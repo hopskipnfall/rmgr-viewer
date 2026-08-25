@@ -380,6 +380,9 @@
           flex-wrap: wrap;
           max-height: 45%;
         }
+        #matchStats {
+          width: 100%;
+        }
         #players {
           width: 100%;
           flex-direction: row;
@@ -523,7 +526,6 @@
         </div>
       </div>
       <aside id="sidebar">
-        <div id="players"></div>
         <section id="matchStats">
           <div id="matchStatsHeader">
             <button id="statsCollapseBtn" title="Collapse / expand Match Stats">
@@ -536,6 +538,7 @@
             <p id="statsEmpty">No stats — load a Dream Land 2-player replay.</p>
           </div>
         </section>
+        <div id="players"></div>
         <section id="eventLog">
           <div id="eventLogHeader">
             <h2>Event Log</h2>
