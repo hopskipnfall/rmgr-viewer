@@ -123,6 +123,7 @@ export interface Translations {
   save: string;
   cancel: string;
   noGamesMatched: string;
+  removeGame: string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -242,6 +243,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     save: "Save",
     cancel: "Cancel",
     noGamesMatched: "No games match the selected filters.",
+    removeGame: "Remove replay",
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -359,6 +361,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     save: "保存",
     cancel: "キャンセル",
     noGamesMatched: "条件に一致する試合がありません。",
+    removeGame: "リプレイを削除",
   },
 };
 

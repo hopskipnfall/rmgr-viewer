@@ -31,17 +31,20 @@ export class GameList {
     summary: GameSummary,
     port: 0 | 1 | 2 | 3,
   ) => void;
+  private onRemoveGame: (id: string) => void;
 
   constructor(
     container: HTMLElement,
     onSortChanged: (sort: "newest" | "oldest") => void,
     onSelectGame: (summary: GameSummary) => void,
     onManualPerspectiveSet: (summary: GameSummary, port: 0 | 1 | 2 | 3) => void,
+    onRemoveGame: (id: string) => void,
   ) {
     this.container = container;
     this.onSortChanged = onSortChanged;
     this.onSelectGame = onSelectGame;
     this.onManualPerspectiveSet = onManualPerspectiveSet;
+    this.onRemoveGame = onRemoveGame;
   }
 
   public setSortOrder(sort: "newest" | "oldest"): void {
@@ -96,7 +99,7 @@ export class GameList {
       this.onSortChanged(this.sortOrder);
     });
 
-    // Attach row click and inline button event listeners
+    // Attach row click, inline button, and remove button event listeners
     const rows = this.container.querySelectorAll<HTMLElement>(".game-row");
     rows.forEach((row) => {
       const id = row.dataset.id;
@@ -105,6 +108,14 @@ export class GameList {
 
       row.addEventListener("click", () => {
         this.onSelectGame(summary);
+      });
+
+      // Remove game button
+      const removeBtn =
+        row.querySelector<HTMLButtonElement>(".remove-game-btn");
+      removeBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.onRemoveGame(summary.id);
       });
 
       // Inline manual perspective buttons
@@ -142,7 +153,10 @@ export class GameList {
           <div class="game-row-players">
             ${summary.ports.map((p) => `${escapeHtml(p.playerName || `P${p.port + 1}`)} (${escapeHtml(characterName(p.characterId))})`).join(" vs ")}
           </div>
-          <span class="drill-in-arrow">›</span>
+          <div class="game-row-actions">
+            <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
+            <span class="drill-in-arrow">›</span>
+          </div>
         </div>
       `;
     }
@@ -180,7 +194,10 @@ export class GameList {
               </button>
             </div>
           </div>
-          <span class="drill-in-arrow">›</span>
+          <div class="game-row-actions">
+            <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
+            <span class="drill-in-arrow">›</span>
+          </div>
         </div>
       `;
     }
@@ -218,7 +235,10 @@ export class GameList {
           <span class="char-label">(${escapeHtml(characterName(oppP.characterId))})</span>
           ${resultBadge}
         </div>
-        <span class="drill-in-arrow">›</span>
+        <div class="game-row-actions">
+          <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
+          <span class="drill-in-arrow">›</span>
+        </div>
       </div>
     `;
   }

@@ -526,10 +526,35 @@
         color: #e0473f;
         background: rgba(224, 71, 63, 0.15);
       }
+      .game-row-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 12px;
+      }
+      .remove-game-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        font-size: 13px;
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 4px;
+        line-height: 1;
+        opacity: 0.5;
+        transition:
+          opacity 0.1s,
+          color 0.1s,
+          background 0.1s;
+      }
+      .remove-game-btn:hover {
+        opacity: 1;
+        color: #e0473f;
+        background: rgba(224, 71, 63, 0.15);
+      }
       .drill-in-arrow {
         font-size: 18px;
         color: var(--text-dim);
-        margin-left: 12px;
       }
       .game-row-ambiguous-body {
         display: flex;

@@ -248,6 +248,7 @@ async function init(): Promise<void> {
   try {
     const sampleLoaded = await loadReplayFromUrl(DEFAULT_SAMPLE_URL);
     bundledSampleSummary = summarizeReplay(sampleLoaded, null);
+    bundledSampleSummary.isBundledSample = true;
     libraryController.addSummaries([bundledSampleSummary]);
   } catch (err) {
     console.warn("Could not load default bundled sample:", err);

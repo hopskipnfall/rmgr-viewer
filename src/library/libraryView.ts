@@ -110,6 +110,9 @@ export class LibraryViewController {
         summary.manualPerspectivePort = port;
         this.render();
       },
+      (idToRemove) => {
+        this.removeSummary(idToRemove);
+      },
     );
   }
 
@@ -119,6 +122,12 @@ export class LibraryViewController {
   }
 
   public addSummaries(newSummaries: GameSummary[]): void {
+    // When adding user-imported replays, remove the default preloaded bundled file if present
+    const hasUserImported = newSummaries.some((s) => !s.isBundledSample);
+    if (hasUserImported) {
+      this.summaries = this.summaries.filter((s) => !s.isBundledSample);
+    }
+
     // Avoid duplicate IDs
     const existingIds = new Set(this.summaries.map((s) => s.id));
     for (const s of newSummaries) {
@@ -127,6 +136,11 @@ export class LibraryViewController {
         existingIds.add(s.id);
       }
     }
+    this.render();
+  }
+
+  public removeSummary(id: string): void {
+    this.summaries = this.summaries.filter((s) => s.id !== id);
     this.render();
   }
 
