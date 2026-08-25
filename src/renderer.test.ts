@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   getAttackInfo,
   getDeathDirection,
+  getFalconSpecialType,
   isCrouchState,
   isDeadState,
+  isFalconCharacter,
   isGrabbedState,
   isLandingState,
   isShieldState,
@@ -104,12 +106,59 @@ describe("isGrabbedState", () => {
     expect(isGrabbedState(0x0ab)).toBe(true); // CapturePull
     expect(isGrabbedState(0x0ac)).toBe(true); // CaptureWait
     expect(isGrabbedState(0x0ad)).toBe(true); // CaptureDamage
+    expect(isGrabbedState(0x0b3)).toBe(true); // CaptureFalconDive (Falcon Up-B victim)
+    expect(isGrabbedState(0x0b6)).toBe(true); // CaptureCargo
+    expect(isGrabbedState(0x0b9)).toBe(true); // CapturePulled
   });
 
   it("returns false for non-grabbed action states", () => {
     expect(isGrabbedState(0x00a)).toBe(false); // Idle
     expect(isGrabbedState(0x0a6)).toBe(false); // Grab (attacker)
     expect(isGrabbedState(0x099)).toBe(false); // Shield
+  });
+});
+
+describe("isFalconCharacter", () => {
+  it("identifies Captain Falcon and J Falcon correctly", () => {
+    expect(isFalconCharacter(0x07)).toBe(true); // Captain Falcon
+    expect(isFalconCharacter(0x28)).toBe(true); // Falcon (JP)
+    expect(isFalconCharacter(0x15)).toBe(true); // Polygon Falcon
+  });
+
+  it("returns false for other characters", () => {
+    expect(isFalconCharacter(0x00)).toBe(false); // Mario
+    expect(isFalconCharacter(0x01)).toBe(false); // Fox
+    expect(isFalconCharacter(0x02)).toBe(false); // DK
+    expect(isFalconCharacter(0x09)).toBe(false); // Pikachu
+  });
+});
+
+describe("getFalconSpecialType", () => {
+  it("classifies Falcon Punch correctly", () => {
+    expect(getFalconSpecialType(0x07, 0x0e5)).toBe("punch");
+    expect(getFalconSpecialType(0x07, 0x0e6)).toBe("punch");
+    expect(getFalconSpecialType(0x28, 0x0e5)).toBe("punch");
+  });
+
+  it("classifies Falcon Dive states correctly", () => {
+    expect(getFalconSpecialType(0x07, 0x0e8)).toBe("dive_reach");
+    expect(getFalconSpecialType(0x07, 0x0e9)).toBe("dive_reach");
+    expect(getFalconSpecialType(0x07, 0x0ea)).toBe("dive_catch");
+    expect(getFalconSpecialType(0x07, 0x0ee)).toBe("dive_explosion");
+    expect(getFalconSpecialType(0x28, 0x0ea)).toBe("dive_catch");
+  });
+
+  it("classifies Falcon Kick states correctly", () => {
+    expect(getFalconSpecialType(0x07, 0x0eb)).toBe("kick");
+    expect(getFalconSpecialType(0x07, 0x0ec)).toBe("kick");
+    expect(getFalconSpecialType(0x07, 0x0ed)).toBe("kick_end");
+    expect(getFalconSpecialType(0x28, 0x0eb)).toBe("kick");
+  });
+
+  it("returns null for non-special states or non-Falcon characters", () => {
+    expect(getFalconSpecialType(0x07, 0x00a)).toBeNull(); // Idle
+    expect(getFalconSpecialType(0x07, 0x0d2)).toBeNull(); // Fair
+    expect(getFalconSpecialType(0x00, 0x0e5)).toBeNull(); // Mario in 0xe5
   });
 });
 
