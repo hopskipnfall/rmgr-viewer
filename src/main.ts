@@ -14,7 +14,12 @@ import { summarizeReplay, type GameSummary } from "./data/gameSummary.js";
 import { importReplayFiles } from "./data/importer.js";
 import { MatchViewController } from "./match/matchView.js";
 import { LibraryViewController } from "./library/libraryView.js";
-import { resolvePerspectivePort, loadIdentity } from "./data/identity.js";
+import {
+  resolvePerspectivePort,
+  resolveOpponentPort,
+  loadIdentity,
+} from "./data/identity.js";
+import { computeMatchupBaseline, type DerivedRates } from "./data/aggregate.js";
 
 // DOM Elements
 const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
@@ -162,7 +167,25 @@ async function handleRouteChange(route: Route): Promise<void> {
         summary.manualPerspectivePort ??
         resolvePerspectivePort(summary, identity);
 
-      matchController.loadMatch(loaded, perspectivePort);
+      let matchupBaseline: DerivedRates | null = null;
+      if (perspectivePort !== null && summary.ports.length === 2) {
+        const yourP = summary.ports.find((p) => p.port === perspectivePort);
+        const oppPort = resolveOpponentPort(summary, perspectivePort);
+        const oppP =
+          oppPort !== null
+            ? summary.ports.find((p) => p.port === oppPort)
+            : null;
+        if (yourP && oppP) {
+          matchupBaseline = computeMatchupBaseline(
+            libraryController.getSummaries(),
+            identity,
+            yourP.characterId,
+            oppP.characterId,
+          );
+        }
+      }
+
+      matchController.loadMatch(loaded, perspectivePort, matchupBaseline);
       matchController.activate();
       loadStatus.textContent = "";
     } catch (err) {

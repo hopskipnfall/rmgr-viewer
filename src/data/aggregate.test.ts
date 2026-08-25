@@ -280,4 +280,27 @@ describe("aggregate module", () => {
     expect(breakdown[1]?.losses).toBe(1);
     expect(breakdown[1]?.rates.recoveryPct).toBe(50);
   });
+
+  it("calculates wins, losses, and win rate percentage accurately", () => {
+    const winGame = makeSummary({
+      id: "w1",
+      yourFinalStocks: 3,
+      oppFinalStocks: 0,
+      yourStats: {},
+    });
+    const lossGame = makeSummary({
+      id: "l1",
+      yourFinalStocks: 0,
+      oppFinalStocks: 2,
+      yourStats: {},
+    });
+
+    const filtered = filterGameSummaries([winGame, lossGame], identity);
+    const agg = aggregateFilteredGames(filtered);
+
+    expect(agg.totalGames).toBe(2);
+    expect(agg.wins).toBe(1);
+    expect(agg.losses).toBe(1);
+    expect(agg.winRatePct).toBe(50);
+  });
 });

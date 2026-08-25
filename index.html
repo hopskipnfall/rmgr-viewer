@@ -511,12 +511,30 @@
         text-transform: uppercase;
         margin: 0 4px;
       }
+      .game-row.row-won {
+        border-left: 3px solid #4fbf6a;
+      }
+      .game-row.row-lost {
+        border-left: 3px solid rgba(224, 71, 63, 0.4);
+      }
+      .winner-meta {
+        font-weight: 600;
+      }
+      .winner-meta.win {
+        color: #4fbf6a;
+      }
+      .winner-meta.loss {
+        color: var(--text-dim);
+      }
       .result-badge {
         font-size: 11px;
         font-weight: 700;
-        padding: 1px 6px;
+        padding: 2px 6px;
         border-radius: 4px;
         margin-left: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
       }
       .result-badge.win {
         color: #4fbf6a;
@@ -942,6 +960,18 @@
         color: #4fbf6a;
       }
       .stat-pct.pct-failure {
+        color: #e0473f;
+      }
+      .stat-match-delta {
+        font-size: 11px;
+        font-weight: 600;
+        margin-left: 4px;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat-match-delta.pct-delta-pos {
+        color: #4fbf6a;
+      }
+      .stat-match-delta.pct-delta-neg {
         color: #e0473f;
       }
       #eventLogList {

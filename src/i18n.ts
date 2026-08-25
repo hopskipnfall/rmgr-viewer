@@ -124,6 +124,14 @@ export interface Translations {
   cancel: string;
   noGamesMatched: string;
   removeGame: string;
+  winRate: string;
+  gamesWonFraction: (w: number, tot: number) => string;
+  winner: (name: string) => string;
+  win: string;
+  loss: string;
+  tie: string;
+  matchupAverage: string;
+  vsMatchup: (v: string) => string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -244,6 +252,14 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     cancel: "Cancel",
     noGamesMatched: "No games match the selected filters.",
     removeGame: "Remove replay",
+    winRate: "Win Rate",
+    gamesWonFraction: (w, tot) => `${w} / ${tot} won`,
+    winner: (name) => `Winner: ${name}`,
+    win: "WIN",
+    loss: "LOSS",
+    tie: "TIE",
+    matchupAverage: "Matchup avg",
+    vsMatchup: (v) => `${v} vs matchup`,
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -362,6 +378,14 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     cancel: "キャンセル",
     noGamesMatched: "条件に一致する試合がありません。",
     removeGame: "リプレイを削除",
+    winRate: "勝率",
+    gamesWonFraction: (w, tot) => `${tot}試合中 ${w}勝`,
+    winner: (name) => `勝者: ${name}`,
+    win: "勝利",
+    loss: "敗北",
+    tie: "引分",
+    matchupAverage: "同カード平均",
+    vsMatchup: (v) => `同カード比 ${v}`,
   },
 };
 

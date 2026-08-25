@@ -33,6 +33,7 @@ import {
   type AngelInvincibilityEvent,
 } from "../angelInvincibility.js";
 import type { LoadedReplay } from "../replaySource.js";
+import type { DerivedRates } from "../data/aggregate.js";
 
 export type MatchEvent =
   EdgeGuardEvent | NeutralHitEvent | LedgeTrapEvent | AngelInvincibilityEvent;
@@ -97,6 +98,7 @@ export class MatchViewController {
   private perspectivePort: PortIndex | null = null;
   private statsCollapsed = false;
   private hudOverlayEnabled = true;
+  private matchupBaseline: DerivedRates | null = null;
 
   private boundOnKeyDown: (e: KeyboardEvent) => void;
   private boundOnResize: () => void;
@@ -723,6 +725,7 @@ export class MatchViewController {
       successes: number,
       total: number,
       successClass: "pct-success" | "pct-failure",
+      baselinePct?: number | null,
     ): void => {
       const row = document.createElement("div");
       row.className = "stat-row";
@@ -737,8 +740,19 @@ export class MatchViewController {
       const pctSpan = document.createElement("span");
       pctSpan.className = `stat-pct ${total > 0 ? successClass : ""}`;
       pctSpan.textContent = pct(successes, total);
-
       val.appendChild(pctSpan);
+
+      if (total > 0 && baselinePct !== null && baselinePct !== undefined) {
+        const matchPct = (successes / total) * 100;
+        const diff = Math.round(matchPct - baselinePct);
+        const sign = diff > 0 ? "+" : "";
+        const deltaSpan = document.createElement("span");
+        deltaSpan.className = `stat-match-delta ${diff > 0 ? "pct-delta-pos" : diff < 0 ? "pct-delta-neg" : ""}`;
+        deltaSpan.textContent = ` (${sign}${diff}%)`;
+        deltaSpan.title = `${tr.vsMatchup(`${sign}${diff}%`)} (${Math.round(baselinePct)}% avg)`;
+        val.appendChild(deltaSpan);
+      }
+
       val.append(`  ${tr.situations(successes, total)}`);
 
       row.appendChild(lbl);
@@ -750,6 +764,7 @@ export class MatchViewController {
       label: string,
       valueStr: string,
       subtext?: string,
+      baselineHits?: number | null,
     ): void => {
       const row = document.createElement("div");
       row.className = "stat-row";
@@ -764,8 +779,25 @@ export class MatchViewController {
       const valSpan = document.createElement("span");
       valSpan.className = "stat-pct";
       valSpan.textContent = valueStr;
-
       val.appendChild(valSpan);
+
+      if (
+        neutralStats.averageHitsPerStock !== null &&
+        baselineHits !== null &&
+        baselineHits !== undefined
+      ) {
+        const diff = Number(
+          (neutralStats.averageHitsPerStock - baselineHits).toFixed(1),
+        );
+        const sign = diff > 0 ? "+" : "";
+        const deltaSpan = document.createElement("span");
+        // For neutral hits per stock, fewer is better
+        deltaSpan.className = `stat-match-delta ${diff < 0 ? "pct-delta-pos" : diff > 0 ? "pct-delta-neg" : ""}`;
+        deltaSpan.textContent = ` (${sign}${diff.toFixed(1)})`;
+        deltaSpan.title = `${tr.vsMatchup(`${sign}${diff.toFixed(1)}`)} (${baselineHits.toFixed(1)} avg)`;
+        val.appendChild(deltaSpan);
+      }
+
       if (subtext) {
         val.append(`  ${subtext}`);
       }
@@ -787,30 +819,35 @@ export class MatchViewController {
       stats.recoverySuccesses,
       stats.recoverySituations,
       "pct-success",
+      this.matchupBaseline?.recoveryPct,
     );
     addRow(
       tr.edgeGuard,
       stats.edgeGuardSuccesses,
       stats.edgeGuardSituations,
       "pct-success",
+      this.matchupBaseline?.edgeGuardPct,
     );
     addRow(
       tr.ledgeGetup,
       ledgeStats.ledgeGetupSuccesses,
       ledgeStats.ledgeGetupSituations,
       "pct-success",
+      this.matchupBaseline?.ledgeGetupPct,
     );
     addRow(
       tr.ledgeTrap,
       ledgeStats.ledgeTrapSuccesses,
       ledgeStats.ledgeTrapSituations,
       "pct-success",
+      this.matchupBaseline?.ledgeTrapPct,
     );
     addRow(
       tr.angelAvoid,
       angelStats.avoidSuccesses,
       angelStats.avoidSituations,
       "pct-success",
+      this.matchupBaseline?.angelAvoidPct,
     );
     addValueRow(
       tr.neutralHitsPerStock,
@@ -823,6 +860,7 @@ export class MatchViewController {
             neutralStats.stocksTaken,
           )
         : tr.noStocksTaken,
+      this.matchupBaseline?.neutralHitsPerStock,
     );
   }
 
@@ -860,9 +898,11 @@ export class MatchViewController {
   public loadMatch(
     loaded: LoadedReplay,
     initialPerspectivePort: PortIndex | null = null,
+    matchupBaseline: DerivedRates | null = null,
   ): void {
     this.playback?.pause();
     this.currentLoaded = loaded;
+    this.matchupBaseline = matchupBaseline;
     const { replay } = loaded;
     this.currentReplay = replay;
     const edgeEvents = computeEdgeGuardEvents(replay);

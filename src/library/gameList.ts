@@ -140,6 +140,14 @@ export class GameList {
     const duration = formatDuration(summary.frameCount);
 
     if (!is2Player) {
+      const topPort = [...summary.ports].sort(
+        (a, b) => b.finalStocks - a.finalStocks,
+      )[0];
+      const winnerName =
+        topPort && topPort.finalStocks > 0
+          ? topPort.playerName || `P${topPort.port + 1}`
+          : null;
+
       return `
         <div class="game-row unsupported" data-id="${summary.id}">
           <div class="game-row-meta">
@@ -149,6 +157,7 @@ export class GameList {
             <span class="meta-dot">·</span>
             <span class="game-duration">${duration}</span>
             <span class="unsupported-badge">${escapeHtml(tr.notSupportedPlayers)}</span>
+            ${winnerName ? `<span class="meta-dot">·</span><span class="winner-meta">🏆 ${escapeHtml(tr.winner(winnerName))}</span>` : ""}
           </div>
           <div class="game-row-players">
             ${summary.ports.map((p) => `${escapeHtml(p.playerName || `P${p.port + 1}`)} (${escapeHtml(characterName(p.characterId))})`).join(" vs ")}
@@ -171,6 +180,15 @@ export class GameList {
       const label0 = port0.playerName || characterName(port0.characterId);
       const label1 = port1.playerName || characterName(port1.characterId);
 
+      let winnerText = "";
+      if (port0.finalStocks >= 0 && port1.finalStocks >= 0) {
+        if (port0.finalStocks > port1.finalStocks) {
+          winnerText = `<span class="winner-meta">🏆 ${escapeHtml(tr.winner(label0))}</span>`;
+        } else if (port1.finalStocks > port0.finalStocks) {
+          winnerText = `<span class="winner-meta">🏆 ${escapeHtml(tr.winner(label1))}</span>`;
+        }
+      }
+
       return `
         <div class="game-row ambiguous" data-id="${summary.id}">
           <div class="game-row-meta">
@@ -180,6 +198,7 @@ export class GameList {
             <span class="game-stage">${escapeHtml(stage)}</span>
             <span class="meta-dot">·</span>
             <span class="game-duration">${duration}</span>
+            ${winnerText ? `<span class="meta-dot">·</span>${winnerText}` : ""}
           </div>
           <div class="game-row-ambiguous-body">
             <span class="ambiguous-players">
@@ -206,26 +225,30 @@ export class GameList {
     const yourP = summary.ports.find((p) => p.port === yourPort)!;
     const oppP = summary.ports.find((p) => p.port === oppPort)!;
 
-    let resultBadge = "";
-    if (yourP.finalStocks >= 0 && oppP.finalStocks >= 0) {
-      if (yourP.finalStocks > oppP.finalStocks) {
-        resultBadge = '<span class="result-badge win">W</span>';
-      } else if (oppP.finalStocks > yourP.finalStocks) {
-        resultBadge = '<span class="result-badge loss">L</span>';
-      }
-    }
-
     const yourName = yourP.playerName || `P${yourP.port + 1}`;
     const oppName = oppP.playerName || `P${oppP.port + 1}`;
 
+    let resultBadge = "";
+    let winnerMeta = "";
+    if (yourP.finalStocks >= 0 && oppP.finalStocks >= 0) {
+      if (yourP.finalStocks > oppP.finalStocks) {
+        resultBadge = `<span class="result-badge win">🏆 ${escapeHtml(tr.win)}</span>`;
+        winnerMeta = `<span class="winner-meta win">🏆 ${escapeHtml(tr.winner(yourName))}</span>`;
+      } else if (oppP.finalStocks > yourP.finalStocks) {
+        resultBadge = `<span class="result-badge loss">${escapeHtml(tr.loss)}</span>`;
+        winnerMeta = `<span class="winner-meta loss">${escapeHtml(tr.winner(oppName))}</span>`;
+      }
+    }
+
     return `
-      <div class="game-row" data-id="${summary.id}">
+      <div class="game-row ${yourP.finalStocks > oppP.finalStocks ? "row-won" : yourP.finalStocks < oppP.finalStocks ? "row-lost" : ""}" data-id="${summary.id}">
         <div class="game-row-meta">
           <span class="game-date">${escapeHtml(dateStr)}</span>
           <span class="meta-dot">·</span>
           <span class="game-stage">${escapeHtml(stage)}</span>
           <span class="meta-dot">·</span>
           <span class="game-duration">${duration}</span>
+          ${winnerMeta ? `<span class="meta-dot">·</span>${winnerMeta}` : ""}
         </div>
         <div class="game-row-players">
           <strong class="you-player">${escapeHtml(yourName)}</strong>

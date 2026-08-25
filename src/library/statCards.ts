@@ -25,14 +25,17 @@ export class StatCards {
       hitsValue: number | null = null,
       totalHits = 0,
       stocks = 0,
+      customFraction?: string,
     ): string => {
       const isLowN = isHitsRate ? stocks < 5 : total < 10 && total > 0;
       const hasData = isHitsRate ? stocks > 0 : total > 0;
 
       let valueDisplay = "—";
-      const fractionDisplay = isHitsRate
-        ? `${totalHits} hits / ${stocks} st.`
-        : `${successes}/${total}`;
+      const fractionDisplay =
+        customFraction ??
+        (isHitsRate
+          ? `${totalHits} hits / ${stocks} st.`
+          : `${successes}/${total}`);
 
       if (isHitsRate) {
         valueDisplay =
@@ -90,6 +93,18 @@ export class StatCards {
 
     this.container.innerHTML = `
       <div class="stat-cards-grid">
+        ${renderCard(
+          tr.winRate,
+          rates.winRatePct,
+          rates.wins,
+          rates.wins + rates.losses,
+          deltas?.winRatePctDelta ?? null,
+          false,
+          null,
+          0,
+          0,
+          tr.gamesWonFraction(rates.wins, rates.totalGames),
+        )}
         ${renderCard(
           tr.recovery,
           rates.recoveryPct,

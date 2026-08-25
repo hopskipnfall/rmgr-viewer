@@ -16,6 +16,9 @@ export interface FilterCriteria {
 export interface DerivedRates {
   totalGames: number;
   dreamLandGames: number;
+  wins: number;
+  losses: number;
+  winRatePct: number | null;
 
   recoveryPct: number | null;
   recoverySuccesses: number;
@@ -43,6 +46,7 @@ export interface DerivedRates {
 }
 
 export interface RateDeltas {
+  winRatePctDelta: number | null;
   recoveryPctDelta: number | null;
   edgeGuardPctDelta: number | null;
   ledgeGetupPctDelta: number | null;
@@ -148,6 +152,8 @@ export function aggregateFilteredGames(
   resolvedGames: { summary: GameSummary; yourPort: number; oppPort: number }[],
 ): DerivedRates {
   let dreamLandGames = 0;
+  let wins = 0;
+  let losses = 0;
 
   // Dream Land only counters
   let recoverySituations = 0;
@@ -165,7 +171,17 @@ export function aggregateFilteredGames(
   let neutralHitsLanded = 0;
   let stocksTaken = 0;
 
-  for (const { summary, yourPort } of resolvedGames) {
+  for (const { summary, yourPort, oppPort } of resolvedGames) {
+    const yourP = summary.ports.find((p) => p.port === yourPort);
+    const oppP = summary.ports.find((p) => p.port === oppPort);
+    if (yourP && oppP && yourP.finalStocks >= 0 && oppP.finalStocks >= 0) {
+      if (yourP.finalStocks > oppP.finalStocks) {
+        wins++;
+      } else if (oppP.finalStocks > yourP.finalStocks) {
+        losses++;
+      }
+    }
+
     const stats = summary.statsByPort[yourPort as 0 | 1 | 2 | 3];
     if (!stats) continue;
 
@@ -191,9 +207,15 @@ export function aggregateFilteredGames(
   const rate = (num: number, den: number): number | null =>
     den > 0 ? (num / den) * 100 : null;
 
+  const totalDecided = wins + losses;
+  const winRatePct = totalDecided > 0 ? (wins / totalDecided) * 100 : null;
+
   return {
     totalGames: resolvedGames.length,
     dreamLandGames,
+    wins,
+    losses,
+    winRatePct,
 
     recoveryPct: rate(recoverySuccesses, recoverySituations),
     recoverySuccesses,
@@ -240,6 +262,7 @@ export function computeRateDeltas(
   };
 
   return {
+    winRatePctDelta: delta(filtered.winRatePct, baseline.winRatePct, true),
     recoveryPctDelta: delta(filtered.recoveryPct, baseline.recoveryPct, true),
     edgeGuardPctDelta: delta(
       filtered.edgeGuardPct,
@@ -267,6 +290,37 @@ export function computeRateDeltas(
       false,
     ),
   };
+}
+
+/**
+ * Computes the aggregate baseline for a specific character matchup across all games.
+ * If matchup games exist, aggregates those; otherwise aggregates all games for your character.
+ */
+export function computeMatchupBaseline(
+  summaries: GameSummary[],
+  identity: Identity,
+  yourCharId: number,
+  oppCharId: number,
+): DerivedRates {
+  const matchupGames = filterGameSummaries(summaries, identity, {
+    yourCharacterId: yourCharId,
+    oppCharacterId: oppCharId,
+  });
+
+  if (matchupGames.length > 0) {
+    return aggregateFilteredGames(matchupGames);
+  }
+
+  // Fallback to all games with your character
+  const yourCharGames = filterGameSummaries(summaries, identity, {
+    yourCharacterId: yourCharId,
+  });
+  if (yourCharGames.length > 0) {
+    return aggregateFilteredGames(yourCharGames);
+  }
+
+  // Fallback to overall
+  return aggregateFilteredGames(filterGameSummaries(summaries, identity, {}));
 }
 
 /**
