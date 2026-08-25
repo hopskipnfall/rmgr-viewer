@@ -10,6 +10,7 @@ import { PlaybackController, type FrameChangeReason } from "./playback.js";
 import { PORT_COLORS, PORT_LABELS } from "./players.js";
 import { StageRenderer } from "./renderer.js";
 import { actionStateName, characterName, stageName } from "./lookups.js";
+import { initLanguage, setLanguage, t, type Language } from "./i18n.js";
 import {
   computeNeutralHitEvents,
   computeNeutralHitsStats,
@@ -54,6 +55,12 @@ const eventLogList = document.getElementById("eventLogList") as HTMLDivElement;
 const eventLogEmpty = document.getElementById(
   "eventLogEmpty",
 ) as HTMLParagraphElement;
+const eventLogHeaderTitle = document.querySelector(
+  "#eventLogHeader h2",
+) as HTMLHeadingElement;
+const matchStatsHeaderTitle = document.querySelector(
+  "#matchStatsHeader h2",
+) as HTMLHeadingElement;
 const perspectiveToggleEl = document.getElementById(
   "perspectiveToggle",
 ) as HTMLDivElement;
@@ -64,6 +71,14 @@ const statsPanel = document.getElementById("statsPanel") as HTMLDivElement;
 const statsEmpty = document.getElementById(
   "statsEmpty",
 ) as HTMLParagraphElement;
+const langToggleEl = document.getElementById("langToggle") as HTMLDivElement;
+const stageOverlay = document.getElementById("stageOverlay") as HTMLDivElement;
+const stageOverlayList = document.getElementById(
+  "stageOverlayList",
+) as HTMLDivElement;
+const hudToggleBtn = document.getElementById(
+  "hudToggleBtn",
+) as HTMLButtonElement;
 
 const stageRenderer = new StageRenderer(stageCanvas);
 
@@ -82,6 +97,7 @@ interface PlayerPanel {
 
 let camera: Camera;
 let currentReplay: Replay | null = null;
+let currentLoaded: LoadedReplay | null = null;
 let panels: PlayerPanel[] = [];
 let playback: PlaybackController | null = null;
 let lastFrame: Frame | undefined;
@@ -94,6 +110,12 @@ let currentLogEls: HTMLDivElement[] = [];
 /** Which port's perspective the event log and stats are shown from. */
 let perspectivePort: PortIndex | null = null;
 let statsCollapsed = false;
+let hudOverlayEnabled = true;
+try {
+  hudOverlayEnabled = localStorage.getItem("rmgr-viewer-hud") !== "false";
+} catch {
+  // Ignore localStorage read error
+}
 
 function formatElapsed(frameIndex: number): string {
   const totalSeconds = frameIndex / 60;
@@ -102,8 +124,35 @@ function formatElapsed(frameIndex: number): string {
   return `${minutes}:${seconds.toFixed(2).padStart(5, "0")}`;
 }
 
+function updateStaticTranslations(): void {
+  const tr = t();
+  if (matchStatsHeaderTitle) matchStatsHeaderTitle.textContent = tr.matchStats;
+  if (eventLogHeaderTitle) eventLogHeaderTitle.textContent = tr.eventLog;
+  if (statsEmpty) statsEmpty.textContent = tr.statsEmpty;
+  if (eventLogEmpty) eventLogEmpty.textContent = tr.eventLogEmpty;
+  if (statsCollapseBtn) statsCollapseBtn.title = tr.statsCollapseTitle;
+  if (hudToggleBtn) {
+    hudToggleBtn.textContent = tr.hudOverlay;
+    hudToggleBtn.title = tr.hudOverlayTitle;
+  }
+  if (stepBackBtn) stepBackBtn.title = tr.prevFrameTooltip;
+  if (playPauseBtn) playPauseBtn.title = tr.playPauseTooltip;
+  if (stepForwardBtn) stepForwardBtn.title = tr.nextFrameTooltip;
+}
+
+function updateFileInfo(loaded: LoadedReplay): void {
+  const { replay, sourceName, recordedAt } = loaded;
+  const tr = t();
+  const recordedLabel = tr.recordedLabel(recordedAt.toLocaleString());
+  const framesCount = tr.framesLabel(replay.frames.length);
+  const statusStr = replay.isComplete ? tr.complete : tr.incomplete;
+  fileInfo.textContent = `${sourceName} — ${stageName(replay.gameStart.stageId)}, ${recordedLabel}, ${framesCount}, ${statusStr}`;
+}
+
 function buildPlayerPanels(replay: Replay): void {
   playersEl.innerHTML = "";
+  const tr = t();
+
   panels = getSeatedPorts(replay).map((port) => {
     const settings = replay.gameStart.ports[port];
     const color = PORT_COLORS[port];
@@ -116,11 +165,11 @@ function buildPlayerPanels(replay: Replay): void {
     panel.innerHTML = `
       <div class="player-name">${escapeHtml(name)} <span class="character">— ${escapeHtml(characterName(settings.characterId))} (${escapeHtml(PORT_LABELS[port])})</span></div>
       <div class="player-stats">
-        <div>Damage: <strong class="stat-damage">—</strong></div>
-        <div>Stocks: <strong class="stat-stocks">—</strong></div>
-        <div class="full-row">State: <strong class="stat-state">—</strong></div>
-        <div class="full-row">Position: <strong class="stat-position">—</strong></div>
-        <div class="full-row">Combo hits: <strong class="stat-combo-hits">0</strong></div>
+        <div>${escapeHtml(tr.damage)} <strong class="stat-damage">—</strong></div>
+        <div>${escapeHtml(tr.stocks)} <strong class="stat-stocks">—</strong></div>
+        <div class="full-row">${escapeHtml(tr.state)} <strong class="stat-state">—</strong></div>
+        <div class="full-row">${escapeHtml(tr.position)} <strong class="stat-position">—</strong></div>
+        <div class="full-row">${escapeHtml(tr.comboHits)} <strong class="stat-combo-hits">0</strong></div>
       </div>
       <canvas class="controller-pad" width="140" height="84"></canvas>
     `;
@@ -166,12 +215,13 @@ function renderFrame(
     hoverScreen,
   );
 
+  const tr = t();
   for (const panel of panels) {
     const portData = frame?.ports[panel.port];
     if (!portData) {
       panel.damageEl.textContent = "—";
       panel.stocksEl.textContent = "—";
-      panel.stateEl.textContent = "not on screen";
+      panel.stateEl.textContent = tr.notOnScreen;
       panel.positionEl.textContent = "—";
       panel.comboHitsEl.textContent = "—";
       panel.comboHitsEl.className = "stat-combo-hits";
@@ -188,9 +238,9 @@ function renderFrame(
     const comboCount = post.comboHitCount;
     if (comboCount > 0) {
       const hitstunSuffix = inHitstun
-        ? ` (${post.hitstunCounter}f hitstun)`
+        ? tr.hitstunUnit(post.hitstunCounter)
         : "";
-      panel.comboHitsEl.textContent = `${comboCount} hit${comboCount !== 1 ? "s" : ""}${hitstunSuffix}`;
+      panel.comboHitsEl.textContent = `${tr.hitUnit(comboCount)}${hitstunSuffix}`;
       panel.comboHitsEl.className = "stat-combo-hits in-combo";
     } else {
       panel.comboHitsEl.textContent = "0";
@@ -203,18 +253,17 @@ function renderFrame(
 
 /**
  * Returns the text label and CSS kind class for an event, from the given
- * port's perspective. If perspective is null, falls back to the neutral
- * "Wario recovering / Player recovering" style used before perspective was
- * introduced.
+ * port's perspective. If perspective is null, falls back to neutral style.
  */
 function eventLabel(
   ev: MatchEvent,
   replay: Replay,
   perspective: PortIndex | null,
 ): { text: string; kind: "neutral-hit" | "entered" | "success" | "failure" } {
+  const tr = t();
   if (ev.kind === "neutral-hit") {
     return {
-      text: `${ev.frame} — Neutral hit`,
+      text: `${ev.frame} — ${ev.hitType === "grab" ? tr.neutralHitGrab : tr.neutralHitAttack}`,
       kind: "neutral-hit",
     };
   }
@@ -231,17 +280,17 @@ function eventLabel(
       switch (ev.kind) {
         case "ledge-getup-entered":
           return {
-            text: `${ev.frame} — ${name(ev.ledgePort)} on ledge`,
+            text: `${ev.frame} — ${name(ev.ledgePort)} ${tr.ledgeGetupEntered}`,
             kind: "entered",
           };
         case "ledge-getup-success":
           return {
-            text: `${ev.frame} — ${name(ev.ledgePort)} getup: success`,
+            text: `${ev.frame} — ${tr.playerLedgeGetupSuccess(name(ev.ledgePort))}`,
             kind: "success",
           };
         case "ledge-getup-failure":
           return {
-            text: `${ev.frame} — ${name(ev.ledgePort)} getup: failure`,
+            text: `${ev.frame} — ${tr.playerLedgeGetupFailure(name(ev.ledgePort))}`,
             kind: "failure",
           };
       }
@@ -251,17 +300,17 @@ function eventLabel(
     switch (ev.kind) {
       case "ledge-getup-entered":
         return {
-          text: `${ev.frame} — ${isLedgePlayer ? "Ledge getup" : "Ledge trap"}`,
+          text: `${ev.frame} — ${isLedgePlayer ? tr.ledgeGetupEntered : tr.ledgeTrapEntered}`,
           kind: "entered",
         };
       case "ledge-getup-success":
         return isLedgePlayer
-          ? { text: `${ev.frame} — Ledge getup: success`, kind: "success" }
-          : { text: `${ev.frame} — Ledge trap: failed`, kind: "failure" };
+          ? { text: `${ev.frame} — ${tr.ledgeGetupSuccess}`, kind: "success" }
+          : { text: `${ev.frame} — ${tr.ledgeTrapFailed}`, kind: "failure" };
       case "ledge-getup-failure":
         return isLedgePlayer
-          ? { text: `${ev.frame} — Ledge getup: failure`, kind: "failure" }
-          : { text: `${ev.frame} — Ledge trap: success`, kind: "success" };
+          ? { text: `${ev.frame} — ${tr.ledgeGetupFailure}`, kind: "failure" }
+          : { text: `${ev.frame} — ${tr.ledgeTrapSuccess}`, kind: "success" };
     }
   }
 
@@ -274,17 +323,17 @@ function eventLabel(
       switch (ev.kind) {
         case "angel-entered":
           return {
-            text: `${ev.frame} — ${name(ev.respawnPort)} angel invincibility`,
+            text: `${ev.frame} — ${tr.playerAngelEntered(name(ev.respawnPort))}`,
             kind: "entered",
           };
         case "angel-avoid-success":
           return {
-            text: `${ev.frame} — ${name(ev.oppPort)} avoided angel (0 dmg)`,
+            text: `${ev.frame} — ${tr.playerAngelAvoidSuccess(name(ev.oppPort))}`,
             kind: "success",
           };
         case "angel-avoid-failure":
           return {
-            text: `${ev.frame} — ${name(ev.oppPort)} hit during angel (+${ev.damageTaken ?? 0}%)`,
+            text: `${ev.frame} — ${tr.playerAngelAvoidFailure(name(ev.oppPort), ev.damageTaken ?? 0)}`,
             kind: "failure",
           };
       }
@@ -294,24 +343,24 @@ function eventLabel(
     switch (ev.kind) {
       case "angel-entered":
         return {
-          text: `${ev.frame} — ${isRespawner ? "Angel invincibility" : "Opponent angel"}`,
+          text: `${ev.frame} — ${isRespawner ? tr.angelEntered : tr.opponentAngelEntered}`,
           kind: "entered",
         };
       case "angel-avoid-success":
         return isRespawner
-          ? { text: `${ev.frame} — Angel: 0 hits landed`, kind: "failure" }
+          ? { text: `${ev.frame} — ${tr.angelNoHits}`, kind: "failure" }
           : {
-              text: `${ev.frame} — Angel avoid: success (0 dmg)`,
+              text: `${ev.frame} — ${tr.angelAvoidSuccess}`,
               kind: "success",
             };
       case "angel-avoid-failure":
         return isRespawner
           ? {
-              text: `${ev.frame} — Angel: hit landed (+${ev.damageTaken ?? 0}%)`,
+              text: `${ev.frame} — ${tr.angelHitLanded(ev.damageTaken ?? 0)}`,
               kind: "success",
             }
           : {
-              text: `${ev.frame} — Angel avoid: failed (+${ev.damageTaken ?? 0}%)`,
+              text: `${ev.frame} — ${tr.angelAvoidFailed(ev.damageTaken ?? 0)}`,
               kind: "failure",
             };
     }
@@ -319,17 +368,22 @@ function eventLabel(
 
   const edgeEv = ev as EdgeGuardEvent;
   if (perspective === null) {
-    // Neutral fallback — show both ports by name.
     switch (edgeEv.kind) {
       case "situation-entered":
         return {
-          text: `${edgeEv.frame} — ${name(edgeEv.recoveringPort)} recovering`,
+          text: `${edgeEv.frame} — ${tr.playerRecovering(name(edgeEv.recoveringPort))}`,
           kind: "entered",
         };
       case "recovery-success":
-        return { text: `${edgeEv.frame} — Recovery: success`, kind: "success" };
+        return {
+          text: `${edgeEv.frame} — ${tr.recoverySuccess}`,
+          kind: "success",
+        };
       case "recovery-failure":
-        return { text: `${edgeEv.frame} — Recovery: failure`, kind: "failure" };
+        return {
+          text: `${edgeEv.frame} — ${tr.recoveryFailure}`,
+          kind: "failure",
+        };
     }
   }
 
@@ -337,24 +391,22 @@ function eventLabel(
   switch (edgeEv.kind) {
     case "situation-entered":
       return {
-        text: `${edgeEv.frame} — ${isRecovering ? "Recovering" : "Edge guarding"}`,
+        text: `${edgeEv.frame} — ${isRecovering ? tr.recovering : tr.edgeGuarding}`,
         kind: "entered",
       };
     case "recovery-success":
       return isRecovering
-        ? { text: `${edgeEv.frame} — Recovery: success`, kind: "success" }
-        : { text: `${edgeEv.frame} — Edge guard: failed`, kind: "failure" };
+        ? { text: `${edgeEv.frame} — ${tr.recoverySuccess}`, kind: "success" }
+        : { text: `${edgeEv.frame} — ${tr.edgeGuardFailed}`, kind: "failure" };
     case "recovery-failure":
       return isRecovering
-        ? { text: `${edgeEv.frame} — Recovery: failure`, kind: "failure" }
-        : { text: `${edgeEv.frame} — Edge guard: success`, kind: "success" };
+        ? { text: `${edgeEv.frame} — ${tr.recoveryFailure}`, kind: "failure" }
+        : { text: `${edgeEv.frame} — ${tr.edgeGuardSuccess}`, kind: "success" };
   }
 }
 
 /**
  * Builds the perspective toggle buttons in the event log header.
- * All stats and event log labels update whenever the perspective changes.
- * Called once per replay load.
  */
 function buildPerspectiveToggle(replay: Replay): void {
   perspectiveToggleEl.innerHTML = "";
@@ -377,59 +429,135 @@ function buildPerspectiveToggle(replay: Replay): void {
         b.classList.toggle("active", b === btn);
       }
     });
-    if (perspectivePort === port) btn.classList.add("active");
     perspectiveToggleEl.appendChild(btn);
   }
+
+  // Set active class on initial load.
+  const buttons =
+    perspectiveToggleEl.querySelectorAll<HTMLButtonElement>(".perspective-btn");
+  seated.forEach((port, idx) => {
+    buttons[idx]?.classList.toggle("active", port === perspectivePort);
+  });
 }
 
 /**
- * Rebuilds the event log DOM from the pre-computed `matchEvents` array.
- * Neutral hits are filtered to only show for the player who landed them.
- * Situation labels are rendered from `perspectivePort`'s point of view.
+ * Builds the scrollable event log list.
  */
 function buildEventLog(replay: Replay): void {
-  currentLogEls = [];
-  for (const el of eventLogList.querySelectorAll(".event-log-entry")) {
-    el.remove();
+  eventLogList.innerHTML = "";
+
+  if (perspectivePort === null) {
+    currentLogEvents = [];
+    currentLogEls = [];
+    eventLogList.appendChild(eventLogEmpty);
+    eventLogEmpty.hidden = false;
+    return;
   }
 
-  // Filter events: neutral hits only appear from the attacker's perspective
   currentLogEvents = matchEvents.filter((ev) => {
     if (ev.kind === "neutral-hit") {
-      return perspectivePort === null || ev.attackerPort === perspectivePort;
+      return ev.attackerPort === perspectivePort;
     }
     return true;
   });
 
   if (currentLogEvents.length === 0) {
-    eventLogEmpty.textContent =
-      "No events — load a Dream Land 2-player replay.";
+    currentLogEls = [];
+    eventLogList.appendChild(eventLogEmpty);
     eventLogEmpty.hidden = false;
     return;
   }
 
-  eventLogEmpty.textContent = "No events yet.";
-  eventLogEmpty.hidden = false;
-  eventLogList.scrollTop = 0;
-
-  for (const ev of currentLogEvents) {
+  eventLogEmpty.hidden = true;
+  currentLogEls = currentLogEvents.map((ev) => {
+    const entry = document.createElement("div");
     const { text, kind } = eventLabel(ev, replay, perspectivePort);
-    const div = document.createElement("div");
-    div.className = `event-log-entry kind-${kind}`;
-    div.textContent = text;
-    div.hidden = true;
-    eventLogList.appendChild(div);
-    currentLogEls.push(div);
+    entry.className = `event-log-entry kind-${kind}`;
+    entry.textContent = text;
+    entry.title = `Jump to frame ${ev.frame}`;
+    entry.style.cursor = "pointer";
+    entry.addEventListener("click", () => {
+      playback?.pause();
+      playback?.seek(ev.frameIndex);
+    });
+    eventLogList.appendChild(entry);
+    return entry;
+  });
+}
+
+/**
+ * Highlights the most recent event at or before currentFrameIndex,
+ * and updates the on-screen stage HUD overlay.
+ */
+function updateEventLogHighlight(currentFrameIndex: number): void {
+  let activeIdx = -1;
+  for (let i = 0; i < currentLogEvents.length; i++) {
+    const ev = currentLogEvents[i];
+    if (ev && ev.frameIndex <= currentFrameIndex) {
+      activeIdx = i;
+    } else {
+      break;
+    }
+  }
+
+  // Highlight elements in the sidebar event log list
+  for (let i = 0; i < currentLogEls.length; i++) {
+    const el = currentLogEls[i];
+    if (!el) continue;
+    const isCurrent = i === activeIdx;
+    el.classList.toggle("is-current", isCurrent);
+  }
+
+  // Only scroll within #eventLogList without scrolling the outer #sidebar container!
+  if (activeIdx >= 0) {
+    const activeEl = currentLogEls[activeIdx];
+    if (activeEl) {
+      const list = eventLogList;
+      const itemTop = activeEl.offsetTop - list.offsetTop;
+      const itemBottom = itemTop + activeEl.offsetHeight;
+      const viewTop = list.scrollTop;
+      const viewBottom = viewTop + list.clientHeight;
+
+      if (itemTop < viewTop) {
+        list.scrollTop = itemTop;
+      } else if (itemBottom > viewBottom) {
+        list.scrollTop = itemBottom - list.clientHeight;
+      }
+    }
+  }
+
+  // Update on-screen stage HUD overlay (last up to 3 recent events)
+  if (
+    !hudOverlayEnabled ||
+    activeIdx === -1 ||
+    currentLogEvents.length === 0 ||
+    !currentReplay
+  ) {
+    stageOverlay.hidden = true;
+  } else {
+    stageOverlay.hidden = false;
+    stageOverlayList.innerHTML = "";
+    const startIdx = Math.max(0, activeIdx - 2);
+    for (let i = startIdx; i <= activeIdx; i++) {
+      const ev = currentLogEvents[i];
+      if (!ev) continue;
+      const { text, kind } = eventLabel(ev, currentReplay, perspectivePort);
+      const isLatest = i === activeIdx;
+      const entry = document.createElement("div");
+      entry.className = `overlay-entry kind-${kind}${isLatest ? " is-current" : ""}`;
+      entry.textContent = text;
+      stageOverlayList.appendChild(entry);
+    }
   }
 }
 
 /**
  * Renders per-perspective aggregate statistics into the stats panel.
- * Reads from the pre-computed `edgeGuardEvents` array — O(n) scan,
- * called on replay load and whenever the perspective changes.
  */
 function renderStatsPanel(replay: Replay): void {
   statsPanel.innerHTML = "";
+  const tr = t();
+
   const edgeEvents = matchEvents.filter(
     (ev): ev is EdgeGuardEvent =>
       ev.kind === "situation-entered" ||
@@ -489,7 +617,7 @@ function renderStatsPanel(replay: Replay): void {
     pctSpan.textContent = pct(successes, total);
 
     val.appendChild(pctSpan);
-    val.append(`  ${successes} / ${total} situation${total !== 1 ? "s" : ""}`);
+    val.append(`  ${tr.situations(successes, total)}`);
 
     row.appendChild(lbl);
     row.appendChild(val);
@@ -533,102 +661,62 @@ function renderStatsPanel(replay: Replay): void {
   statsPanel.appendChild(header);
 
   addRow(
-    "Recovery",
+    tr.recovery,
     stats.recoverySuccesses,
     stats.recoverySituations,
     "pct-success",
   );
   addRow(
-    "Edge guard",
+    tr.edgeGuard,
     stats.edgeGuardSuccesses,
     stats.edgeGuardSituations,
     "pct-success",
   );
   addRow(
-    "Ledge getup",
+    tr.ledgeGetup,
     ledgeStats.ledgeGetupSuccesses,
     ledgeStats.ledgeGetupSituations,
     "pct-success",
   );
   addRow(
-    "Ledge trap",
+    tr.ledgeTrap,
     ledgeStats.ledgeTrapSuccesses,
     ledgeStats.ledgeTrapSituations,
     "pct-success",
   );
   addRow(
-    "Angel avoid",
+    tr.angelAvoid,
     angelStats.avoidSuccesses,
     angelStats.avoidSituations,
     "pct-success",
   );
   addValueRow(
-    "Neutral hits / stock taken",
+    tr.neutralHitsPerStock,
     neutralStats.averageHitsPerStock !== null
       ? neutralStats.averageHitsPerStock.toFixed(1)
       : "—",
     neutralStats.stocksTaken > 0
-      ? `${neutralStats.totalHitsLanded} hits across ${neutralStats.stocksTaken} stock${neutralStats.stocksTaken !== 1 ? "s" : ""} taken`
-      : "no stocks taken",
+      ? tr.neutralHitsTakenSummary(
+          neutralStats.totalHitsLanded,
+          neutralStats.stocksTaken,
+        )
+      : tr.noStocksTaken,
   );
-}
-
-/**
- * Updates the visibility and `is-current` highlight of event log entries.
- * Only entries up to `frameIndex` are revealed, so the log starts clear
- * on page load / frame 0 and populates as playback progresses.
- */
-function updateEventLogHighlight(frameIndex: number): void {
-  if (currentLogEvents.length === 0) {
-    eventLogEmpty.textContent =
-      "No events — load a Dream Land 2-player replay.";
-    eventLogEmpty.hidden = false;
-    return;
-  }
-
-  let found = -1;
-  for (let i = 0; i < currentLogEvents.length; i++) {
-    const ev = currentLogEvents[i];
-    const el = currentLogEls[i];
-    if (!ev || !el) continue;
-
-    const hasOccurred = ev.frameIndex <= frameIndex;
-    el.hidden = !hasOccurred;
-    if (hasOccurred) {
-      found = i;
-    }
-  }
-
-  if (found === -1) {
-    eventLogEmpty.textContent = "No events yet.";
-    eventLogEmpty.hidden = false;
-  } else {
-    eventLogEmpty.hidden = true;
-  }
-
-  for (let i = 0; i < currentLogEls.length; i++) {
-    const el = currentLogEls[i];
-    if (!el) continue;
-    const isCurrent = i === found;
-    el.classList.toggle("is-current", isCurrent);
-    if (isCurrent) {
-      el.scrollIntoView({ block: "nearest" });
-    }
-  }
 }
 
 function onFrameChange(
   index: number,
-  playing: boolean,
+  isPlaying: boolean,
   reason: FrameChangeReason,
 ): void {
-  if (!currentReplay) return;
-  scrubber.value = String(index);
-  const frame = currentReplay.frames[index];
-  const frameNumber = frame?.frame ?? index;
-  frameLabel.textContent = `Frame ${frameNumber} / ${currentReplay.frames.length - 1}  ·  ${formatElapsed(index)}`;
-  playPauseBtn.textContent = playing ? "⏸" : "▶";
+  const frame = currentReplay?.frames[index];
   renderFrame(frame, index, reason === "jump");
+  scrubber.value = String(index);
+  playPauseBtn.textContent = isPlaying ? "⏸" : "▶";
+
+  const totalFrames = currentReplay?.frames.length ?? 0;
+  const elapsed = formatElapsed(index);
+  frameLabel.textContent = `Frame ${index} / ${Math.max(0, totalFrames - 1)} (${elapsed})`;
   updateEventLogHighlight(index);
 }
 
@@ -649,7 +737,8 @@ function resizeStageCanvas(): void {
 
 function loadReplay(loaded: LoadedReplay): void {
   playback?.pause();
-  const { replay, sourceName, recordedAt } = loaded;
+  currentLoaded = loaded;
+  const { replay } = loaded;
   currentReplay = replay;
   const edgeEvents = computeEdgeGuardEvents(replay);
   const ledgeEvents = computeLedgeTrapEvents(replay);
@@ -683,11 +772,7 @@ function loadReplay(loaded: LoadedReplay): void {
   buildPerspectiveToggle(replay);
   renderStatsPanel(replay);
   buildEventLog(replay);
-
-  const recordedLabel = `Recorded ${recordedAt.toLocaleString()}`;
-  fileInfo.textContent =
-    `${sourceName} — ${stageName(replay.gameStart.stageId)}, ${recordedLabel}, ` +
-    `${replay.frames.length} frames, ${replay.isComplete ? "complete" : "incomplete recording"}`;
+  updateFileInfo(loaded);
   loadStatus.textContent = "";
 
   scrubber.max = String(Math.max(0, replay.frames.length - 1));
@@ -697,11 +782,30 @@ function loadReplay(loaded: LoadedReplay): void {
   onFrameChange(0, false, "jump");
 }
 
+function applyLanguage(lang: Language): void {
+  setLanguage(lang);
+  updateStaticTranslations();
+  for (const btn of langToggleEl.querySelectorAll<HTMLButtonElement>(
+    ".lang-btn",
+  )) {
+    btn.classList.toggle("active", btn.dataset.lang === lang);
+  }
+  if (currentReplay && currentLoaded) {
+    buildPlayerPanels(currentReplay);
+    buildPerspectiveToggle(currentReplay);
+    renderStatsPanel(currentReplay);
+    buildEventLog(currentReplay);
+    updateFileInfo(currentLoaded);
+    onFrameChange(
+      playback?.currentIndex ?? 0,
+      playback?.isPlaying ?? false,
+      "jump",
+    );
+  }
+}
+
 async function loadDefault(): Promise<void> {
   try {
-    // import.meta.env.BASE_URL (not a hardcoded absolute path) so this
-    // still resolves under GitHub Pages' "/rmgr-viewer/" base - see
-    // vite.config.ts.
     const url = `${import.meta.env.BASE_URL}replays/20260825-105731-Marcela-Penelope.rmgr`;
     loadReplay(await loadReplayFromUrl(url));
   } catch (err) {
@@ -725,6 +829,30 @@ statsCollapseBtn.addEventListener("click", () => {
   statsCollapseBtn.classList.toggle("collapsed", statsCollapsed);
 });
 
+hudToggleBtn.addEventListener("click", () => {
+  hudOverlayEnabled = !hudOverlayEnabled;
+  hudToggleBtn.classList.toggle("active", hudOverlayEnabled);
+  try {
+    localStorage.setItem("rmgr-viewer-hud", String(hudOverlayEnabled));
+  } catch {
+    // Ignore localStorage write error
+  }
+  updateEventLogHighlight(playback?.currentIndex ?? 0);
+});
+
+hudToggleBtn.classList.toggle("active", hudOverlayEnabled);
+
+langToggleEl.addEventListener("click", (e) => {
+  const target = (e.target as HTMLElement).closest<HTMLButtonElement>(
+    ".lang-btn",
+  );
+  if (!target) return;
+  const lang = target.dataset.lang as Language | undefined;
+  if (lang === "en" || lang === "ja") {
+    applyLanguage(lang);
+  }
+});
+
 playPauseBtn.addEventListener("click", () => playback?.toggle());
 stepBackBtn.addEventListener("click", () => playback?.stepBackward());
 stepForwardBtn.addEventListener("click", () => playback?.stepForward());
@@ -745,9 +873,6 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("resize", resizeStageCanvas);
 
-// Re-render (without reframing the camera) so the hover coordinate label
-// tracks the cursor even while playback is paused and nothing else would
-// otherwise trigger a redraw.
 stageCanvas.addEventListener("mousemove", (e) => {
   if (!currentReplay) return;
   hoverScreen = { x: e.offsetX, y: e.offsetY };
@@ -768,5 +893,9 @@ stageCanvas.addEventListener("mouseleave", () => {
     hoverScreen,
   );
 });
+
+// Initialize active language
+const initialLang = initLanguage();
+applyLanguage(initialLang);
 
 void loadDefault();

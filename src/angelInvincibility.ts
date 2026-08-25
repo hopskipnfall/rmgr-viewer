@@ -8,6 +8,9 @@ const RESPAWN_STATES = new Set([
   0x009, // ReviveWait
 ]);
 
+/** Duration of spawn invulnerability after dropping off the revival platform (120f = 2.0s). */
+export const POST_DROP_INVULNERABILITY_FRAMES = 120;
+
 export type AngelInvincibilityEventKind =
   "angel-entered" | "angel-avoid-success" | "angel-avoid-failure";
 
@@ -45,6 +48,8 @@ export interface AngelInvincibilityStats {
 
 /**
  * Computes all angel (spawn/respawn) invincibility events in chronological order.
+ * Tracks the platform descent/wait and the subsequent 120-frame (2-second)
+ * post-drop spawn invincibility window.
  */
 export function computeAngelInvincibilityEvents(
   replay: Replay,
@@ -57,23 +62,20 @@ export function computeAngelInvincibilityEvents(
 
   for (const respawnPort of seated) {
     const oppPort = respawnPort === portA ? portB : portA;
-    let inSpawn = false;
+    let inPlatform = false;
     let startIdx = 0;
-    let oppDamageAtStart = 0;
 
     for (let i = 0; i < replay.frames.length; i++) {
       const f = replay.frames[i];
       if (!f) continue;
       const pPost = f.ports[respawnPort]?.post;
-      const oppPost = f.ports[oppPort]?.post;
-      if (!pPost || !oppPost) continue;
+      if (!pPost) continue;
 
-      const isSpawn = RESPAWN_STATES.has(pPost.actionStateId);
+      const isPlat = RESPAWN_STATES.has(pPost.actionStateId);
 
-      if (isSpawn && !inSpawn) {
-        inSpawn = true;
+      if (isPlat && !inPlatform) {
+        inPlatform = true;
         startIdx = i;
-        oppDamageAtStart = oppPost.damagePercent;
 
         events.push({
           frame: f.frame,
@@ -82,15 +84,24 @@ export function computeAngelInvincibilityEvents(
           respawnPort,
           oppPort,
         });
-      } else if (!isSpawn && inSpawn) {
-        inSpawn = false;
-        const endFrame = replay.frames[i - 1]?.frame ?? f.frame;
-        const oppDamageAtEnd = oppPost.damagePercent;
+      } else if (!isPlat && inPlatform) {
+        inPlatform = false;
+        const dropIdx = i;
+        const endIdx = Math.min(
+          replay.frames.length - 1,
+          dropIdx + POST_DROP_INVULNERABILITY_FRAMES,
+        );
+        const endFrame = replay.frames[endIdx]?.frame ?? f.frame;
+
+        const oppDamageAtStart =
+          replay.frames[startIdx]?.ports[oppPort]?.post?.damagePercent ?? 0;
+        const oppDamageAtEnd =
+          replay.frames[endIdx]?.ports[oppPort]?.post?.damagePercent ?? 0;
         const damageTaken = Math.max(0, oppDamageAtEnd - oppDamageAtStart);
 
         let hitsTaken = 0;
         let lastCombo: number | undefined;
-        for (let j = startIdx; j < i; j++) {
+        for (let j = startIdx; j <= endIdx; j++) {
           const oPost = replay.frames[j]?.ports[oppPort]?.post;
           if (!oPost) continue;
           if (
@@ -106,7 +117,7 @@ export function computeAngelInvincibilityEvents(
 
         events.push({
           frame: endFrame,
-          frameIndex: i - 1,
+          frameIndex: endIdx,
           kind: avoided ? "angel-avoid-success" : "angel-avoid-failure",
           respawnPort,
           oppPort,
