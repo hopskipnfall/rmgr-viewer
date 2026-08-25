@@ -802,28 +802,33 @@
         border-left-color: var(--accent);
       }
       .hud-toggle-btn {
-        margin-left: auto;
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
-        padding: 2px 6px;
-        border-radius: 4px;
+        letter-spacing: 0.04em;
+        padding: 6px 10px;
+        border-radius: 6px;
         border: 1px solid var(--panel-border);
         cursor: pointer;
-        background: transparent;
-        color: var(--text-dim);
+        background: #181a20;
+        color: #717684;
         transition:
           background 0.1s,
           color 0.1s,
           border-color 0.1s;
       }
       .hud-toggle-btn:hover {
-        color: var(--text);
-        border-color: var(--text-dim);
+        background: #22252f;
+        color: #9da3b4;
+        border-color: #3b4050;
       }
       .hud-toggle-btn.active {
-        color: #fff;
-        border-color: var(--accent);
-        background: var(--accent);
+        color: #f1f2f6;
+        border-color: #4e5569;
+        background: #343946;
+      }
+      .hud-toggle-btn.active:hover {
+        background: #3e4454;
+        border-color: #5d657d;
       }
       #stage {
         display: block;
