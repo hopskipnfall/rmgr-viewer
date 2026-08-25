@@ -1,0 +1,225 @@
+import { describe, it, expect } from "vitest";
+import {
+  getAttackInfo,
+  isCrouchState,
+  isDeadState,
+  isGrabbedState,
+  isShieldState,
+  isShieldStunState,
+  isSpecialState,
+  isTauntState,
+} from "./renderer.js";
+
+describe("isShieldState", () => {
+  it("identifies shield action states correctly", () => {
+    expect(isShieldState(0x098)).toBe(true); // ShieldOn
+    expect(isShieldState(0x099)).toBe(true); // Shield
+    expect(isShieldState(0x09a)).toBe(true); // ShieldOff
+    expect(isShieldState(0x09b)).toBe(true); // ShieldStun
+  });
+
+  it("returns false for non-shield action states", () => {
+    expect(isShieldState(0x000)).toBe(false); // DeadDown
+    expect(isShieldState(0x014)).toBe(false); // JumpSquat
+    expect(isShieldState(0x01a)).toBe(false); // Fall
+    expect(isShieldState(0x039)).toBe(false); // Tumble
+    expect(isShieldState(0x09c)).toBe(false); // RollF
+    expect(isShieldState(0x09e)).toBe(false); // ShieldBreak
+    expect(isShieldState(0x0a6)).toBe(false); // Grab
+  });
+});
+
+describe("isShieldStunState", () => {
+  it("identifies shield stun action state correctly", () => {
+    expect(isShieldStunState(0x09b)).toBe(true); // ShieldStun
+  });
+
+  it("returns false for other shield and non-shield states", () => {
+    expect(isShieldStunState(0x098)).toBe(false); // ShieldOn
+    expect(isShieldStunState(0x099)).toBe(false); // Shield
+    expect(isShieldStunState(0x09a)).toBe(false); // ShieldOff
+    expect(isShieldStunState(0x00a)).toBe(false); // Idle
+  });
+});
+
+describe("isSpecialState", () => {
+  it("identifies special move action states correctly", () => {
+    expect(isSpecialState(0x0dc)).toBe(true);
+    expect(isSpecialState(0x0eb)).toBe(true);
+    expect(isSpecialState(0x100)).toBe(true);
+  });
+
+  it("returns false for standard action states", () => {
+    expect(isSpecialState(0x00a)).toBe(false); // Idle
+    expect(isSpecialState(0x0c7)).toBe(false); // UTilt
+    expect(isSpecialState(0x0cf)).toBe(false); // USmash
+    expect(isSpecialState(0x0d1)).toBe(false); // Nair
+  });
+});
+
+describe("isDeadState", () => {
+  it("identifies dead action states correctly", () => {
+    expect(isDeadState(0x000)).toBe(true); // DeadD
+    expect(isDeadState(0x001)).toBe(true); // DeadS
+    expect(isDeadState(0x002)).toBe(true); // DeadU
+    expect(isDeadState(0x003)).toBe(true); // ScreenKO
+    expect(isDeadState(0x004)).toBe(true); // ScreenKOWait
+  });
+
+  it("returns false for respawn / live action states", () => {
+    expect(isDeadState(0x005)).toBe(false); // Entry
+    expect(isDeadState(0x007)).toBe(false); // Revive1
+    expect(isDeadState(0x008)).toBe(false); // Revive2
+    expect(isDeadState(0x009)).toBe(false); // ReviveWait
+    expect(isDeadState(0x00a)).toBe(false); // Idle
+    expect(isDeadState(0x01a)).toBe(false); // Fall
+  });
+});
+
+describe("isGrabbedState", () => {
+  it("identifies captured/grabbed action states correctly", () => {
+    expect(isGrabbedState(0x0ab)).toBe(true); // CapturePull
+    expect(isGrabbedState(0x0ac)).toBe(true); // CaptureWait
+    expect(isGrabbedState(0x0ad)).toBe(true); // CaptureDamage
+  });
+
+  it("returns false for non-grabbed action states", () => {
+    expect(isGrabbedState(0x00a)).toBe(false); // Idle
+    expect(isGrabbedState(0x0a6)).toBe(false); // Grab (attacker)
+    expect(isGrabbedState(0x099)).toBe(false); // Shield
+  });
+});
+
+describe("isCrouchState", () => {
+  it("identifies crouch action states correctly", () => {
+    expect(isCrouchState(0x01c)).toBe(true); // Crouch
+    expect(isCrouchState(0x01d)).toBe(true); // CrouchIdle
+    expect(isCrouchState(0x01e)).toBe(true); // CrouchEnd
+  });
+
+  it("returns false for non-crouch action states", () => {
+    expect(isCrouchState(0x00a)).toBe(false); // Idle
+    expect(isCrouchState(0x00f)).toBe(false); // Dash
+    expect(isCrouchState(0x014)).toBe(false); // JumpSquat
+    expect(isCrouchState(0x01a)).toBe(false); // Fall
+    expect(isCrouchState(0x099)).toBe(false); // Shield
+  });
+});
+
+describe("isTauntState", () => {
+  it("identifies taunt action state correctly", () => {
+    expect(isTauntState(0x0bd)).toBe(true); // Taunt
+  });
+
+  it("returns false for non-taunt action states", () => {
+    expect(isTauntState(0x00a)).toBe(false); // Idle
+    expect(isTauntState(0x0be)).toBe(false); // Jab1
+    expect(isTauntState(0x01c)).toBe(false); // Crouch
+    expect(isTauntState(0x099)).toBe(false); // Shield
+  });
+});
+
+describe("getAttackInfo", () => {
+  it("identifies jab attacks correctly", () => {
+    expect(getAttackInfo(0x0be)).toEqual({
+      type: "jab",
+      direction: "forward",
+    }); // Jab1
+    expect(getAttackInfo(0x0bf)).toEqual({
+      type: "jab",
+      direction: "forward",
+    }); // Jab2
+  });
+
+  it("identifies grab attempts correctly", () => {
+    expect(getAttackInfo(0x0a6)).toEqual({
+      type: "grab",
+      direction: "forward",
+    }); // Grab
+    expect(getAttackInfo(0x0a7)).toEqual({
+      type: "grab",
+      direction: "forward",
+    }); // GrabPull
+    expect(getAttackInfo(0x0a8)).toEqual({
+      type: "grab",
+      direction: "forward",
+    }); // GrabWait
+  });
+
+  it("identifies tilt attacks correctly", () => {
+    expect(getAttackInfo(0x0c7)).toEqual({
+      type: "tilt",
+      direction: "up",
+    }); // UTilt
+    expect(getAttackInfo(0x0c9)).toEqual({
+      type: "tilt",
+      direction: "down",
+    }); // DTilt
+    expect(getAttackInfo(0x0c1)).toEqual({
+      type: "tilt",
+      direction: "forward",
+    }); // FTilt High
+    expect(getAttackInfo(0x0c3)).toEqual({
+      type: "tilt",
+      direction: "forward",
+    }); // FTilt Mid
+    expect(getAttackInfo(0x0c5)).toEqual({
+      type: "tilt",
+      direction: "forward",
+    }); // FTilt Low
+  });
+
+  it("identifies smash attacks correctly", () => {
+    expect(getAttackInfo(0x0cf)).toEqual({
+      type: "smash",
+      direction: "up",
+    }); // USmash
+    expect(getAttackInfo(0x0d0)).toEqual({
+      type: "smash",
+      direction: "down",
+    }); // DSmash
+    expect(getAttackInfo(0x0ca)).toEqual({
+      type: "smash",
+      direction: "forward",
+    }); // FSmash High
+    expect(getAttackInfo(0x0cc)).toEqual({
+      type: "smash",
+      direction: "forward",
+    }); // FSmash Mid
+    expect(getAttackInfo(0x0ce)).toEqual({
+      type: "smash",
+      direction: "forward",
+    }); // FSmash Low
+  });
+
+  it("identifies aerial attacks correctly", () => {
+    expect(getAttackInfo(0x0d1)).toEqual({
+      type: "aerial",
+      direction: "neutral",
+    }); // Nair
+    expect(getAttackInfo(0x0d2)).toEqual({
+      type: "aerial",
+      direction: "forward",
+    }); // Fair
+    expect(getAttackInfo(0x0d3)).toEqual({
+      type: "aerial",
+      direction: "back",
+    }); // Bair
+    expect(getAttackInfo(0x0d4)).toEqual({
+      type: "aerial",
+      direction: "up",
+    }); // Uair
+    expect(getAttackInfo(0x0d5)).toEqual({
+      type: "aerial",
+      direction: "down",
+    }); // Dair
+  });
+
+  it("returns null for non-attack states", () => {
+    expect(getAttackInfo(0x00a)).toBeNull(); // Idle
+    expect(getAttackInfo(0x0c0)).toBeNull(); // DashAttack
+    expect(getAttackInfo(0x0db)).toBeNull(); // LandingAirX
+    expect(getAttackInfo(0x099)).toBeNull(); // Shield
+    expect(getAttackInfo(0x0ab)).toBeNull(); // CapturePull
+  });
+});
