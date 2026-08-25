@@ -9,7 +9,7 @@ import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_COLORS, PORT_LABELS } from "../players.js";
 import { StageRenderer } from "../renderer.js";
-import { actionStateName, characterName, stageName } from "../lookups.js";
+import { actionStateName, characterName } from "../lookups.js";
 import { t } from "../i18n.js";
 import {
   computeNeutralHitEvents,
@@ -65,7 +65,6 @@ export class MatchViewController {
   private stageCanvas: HTMLCanvasElement;
   private stageWrap: HTMLDivElement;
   private playersEl: HTMLDivElement;
-  private fileInfo: HTMLSpanElement;
   private loadStatus: HTMLSpanElement;
   private stepBackBtn: HTMLButtonElement;
   private playPauseBtn: HTMLButtonElement;
@@ -104,7 +103,6 @@ export class MatchViewController {
     this.stageCanvas = document.getElementById("stage") as HTMLCanvasElement;
     this.stageWrap = document.getElementById("stageWrap") as HTMLDivElement;
     this.playersEl = document.getElementById("players") as HTMLDivElement;
-    this.fileInfo = document.getElementById("fileInfo") as HTMLSpanElement;
     this.loadStatus = document.getElementById("loadStatus") as HTMLSpanElement;
     this.stepBackBtn = document.getElementById("stepBack") as HTMLButtonElement;
     this.playPauseBtn = document.getElementById(
@@ -252,22 +250,12 @@ export class MatchViewController {
       this.buildPerspectiveToggle(this.currentReplay);
       this.renderStatsPanel(this.currentReplay);
       this.buildEventLog();
-      this.updateFileInfo(this.currentLoaded);
       this.onFrameChange(
         this.playback?.currentIndex ?? 0,
         this.playback?.isPlaying ?? false,
         "jump",
       );
     }
-  }
-
-  private updateFileInfo(loaded: LoadedReplay): void {
-    const { replay, sourceName, recordedAt } = loaded;
-    const tr = t();
-    const recordedLabel = tr.recordedLabel(recordedAt.toLocaleString());
-    const framesCount = tr.framesLabel(replay.frames.length);
-    const statusStr = replay.isComplete ? tr.complete : tr.incomplete;
-    this.fileInfo.textContent = `${sourceName} — ${stageName(replay.gameStart.stageId)}, ${recordedLabel}, ${framesCount}, ${statusStr}`;
   }
 
   private buildPlayerPanels(replay: Replay): void {
@@ -879,7 +867,6 @@ export class MatchViewController {
     this.buildPerspectiveToggle(replay);
     this.renderStatsPanel(replay);
     this.buildEventLog();
-    this.updateFileInfo(loaded);
     this.loadStatus.textContent = "";
 
     this.scrubber.max = String(Math.max(0, replay.frames.length - 1));
