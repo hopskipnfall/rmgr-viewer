@@ -5,6 +5,7 @@ import {
   isCrouchState,
   isDeadState,
   isGrabbedState,
+  isLandingState,
   isShieldState,
   isShieldStunState,
   isSpecialState,
@@ -45,6 +46,22 @@ describe("isShieldStunState", () => {
     expect(isShieldStunState(0x099)).toBe(false); // Shield
     expect(isShieldStunState(0x09a)).toBe(false); // ShieldOff
     expect(isShieldStunState(0x00a)).toBe(false); // Idle
+  });
+});
+
+describe("isLandingState", () => {
+  it("identifies landing action states correctly", () => {
+    expect(isLandingState(0x01f)).toBe(true); // LandingLight
+    expect(isLandingState(0x020)).toBe(true); // LandingHeavy
+    expect(isLandingState(0x03b)).toBe(true); // LandingSpecial
+    expect(isLandingState(0x0db)).toBe(true); // LandingAirX
+  });
+
+  it("returns false for non-landing action states", () => {
+    expect(isLandingState(0x00a)).toBe(false); // Idle
+    expect(isLandingState(0x01a)).toBe(false); // Fall
+    expect(isLandingState(0x01c)).toBe(false); // Crouch
+    expect(isLandingState(0x099)).toBe(false); // Shield
   });
 });
 
