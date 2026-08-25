@@ -355,7 +355,7 @@ export class StageRenderer {
     const size = characterSize(post.characterId);
     const crouching = isCrouchState(post.actionStateId);
     const heightPx = camera.worldLengthToScreen(
-      size.height * (crouching ? 0.7 : 1.0),
+      size.height * (crouching ? 0.5 : 1.0),
     );
     const halfWidth = camera.worldLengthToScreen(size.width) / 2;
     const topY = y - heightPx;
