@@ -3,6 +3,13 @@ import { Camera } from "./camera.js";
 import { PORT_COLORS } from "./players.js";
 import { stageGeometry, type PlatformSpec } from "./stageGeometry.js";
 import { characterSize } from "./characterSizes.js";
+import {
+  EDGE_GUARD_STAGE_ID,
+  ZONE_Y_LO,
+  ZONE_Y_HI,
+  ZONE_X_AT_Y_LO,
+  ZONE_X_AT_Y_HI,
+} from "./edgeGuard.js";
 
 export class StageRenderer {
   private readonly ctx: CanvasRenderingContext2D;
@@ -23,6 +30,7 @@ export class StageRenderer {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     this.drawBackground();
+    this.drawEdgeGuardZone(camera, stageId);
     this.drawStage(camera, stageId);
 
     if (frame) {
@@ -37,6 +45,83 @@ export class StageRenderer {
     if (hoverScreen) {
       this.drawHoverCoordinates(camera, hoverScreen);
     }
+  }
+
+  /**
+   * Shades the edge-guard danger zone on stages where the zone is defined
+   * (currently Dream Land only). The zone boundary is a diagonal line from
+   * (ZONE_X_AT_Y_LO, ZONE_Y_LO) to (ZONE_X_AT_Y_HI, ZONE_Y_HI), mirrored
+   * on the left side. Everything outside this line is the danger zone.
+   *
+   * We draw the shaded area as a canvas polygon using world→screen transforms,
+   * so it tracks the camera automatically. We extend the polygon far off-screen
+   * (in world space) so the fill covers the blast-zone region without needing
+   * to know the actual blast-zone bounds.
+   */
+  private drawEdgeGuardZone(camera: Camera, stageId: number | undefined): void {
+    if (stageId !== EDGE_GUARD_STAGE_ID) return;
+
+    const { ctx } = this;
+    const FAR = 12000; // well past any realistic blast-zone coordinate
+
+    // Right danger zone: a quadrilateral whose left edge is the diagonal
+    // boundary and whose right/top/bottom edges extend to FAR.
+    // Points in world space (Y up), traversed clockwise:
+    //   top-left corner of zone = (ZONE_X_AT_Y_LO, ZONE_Y_LO)
+    //   top-right far corner    = (FAR, ZONE_Y_LO)
+    //   bottom-right far corner = (FAR, -FAR)
+    //   bottom-left far corner  = (ZONE_X_AT_Y_HI, -FAR)
+    //   then back up the diagonal to close.
+    // We also extend the zone above Y_LO (using X_AT_Y_LO as the fixed
+    // threshold) and below Y_HI (using X_AT_Y_HI as the fixed threshold).
+
+    const drawZoneSide = (sign: 1 | -1): void => {
+      const pts: Array<{ wx: number; wy: number }> = [
+        { wx: sign * ZONE_X_AT_Y_HI, wy: FAR },
+        { wx: sign * FAR, wy: FAR },
+        { wx: sign * FAR, wy: -FAR },
+        { wx: sign * ZONE_X_AT_Y_LO, wy: -FAR },
+        { wx: sign * ZONE_X_AT_Y_LO, wy: ZONE_Y_LO },
+        { wx: sign * ZONE_X_AT_Y_HI, wy: ZONE_Y_HI },
+      ];
+
+      ctx.beginPath();
+      for (let i = 0; i < pts.length; i++) {
+        const pt = pts[i];
+        if (!pt) continue;
+        const s = camera.worldToScreen(pt.wx, pt.wy);
+        if (i === 0) ctx.moveTo(s.x, s.y);
+        else ctx.lineTo(s.x, s.y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255, 140, 40, 0.08)";
+      ctx.fill();
+
+      // Draw the full boundary line (top vertical extension, diagonal, bottom vertical extension)
+      const boundaryPts: Array<{ wx: number; wy: number }> = [
+        { wx: sign * ZONE_X_AT_Y_HI, wy: FAR },
+        { wx: sign * ZONE_X_AT_Y_HI, wy: ZONE_Y_HI },
+        { wx: sign * ZONE_X_AT_Y_LO, wy: ZONE_Y_LO },
+        { wx: sign * ZONE_X_AT_Y_LO, wy: -FAR },
+      ];
+
+      ctx.beginPath();
+      for (let i = 0; i < boundaryPts.length; i++) {
+        const pt = boundaryPts[i];
+        if (!pt) continue;
+        const s = camera.worldToScreen(pt.wx, pt.wy);
+        if (i === 0) ctx.moveTo(s.x, s.y);
+        else ctx.lineTo(s.x, s.y);
+      }
+      ctx.strokeStyle = "rgba(255, 140, 40, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+
+    drawZoneSide(1); // right
+    drawZoneSide(-1); // left
   }
 
   private drawBackground(): void {

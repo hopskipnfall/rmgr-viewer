@@ -1,22 +1,24 @@
-import type { PortIndex, Replay } from "@rmg-k/rmgr";
+import { getSeatedPorts, type PortIndex, type Replay } from "@rmg-k/rmgr";
 
 const PORTS: readonly PortIndex[] = [0, 1, 2, 3];
 
+/** Action states where the player is captured/held/thrown by a grab. */
+const CAPTURE_STATES = new Set([
+  0x0ab, // CapturePull
+  0x0ac, // CaptureWait
+  0x0ad, // CaptureDamage
+  0x0ba, // DamageThrown / Thrown
+  0x0bb,
+]);
+
 /**
- * For each seated port, how many neutral hits (fresh combos - a
- * `comboHitCount` 0 -> nonzero transition; staying nonzero across
- * subsequent hits is the same combo, not a new one) that port has taken in
- * its *current* stock, indexed the same way as `replay.frames` (so
- * `result[port][frameIndex]` matches `replay.frames[frameIndex]`). Resets
- * to 0 starting the frame after `stocksRemaining` drops - the hit that
- * caused the KO (if it lands the same frame the drop is observed) is still
- * counted against the stock that just ended.
+ * For each seated port, how many neutral hits (fresh combos or grabs) that
+ * port has taken in its *current* stock, indexed the same way as `replay.frames`
+ * (so `result[port][frameIndex]` matches `replay.frames[frameIndex]`). Resets
+ * to 0 starting the frame after `stocksRemaining` drops.
  *
  * Precomputed once per loaded replay rather than tracked incrementally
- * during playback: this viewer allows scrubbing/seeking to any frame in
- * any order, so an incremental counter would need recomputing from
- * scratch on every seek anyway - doing the whole pass once up front is
- * both simpler and correct regardless of playback direction.
+ * during playback.
  */
 export function computeNeutralHitsPerStock(
   replay: Replay,
@@ -28,6 +30,7 @@ export function computeNeutralHitsPerStock(
     let neutralHits = 0;
     let lastComboHitCount: number | undefined;
     let lastStocksRemaining: number | undefined;
+    let lastInCapture = false;
 
     for (let i = 0; i < replay.frames.length; i++) {
       const post = replay.frames[i]?.ports[port]?.post;
@@ -36,11 +39,14 @@ export function computeNeutralHitsPerStock(
         continue;
       }
 
-      const isFreshHit =
+      const inCapture = CAPTURE_STATES.has(post.actionStateId);
+      const isFreshAttackHit =
         lastComboHitCount !== undefined
-          ? lastComboHitCount === 0 && post.comboHitCount > 0
-          : post.comboHitCount > 0; // first observation - no prior state, so an already-nonzero count still counts as one hit
-      if (isFreshHit) {
+          ? lastComboHitCount === 0 && post.comboHitCount > 0 && !lastInCapture
+          : post.comboHitCount > 0;
+      const isFreshGrab = inCapture && !lastInCapture;
+
+      if (isFreshAttackHit || isFreshGrab) {
         neutralHits++;
       }
 
@@ -55,10 +61,174 @@ export function computeNeutralHitsPerStock(
 
       lastComboHitCount = post.comboHitCount;
       lastStocksRemaining = post.stocksRemaining;
+      lastInCapture = inCapture;
     }
 
     result[port] = values;
   }
 
   return result;
+}
+
+export interface NeutralHitEvent {
+  readonly frame: number;
+  readonly frameIndex: number;
+  readonly kind: "neutral-hit";
+  readonly attackerPort: PortIndex;
+  readonly victimPort: PortIndex;
+  readonly hitType: "attack" | "grab";
+}
+
+/**
+ * Computes all neutral hit and grab events in chronological order.
+ */
+export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
+  const events: NeutralHitEvent[] = [];
+  const seated = getSeatedPorts(replay);
+  if (seated.length !== 2) return events;
+
+  const [portA, portB] = seated as [PortIndex, PortIndex];
+
+  let lastACombo: number | undefined;
+  let lastBCombo: number | undefined;
+  let lastAInCapture = false;
+  let lastBInCapture = false;
+
+  for (let i = 0; i < replay.frames.length; i++) {
+    const frame = replay.frames[i];
+    if (!frame) continue;
+    const postA = frame.ports[portA]?.post;
+    const postB = frame.ports[portB]?.post;
+    if (!postA || !postB) continue;
+
+    const frameNumber = frame.frame;
+    const aInCapture = CAPTURE_STATES.has(postA.actionStateId);
+    const bInCapture = CAPTURE_STATES.has(postB.actionStateId);
+
+    // Check if A hit/grabbed B
+    const aHitB =
+      (lastBCombo === 0 || lastBCombo === undefined) &&
+      postB.comboHitCount > 0 &&
+      !lastBInCapture;
+    const aGrabbedB = bInCapture && !lastBInCapture;
+
+    if (aHitB || aGrabbedB) {
+      events.push({
+        frame: frameNumber,
+        frameIndex: i,
+        kind: "neutral-hit",
+        attackerPort: portA,
+        victimPort: portB,
+        hitType: aGrabbedB ? "grab" : "attack",
+      });
+    }
+
+    // Check if B hit/grabbed A
+    const bHitA =
+      (lastACombo === 0 || lastACombo === undefined) &&
+      postA.comboHitCount > 0 &&
+      !lastAInCapture;
+    const bGrabbedA = aInCapture && !lastAInCapture;
+
+    if (bHitA || bGrabbedA) {
+      events.push({
+        frame: frameNumber,
+        frameIndex: i,
+        kind: "neutral-hit",
+        attackerPort: portB,
+        victimPort: portA,
+        hitType: bGrabbedA ? "grab" : "attack",
+      });
+    }
+
+    lastACombo = postA.comboHitCount;
+    lastBCombo = postB.comboHitCount;
+    lastAInCapture = aInCapture;
+    lastBInCapture = bInCapture;
+  }
+
+  return events;
+}
+
+export interface NeutralHitsStats {
+  /** Total completed stocks taken from opponent(s). */
+  stocksTaken: number;
+  /** Total neutral hits landed across all taken stocks. */
+  totalHitsLanded: number;
+  /** Average number of neutral hits per stock taken, or null if no stocks taken. */
+  averageHitsPerStock: number | null;
+}
+
+/**
+ * Computes the average number of neutral hits landed by `attackerPort`
+ * before taking each stock from opponent(s). Grabs are counted as hits.
+ */
+export function computeNeutralHitsStats(
+  replay: Replay,
+  attackerPort: PortIndex,
+): NeutralHitsStats {
+  const seated = getSeatedPorts(replay);
+  const opponents = seated.filter((p) => p !== attackerPort);
+  if (opponents.length === 0) {
+    return { stocksTaken: 0, totalHitsLanded: 0, averageHitsPerStock: null };
+  }
+
+  const hitsPerStockTaken: number[] = [];
+
+  for (const victimPort of opponents) {
+    let currentStockHits = 0;
+    let lastComboHitCount: number | undefined;
+    let lastStocksRemaining: number | undefined;
+    let lastInCapture = false;
+
+    for (let i = 0; i < replay.frames.length; i++) {
+      const post = replay.frames[i]?.ports[victimPort]?.post;
+      if (!post) continue;
+
+      const inCapture = CAPTURE_STATES.has(post.actionStateId);
+      const isFreshAttackHit =
+        lastComboHitCount !== undefined
+          ? lastComboHitCount === 0 && post.comboHitCount > 0 && !lastInCapture
+          : post.comboHitCount > 0;
+      const isFreshGrab = inCapture && !lastInCapture;
+
+      if (isFreshAttackHit || isFreshGrab) {
+        currentStockHits++;
+      }
+
+      const stockLost =
+        lastStocksRemaining !== undefined &&
+        post.stocksRemaining < lastStocksRemaining;
+      if (stockLost) {
+        hitsPerStockTaken.push(currentStockHits);
+        currentStockHits = 0;
+      }
+
+      lastComboHitCount = post.comboHitCount;
+      lastStocksRemaining = post.stocksRemaining;
+      lastInCapture = inCapture;
+    }
+
+    // If recording is complete and the opponent lost the match at the end,
+    // count that final stock taken as well.
+    if (
+      replay.isComplete &&
+      replay.gameEnd &&
+      replay.gameEnd.placements[victimPort] === -1 &&
+      currentStockHits > 0
+    ) {
+      hitsPerStockTaken.push(currentStockHits);
+    }
+  }
+
+  const stocksTaken = hitsPerStockTaken.length;
+  const totalHitsLanded = hitsPerStockTaken.reduce((sum, h) => sum + h, 0);
+  const averageHitsPerStock =
+    stocksTaken > 0 ? totalHitsLanded / stocksTaken : null;
+
+  return {
+    stocksTaken,
+    totalHitsLanded,
+    averageHitsPerStock,
+  };
 }

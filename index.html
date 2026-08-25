@@ -14,6 +14,9 @@
         --text-dim: #8b8f9c;
         --accent: #4f7fdb;
       }
+      [hidden] {
+        display: none !important;
+      }
       * {
         box-sizing: border-box;
       }
@@ -94,14 +97,191 @@
         width: 100%;
         height: 100%;
       }
-      #players {
+      #sidebar {
         width: 320px;
         flex-shrink: 0;
         display: flex;
         flex-direction: column;
         gap: 10px;
-        overflow-y: auto;
         min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      #players {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      #matchStats,
+      #eventLog {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      #matchStatsHeader,
+      #eventLogHeader {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--panel-border);
+        flex-shrink: 0;
+        flex-wrap: wrap;
+      }
+      #statsCollapseBtn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: var(--text-dim);
+      }
+      #statsCollapseBtn:hover {
+        color: var(--text);
+      }
+      .collapse-icon {
+        font-size: 8px;
+        transition: transform 0.15s ease;
+      }
+      #statsCollapseBtn.collapsed .collapse-icon {
+        transform: rotate(-90deg);
+      }
+      #matchStatsHeader h2,
+      #eventLogHeader h2 {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0;
+        flex-shrink: 0;
+      }
+      #statsCollapseBtn:hover h2 {
+        color: var(--text);
+      }
+      #perspectiveToggle {
+        display: flex;
+        gap: 4px;
+        margin-left: auto;
+        flex-wrap: wrap;
+      }
+      .perspective-btn {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        background: transparent;
+        color: var(--text-dim);
+        opacity: 0.55;
+        transition: opacity 0.1s;
+      }
+      .perspective-btn.active {
+        opacity: 1;
+        border-color: currentColor;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      #statsPanel {
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 12px;
+      }
+      #statsPanel[hidden] {
+        display: none !important;
+      }
+      #statsEmpty {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin: 0;
+      }
+      .stat-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .stat-row-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-dim);
+      }
+      .stat-row-value {
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+        font-size: 13px;
+      }
+      .stat-pct {
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .stat-pct.pct-success {
+        color: #4fbf6a;
+      }
+      .stat-pct.pct-failure {
+        color: #e0473f;
+      }
+      #eventLogList {
+        overflow-y: auto;
+        max-height: 240px;
+        padding: 4px 0;
+      }
+      #eventLogEmpty {
+        font-size: 12px;
+        color: var(--text-dim);
+        padding: 10px 12px;
+        margin: 0;
+      }
+      .event-log-entry {
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        padding: 4px 12px;
+        color: var(--text-dim);
+        border-left: 3px solid transparent;
+        cursor: default;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .event-log-entry.is-current {
+        color: var(--text);
+        background: rgba(79, 127, 219, 0.12);
+        border-left-color: var(--accent);
+      }
+      .event-log-entry.kind-entered {
+        color: var(--text-dim);
+      }
+      .event-log-entry.kind-neutral-hit {
+        color: var(--text-dim);
+      }
+      .event-log-entry.kind-success {
+        color: #4fbf6a;
+      }
+      .event-log-entry.kind-failure {
+        color: #e0473f;
+      }
+      .event-log-entry.is-current.kind-neutral-hit {
+        background: rgba(139, 143, 156, 0.14);
+        border-left-color: var(--text-dim);
+      }
+      .event-log-entry.is-current.kind-success {
+        background: rgba(79, 191, 106, 0.12);
+        border-left-color: #4fbf6a;
+      }
+      .event-log-entry.is-current.kind-failure {
+        background: rgba(224, 71, 63, 0.12);
+        border-left-color: #e0473f;
       }
       footer {
         flex-shrink: 0;
@@ -113,11 +293,19 @@
         main {
           flex-direction: column;
         }
-        #players {
+        #sidebar {
           width: 100%;
           flex-direction: row;
           flex-wrap: wrap;
           max-height: 45%;
+        }
+        #players {
+          width: 100%;
+          flex-direction: row;
+          flex-wrap: wrap;
+        }
+        #eventLog {
+          width: 100%;
         }
         .player-panel {
           flex: 1 1 260px;
@@ -155,6 +343,9 @@
       }
       .player-stats .full-row {
         grid-column: 1 / -1;
+      }
+      .stat-combo-hits.in-combo {
+        color: #ff9f43;
       }
       canvas.controller-pad {
         display: block;
@@ -214,7 +405,29 @@
       <div id="stageWrap">
         <canvas id="stage" width="960" height="540"></canvas>
       </div>
-      <aside id="players"></aside>
+      <aside id="sidebar">
+        <div id="players"></div>
+        <section id="matchStats">
+          <div id="matchStatsHeader">
+            <button id="statsCollapseBtn" title="Collapse / expand Match Stats">
+              <span class="collapse-icon">▼</span>
+              <h2>Match Stats</h2>
+            </button>
+            <div id="perspectiveToggle"></div>
+          </div>
+          <div id="statsPanel">
+            <p id="statsEmpty">No stats — load a Dream Land 2-player replay.</p>
+          </div>
+        </section>
+        <section id="eventLog">
+          <div id="eventLogHeader">
+            <h2>Event Log</h2>
+          </div>
+          <div id="eventLogList">
+            <p id="eventLogEmpty">No events yet.</p>
+          </div>
+        </section>
+      </aside>
     </main>
     <footer>
       <button id="stepBack" title="Previous frame">⏮</button>
