@@ -138,14 +138,15 @@ export function summarizeReplay(
   const ports: GamePortSummary[] = seated.map((port) => {
     const settings = replay.gameStart.ports[port];
     const name = replay.gameStart.playerNames[port] || "";
-    let finalStocks = -1;
+    let finalStocks = 0;
     if (replay.gameEnd) {
-      finalStocks = replay.gameEnd.placements[port] ?? -1;
+      const p = replay.gameEnd.placements[port];
+      finalStocks = p !== undefined && p >= 0 ? p + 1 : 0;
     } else if (replay.frames.length > 0) {
       const lastFrame = replay.frames[replay.frames.length - 1];
       const post = lastFrame?.ports[port]?.post;
       if (post) {
-        finalStocks = post.stocksRemaining + 1;
+        finalStocks = post.stocksRemaining >= 0 ? post.stocksRemaining + 1 : 0;
       }
     }
     return {

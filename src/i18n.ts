@@ -122,6 +122,10 @@ export interface Translations {
   add: string;
   save: string;
   cancel: string;
+  selectAll: string;
+  deselectAll: string;
+  selectYourNames: string;
+  noNamesSelected: string;
   noGamesMatched: string;
   removeGame: string;
   winRate: string;
@@ -250,6 +254,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     add: "Add",
     save: "Save",
     cancel: "Cancel",
+    selectAll: "Select all",
+    deselectAll: "Deselect all",
+    selectYourNames: "Select your names...",
+    noNamesSelected: "No name selected",
     noGamesMatched: "No games match the selected filters.",
     removeGame: "Remove replay",
     winRate: "Win Rate",
@@ -376,6 +384,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     add: "追加",
     save: "保存",
     cancel: "キャンセル",
+    selectAll: "すべて選択",
+    deselectAll: "すべて解除",
+    selectYourNames: "プレイヤー名を選択...",
+    noNamesSelected: "未選択",
     noGamesMatched: "条件に一致する試合がありません。",
     removeGame: "リプレイを削除",
     winRate: "勝率",

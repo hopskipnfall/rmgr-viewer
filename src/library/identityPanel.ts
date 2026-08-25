@@ -1,26 +1,25 @@
 import { t } from "../i18n.js";
 import type { GameSummary } from "../data/gameSummary.js";
-import {
-  type Identity,
-  extractAllPlayerNames,
-  saveIdentity,
-} from "../data/identity.js";
+import { type Identity, extractAllPlayerNames } from "../data/identity.js";
 
 export class IdentityPanel {
   private container: HTMLElement;
   private identity: Identity;
   private onIdentityChanged: (identity: Identity) => void;
   private modalContainer: HTMLElement;
+  private getSummaries: () => GameSummary[];
 
   constructor(
     container: HTMLElement,
     modalContainer: HTMLElement,
     identity: Identity,
+    getSummaries: () => GameSummary[],
     onIdentityChanged: (identity: Identity) => void,
   ) {
     this.container = container;
     this.modalContainer = modalContainer;
     this.identity = identity;
+    this.getSummaries = getSummaries;
     this.onIdentityChanged = onIdentityChanged;
   }
 
@@ -31,27 +30,39 @@ export class IdentityPanel {
 
   public render(): void {
     const tr = t();
+    const hasAliases = this.identity.aliases.size > 0;
+    const nameDisplay = hasAliases
+      ? escapeHtml(
+          this.identity.displayName ||
+            Array.from(this.identity.aliases)[0] ||
+            "",
+        )
+      : escapeHtml(tr.noNamesSelected);
+    const subDisplay = hasAliases
+      ? tr.aliasesCount(this.identity.aliases.size)
+      : escapeHtml(tr.selectYourNames);
+
     this.container.innerHTML = `
       <div class="identity-card-header">
         <span class="section-title">${tr.you}</span>
         <button class="edit-identity-btn" id="editIdentityBtn">${tr.edit}</button>
       </div>
-      <div class="identity-name">${escapeHtml(this.identity.displayName)}</div>
-      <div class="identity-aliases-count">${tr.aliasesCount(this.identity.aliases.size)}</div>
+      <div class="identity-name ${!hasAliases ? "not-selected" : ""}">${nameDisplay}</div>
+      <div class="identity-aliases-count">${subDisplay}</div>
     `;
 
     const editBtn = this.container.querySelector(
       "#editIdentityBtn",
     ) as HTMLButtonElement;
     editBtn?.addEventListener("click", () => {
-      // Need summaries to extract names, but modal can also open with currently known aliases
-      this.openModal([]);
+      this.openModal(this.getSummaries());
     });
   }
 
-  public openModal(summaries: GameSummary[]): void {
+  public openModal(summaries?: GameSummary[]): void {
     const tr = t();
-    const observedNames = extractAllPlayerNames(summaries);
+    const targetSummaries = summaries ?? this.getSummaries();
+    const observedNames = extractAllPlayerNames(targetSummaries);
 
     // Collect all candidates: observed names + existing aliases
     const candidatesMap = new Map<string, number>();
@@ -83,6 +94,12 @@ export class IdentityPanel {
         <p class="modal-subtitle">${escapeHtml(tr.identityModalSubtitle)}</p>
 
         <div class="modal-body">
+          <div class="modal-selection-toolbar">
+            <button type="button" id="selectAllModalBtn" class="btn-link">${escapeHtml(tr.selectAll)}</button>
+            <span class="meta-dot">·</span>
+            <button type="button" id="deselectAllModalBtn" class="btn-link">${escapeHtml(tr.deselectAll)}</button>
+          </div>
+
           <div class="alias-checkbox-list">
             ${
               candidateList.length === 0
@@ -99,11 +116,6 @@ export class IdentityPanel {
                     )
                     .join("")
             }
-          </div>
-
-          <div class="add-alias-row">
-            <input type="text" id="newAliasInput" placeholder="${escapeHtml(tr.addCustomAlias)}" />
-            <button id="addAliasBtn" class="btn-secondary">${escapeHtml(tr.add)}</button>
           </div>
         </div>
 
@@ -123,31 +135,32 @@ export class IdentityPanel {
     const closeBtn = this.modalContainer.querySelector("#modalCloseBtn");
     const cancelBtn = this.modalContainer.querySelector("#cancelModalBtn");
     const saveBtn = this.modalContainer.querySelector("#saveModalBtn");
-    const addBtn = this.modalContainer.querySelector("#addAliasBtn");
-    const newAliasInput = this.modalContainer.querySelector(
-      "#newAliasInput",
-    ) as HTMLInputElement;
+    const selectAllBtn =
+      this.modalContainer.querySelector("#selectAllModalBtn");
+    const deselectAllBtn = this.modalContainer.querySelector(
+      "#deselectAllModalBtn",
+    );
 
     backdrop?.addEventListener("click", close);
     closeBtn?.addEventListener("click", close);
     cancelBtn?.addEventListener("click", close);
 
-    addBtn?.addEventListener("click", () => {
-      const val = newAliasInput.value.trim();
-      if (!val) return;
-      this.identity.aliases.add(val);
-      if (this.identity.displayName === "Me") {
-        this.identity.displayName = val;
-      }
-      newAliasInput.value = "";
-      this.openModal(summaries);
+    selectAllBtn?.addEventListener("click", () => {
+      const cbs = this.modalContainer.querySelectorAll<HTMLInputElement>(
+        ".alias-checkbox-list input[type='checkbox']",
+      );
+      cbs.forEach((cb) => {
+        cb.checked = true;
+      });
     });
 
-    newAliasInput?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        addBtn?.dispatchEvent(new MouseEvent("click"));
-      }
+    deselectAllBtn?.addEventListener("click", () => {
+      const cbs = this.modalContainer.querySelectorAll<HTMLInputElement>(
+        ".alias-checkbox-list input[type='checkbox']",
+      );
+      cbs.forEach((cb) => {
+        cb.checked = false;
+      });
     });
 
     saveBtn?.addEventListener("click", () => {
@@ -167,17 +180,8 @@ export class IdentityPanel {
       });
 
       this.identity.aliases = newAliases;
-      if (
-        firstChecked &&
-        (this.identity.displayName === "Me" ||
-          !newAliases.has(this.identity.displayName))
-      ) {
-        this.identity.displayName = firstChecked;
-      } else if (newAliases.size === 0) {
-        this.identity.displayName = "Me";
-      }
+      this.identity.displayName = firstChecked ?? "";
 
-      saveIdentity(this.identity);
       this.render();
       this.onIdentityChanged(this.identity);
       close();

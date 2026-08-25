@@ -1,6 +1,6 @@
 import { t } from "../i18n.js";
 import type { GameSummary } from "../data/gameSummary.js";
-import { type Identity, loadIdentity, saveIdentity } from "../data/identity.js";
+import { type Identity, loadIdentity } from "../data/identity.js";
 import {
   type FilterCriteria,
   filterGameSummaries,
@@ -78,9 +78,9 @@ export class LibraryViewController {
       identityCard,
       modalContainer,
       this.identity,
+      () => this.summaries,
       (newIdentity) => {
         this.identity = newIdentity;
-        saveIdentity(this.identity);
         this.render();
       },
     );

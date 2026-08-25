@@ -11,33 +11,23 @@ const STORAGE_KEY = "rmgr-viewer-identity";
 /**
  * Creates a default identity structure.
  */
-export function createDefaultIdentity(initialName = "Me"): Identity {
+export function createDefaultIdentity(initialName = ""): Identity {
   const aliases = new Set<string>();
-  if (initialName && initialName !== "Me") {
+  if (initialName) {
     aliases.add(initialName);
   }
   return {
-    displayName: initialName || "Me",
+    displayName: initialName || "",
     aliases,
   };
 }
 
 /**
- * Loads saved identity from localStorage if available.
+ * Loads default identity (in-memory for current session, resets on page reload).
  */
 export function loadIdentity(): Identity {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as {
-        displayName?: string;
-        aliases?: string[];
-      };
-      return {
-        displayName: parsed.displayName || "Me",
-        aliases: new Set(parsed.aliases || []),
-      };
-    }
+    localStorage.removeItem(STORAGE_KEY);
   } catch {
     // Ignore localStorage errors
   }
@@ -45,18 +35,10 @@ export function loadIdentity(): Identity {
 }
 
 /**
- * Saves identity to localStorage.
+ * Saves identity (no-op as identity is session-only and resets on page reload).
  */
-export function saveIdentity(identity: Identity): void {
-  try {
-    const data = {
-      displayName: identity.displayName,
-      aliases: Array.from(identity.aliases),
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // Ignore localStorage errors
-  }
+export function saveIdentity(): void {
+  // Session-only: do not persist to localStorage
 }
 
 /**
