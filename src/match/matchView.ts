@@ -223,13 +223,20 @@ export class MatchViewController {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    if (e.target instanceof HTMLInputElement) return;
+    if (
+      e.target instanceof HTMLTextAreaElement ||
+      (e.target instanceof HTMLInputElement && e.target.type !== "range")
+    ) {
+      return;
+    }
     if (e.code === "Space") {
       e.preventDefault();
       this.playback?.toggle();
     } else if (e.code === "ArrowLeft") {
+      e.preventDefault();
       this.playback?.stepBackward();
     } else if (e.code === "ArrowRight") {
+      e.preventDefault();
       this.playback?.stepForward();
     }
   }
