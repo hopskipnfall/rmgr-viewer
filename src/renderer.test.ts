@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   getAttackInfo,
+  getDeathDirection,
   isCrouchState,
   isDeadState,
   isGrabbedState,
@@ -9,6 +10,11 @@ import {
   isSpecialState,
   isTauntState,
 } from "./renderer.js";
+import {
+  DREAM_LAND_BLAST_ZONE,
+  DREAM_LAND_STAGE_ID,
+  stageBlastZone,
+} from "./stageGeometry.js";
 
 describe("isShieldState", () => {
   it("identifies shield action states correctly", () => {
@@ -221,5 +227,48 @@ describe("getAttackInfo", () => {
     expect(getAttackInfo(0x0db)).toBeNull(); // LandingAirX
     expect(getAttackInfo(0x099)).toBeNull(); // Shield
     expect(getAttackInfo(0x0ab)).toBeNull(); // CapturePull
+  });
+});
+
+describe("getDeathDirection", () => {
+  it("identifies bottom death correctly", () => {
+    expect(getDeathDirection(0x000, 0)).toBe("bottom"); // DeadD
+  });
+
+  it("identifies left and right side deaths correctly", () => {
+    expect(getDeathDirection(0x001, -9050)).toBe("left"); // DeadS left
+    expect(getDeathDirection(0x001, 9050)).toBe("right"); // DeadS right
+  });
+
+  it("identifies top death correctly", () => {
+    expect(getDeathDirection(0x002, 0)).toBe("top"); // DeadU
+  });
+
+  it("identifies screen death correctly", () => {
+    expect(getDeathDirection(0x003, 0)).toBe("screen"); // ScreenKO
+    expect(getDeathDirection(0x004, 0)).toBe("screen"); // ScreenKOWait
+  });
+
+  it("returns null for non-death states", () => {
+    expect(getDeathDirection(0x00a, 0)).toBeNull(); // Idle
+    expect(getDeathDirection(0x01a, 0)).toBeNull(); // Fall
+    expect(getDeathDirection(0x099, 0)).toBeNull(); // Shield
+  });
+});
+
+describe("stageBlastZone", () => {
+  it("returns correct blast zone for Dream Land", () => {
+    expect(stageBlastZone(DREAM_LAND_STAGE_ID)).toEqual(DREAM_LAND_BLAST_ZONE);
+    expect(DREAM_LAND_BLAST_ZONE).toEqual({
+      leftX: -9000,
+      rightX: 9000,
+      bottomY: -3500,
+      topY: 8300,
+    });
+  });
+
+  it("returns undefined for unknown stage", () => {
+    expect(stageBlastZone(999)).toBeUndefined();
+    expect(stageBlastZone(undefined)).toBeUndefined();
   });
 });

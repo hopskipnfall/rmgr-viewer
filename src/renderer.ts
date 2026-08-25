@@ -1,7 +1,11 @@
 import type { Frame, PortIndex } from "@rmg-k/rmgr";
 import { Camera } from "./camera.js";
 import { PORT_COLORS } from "./players.js";
-import { stageGeometry, type PlatformSpec } from "./stageGeometry.js";
+import {
+  stageGeometry,
+  stageBlastZone,
+  type PlatformSpec,
+} from "./stageGeometry.js";
 import { characterSize } from "./characterSizes.js";
 import {
   EDGE_GUARD_STAGE_ID,
@@ -41,6 +45,19 @@ const DEAD_ACTION_STATES = new Set([
 
 export function isDeadState(actionStateId: number): boolean {
   return DEAD_ACTION_STATES.has(actionStateId);
+}
+
+export type DeathDirection = "bottom" | "left" | "right" | "top" | "screen";
+
+export function getDeathDirection(
+  actionStateId: number,
+  positionX: number,
+): DeathDirection | null {
+  if (actionStateId === 0x000) return "bottom";
+  if (actionStateId === 0x001) return positionX > 0 ? "right" : "left";
+  if (actionStateId === 0x002) return "top";
+  if (actionStateId === 0x003 || actionStateId === 0x004) return "screen";
+  return null;
 }
 
 const CROUCH_ACTION_STATES = new Set([
@@ -163,6 +180,7 @@ export class StageRenderer {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     this.drawBackground();
+    this.drawBlastZone(camera, stageId);
     this.drawEdgeGuardZone(camera, stageId);
     this.drawStage(camera, stageId);
 
@@ -179,10 +197,200 @@ export class StageRenderer {
         }
         this.drawPlayer(camera, port, portData.post);
       }
+      this.drawDeathDirectionFlashes(frame);
     }
 
     if (hoverScreen) {
       this.drawHoverCoordinates(camera, hoverScreen);
+    }
+  }
+
+  /**
+   * Draws the outer stage blast zone boundary (death boundary rectangle).
+   * Shaded with a subtle outer danger tint and an inward-facing edge gradient.
+   */
+  private drawBlastZone(camera: Camera, stageId: number | undefined): void {
+    const blastZone = stageBlastZone(stageId);
+    if (!blastZone) return;
+
+    const { ctx, canvas } = this;
+    const tl = camera.worldToScreen(blastZone.leftX, blastZone.topY);
+    const br = camera.worldToScreen(blastZone.rightX, blastZone.bottomY);
+    const rectX = tl.x;
+    const rectY = tl.y;
+    const rectW = br.x - tl.x;
+    const rectH = br.y - tl.y;
+
+    // 1. Subtle dark danger shade outside the blast zone rectangle
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, canvas.width, canvas.height);
+    ctx.rect(rectX, rectY, rectW, rectH);
+    ctx.fillStyle = "rgba(255, 30, 20, 0.05)";
+    ctx.fill("evenodd");
+
+    // 2. Blast zone perimeter outline with subtle glow
+    ctx.beginPath();
+    ctx.rect(rectX, rectY, rectW, rectH);
+    ctx.strokeStyle = "rgba(255, 60, 40, 0.4)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([8, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 3. Corner brackets at all 4 corners
+    const bracketSize = 14;
+    ctx.strokeStyle = "rgba(255, 90, 60, 0.75)";
+    ctx.lineWidth = 2.5;
+
+    // Top-Left
+    ctx.beginPath();
+    ctx.moveTo(rectX, rectY + bracketSize);
+    ctx.lineTo(rectX, rectY);
+    ctx.lineTo(rectX + bracketSize, rectY);
+    ctx.stroke();
+
+    // Top-Right
+    ctx.beginPath();
+    ctx.moveTo(rectX + rectW - bracketSize, rectY);
+    ctx.lineTo(rectX + rectW, rectY);
+    ctx.lineTo(rectX + rectW, rectY + bracketSize);
+    ctx.stroke();
+
+    // Bottom-Right
+    ctx.beginPath();
+    ctx.moveTo(rectX + rectW, rectY + rectH - bracketSize);
+    ctx.lineTo(rectX + rectW, rectY + rectH);
+    ctx.lineTo(rectX + rectW - bracketSize, rectY + rectH);
+    ctx.stroke();
+
+    // Bottom-Left
+    ctx.beginPath();
+    ctx.moveTo(rectX + bracketSize, rectY + rectH);
+    ctx.lineTo(rectX, rectY + rectH);
+    ctx.lineTo(rectX, rectY + rectH - bracketSize);
+    ctx.stroke();
+
+    // 4. Subtle inward perimeter gradient
+    const gradDepth = 24;
+    // Left edge
+    const gLeft = ctx.createLinearGradient(rectX, 0, rectX + gradDepth, 0);
+    gLeft.addColorStop(0, "rgba(255, 50, 30, 0.12)");
+    gLeft.addColorStop(1, "rgba(255, 50, 30, 0)");
+    ctx.fillStyle = gLeft;
+    ctx.fillRect(rectX, rectY, gradDepth, rectH);
+
+    // Right edge
+    const gRight = ctx.createLinearGradient(
+      rectX + rectW,
+      0,
+      rectX + rectW - gradDepth,
+      0,
+    );
+    gRight.addColorStop(0, "rgba(255, 50, 30, 0.12)");
+    gRight.addColorStop(1, "rgba(255, 50, 30, 0)");
+    ctx.fillStyle = gRight;
+    ctx.fillRect(rectX + rectW - gradDepth, rectY, gradDepth, rectH);
+
+    // Top edge
+    const gTop = ctx.createLinearGradient(0, rectY, 0, rectY + gradDepth);
+    gTop.addColorStop(0, "rgba(255, 50, 30, 0.12)");
+    gTop.addColorStop(1, "rgba(255, 50, 30, 0)");
+    ctx.fillStyle = gTop;
+    ctx.fillRect(rectX, rectY, rectW, gradDepth);
+
+    // Bottom edge
+    const gBot = ctx.createLinearGradient(
+      0,
+      rectY + rectH,
+      0,
+      rectY + rectH - gradDepth,
+    );
+    gBot.addColorStop(0, "rgba(255, 50, 30, 0.12)");
+    gBot.addColorStop(1, "rgba(255, 50, 30, 0)");
+    ctx.fillStyle = gBot;
+    ctx.fillRect(rectX, rectY + rectH - gradDepth, rectW, gradDepth);
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws a red gradient death flash along the side / blast zone where a player just died.
+   * Fades smoothly across the first 45 frames of the death state.
+   */
+  private drawDeathDirectionFlashes(frame: Frame | undefined): void {
+    if (!frame) return;
+    const { ctx, canvas } = this;
+
+    for (const key of Object.keys(frame.ports)) {
+      const port = Number(key) as PortIndex;
+      const portData = frame.ports[port];
+      if (!portData) continue;
+
+      const { actionStateId, positionX, actionFrameCounter } = portData.post;
+      const direction = getDeathDirection(actionStateId, positionX);
+      if (!direction) continue;
+
+      // Death animation fade: strongest on frames 0-10, fading until frame 45
+      const MAX_DEATH_FRAMES = 45;
+      if (actionFrameCounter >= MAX_DEATH_FRAMES) continue;
+
+      const progress = actionFrameCounter / MAX_DEATH_FRAMES;
+      const intensity = Math.max(0, 1 - progress);
+      const opacity = intensity * 0.75;
+      const depth = 80 + intensity * 140; // 80px - 220px deep sweep
+
+      ctx.save();
+      if (direction === "bottom") {
+        const grad = ctx.createLinearGradient(
+          0,
+          canvas.height,
+          0,
+          canvas.height - depth,
+        );
+        grad.addColorStop(0, `rgba(255, 30, 20, ${opacity * 0.85})`);
+        grad.addColorStop(0.35, `rgba(255, 70, 20, ${opacity * 0.5})`);
+        grad.addColorStop(1, "rgba(255, 30, 20, 0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, canvas.height - depth, canvas.width, depth);
+      } else if (direction === "top") {
+        const grad = ctx.createLinearGradient(0, 0, 0, depth);
+        grad.addColorStop(0, `rgba(255, 30, 20, ${opacity * 0.85})`);
+        grad.addColorStop(0.35, `rgba(255, 70, 20, ${opacity * 0.5})`);
+        grad.addColorStop(1, "rgba(255, 30, 20, 0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, depth);
+      } else if (direction === "left") {
+        const grad = ctx.createLinearGradient(0, 0, depth, 0);
+        grad.addColorStop(0, `rgba(255, 30, 20, ${opacity * 0.85})`);
+        grad.addColorStop(0.35, `rgba(255, 70, 20, ${opacity * 0.5})`);
+        grad.addColorStop(1, "rgba(255, 30, 20, 0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, depth, canvas.height);
+      } else if (direction === "right") {
+        const grad = ctx.createLinearGradient(
+          canvas.width,
+          0,
+          canvas.width - depth,
+          0,
+        );
+        grad.addColorStop(0, `rgba(255, 30, 20, ${opacity * 0.85})`);
+        grad.addColorStop(0.35, `rgba(255, 70, 20, ${opacity * 0.5})`);
+        grad.addColorStop(1, "rgba(255, 30, 20, 0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(canvas.width - depth, 0, depth, canvas.height);
+      } else if (direction === "screen") {
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const radius = Math.max(canvas.width, canvas.height) * 0.6;
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        grad.addColorStop(0, `rgba(255, 45, 20, ${opacity * 0.65})`);
+        grad.addColorStop(0.45, `rgba(255, 80, 20, ${opacity * 0.3})`);
+        grad.addColorStop(1, "rgba(255, 30, 20, 0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      ctx.restore();
     }
   }
 
