@@ -1481,16 +1481,16 @@ export class StageRenderer {
       }
       ctx.lineTo(x, boltEndY);
 
-      // Outer electric blue/cyan aura
-      ctx.strokeStyle = "#00e5ff";
-      ctx.lineWidth = 4;
+      // Outer electric yellow aura
+      ctx.strokeStyle = "rgba(255, 215, 0, 0.6)";
+      ctx.lineWidth = 5;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.shadowColor = "#00e5ff";
-      ctx.shadowBlur = 12;
+      ctx.shadowColor = "#ffd700";
+      ctx.shadowBlur = 14;
       ctx.stroke();
 
-      // Yellow energy mid-stroke
+      // Bright yellow energy mid-stroke
       ctx.beginPath();
       ctx.moveTo(x, boltStartY);
       for (let i = 1; i < segments; i++) {
@@ -1499,10 +1499,10 @@ export class StageRenderer {
       }
       ctx.lineTo(x, boltEndY);
       ctx.strokeStyle = "#ffe600";
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = 2.8;
       ctx.stroke();
 
-      // Bright white central lightning core
+      // Crisp white central lightning core
       ctx.beginPath();
       ctx.moveTo(x, boltStartY);
       for (let i = 1; i < segments; i++) {
@@ -1511,15 +1511,15 @@ export class StageRenderer {
       }
       ctx.lineTo(x, boltEndY);
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.4;
       ctx.stroke();
 
       // 2. Electric shockwave impact halo around Pikachu
       const haloRadius = Math.max(14, halfWidth * 1.2);
       ctx.beginPath();
       ctx.arc(x, centerY, haloRadius, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0, 229, 255, 0.25)";
-      ctx.shadowColor = "#ffe600";
+      ctx.fillStyle = "rgba(255, 215, 0, 0.3)";
+      ctx.shadowColor = "#ffd700";
       ctx.shadowBlur = 14;
       ctx.fill();
 
@@ -1527,7 +1527,7 @@ export class StageRenderer {
       ctx.beginPath();
       ctx.arc(x, centerY, haloRadius * 1.2, 0, Math.PI * 2);
       ctx.strokeStyle = "#ffe600";
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
       ctx.stroke();
       ctx.setLineDash([]);
@@ -1542,8 +1542,8 @@ export class StageRenderer {
       ctx.beginPath();
       ctx.arc(noseX, centerY, 5, 0, Math.PI * 2);
       ctx.fillStyle = "#ffe600";
-      ctx.shadowColor = "#ffe600";
-      ctx.shadowBlur = 8;
+      ctx.shadowColor = "#ffd700";
+      ctx.shadowBlur = 10;
       ctx.fill();
 
       ctx.beginPath();
@@ -1551,11 +1551,11 @@ export class StageRenderer {
       ctx.fillStyle = "#ffffff";
       ctx.fill();
 
-      // Subtle electric spark aura around triangle
+      // Electric spark aura around triangle
       ctx.beginPath();
       ctx.arc(x, centerY, Math.max(10, halfWidth * 0.9), 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(0, 229, 255, 0.7)";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(255, 230, 0, 0.85)";
+      ctx.lineWidth = 2;
       ctx.stroke();
 
       ctx.restore();
@@ -1563,13 +1563,13 @@ export class StageRenderer {
     }
 
     if (specialType === "quick_attack") {
-      // Startup/landing subtle electric spark gathered at nose
+      // Startup/landing electric spark gathered at nose
       ctx.save();
       ctx.beginPath();
       ctx.arc(noseX, centerY, 4, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0, 229, 255, 0.8)";
-      ctx.shadowColor = "#00e5ff";
-      ctx.shadowBlur = 6;
+      ctx.fillStyle = "#ffe600";
+      ctx.shadowColor = "#ffd700";
+      ctx.shadowBlur = 8;
       ctx.fill();
       ctx.restore();
     }
@@ -1608,18 +1608,18 @@ export class StageRenderer {
     const screenPts = pathPoints.map((pt) => camera.worldToScreen(pt.x, pt.y));
 
     ctx.save();
-    // 1. Wide outer electric cyan aura glow
+    // 1. Wide outer electric golden-yellow aura glow
     ctx.beginPath();
     ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
     for (let i = 1; i < screenPts.length; i++) {
       ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
     }
-    ctx.strokeStyle = "rgba(0, 229, 255, 0.5)";
-    ctx.lineWidth = 8;
+    ctx.strokeStyle = "rgba(255, 215, 0, 0.55)";
+    ctx.lineWidth = 9;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.shadowColor = "#00e5ff";
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = "#ffd700";
+    ctx.shadowBlur = 14;
     ctx.stroke();
 
     // 2. Vibrant electric yellow mid-stroke
@@ -1629,7 +1629,7 @@ export class StageRenderer {
       ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
     }
     ctx.strokeStyle = "#ffe600";
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = 4;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.stroke();
@@ -1641,7 +1641,7 @@ export class StageRenderer {
       ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
     }
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.8;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.stroke();
@@ -1649,10 +1649,10 @@ export class StageRenderer {
     // 4. Start origin spark flare
     const start = screenPts[0]!;
     ctx.beginPath();
-    ctx.arc(start.x, start.y, 4, 0, Math.PI * 2);
+    ctx.arc(start.x, start.y, 4.5, 0, Math.PI * 2);
     ctx.fillStyle = "#ffe600";
-    ctx.shadowColor = "#ffe600";
-    ctx.shadowBlur = 8;
+    ctx.shadowColor = "#ffd700";
+    ctx.shadowBlur = 10;
     ctx.fill();
 
     ctx.restore();
