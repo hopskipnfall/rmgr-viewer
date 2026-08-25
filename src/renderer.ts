@@ -152,6 +152,49 @@ export function getFalconSpecialType(
   return null;
 }
 
+export function isPikachuCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x09 || // Pikachu
+    characterId === 0x17 || // Polygon Pikachu
+    characterId === 0x2d || // Pikachu (EU)
+    characterId === 0x32 // Pikachu (JP)
+  );
+}
+
+export type PikachuSpecialType =
+  "thunder" | "quick_attack" | "quick_attack_zip";
+
+export function getPikachuSpecialType(
+  characterId: number,
+  actionStateId: number,
+): PikachuSpecialType | null {
+  if (!isPikachuCharacter(characterId)) return null;
+  // Down-B Thunder states: 0xe3, 0xe4, 0xe5, 0xe6, 0xe7
+  if (
+    actionStateId === 0x0e3 ||
+    actionStateId === 0x0e4 ||
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6 ||
+    actionStateId === 0x0e7
+  ) {
+    return "thunder";
+  }
+  // Up-B Quick Attack zip/flight states: 0xec (Zip 1), 0xed (Zip 2)
+  if (actionStateId === 0x0ec || actionStateId === 0x0ed) {
+    return "quick_attack_zip";
+  }
+  // Up-B Quick Attack startup/landing: 0x0e8, 0x0e9, 0x0ea, 0x0eb
+  if (
+    actionStateId === 0x0e8 ||
+    actionStateId === 0x0e9 ||
+    actionStateId === 0x0ea ||
+    actionStateId === 0x0eb
+  ) {
+    return "quick_attack";
+  }
+  return null;
+}
+
 export function getAttackInfo(actionStateId: number): AttackInfo | null {
   // Jabs
   if (actionStateId === 0x0be || actionStateId === 0x0bf) {
@@ -795,6 +838,24 @@ export class StageRenderer {
       }
     }
 
+    // Draw Pikachu special move visuals if applicable
+    const pikaSpecial = getPikachuSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (pikaSpecial) {
+      this.drawPikachuSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        pikaSpecial,
+        post.actionFrameCounter,
+      );
+    }
+
     const taunting = isTauntState(post.actionStateId);
     let triangleColor = color;
 
@@ -1347,6 +1408,155 @@ export class StageRenderer {
       ctx.beginPath();
       ctx.arc(noseX, centerY, 6, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(255, 120, 0, 0.5)";
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Visualizes Pikachu's signature special moves:
+   * - Thunder (Down-B): Lightning bolt descending from the sky (infinite height, Y=0) down to Pikachu with electric shock halo.
+   * - Quick Attack (Up-B): Straight-line high-speed electric motion trails and nose spark.
+   */
+  private drawPikachuSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: PikachuSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * halfWidth;
+
+    if (specialType === "thunder") {
+      ctx.save();
+      // 1. Full-height lightning bolt coming down from sky (Y=0) straight to Pikachu (centerY)
+      const boltStartY = 0;
+      const boltEndY = centerY - heightPx * 0.2;
+      const totalHeight = Math.max(20, boltEndY - boltStartY);
+      const segments = 8;
+      const segH = totalHeight / segments;
+
+      // Seeded zigzag offsets based on frame counter to animate lightning jitter
+      const seed = frameCounter * 7.3;
+      ctx.beginPath();
+      ctx.moveTo(x, boltStartY);
+      for (let i = 1; i < segments; i++) {
+        const jitter = Math.sin(seed + i * 2.4) * (halfWidth * 0.85);
+        ctx.lineTo(x + jitter, boltStartY + i * segH);
+      }
+      ctx.lineTo(x, boltEndY);
+
+      // Outer electric blue/cyan aura
+      ctx.strokeStyle = "#00e5ff";
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = "#00e5ff";
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+
+      // Yellow energy mid-stroke
+      ctx.beginPath();
+      ctx.moveTo(x, boltStartY);
+      for (let i = 1; i < segments; i++) {
+        const jitter = Math.sin(seed + i * 2.4) * (halfWidth * 0.85);
+        ctx.lineTo(x + jitter, boltStartY + i * segH);
+      }
+      ctx.lineTo(x, boltEndY);
+      ctx.strokeStyle = "#ffe600";
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+
+      // Bright white central lightning core
+      ctx.beginPath();
+      ctx.moveTo(x, boltStartY);
+      for (let i = 1; i < segments; i++) {
+        const jitter = Math.sin(seed + i * 2.4) * (halfWidth * 0.85);
+        ctx.lineTo(x + jitter, boltStartY + i * segH);
+      }
+      ctx.lineTo(x, boltEndY);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // 2. Electric shockwave impact halo around Pikachu
+      const haloRadius = Math.max(14, halfWidth * 1.2);
+      ctx.beginPath();
+      ctx.arc(x, centerY, haloRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 229, 255, 0.25)";
+      ctx.shadowColor = "#ffe600";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+
+      // Radiating electric spark ring
+      ctx.beginPath();
+      ctx.arc(x, centerY, haloRadius * 1.2, 0, Math.PI * 2);
+      ctx.strokeStyle = "#ffe600";
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "quick_attack_zip") {
+      ctx.save();
+      // High-speed electric straight-line rush streak trailing behind Pikachu
+      const trailLen = halfWidth * 2.2;
+      const backX = x - dir * halfWidth;
+
+      // 1. Dual electric speed trails
+      ctx.beginPath();
+      ctx.moveTo(backX, centerY - heightPx * 0.3);
+      ctx.lineTo(backX - dir * trailLen, centerY - heightPx * 0.15);
+      ctx.moveTo(backX, centerY);
+      ctx.lineTo(backX - dir * (trailLen * 1.4), centerY);
+      ctx.moveTo(backX, centerY + heightPx * 0.3);
+      ctx.lineTo(backX - dir * trailLen, centerY + heightPx * 0.15);
+
+      ctx.strokeStyle = "#00e5ff";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#00e5ff";
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // White inner core trail
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      // 2. Electric tip flare on nose
+      ctx.beginPath();
+      ctx.arc(noseX, centerY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffe600";
+      ctx.shadowColor = "#ffe600";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(noseX, centerY, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "quick_attack") {
+      // Startup/landing subtle electric spark gathered at nose
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(noseX, centerY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 229, 255, 0.8)";
+      ctx.shadowColor = "#00e5ff";
+      ctx.shadowBlur = 6;
       ctx.fill();
       ctx.restore();
     }

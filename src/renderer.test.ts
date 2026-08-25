@@ -3,11 +3,13 @@ import {
   getAttackInfo,
   getDeathDirection,
   getFalconSpecialType,
+  getPikachuSpecialType,
   isCrouchState,
   isDeadState,
   isFalconCharacter,
   isGrabbedState,
   isLandingState,
+  isPikachuCharacter,
   isShieldState,
   isShieldStunState,
   isSpecialState,
@@ -159,6 +161,47 @@ describe("getFalconSpecialType", () => {
     expect(getFalconSpecialType(0x07, 0x00a)).toBeNull(); // Idle
     expect(getFalconSpecialType(0x07, 0x0d2)).toBeNull(); // Fair
     expect(getFalconSpecialType(0x00, 0x0e5)).toBeNull(); // Mario in 0xe5
+  });
+});
+
+describe("isPikachuCharacter", () => {
+  it("identifies Pikachu variants correctly", () => {
+    expect(isPikachuCharacter(0x09)).toBe(true); // Pikachu
+    expect(isPikachuCharacter(0x17)).toBe(true); // Polygon Pikachu
+    expect(isPikachuCharacter(0x2d)).toBe(true); // Pikachu (EU)
+    expect(isPikachuCharacter(0x32)).toBe(true); // Pikachu (JP)
+  });
+
+  it("returns false for other characters", () => {
+    expect(isPikachuCharacter(0x00)).toBe(false); // Mario
+    expect(isPikachuCharacter(0x07)).toBe(false); // Captain Falcon
+    expect(isPikachuCharacter(0x01)).toBe(false); // Fox
+  });
+});
+
+describe("getPikachuSpecialType", () => {
+  it("classifies Thunder (Down-B) correctly", () => {
+    expect(getPikachuSpecialType(0x09, 0x0e3)).toBe("thunder");
+    expect(getPikachuSpecialType(0x09, 0x0e4)).toBe("thunder");
+    expect(getPikachuSpecialType(0x09, 0x0e5)).toBe("thunder");
+    expect(getPikachuSpecialType(0x09, 0x0e6)).toBe("thunder");
+    expect(getPikachuSpecialType(0x09, 0x0e7)).toBe("thunder");
+    expect(getPikachuSpecialType(0x32, 0x0e3)).toBe("thunder");
+  });
+
+  it("classifies Quick Attack (Up-B) correctly", () => {
+    expect(getPikachuSpecialType(0x09, 0x0e8)).toBe("quick_attack");
+    expect(getPikachuSpecialType(0x09, 0x0eb)).toBe("quick_attack");
+    expect(getPikachuSpecialType(0x09, 0x0ec)).toBe("quick_attack_zip");
+    expect(getPikachuSpecialType(0x09, 0x0ed)).toBe("quick_attack_zip");
+    expect(getPikachuSpecialType(0x09, 0x0e9)).toBe("quick_attack");
+    expect(getPikachuSpecialType(0x09, 0x0ea)).toBe("quick_attack");
+  });
+
+  it("returns null for non-special states or non-Pikachu characters", () => {
+    expect(getPikachuSpecialType(0x09, 0x00a)).toBeNull(); // Idle
+    expect(getPikachuSpecialType(0x09, 0x0d1)).toBeNull(); // Nair
+    expect(getPikachuSpecialType(0x00, 0x0e3)).toBeNull(); // Mario in 0xe3
   });
 });
 
