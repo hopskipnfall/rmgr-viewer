@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rmgr-viewer
+
+      # This depends on @rmg-k/rmgr via a local file:../rmgr-ts reference
+      # (see package.json and the README's "Local development" section) -
+      # checked out as a sibling directory here, exactly like local dev
+      # expects, and built before rmgr-viewer's own npm ci needs to resolve
+      # it.
+      - uses: actions/checkout@v4
+        with:
+          repository: hopskipnfall/rmgr-ts
+          path: rmgr-ts
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - run: npm ci
+        working-directory: rmgr-ts
+      - run: npm run build
+        working-directory: rmgr-ts
+
+      - run: npm ci
+        working-directory: rmgr-viewer
+      - run: npm run build
+        working-directory: rmgr-viewer
+      - run: npm run typecheck
+        working-directory: rmgr-viewer
+      - run: npm run lint
+        working-directory: rmgr-viewer
+      - run: npm run format:check
+        working-directory: rmgr-viewer

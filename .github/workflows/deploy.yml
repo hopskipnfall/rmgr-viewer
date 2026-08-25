@@ -1,0 +1,62 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time; let an in-flight run finish rather than
+# cancelling it mid-deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rmgr-viewer
+
+      # See ci.yml's comment - same sibling-checkout setup local dev uses.
+      - uses: actions/checkout@v4
+        with:
+          repository: hopskipnfall/rmgr-ts
+          path: rmgr-ts
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+        working-directory: rmgr-ts
+      - run: npm run build
+        working-directory: rmgr-ts
+
+      - run: npm ci
+        working-directory: rmgr-viewer
+      # CI is already set by GitHub Actions, so vite.config.ts picks the
+      # "/rmgr-viewer/" base automatically - see that file's comment.
+      - run: npm run build
+        working-directory: rmgr-viewer
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: rmgr-viewer/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
