@@ -191,6 +191,8 @@ export class MatchViewController {
         this.lastFrame,
         this.currentReplay.gameStart.stageId,
         this.hoverScreen,
+        this.currentReplay,
+        this.playback?.currentIndex ?? 0,
       );
     });
 
@@ -202,6 +204,8 @@ export class MatchViewController {
         this.lastFrame,
         this.currentReplay.gameStart.stageId,
         this.hoverScreen,
+        this.currentReplay,
+        this.playback?.currentIndex ?? 0,
       );
     });
   }
@@ -219,13 +223,20 @@ export class MatchViewController {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    if (e.target instanceof HTMLInputElement) return;
+    if (
+      e.target instanceof HTMLTextAreaElement ||
+      (e.target instanceof HTMLInputElement && e.target.type !== "range")
+    ) {
+      return;
+    }
     if (e.code === "Space") {
       e.preventDefault();
       this.playback?.toggle();
     } else if (e.code === "ArrowLeft") {
+      e.preventDefault();
       this.playback?.stepBackward();
     } else if (e.code === "ArrowRight") {
+      e.preventDefault();
       this.playback?.stepForward();
     }
   }
@@ -319,6 +330,8 @@ export class MatchViewController {
       frame,
       this.currentReplay?.gameStart.stageId,
       this.hoverScreen,
+      this.currentReplay,
+      _frameIndex,
     );
 
     const tr = t();

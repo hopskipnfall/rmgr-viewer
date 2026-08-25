@@ -7,6 +7,9 @@ const CAPTURE_STATES = new Set([
   0x0ab, // CapturePull
   0x0ac, // CaptureWait
   0x0ad, // CaptureDamage
+  0x0b3, // CaptureFalconDive (Captain Falcon & J Falcon Up-B grab)
+  0x0b6, // CaptureCargo / CommandGrabHold
+  0x0b9, // CapturePulled / ThrowTransition
   0x0ba, // DamageThrown / Thrown
   0x0bb,
 ]);
