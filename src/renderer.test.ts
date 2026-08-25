@@ -10,6 +10,7 @@ import {
   isGrabbedState,
   isLandingState,
   isPikachuCharacter,
+  isQuickAttackState,
   isShieldState,
   isShieldStunState,
   isSpecialState,
@@ -202,6 +203,24 @@ describe("getPikachuSpecialType", () => {
     expect(getPikachuSpecialType(0x09, 0x00a)).toBeNull(); // Idle
     expect(getPikachuSpecialType(0x09, 0x0d1)).toBeNull(); // Nair
     expect(getPikachuSpecialType(0x00, 0x0e3)).toBeNull(); // Mario in 0xe3
+  });
+});
+
+describe("isQuickAttackState", () => {
+  it("identifies all Quick Attack phases correctly", () => {
+    expect(isQuickAttackState(0x0e8)).toBe(true); // Ground QA Startup
+    expect(isQuickAttackState(0x0eb)).toBe(true); // Air QA Startup
+    expect(isQuickAttackState(0x0ec)).toBe(true); // Zip 1
+    expect(isQuickAttackState(0x0ed)).toBe(true); // Zip 2
+    expect(isQuickAttackState(0x0e9)).toBe(true); // QA End / Landing
+    expect(isQuickAttackState(0x0ea)).toBe(true); // QA Landing
+  });
+
+  it("returns false for non-Quick-Attack states", () => {
+    expect(isQuickAttackState(0x00a)).toBe(false); // Idle
+    expect(isQuickAttackState(0x01a)).toBe(false); // Fall
+    expect(isQuickAttackState(0x03a)).toBe(false); // FallSpecial
+    expect(isQuickAttackState(0x0e3)).toBe(false); // Thunder
   });
 });
 

@@ -191,6 +191,8 @@ export class MatchViewController {
         this.lastFrame,
         this.currentReplay.gameStart.stageId,
         this.hoverScreen,
+        this.currentReplay,
+        this.playback?.currentIndex ?? 0,
       );
     });
 
@@ -202,6 +204,8 @@ export class MatchViewController {
         this.lastFrame,
         this.currentReplay.gameStart.stageId,
         this.hoverScreen,
+        this.currentReplay,
+        this.playback?.currentIndex ?? 0,
       );
     });
   }
@@ -319,6 +323,8 @@ export class MatchViewController {
       frame,
       this.currentReplay?.gameStart.stageId,
       this.hoverScreen,
+      this.currentReplay,
+      _frameIndex,
     );
 
     const tr = t();

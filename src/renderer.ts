@@ -1,4 +1,4 @@
-import type { Frame, PortIndex } from "@rmg-k/rmgr";
+import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
 import { Camera } from "./camera.js";
 import { PORT_COLORS } from "./players.js";
 import {
@@ -195,6 +195,19 @@ export function getPikachuSpecialType(
   return null;
 }
 
+const QUICK_ATTACK_STATES = new Set([
+  0x0e8, // Ground QA Startup
+  0x0eb, // Air QA Startup
+  0x0ec, // Quick Attack Zip 1
+  0x0ed, // Quick Attack Zip 2
+  0x0e9, // QA End / Landing
+  0x0ea, // QA Landing
+]);
+
+export function isQuickAttackState(actionStateId: number): boolean {
+  return QUICK_ATTACK_STATES.has(actionStateId);
+}
+
 export function getAttackInfo(actionStateId: number): AttackInfo | null {
   // Jabs
   if (actionStateId === 0x0be || actionStateId === 0x0bf) {
@@ -274,6 +287,8 @@ export class StageRenderer {
     frame: Frame | undefined,
     stageId: number | undefined,
     hoverScreen: { x: number; y: number } | undefined,
+    replay?: Replay | null,
+    frameIndex?: number,
   ): void {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -284,6 +299,21 @@ export class StageRenderer {
     this.drawStage(camera, stageId);
 
     if (frame) {
+      // Draw Pikachu Quick Attack spatial flight streaks before characters
+      if (replay && frameIndex !== undefined) {
+        for (const key of Object.keys(frame.ports)) {
+          const port = Number(key) as PortIndex;
+          const portData = frame.ports[port];
+          if (!portData) continue;
+          if (
+            isPikachuCharacter(portData.post.characterId) &&
+            isQuickAttackState(portData.post.actionStateId)
+          ) {
+            this.drawPikachuQuickAttackStreak(camera, port, replay, frameIndex);
+          }
+        }
+      }
+
       for (const key of Object.keys(frame.ports)) {
         const port = Number(key) as PortIndex;
         const portData = frame.ports[port];
@@ -1508,42 +1538,25 @@ export class StageRenderer {
 
     if (specialType === "quick_attack_zip") {
       ctx.save();
-      // High-speed electric straight-line rush streak trailing behind Pikachu
-      const trailLen = halfWidth * 2.2;
-      const backX = x - dir * halfWidth;
-
-      // 1. Dual electric speed trails
-      ctx.beginPath();
-      ctx.moveTo(backX, centerY - heightPx * 0.3);
-      ctx.lineTo(backX - dir * trailLen, centerY - heightPx * 0.15);
-      ctx.moveTo(backX, centerY);
-      ctx.lineTo(backX - dir * (trailLen * 1.4), centerY);
-      ctx.moveTo(backX, centerY + heightPx * 0.3);
-      ctx.lineTo(backX - dir * trailLen, centerY + heightPx * 0.15);
-
-      ctx.strokeStyle = "#00e5ff";
-      ctx.lineWidth = 3;
-      ctx.lineCap = "round";
-      ctx.shadowColor = "#00e5ff";
-      ctx.shadowBlur = 10;
-      ctx.stroke();
-
-      // White inner core trail
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
-
-      // 2. Electric tip flare on nose
+      // Electric tip flare on nose and glowing electric spark halo around Pikachu
       ctx.beginPath();
       ctx.arc(noseX, centerY, 5, 0, Math.PI * 2);
       ctx.fillStyle = "#ffe600";
       ctx.shadowColor = "#ffe600";
       ctx.shadowBlur = 8;
       ctx.fill();
+
       ctx.beginPath();
       ctx.arc(noseX, centerY, 2.5, 0, Math.PI * 2);
       ctx.fillStyle = "#ffffff";
       ctx.fill();
+
+      // Subtle electric spark aura around triangle
+      ctx.beginPath();
+      ctx.arc(x, centerY, Math.max(10, halfWidth * 0.9), 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(0, 229, 255, 0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
 
       ctx.restore();
       return;
@@ -1560,6 +1573,89 @@ export class StageRenderer {
       ctx.fill();
       ctx.restore();
     }
+  }
+
+  /**
+   * Traces Pikachu's continuous spatial path in the air during Quick Attack (Up-B),
+   * connecting from the start of the jump to the current position across 1 or 2 straight lines.
+   */
+  private drawPikachuQuickAttackStreak(
+    camera: Camera,
+    port: PortIndex,
+    replay: Replay,
+    frameIndex: number,
+  ): void {
+    const { ctx } = this;
+    const pathPoints: Array<{ x: number; y: number }> = [];
+
+    let currIdx = frameIndex;
+    while (currIdx >= 0) {
+      const pData = replay.frames[currIdx]?.ports[port]?.post;
+      if (!pData || !isQuickAttackState(pData.actionStateId)) {
+        break;
+      }
+      pathPoints.push({ x: pData.positionX, y: pData.positionY });
+      // If we reached the initial startup of this Quick Attack, stop tracing
+      if (pData.actionStateId === 0x0e8 || pData.actionStateId === 0x0eb) {
+        break;
+      }
+      currIdx--;
+    }
+
+    if (pathPoints.length < 2) return;
+    pathPoints.reverse(); // Chronological order: [startPoint, ..., currentPoint]
+
+    const screenPts = pathPoints.map((pt) => camera.worldToScreen(pt.x, pt.y));
+
+    ctx.save();
+    // 1. Wide outer electric cyan aura glow
+    ctx.beginPath();
+    ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+    for (let i = 1; i < screenPts.length; i++) {
+      ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+    }
+    ctx.strokeStyle = "rgba(0, 229, 255, 0.5)";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "#00e5ff";
+    ctx.shadowBlur = 12;
+    ctx.stroke();
+
+    // 2. Vibrant electric yellow mid-stroke
+    ctx.beginPath();
+    ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+    for (let i = 1; i < screenPts.length; i++) {
+      ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+    }
+    ctx.strokeStyle = "#ffe600";
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    // 3. Crisp bright white central lightning core
+    ctx.beginPath();
+    ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+    for (let i = 1; i < screenPts.length; i++) {
+      ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+    }
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    // 4. Start origin spark flare
+    const start = screenPts[0]!;
+    ctx.beginPath();
+    ctx.arc(start.x, start.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffe600";
+    ctx.shadowColor = "#ffe600";
+    ctx.shadowBlur = 8;
+    ctx.fill();
+
+    ctx.restore();
   }
 
   /** World-space coordinates under the cursor, in a small label offset from the pointer. */
