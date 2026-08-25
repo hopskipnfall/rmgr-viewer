@@ -68,3 +68,36 @@ export function stageGeometry(
 ): PlatformSpec[] | undefined {
   return stageId !== undefined ? STAGE_GEOMETRY[stageId] : undefined;
 }
+
+/**
+ * Stage blast zone (death boundary) coordinates in world units.
+ *
+ * Derived empirically from recorded match death coordinates:
+ * - Left blast zone: X <= -9000
+ * - Right blast zone: X >= 9000
+ * - Bottom blast zone: Y <= -3500
+ * - Top blast zone: Y >= 8300
+ */
+export interface BlastZoneSpec {
+  leftX: number;
+  rightX: number;
+  bottomY: number;
+  topY: number;
+}
+
+export const DREAM_LAND_BLAST_ZONE: BlastZoneSpec = {
+  leftX: -9000,
+  rightX: 9000,
+  bottomY: -3500,
+  topY: 8300,
+};
+
+const STAGE_BLAST_ZONES: Partial<Record<number, BlastZoneSpec>> = {
+  [DREAM_LAND_STAGE_ID]: DREAM_LAND_BLAST_ZONE,
+};
+
+export function stageBlastZone(
+  stageId: number | undefined,
+): BlastZoneSpec | undefined {
+  return stageId !== undefined ? STAGE_BLAST_ZONES[stageId] : undefined;
+}

@@ -8,7 +8,7 @@ import { Camera } from "../camera.js";
 import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_COLORS, PORT_LABELS } from "../players.js";
-import { StageRenderer } from "../renderer.js";
+import { StageRenderer, isDeadState } from "../renderer.js";
 import { actionStateName, characterName } from "../lookups.js";
 import { t } from "../i18n.js";
 import {
@@ -308,6 +308,9 @@ export class MatchViewController {
     const positions = this.panels
       .map((panel) => frame?.ports[panel.port]?.post)
       .filter((post): post is NonNullable<typeof post> => post !== undefined)
+      .filter(
+        (post) => !isDeadState(post.actionStateId) && post.stocksRemaining >= 0,
+      )
       .map((post) => ({ x: post.positionX, y: post.positionY }));
     this.camera.update(positions, snap);
 
