@@ -34,12 +34,12 @@ export class StatCards {
       const fractionDisplay =
         customFraction ??
         (isHitsRate
-          ? `${totalHits} hits / ${stocks} st.`
+          ? tr.hitsPerStockFraction(totalHits, stocks)
           : `${successes}/${total}`);
 
       if (isHitsRate) {
         valueDisplay =
-          hitsValue !== null ? `${hitsValue.toFixed(1)} /st.` : "—";
+          hitsValue !== null ? tr.hitsPerStockUnit(hitsValue.toFixed(1)) : "—";
       } else if (pct !== null) {
         valueDisplay = `${Math.round(pct)}%`;
       }

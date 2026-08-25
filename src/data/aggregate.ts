@@ -302,25 +302,101 @@ export function computeMatchupBaseline(
   yourCharId: number,
   oppCharId: number,
 ): DerivedRates {
-  const matchupGames = filterGameSummaries(summaries, identity, {
-    yourCharacterId: yourCharId,
-    oppCharacterId: oppCharId,
-  });
+  if (identity.aliases.size > 0) {
+    const matchupGames = filterGameSummaries(summaries, identity, {
+      yourCharacterId: yourCharId,
+      oppCharacterId: oppCharId,
+    });
 
-  if (matchupGames.length > 0) {
-    return aggregateFilteredGames(matchupGames);
+    if (matchupGames.length > 0) {
+      return aggregateFilteredGames(matchupGames);
+    }
+
+    // Fallback to all games with your character
+    const yourCharGames = filterGameSummaries(summaries, identity, {
+      yourCharacterId: yourCharId,
+    });
+    if (yourCharGames.length > 0) {
+      return aggregateFilteredGames(yourCharGames);
+    }
+
+    // Fallback to overall
+    return aggregateFilteredGames(filterGameSummaries(summaries, identity, {}));
   }
 
-  // Fallback to all games with your character
-  const yourCharGames = filterGameSummaries(summaries, identity, {
-    yourCharacterId: yourCharId,
-  });
-  if (yourCharGames.length > 0) {
-    return aggregateFilteredGames(yourCharGames);
+  // If no identity aliases configured, aggregate directly by character matchup across all games
+  const directMatchupGames: {
+    summary: GameSummary;
+    yourPort: number;
+    oppPort: number;
+  }[] = [];
+  for (const s of summaries) {
+    if (s.ports.length !== 2) continue;
+    const p0 = s.ports[0]!;
+    const p1 = s.ports[1]!;
+    if (p0.characterId === yourCharId && p1.characterId === oppCharId) {
+      directMatchupGames.push({
+        summary: s,
+        yourPort: p0.port,
+        oppPort: p1.port,
+      });
+    } else if (p1.characterId === yourCharId && p0.characterId === oppCharId) {
+      directMatchupGames.push({
+        summary: s,
+        yourPort: p1.port,
+        oppPort: p0.port,
+      });
+    }
   }
 
-  // Fallback to overall
-  return aggregateFilteredGames(filterGameSummaries(summaries, identity, {}));
+  if (directMatchupGames.length > 0) {
+    return aggregateFilteredGames(directMatchupGames);
+  }
+
+  const directCharGames: {
+    summary: GameSummary;
+    yourPort: number;
+    oppPort: number;
+  }[] = [];
+  for (const s of summaries) {
+    if (s.ports.length !== 2) continue;
+    const p0 = s.ports[0]!;
+    const p1 = s.ports[1]!;
+    if (p0.characterId === yourCharId) {
+      directCharGames.push({
+        summary: s,
+        yourPort: p0.port,
+        oppPort: p1.port,
+      });
+    } else if (p1.characterId === yourCharId) {
+      directCharGames.push({
+        summary: s,
+        yourPort: p1.port,
+        oppPort: p0.port,
+      });
+    }
+  }
+
+  if (directCharGames.length > 0) {
+    return aggregateFilteredGames(directCharGames);
+  }
+
+  // Fallback to all 2-player games
+  const all2pGames: {
+    summary: GameSummary;
+    yourPort: number;
+    oppPort: number;
+  }[] = [];
+  for (const s of summaries) {
+    if (s.ports.length === 2) {
+      all2pGames.push({
+        summary: s,
+        yourPort: s.ports[0]!.port,
+        oppPort: s.ports[1]!.port,
+      });
+    }
+  }
+  return aggregateFilteredGames(all2pGames);
 }
 
 /**

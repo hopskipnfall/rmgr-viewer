@@ -140,14 +140,6 @@ export class GameList {
     const duration = formatDuration(summary.frameCount);
 
     if (!is2Player) {
-      const topPort = [...summary.ports].sort(
-        (a, b) => b.finalStocks - a.finalStocks,
-      )[0];
-      const winnerName =
-        topPort && topPort.finalStocks > 0
-          ? topPort.playerName || `P${topPort.port + 1}`
-          : null;
-
       return `
         <div class="game-row unsupported" data-id="${summary.id}">
           <div class="game-row-meta">
@@ -157,7 +149,6 @@ export class GameList {
             <span class="meta-dot">·</span>
             <span class="game-duration">${duration}</span>
             <span class="unsupported-badge">${escapeHtml(tr.notSupportedPlayers)}</span>
-            ${winnerName ? `<span class="meta-dot">·</span><span class="winner-meta">🏆 ${escapeHtml(tr.winner(winnerName))}</span>` : ""}
           </div>
           <div class="game-row-players">
             ${summary.ports.map((p) => `${escapeHtml(p.playerName || `P${p.port + 1}`)} (${escapeHtml(characterName(p.characterId))})`).join(" vs ")}
@@ -180,15 +171,6 @@ export class GameList {
       const label0 = port0.playerName || characterName(port0.characterId);
       const label1 = port1.playerName || characterName(port1.characterId);
 
-      let winnerText = "";
-      if (port0.finalStocks >= 0 && port1.finalStocks >= 0) {
-        if (port0.finalStocks > port1.finalStocks) {
-          winnerText = `<span class="winner-meta">🏆 ${escapeHtml(tr.winner(label0))}</span>`;
-        } else if (port1.finalStocks > port0.finalStocks) {
-          winnerText = `<span class="winner-meta">🏆 ${escapeHtml(tr.winner(label1))}</span>`;
-        }
-      }
-
       return `
         <div class="game-row ambiguous" data-id="${summary.id}">
           <div class="game-row-meta">
@@ -198,12 +180,15 @@ export class GameList {
             <span class="game-stage">${escapeHtml(stage)}</span>
             <span class="meta-dot">·</span>
             <span class="game-duration">${duration}</span>
-            ${winnerText ? `<span class="meta-dot">·</span>${winnerText}` : ""}
           </div>
-          <div class="game-row-ambiguous-body">
-            <span class="ambiguous-players">
-              ${escapeHtml(port0.playerName || `P${port0.port + 1}`)} (${escapeHtml(characterName(port0.characterId))}) vs ${escapeHtml(port1.playerName || `P${port1.port + 1}`)} (${escapeHtml(characterName(port1.characterId))})
-            </span>
+          <div class="game-row-players">
+            <strong>${escapeHtml(port0.playerName || `P${port0.port + 1}`)}</strong>
+            <span class="char-label">(${escapeHtml(characterName(port0.characterId))})</span>
+            <span class="vs-label">vs</span>
+            <strong>${escapeHtml(port1.playerName || `P${port1.port + 1}`)}</strong>
+            <span class="char-label">(${escapeHtml(characterName(port1.characterId))})</span>
+          </div>
+          <div class="game-row-actions">
             <div class="inline-perspective-actions">
               <button class="inline-perspective-btn" data-port="${port0.port}">
                 ${escapeHtml(tr.imPlayer(label0))}
@@ -212,8 +197,6 @@ export class GameList {
                 ${escapeHtml(tr.imPlayer(label1))}
               </button>
             </div>
-          </div>
-          <div class="game-row-actions">
             <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
             <span class="drill-in-arrow">›</span>
           </div>
@@ -229,14 +212,11 @@ export class GameList {
     const oppName = oppP.playerName || `P${oppP.port + 1}`;
 
     let resultBadge = "";
-    let winnerMeta = "";
     if (yourP.finalStocks >= 0 && oppP.finalStocks >= 0) {
       if (yourP.finalStocks > oppP.finalStocks) {
         resultBadge = `<span class="result-badge win">🏆 ${escapeHtml(tr.win)}</span>`;
-        winnerMeta = `<span class="winner-meta win">🏆 ${escapeHtml(tr.winner(yourName))}</span>`;
       } else if (oppP.finalStocks > yourP.finalStocks) {
         resultBadge = `<span class="result-badge loss">${escapeHtml(tr.loss)}</span>`;
-        winnerMeta = `<span class="winner-meta loss">${escapeHtml(tr.winner(oppName))}</span>`;
       }
     }
 
@@ -248,7 +228,6 @@ export class GameList {
           <span class="game-stage">${escapeHtml(stage)}</span>
           <span class="meta-dot">·</span>
           <span class="game-duration">${duration}</span>
-          ${winnerMeta ? `<span class="meta-dot">·</span>${winnerMeta}` : ""}
         </div>
         <div class="game-row-players">
           <strong class="you-player">${escapeHtml(yourName)}</strong>
@@ -256,9 +235,9 @@ export class GameList {
           <span class="vs-label">vs</span>
           <span class="opp-player">${escapeHtml(oppName)}</span>
           <span class="char-label">(${escapeHtml(characterName(oppP.characterId))})</span>
-          ${resultBadge}
         </div>
         <div class="game-row-actions">
+          ${resultBadge}
           <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
           <span class="drill-in-arrow">›</span>
         </div>

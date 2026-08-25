@@ -72,9 +72,6 @@ export class MatchViewController {
   private stepForwardBtn: HTMLButtonElement;
   private scrubber: HTMLInputElement;
   private frameLabel: HTMLSpanElement;
-  private eventLogList: HTMLDivElement;
-  private eventLogEmpty: HTMLParagraphElement;
-  private eventLogHeaderTitle: HTMLHeadingElement;
   private matchStatsHeaderTitle: HTMLHeadingElement;
   private perspectiveToggleEl: HTMLDivElement;
   private statsCollapseBtn: HTMLButtonElement;
@@ -94,11 +91,11 @@ export class MatchViewController {
   private hoverScreen: { x: number; y: number } | undefined;
   private matchEvents: MatchEvent[] = [];
   private currentLogEvents: MatchEvent[] = [];
-  private currentLogEls: HTMLDivElement[] = [];
   private perspectivePort: PortIndex | null = null;
   private statsCollapsed = false;
   private hudOverlayEnabled = true;
   private matchupBaseline: DerivedRates | null = null;
+  private onPerspectiveChangedCb?: (port: PortIndex) => void;
 
   private boundOnKeyDown: (e: KeyboardEvent) => void;
   private boundOnResize: () => void;
@@ -118,15 +115,6 @@ export class MatchViewController {
     ) as HTMLButtonElement;
     this.scrubber = document.getElementById("scrubber") as HTMLInputElement;
     this.frameLabel = document.getElementById("frameLabel") as HTMLSpanElement;
-    this.eventLogList = document.getElementById(
-      "eventLogList",
-    ) as HTMLDivElement;
-    this.eventLogEmpty = document.getElementById(
-      "eventLogEmpty",
-    ) as HTMLParagraphElement;
-    this.eventLogHeaderTitle = document.querySelector(
-      "#eventLogHeader h2",
-    ) as HTMLHeadingElement;
     this.matchStatsHeaderTitle = document.querySelector(
       "#matchStatsHeader h2",
     ) as HTMLHeadingElement;
@@ -248,10 +236,7 @@ export class MatchViewController {
     const tr = t();
     if (this.matchStatsHeaderTitle)
       this.matchStatsHeaderTitle.textContent = tr.matchStats;
-    if (this.eventLogHeaderTitle)
-      this.eventLogHeaderTitle.textContent = tr.eventLog;
     if (this.statsEmpty) this.statsEmpty.textContent = tr.statsEmpty;
-    if (this.eventLogEmpty) this.eventLogEmpty.textContent = tr.eventLogEmpty;
     if (this.statsCollapseBtn)
       this.statsCollapseBtn.title = tr.statsCollapseTitle;
     if (this.hudToggleBtn) {
@@ -266,7 +251,7 @@ export class MatchViewController {
       this.buildPlayerPanels(this.currentReplay);
       this.buildPerspectiveToggle(this.currentReplay);
       this.renderStatsPanel(this.currentReplay);
-      this.buildEventLog(this.currentReplay);
+      this.buildEventLog();
       this.updateFileInfo(this.currentLoaded);
       this.onFrameChange(
         this.playback?.currentIndex ?? 0,
@@ -552,8 +537,9 @@ export class MatchViewController {
       btn.style.color = PORT_COLORS[port];
       btn.addEventListener("click", () => {
         this.perspectivePort = port;
+        this.onPerspectiveChangedCb?.(port);
         this.renderStatsPanel(replay);
-        this.buildEventLog(replay);
+        this.buildEventLog();
         this.updateEventLogHighlight(this.playback?.currentIndex ?? 0);
         for (const b of this.perspectiveToggleEl.querySelectorAll(
           ".perspective-btn",
@@ -573,14 +559,9 @@ export class MatchViewController {
     });
   }
 
-  private buildEventLog(replay: Replay): void {
-    this.eventLogList.innerHTML = "";
-
+  private buildEventLog(): void {
     if (this.perspectivePort === null) {
       this.currentLogEvents = [];
-      this.currentLogEls = [];
-      this.eventLogList.appendChild(this.eventLogEmpty);
-      this.eventLogEmpty.hidden = false;
       return;
     }
 
@@ -589,29 +570,6 @@ export class MatchViewController {
         return ev.attackerPort === this.perspectivePort;
       }
       return true;
-    });
-
-    if (this.currentLogEvents.length === 0) {
-      this.currentLogEls = [];
-      this.eventLogList.appendChild(this.eventLogEmpty);
-      this.eventLogEmpty.hidden = false;
-      return;
-    }
-
-    this.eventLogEmpty.hidden = true;
-    this.currentLogEls = this.currentLogEvents.map((ev) => {
-      const entry = document.createElement("div");
-      const { text, kind } = this.eventLabel(ev, replay, this.perspectivePort);
-      entry.className = `event-log-entry kind-${kind}`;
-      entry.textContent = text;
-      entry.title = `Jump to frame ${ev.frame}`;
-      entry.style.cursor = "pointer";
-      entry.addEventListener("click", () => {
-        this.playback?.pause();
-        this.playback?.seek(ev.frameIndex);
-      });
-      this.eventLogList.appendChild(entry);
-      return entry;
     });
   }
 
@@ -623,30 +581,6 @@ export class MatchViewController {
         activeIdx = i;
       } else {
         break;
-      }
-    }
-
-    for (let i = 0; i < this.currentLogEls.length; i++) {
-      const el = this.currentLogEls[i];
-      if (!el) continue;
-      const isCurrent = i === activeIdx;
-      el.classList.toggle("is-current", isCurrent);
-    }
-
-    if (activeIdx >= 0) {
-      const activeEl = this.currentLogEls[activeIdx];
-      if (activeEl) {
-        const list = this.eventLogList;
-        const itemTop = activeEl.offsetTop - list.offsetTop;
-        const itemBottom = itemTop + activeEl.offsetHeight;
-        const viewTop = list.scrollTop;
-        const viewBottom = viewTop + list.clientHeight;
-
-        if (itemTop < viewTop) {
-          list.scrollTop = itemTop;
-        } else if (itemBottom > viewBottom) {
-          list.scrollTop = itemBottom - list.clientHeight;
-        }
       }
     }
 
@@ -944,7 +878,7 @@ export class MatchViewController {
     this.buildPlayerPanels(replay);
     this.buildPerspectiveToggle(replay);
     this.renderStatsPanel(replay);
-    this.buildEventLog(replay);
+    this.buildEventLog();
     this.updateFileInfo(loaded);
     this.loadStatus.textContent = "";
 
@@ -956,5 +890,16 @@ export class MatchViewController {
       (idx, isPlaying, reason) => this.onFrameChange(idx, isPlaying, reason),
     );
     this.onFrameChange(0, false, "jump");
+  }
+
+  public setOnPerspectiveChanged(cb: (port: PortIndex) => void): void {
+    this.onPerspectiveChangedCb = cb;
+  }
+
+  public setMatchupBaseline(baseline: DerivedRates | null): void {
+    this.matchupBaseline = baseline;
+    if (this.currentReplay) {
+      this.renderStatsPanel(this.currentReplay);
+    }
   }
 }

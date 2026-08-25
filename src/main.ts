@@ -5,6 +5,7 @@ import {
   onRoute,
   type Route,
 } from "./router.js";
+import type { PortIndex } from "@rmg-k/rmgr";
 import {
   loadReplayFromFile,
   loadReplayFromUrl,
@@ -17,7 +18,6 @@ import { LibraryViewController } from "./library/libraryView.js";
 import {
   resolvePerspectivePort,
   resolveOpponentPort,
-  loadIdentity,
 } from "./data/identity.js";
 import { computeMatchupBaseline, type DerivedRates } from "./data/aggregate.js";
 
@@ -109,8 +109,8 @@ async function handleImport(files: FileList | File[]): Promise<void> {
       libraryController.addSummaries(result.summaries);
 
       // If user hasn't set custom aliases or imported many games, suggest onboarding
-      const identity = loadIdentity();
-      if (identity.aliases.size <= 1 && result.summaries.length > 1) {
+      const identity = libraryController.getIdentity();
+      if (identity.aliases.size === 0 && result.summaries.length > 1) {
         libraryController.openOnboardingModal();
       }
     }
@@ -127,8 +127,31 @@ async function handleImport(files: FileList | File[]): Promise<void> {
   }
 }
 
+let currentMatchSummary: GameSummary | null = null;
+
+function computeMatchupBaselineForPort(
+  summary: GameSummary,
+  port: PortIndex,
+): DerivedRates | null {
+  if (summary.ports.length !== 2) return null;
+  const identity = libraryController.getIdentity();
+  const yourP = summary.ports.find((p) => p.port === port);
+  const oppPort = resolveOpponentPort(summary, port);
+  const oppP =
+    oppPort !== null ? summary.ports.find((p) => p.port === oppPort) : null;
+  if (!yourP || !oppP) return null;
+
+  return computeMatchupBaseline(
+    libraryController.getSummaries(),
+    identity,
+    yourP.characterId,
+    oppP.characterId,
+  );
+}
+
 async function handleRouteChange(route: Route): Promise<void> {
   if (route.view === "library") {
+    currentMatchSummary = null;
     // Show Library View
     matchController.deactivate();
     matchViewEl.hidden = true;
@@ -146,6 +169,7 @@ async function handleRouteChange(route: Route): Promise<void> {
       navigateToLibrary();
       return;
     }
+    currentMatchSummary = summary;
 
     libraryViewEl.hidden = true;
     matchViewEl.hidden = false;
@@ -162,30 +186,22 @@ async function handleRouteChange(route: Route): Promise<void> {
         loaded = await loadReplayFromUrl(DEFAULT_SAMPLE_URL);
       }
 
-      const identity = loadIdentity();
+      const identity = libraryController.getIdentity();
       const perspectivePort =
         summary.manualPerspectivePort ??
         resolvePerspectivePort(summary, identity);
 
-      let matchupBaseline: DerivedRates | null = null;
-      if (perspectivePort !== null && summary.ports.length === 2) {
-        const yourP = summary.ports.find((p) => p.port === perspectivePort);
-        const oppPort = resolveOpponentPort(summary, perspectivePort);
-        const oppP =
-          oppPort !== null
-            ? summary.ports.find((p) => p.port === oppPort)
-            : null;
-        if (yourP && oppP) {
-          matchupBaseline = computeMatchupBaseline(
-            libraryController.getSummaries(),
-            identity,
-            yourP.characterId,
-            oppP.characterId,
-          );
-        }
-      }
+      const initialPort: PortIndex =
+        perspectivePort !== null
+          ? perspectivePort
+          : (summary.ports[0]?.port ?? 0);
 
-      matchController.loadMatch(loaded, perspectivePort, matchupBaseline);
+      const matchupBaseline = computeMatchupBaselineForPort(
+        summary,
+        initialPort,
+      );
+
+      matchController.loadMatch(loaded, initialPort, matchupBaseline);
       matchController.activate();
       loadStatus.textContent = "";
     } catch (err) {
@@ -197,6 +213,16 @@ async function handleRouteChange(route: Route): Promise<void> {
 async function init(): Promise<void> {
   // 1. Initialize Views
   matchController = new MatchViewController();
+  matchController.setOnPerspectiveChanged((newPort) => {
+    if (currentMatchSummary) {
+      const baseline = computeMatchupBaselineForPort(
+        currentMatchSummary,
+        newPort,
+      );
+      matchController.setMatchupBaseline(baseline);
+    }
+  });
+
   libraryController = new LibraryViewController(
     libraryViewEl,
     modalContainerEl,

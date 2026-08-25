@@ -148,6 +148,10 @@ export class LibraryViewController {
     return this.summaries;
   }
 
+  public getIdentity(): Identity {
+    return this.identity;
+  }
+
   public getSummaryById(id: string): GameSummary | undefined {
     return this.summaries.find((s) => s.id === id);
   }

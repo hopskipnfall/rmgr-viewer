@@ -465,9 +465,10 @@
         border: 1px solid var(--panel-border);
         border-radius: 8px;
         padding: 10px 14px;
-        display: flex;
+        display: grid;
+        grid-template-columns: 240px 1fr auto;
         align-items: center;
-        justify-content: space-between;
+        gap: 16px;
         cursor: pointer;
         transition:
           background 0.1s,
@@ -490,7 +491,8 @@
         display: flex;
         align-items: center;
         gap: 6px;
-        margin-bottom: 4px;
+        margin: 0;
+        white-space: nowrap;
       }
       .meta-dot {
         opacity: 0.5;
@@ -500,6 +502,7 @@
         color: var(--text);
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 6px;
       }
       .you-player {
@@ -522,21 +525,11 @@
       .game-row.row-lost {
         border-left: 3px solid rgba(224, 71, 63, 0.4);
       }
-      .winner-meta {
-        font-weight: 600;
-      }
-      .winner-meta.win {
-        color: #4fbf6a;
-      }
-      .winner-meta.loss {
-        color: var(--text-dim);
-      }
       .result-badge {
         font-size: 11px;
         font-weight: 700;
         padding: 2px 6px;
         border-radius: 4px;
-        margin-left: 8px;
         display: inline-flex;
         align-items: center;
         gap: 3px;
@@ -552,8 +545,8 @@
       .game-row-actions {
         display: flex;
         align-items: center;
-        gap: 6px;
-        margin-left: 12px;
+        gap: 8px;
+        justify-self: end;
       }
       .remove-game-btn {
         background: transparent;
@@ -578,13 +571,6 @@
       .drill-in-arrow {
         font-size: 18px;
         color: var(--text-dim);
-      }
-      .game-row-ambiguous-body {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        flex: 1;
       }
       .inline-perspective-actions {
         display: flex;
@@ -860,8 +846,7 @@
         flex-direction: column;
         gap: 10px;
       }
-      #matchStats,
-      #eventLog {
+      #matchStats {
         flex-shrink: 0;
         display: flex;
         flex-direction: column;
@@ -871,8 +856,7 @@
         border-radius: 8px;
         overflow: hidden;
       }
-      #matchStatsHeader,
-      #eventLogHeader {
+      #matchStatsHeader {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -991,57 +975,6 @@
       .stat-match-delta.pct-delta-neg {
         color: #e0473f;
       }
-      #eventLogList {
-        overflow-y: auto;
-        max-height: 240px;
-        padding: 4px 0;
-      }
-      #eventLogEmpty {
-        font-size: 12px;
-        color: var(--text-dim);
-        padding: 10px 12px;
-        margin: 0;
-      }
-      .event-log-entry {
-        font-size: 12px;
-        font-variant-numeric: tabular-nums;
-        padding: 4px 12px;
-        color: var(--text-dim);
-        border-left: 3px solid transparent;
-        cursor: default;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .event-log-entry.is-current {
-        color: var(--text);
-        background: rgba(79, 127, 219, 0.12);
-        border-left-color: var(--accent);
-      }
-      .event-log-entry.kind-entered {
-        color: var(--text-dim);
-      }
-      .event-log-entry.kind-neutral-hit {
-        color: var(--text-dim);
-      }
-      .event-log-entry.kind-success {
-        color: #4fbf6a;
-      }
-      .event-log-entry.kind-failure {
-        color: #e0473f;
-      }
-      .event-log-entry.is-current.kind-neutral-hit {
-        background: rgba(139, 143, 156, 0.14);
-        border-left-color: var(--text-dim);
-      }
-      .event-log-entry.is-current.kind-success {
-        background: rgba(79, 191, 106, 0.12);
-        border-left-color: #4fbf6a;
-      }
-      .event-log-entry.is-current.kind-failure {
-        background: rgba(224, 71, 63, 0.12);
-        border-left-color: #e0473f;
-      }
 
       /* Player panel */
       .player-panel {
@@ -1151,9 +1084,6 @@
           flex-direction: row;
           flex-wrap: wrap;
         }
-        #eventLog {
-          width: 100%;
-        }
         .player-panel {
           flex: 1 1 260px;
         }
@@ -1227,21 +1157,6 @@
             </div>
           </section>
           <div id="players"></div>
-          <section id="eventLog">
-            <div id="eventLogHeader">
-              <h2>Event Log</h2>
-              <button
-                id="hudToggleBtn"
-                class="hud-toggle-btn active"
-                title="Toggle on-screen event HUD"
-              >
-                HUD
-              </button>
-            </div>
-            <div id="eventLogList">
-              <p id="eventLogEmpty">No events yet.</p>
-            </div>
-          </section>
         </aside>
       </div>
     </main>
@@ -1254,6 +1169,13 @@
       <button id="stepBack" title="Previous frame">⏮</button>
       <button id="playPause" title="Play/Pause">▶</button>
       <button id="stepForward" title="Next frame">⏭</button>
+      <button
+        id="hudToggleBtn"
+        class="hud-toggle-btn active"
+        title="Toggle on-screen event HUD"
+      >
+        HUD
+      </button>
       <input type="range" id="scrubber" min="0" max="0" value="0" />
       <span id="frameLabel"></span>
     </footer>
