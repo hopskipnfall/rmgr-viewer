@@ -78,6 +78,8 @@ export interface Translations {
   prevFrameTooltip: string;
   playPauseTooltip: string;
   nextFrameTooltip: string;
+  hudOverlay: string;
+  hudOverlayTitle: string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -116,6 +118,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     eventLog: "Event Log",
     eventLogEmpty: "No events yet.",
+    hudOverlay: "HUD",
+    hudOverlayTitle: "Toggle on-screen event HUD",
 
     recovering: "Recovering",
     edgeGuarding: "Edge guarding",
@@ -188,6 +192,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     eventLog: "イベントログ",
     eventLogEmpty: "イベントはまだありません。",
+    hudOverlay: "HUD",
+    hudOverlayTitle: "画面上のイベントHUDの表示切替",
 
     recovering: "復帰中",
     edgeGuarding: "復帰阻止中",
@@ -233,10 +239,31 @@ export function getLanguage(): Language {
 }
 
 export function initLanguage(): Language {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved === "ja" || saved === "en") {
-    currentLang = saved;
-  } else if (navigator.language?.startsWith("ja")) {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const hl = urlParams.get("hl");
+    if (hl === "ja" || hl === "en") {
+      currentLang = hl;
+      return currentLang;
+    }
+  } catch {
+    // Ignore URL search params error
+  }
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === "ja" || saved === "en") {
+      currentLang = saved;
+      return currentLang;
+    }
+  } catch {
+    // Ignore localStorage read error
+  }
+
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.language?.startsWith("ja")
+  ) {
     currentLang = "ja";
   } else {
     currentLang = "en";
@@ -249,7 +276,19 @@ export function setLanguage(lang: Language): void {
   try {
     localStorage.setItem(STORAGE_KEY, lang);
   } catch {
-    // Ignore localStorage errors (e.g. sandboxed iframe or private browsing)
+    // Ignore localStorage write error
+  }
+
+  try {
+    const url = new URL(window.location.href);
+    if (lang === "ja") {
+      url.searchParams.set("hl", "ja");
+    } else {
+      url.searchParams.delete("hl");
+    }
+    window.history.replaceState({}, "", url.toString());
+  } catch {
+    // Ignore history API error
   }
 }
 

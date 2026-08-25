@@ -81,6 +81,7 @@
         min-width: 0;
       }
       #stageWrap {
+        position: relative;
         flex: 1;
         min-width: 0;
         min-height: 0;
@@ -91,6 +92,86 @@
         border: 1px solid var(--panel-border);
         border-radius: 8px;
         overflow: hidden;
+      }
+      #stageOverlay {
+        position: absolute;
+        bottom: 12px;
+        left: 14px;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        z-index: 10;
+        max-width: 440px;
+      }
+      #stageOverlay[hidden] {
+        display: none !important;
+      }
+      #stageOverlayList {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .overlay-entry {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(18, 20, 26, 0.85);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-left: 4px solid var(--accent);
+        border-radius: 6px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        opacity: 0.85;
+      }
+      .overlay-entry.is-current {
+        opacity: 1;
+        background: rgba(26, 30, 42, 0.92);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      }
+      .overlay-entry.kind-success {
+        border-left-color: #4fbf6a;
+      }
+      .overlay-entry.kind-failure {
+        border-left-color: #e0473f;
+      }
+      .overlay-entry.kind-neutral-hit {
+        border-left-color: var(--text-dim);
+      }
+      .overlay-entry.kind-entered {
+        border-left-color: var(--accent);
+      }
+      .hud-toggle-btn {
+        margin-left: auto;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid var(--panel-border);
+        cursor: pointer;
+        background: transparent;
+        color: var(--text-dim);
+        transition:
+          background 0.1s,
+          color 0.1s,
+          border-color 0.1s;
+      }
+      .hud-toggle-btn:hover {
+        color: var(--text);
+        border-color: var(--text-dim);
+      }
+      .hud-toggle-btn.active {
+        color: #fff;
+        border-color: var(--accent);
+        background: var(--accent);
       }
       #stage {
         display: block;
@@ -437,6 +518,9 @@
     <main>
       <div id="stageWrap">
         <canvas id="stage" width="960" height="540"></canvas>
+        <div id="stageOverlay">
+          <div id="stageOverlayList"></div>
+        </div>
       </div>
       <aside id="sidebar">
         <div id="players"></div>
@@ -455,6 +539,13 @@
         <section id="eventLog">
           <div id="eventLogHeader">
             <h2>Event Log</h2>
+            <button
+              id="hudToggleBtn"
+              class="hud-toggle-btn active"
+              title="Toggle on-screen event HUD"
+            >
+              HUD
+            </button>
           </div>
           <div id="eventLogList">
             <p id="eventLogEmpty">No events yet.</p>

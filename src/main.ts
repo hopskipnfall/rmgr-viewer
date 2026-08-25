@@ -72,6 +72,13 @@ const statsEmpty = document.getElementById(
   "statsEmpty",
 ) as HTMLParagraphElement;
 const langToggleEl = document.getElementById("langToggle") as HTMLDivElement;
+const stageOverlay = document.getElementById("stageOverlay") as HTMLDivElement;
+const stageOverlayList = document.getElementById(
+  "stageOverlayList",
+) as HTMLDivElement;
+const hudToggleBtn = document.getElementById(
+  "hudToggleBtn",
+) as HTMLButtonElement;
 
 const stageRenderer = new StageRenderer(stageCanvas);
 
@@ -103,6 +110,12 @@ let currentLogEls: HTMLDivElement[] = [];
 /** Which port's perspective the event log and stats are shown from. */
 let perspectivePort: PortIndex | null = null;
 let statsCollapsed = false;
+let hudOverlayEnabled = true;
+try {
+  hudOverlayEnabled = localStorage.getItem("rmgr-viewer-hud") !== "false";
+} catch {
+  // Ignore localStorage read error
+}
 
 function formatElapsed(frameIndex: number): string {
   const totalSeconds = frameIndex / 60;
@@ -118,6 +131,10 @@ function updateStaticTranslations(): void {
   if (statsEmpty) statsEmpty.textContent = tr.statsEmpty;
   if (eventLogEmpty) eventLogEmpty.textContent = tr.eventLogEmpty;
   if (statsCollapseBtn) statsCollapseBtn.title = tr.statsCollapseTitle;
+  if (hudToggleBtn) {
+    hudToggleBtn.textContent = tr.hudOverlay;
+    hudToggleBtn.title = tr.hudOverlayTitle;
+  }
   if (stepBackBtn) stepBackBtn.title = tr.prevFrameTooltip;
   if (playPauseBtn) playPauseBtn.title = tr.playPauseTooltip;
   if (stepForwardBtn) stepForwardBtn.title = tr.nextFrameTooltip;
@@ -469,11 +486,10 @@ function buildEventLog(replay: Replay): void {
 }
 
 /**
- * Highlights the most recent event at or before currentFrameIndex.
+ * Highlights the most recent event at or before currentFrameIndex,
+ * and updates the on-screen stage HUD overlay.
  */
 function updateEventLogHighlight(currentFrameIndex: number): void {
-  if (currentLogEls.length === 0) return;
-
   let activeIdx = -1;
   for (let i = 0; i < currentLogEvents.length; i++) {
     const ev = currentLogEvents[i];
@@ -484,13 +500,53 @@ function updateEventLogHighlight(currentFrameIndex: number): void {
     }
   }
 
+  // Highlight elements in the sidebar event log list
   for (let i = 0; i < currentLogEls.length; i++) {
     const el = currentLogEls[i];
     if (!el) continue;
     const isCurrent = i === activeIdx;
     el.classList.toggle("is-current", isCurrent);
-    if (isCurrent) {
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  // Only scroll within #eventLogList without scrolling the outer #sidebar container!
+  if (activeIdx >= 0) {
+    const activeEl = currentLogEls[activeIdx];
+    if (activeEl) {
+      const list = eventLogList;
+      const itemTop = activeEl.offsetTop - list.offsetTop;
+      const itemBottom = itemTop + activeEl.offsetHeight;
+      const viewTop = list.scrollTop;
+      const viewBottom = viewTop + list.clientHeight;
+
+      if (itemTop < viewTop) {
+        list.scrollTop = itemTop;
+      } else if (itemBottom > viewBottom) {
+        list.scrollTop = itemBottom - list.clientHeight;
+      }
+    }
+  }
+
+  // Update on-screen stage HUD overlay (last up to 3 recent events)
+  if (
+    !hudOverlayEnabled ||
+    activeIdx === -1 ||
+    currentLogEvents.length === 0 ||
+    !currentReplay
+  ) {
+    stageOverlay.hidden = true;
+  } else {
+    stageOverlay.hidden = false;
+    stageOverlayList.innerHTML = "";
+    const startIdx = Math.max(0, activeIdx - 2);
+    for (let i = startIdx; i <= activeIdx; i++) {
+      const ev = currentLogEvents[i];
+      if (!ev) continue;
+      const { text, kind } = eventLabel(ev, currentReplay, perspectivePort);
+      const isLatest = i === activeIdx;
+      const entry = document.createElement("div");
+      entry.className = `overlay-entry kind-${kind}${isLatest ? " is-current" : ""}`;
+      entry.textContent = text;
+      stageOverlayList.appendChild(entry);
     }
   }
 }
@@ -772,6 +828,19 @@ statsCollapseBtn.addEventListener("click", () => {
   statsPanel.hidden = statsCollapsed;
   statsCollapseBtn.classList.toggle("collapsed", statsCollapsed);
 });
+
+hudToggleBtn.addEventListener("click", () => {
+  hudOverlayEnabled = !hudOverlayEnabled;
+  hudToggleBtn.classList.toggle("active", hudOverlayEnabled);
+  try {
+    localStorage.setItem("rmgr-viewer-hud", String(hudOverlayEnabled));
+  } catch {
+    // Ignore localStorage write error
+  }
+  updateEventLogHighlight(playback?.currentIndex ?? 0);
+});
+
+hudToggleBtn.classList.toggle("active", hudOverlayEnabled);
 
 langToggleEl.addEventListener("click", (e) => {
   const target = (e.target as HTMLElement).closest<HTMLButtonElement>(
