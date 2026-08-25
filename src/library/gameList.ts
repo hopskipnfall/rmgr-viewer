@@ -85,7 +85,9 @@ export class GameList {
           sorted.length === 0
             ? `<div class="game-list-empty">${escapeHtml(tr.noGamesMatched)}</div>`
             : sorted
-                .map((summary) => this.renderGameRow(summary, identity))
+                .map((summary) =>
+                  this.renderGameRow(summary, identity, sorted.length === 1),
+                )
                 .join("")
         }
       </div>
@@ -132,16 +134,21 @@ export class GameList {
     });
   }
 
-  private renderGameRow(summary: GameSummary, identity: Identity): string {
+  private renderGameRow(
+    summary: GameSummary,
+    identity: Identity,
+    isSingleGame: boolean = false,
+  ): string {
     const tr = t();
     const is2Player = summary.ports.length === 2;
     const stage = stageName(summary.stageId);
     const dateStr = formatDate(summary.recordedAt);
     const duration = formatDuration(summary.frameCount);
+    const pulseClass = isSingleGame ? "single-game-pulse" : "";
 
     if (!is2Player) {
       return `
-        <div class="game-row unsupported" data-id="${summary.id}">
+        <div class="game-row unsupported ${pulseClass}" data-id="${summary.id}">
           <div class="game-row-meta">
             <span class="game-date">${escapeHtml(dateStr)}</span>
             <span class="meta-dot">·</span>
@@ -172,7 +179,7 @@ export class GameList {
       const label1 = port1.playerName || characterName(port1.characterId);
 
       return `
-        <div class="game-row ambiguous" data-id="${summary.id}">
+        <div class="game-row ambiguous ${pulseClass}" data-id="${summary.id}">
           <div class="game-row-meta">
             <span class="ambiguous-badge">⚠</span>
             <span class="game-date">${escapeHtml(dateStr)}</span>
@@ -221,7 +228,7 @@ export class GameList {
     }
 
     return `
-      <div class="game-row ${yourP.finalStocks > oppP.finalStocks ? "row-won" : yourP.finalStocks < oppP.finalStocks ? "row-lost" : ""}" data-id="${summary.id}">
+      <div class="game-row ${pulseClass} ${yourP.finalStocks > oppP.finalStocks ? "row-won" : yourP.finalStocks < oppP.finalStocks ? "row-lost" : ""}" data-id="${summary.id}">
         <div class="game-row-meta">
           <span class="game-date">${escapeHtml(dateStr)}</span>
           <span class="meta-dot">·</span>

@@ -33,6 +33,7 @@ export class LibraryViewController {
   private breakdownTable: BreakdownTable;
   private gameList: GameList;
 
+  private mobileSidebarExpanded = false;
   private onSelectGameCallback: (summary: GameSummary) => void;
 
   constructor(
@@ -47,8 +48,20 @@ export class LibraryViewController {
     // Create sub-component mount points inside container
     this.container.innerHTML = `
       <div id="librarySidebar" class="library-sidebar">
-        <div id="identityCard" class="identity-card"></div>
-        <div id="filterPanelWrap" class="filter-panel-wrap"></div>
+        <button id="mobileSidebarToggle" class="mobile-sidebar-toggle" aria-expanded="false">
+          <div class="mobile-toggle-left">
+            <span class="mobile-toggle-icon">👤</span>
+            <span id="mobileIdentitySummary" class="mobile-toggle-name"></span>
+          </div>
+          <div class="mobile-toggle-right">
+            <span id="mobileFilterSummary" class="mobile-toggle-filters"></span>
+            <span class="mobile-toggle-arrow">▾</span>
+          </div>
+        </button>
+        <div id="librarySidebarContent" class="library-sidebar-content">
+          <div id="identityCard" class="identity-card"></div>
+          <div id="filterPanelWrap" class="filter-panel-wrap"></div>
+        </div>
       </div>
       <div id="libraryMain" class="library-main">
         <div id="overallHeader" class="overall-header"></div>
@@ -57,6 +70,29 @@ export class LibraryViewController {
         <div id="gameListWrap" class="game-list-wrap"></div>
       </div>
     `;
+
+    const mobileSidebarToggle = this.container.querySelector(
+      "#mobileSidebarToggle",
+    ) as HTMLButtonElement;
+    const librarySidebarContent = this.container.querySelector(
+      "#librarySidebarContent",
+    ) as HTMLElement;
+
+    mobileSidebarToggle?.addEventListener("click", () => {
+      this.mobileSidebarExpanded = !this.mobileSidebarExpanded;
+      mobileSidebarToggle.classList.toggle(
+        "expanded",
+        this.mobileSidebarExpanded,
+      );
+      mobileSidebarToggle.setAttribute(
+        "aria-expanded",
+        String(this.mobileSidebarExpanded),
+      );
+      librarySidebarContent?.classList.toggle(
+        "expanded",
+        this.mobileSidebarExpanded,
+      );
+    });
 
     const identityCard = this.container.querySelector(
       "#identityCard",
@@ -174,6 +210,36 @@ export class LibraryViewController {
     // 2. Filter panel
     this.filterPanel.render(this.summaries, this.identity);
 
+    // Update mobile sidebar toggle summary
+    const mobileIdSummaryEl = this.container.querySelector(
+      "#mobileIdentitySummary",
+    ) as HTMLElement;
+    const mobileFilterSummaryEl = this.container.querySelector(
+      "#mobileFilterSummary",
+    ) as HTMLElement;
+    if (mobileIdSummaryEl && mobileFilterSummaryEl) {
+      const aliases = Array.from(this.identity.aliases);
+      if (aliases.length > 0) {
+        mobileIdSummaryEl.textContent = aliases.join(", ");
+        mobileIdSummaryEl.classList.remove("not-selected");
+      } else {
+        mobileIdSummaryEl.textContent = tr.noNamesSelected;
+        mobileIdSummaryEl.classList.add("not-selected");
+      }
+
+      let activeFiltersCount = 0;
+      if (this.criteria.yourCharacterId !== "all") activeFiltersCount++;
+      if (this.criteria.oppCharacterId !== "all") activeFiltersCount++;
+      if (this.criteria.opponentName !== "all") activeFiltersCount++;
+      if (this.criteria.stageId !== "all") activeFiltersCount++;
+
+      if (activeFiltersCount > 0) {
+        mobileFilterSummaryEl.innerHTML = `${escapeHtml(tr.filters)} <span class="mobile-toggle-badge">${activeFiltersCount}</span>`;
+      } else {
+        mobileFilterSummaryEl.textContent = tr.filters;
+      }
+    }
+
     // 3. Baseline aggregation (unfiltered-you)
     const baselineFiltered = filterGameSummaries(
       this.summaries,
@@ -196,22 +262,39 @@ export class LibraryViewController {
       ? computeRateDeltas(filteredRates, baselineRates)
       : null;
 
-    // 6. Overall Header
+    // 6. Overall Statistics (collapsed unless at least 2 games have a resolved identity)
+    const hasSufficientGames = baselineFiltered.length >= 2;
     const overallHeaderEl = this.container.querySelector(
       "#overallHeader",
     ) as HTMLElement;
-    if (overallHeaderEl) {
-      overallHeaderEl.innerHTML = `
-        <h2>${escapeHtml(tr.overallHeader(filteredRates.totalGames, filteredRates.dreamLandGames))}</h2>
-      `;
+    const statCardsWrapEl = this.container.querySelector(
+      "#statCardsWrap",
+    ) as HTMLElement;
+    const breakdownWrapEl = this.container.querySelector(
+      "#breakdownWrap",
+    ) as HTMLElement;
+
+    if (!hasSufficientGames) {
+      if (overallHeaderEl) overallHeaderEl.hidden = true;
+      if (statCardsWrapEl) statCardsWrapEl.hidden = true;
+      if (breakdownWrapEl) breakdownWrapEl.hidden = true;
+    } else {
+      if (overallHeaderEl) {
+        overallHeaderEl.hidden = false;
+        overallHeaderEl.innerHTML = `
+          <h2>${escapeHtml(tr.overallHeader(filteredRates.totalGames, filteredRates.dreamLandGames))}</h2>
+        `;
+      }
+      if (statCardsWrapEl) statCardsWrapEl.hidden = false;
+      if (breakdownWrapEl) breakdownWrapEl.hidden = false;
+
+      // 7. Stat Cards
+      this.statCards.render(filteredRates, deltas, showDeltas);
+
+      // 8. Breakdown Table
+      const breakdownRows = computeOpponentCharacterBreakdown(resolvedGames);
+      this.breakdownTable.render(breakdownRows);
     }
-
-    // 7. Stat Cards
-    this.statCards.render(filteredRates, deltas, showDeltas);
-
-    // 8. Breakdown Table
-    const breakdownRows = computeOpponentCharacterBreakdown(resolvedGames);
-    this.breakdownTable.render(breakdownRows);
 
     // 9. Game List
     // Show games matching current filter criteria, or all games if no filters
