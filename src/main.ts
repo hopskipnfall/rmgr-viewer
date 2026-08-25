@@ -594,7 +594,7 @@ function renderStatsPanel(replay: Replay): void {
     PORT_LABELS[perspectivePort];
 
   const pct = (n: number, d: number): string =>
-    d === 0 ? "—" : `${Math.round((n / d) * 100)}%`;
+    d === 0 ? "N/A" : `${Math.round((n / d) * 100)}%`;
 
   const addRow = (
     label: string,
