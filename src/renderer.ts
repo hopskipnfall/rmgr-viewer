@@ -35,6 +35,17 @@ export function isSpecialState(actionStateId: number): boolean {
   return actionStateId >= 0x0dc;
 }
 
+const LANDING_ACTION_STATES = new Set([
+  0x01f, // LandingLight
+  0x020, // LandingHeavy
+  0x03b, // LandingSpecial
+  0x0db, // LandingAirX
+]);
+
+export function isLandingState(actionStateId: number): boolean {
+  return LANDING_ACTION_STATES.has(actionStateId);
+}
+
 const DEAD_ACTION_STATES = new Set([
   0x000, // DeadD
   0x001, // DeadS
@@ -731,6 +742,7 @@ export class StageRenderer {
     const inCombo = inHitstun && (post.comboHitCount ?? 0) > 0;
     const comboHits = inHitstun ? (post.comboHitCount ?? 0) : 0;
     const isSpecial = isSpecialState(post.actionStateId);
+    const isLanding = isLandingState(post.actionStateId);
 
     // Isosceles triangle, nose pointing in the facing direction, feet at y and head at topY.
     const triX =
@@ -775,8 +787,8 @@ export class StageRenderer {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
       ctx.lineWidth = 1;
       ctx.stroke();
-    } else if (isSpecial) {
-      // Special move: neutral cool-silver/gray energy outline
+    } else if (isSpecial || isLanding) {
+      // Special move & Landing animation: neutral cool-silver/gray energy outline
       ctx.save();
       ctx.strokeStyle = "rgba(190, 205, 225, 0.95)";
       ctx.lineWidth = 2.5;
