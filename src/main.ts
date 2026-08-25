@@ -31,6 +31,9 @@ const modalContainerEl = document.getElementById(
 const backToLibraryBtn = document.getElementById(
   "backToLibraryBtn",
 ) as HTMLButtonElement;
+const importContainer = document.getElementById(
+  "importContainer",
+) as HTMLDivElement;
 const importBtn = document.getElementById("importBtn") as HTMLButtonElement;
 const importDropdownMenu = document.getElementById(
   "importDropdownMenu",
@@ -156,6 +159,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchViewEl.hidden = true;
     matchFooterEl.hidden = true;
     backToLibraryBtn.hidden = true;
+    importContainer.hidden = false;
 
     libraryViewEl.hidden = false;
     libraryController.render();
@@ -173,6 +177,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchViewEl.hidden = false;
     matchFooterEl.hidden = false;
     backToLibraryBtn.hidden = false;
+    importContainer.hidden = true;
 
     loadStatus.textContent = "Loading replay...";
     try {
