@@ -43,5 +43,7 @@ jobs:
         working-directory: rmgr-viewer
       - run: npm run lint
         working-directory: rmgr-viewer
+      - run: npm test
+        working-directory: rmgr-viewer
       - run: npm run format:check
         working-directory: rmgr-viewer

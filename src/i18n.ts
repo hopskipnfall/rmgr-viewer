@@ -80,6 +80,49 @@ export interface Translations {
   nextFrameTooltip: string;
   hudOverlay: string;
   hudOverlayTitle: string;
+
+  // Library View
+  importReplays: string;
+  importFiles: string;
+  importFolder: string;
+  importingProgress: (loaded: number, total: number) => string;
+  backToLibrary: string;
+  you: string;
+  aliasesCount: (n: number) => string;
+  edit: string;
+  filters: string;
+  yourCharacter: string;
+  oppCharacter: string;
+  opponent: string;
+  stage: string;
+  all: string;
+  resetFilters: string;
+  overallHeader: (total: number, dl: number) => string;
+  lowSampleWarning: string;
+  vsAll: (val: string) => string;
+  byOpponentCharacter: string;
+  characterCol: string;
+  gamesCol: string;
+  winLossCol: string;
+  recovCol: string;
+  edgeGCol: string;
+  ledgeGCol: string;
+  ledgeTCol: string;
+  angelCol: string;
+  nhPerStockCol: string;
+  gamesListHeader: (count: number) => string;
+  sortNewestFirst: string;
+  sortOldestFirst: string;
+  ambiguousIdentity: string;
+  imPlayer: (name: string) => string;
+  notSupportedPlayers: string;
+  identityModalTitle: string;
+  identityModalSubtitle: string;
+  addCustomAlias: string;
+  add: string;
+  save: string;
+  cancel: string;
+  noGamesMatched: string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -155,6 +198,50 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     prevFrameTooltip: "Previous frame",
     playPauseTooltip: "Play / pause",
     nextFrameTooltip: "Next frame",
+
+    importReplays: "Import replays",
+    importFiles: "Select files (.rmgr)",
+    importFolder: "Select folder",
+    importingProgress: (l, tot) => `Importing replays (${l}/${tot})...`,
+    backToLibrary: "← Library",
+    you: "YOU",
+    aliasesCount: (n) => `${n} alias${n !== 1 ? "es" : ""}`,
+    edit: "edit",
+    filters: "FILTERS",
+    yourCharacter: "Your character",
+    oppCharacter: "Opponent character",
+    opponent: "Opponent",
+    stage: "Stage",
+    all: "All",
+    resetFilters: "Reset",
+    overallHeader: (tot, dl) =>
+      `OVERALL · ${tot} game${tot !== 1 ? "s" : ""} · ${dl} on Dream Land`,
+    lowSampleWarning: "low n",
+    vsAll: (v) => `${v} vs all`,
+    byOpponentCharacter: "BY OPPONENT CHARACTER",
+    characterCol: "Char",
+    gamesCol: "Games",
+    winLossCol: "W-L",
+    recovCol: "Recov.",
+    edgeGCol: "EdgeG.",
+    ledgeGCol: "LedgeG.",
+    ledgeTCol: "LedgeT.",
+    angelCol: "Angel",
+    nhPerStockCol: "NH/St",
+    gamesListHeader: (c) => `GAMES (${c})`,
+    sortNewestFirst: "newest first",
+    sortOldestFirst: "oldest first",
+    ambiguousIdentity: "Ambiguous identity",
+    imPlayer: (name) => `I'm ${name}`,
+    notSupportedPlayers: "3-4 players (unsupported)",
+    identityModalTitle: "Who are you?",
+    identityModalSubtitle:
+      "Select the player names you use across your replays to aggregate your statistics accurately.",
+    addCustomAlias: "Add custom name",
+    add: "Add",
+    save: "Save",
+    cancel: "Cancel",
+    noGamesMatched: "No games match the selected filters.",
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -229,6 +316,49 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     prevFrameTooltip: "前のフレーム",
     playPauseTooltip: "再生 / 一時停止",
     nextFrameTooltip: "次のフレーム",
+
+    importReplays: "リプレイの読み込み",
+    importFiles: "ファイルを選択 (.rmgr)",
+    importFolder: "フォルダを選択",
+    importingProgress: (l, tot) => `読み込み中 (${l}/${tot})...`,
+    backToLibrary: "← ライブラリに戻る",
+    you: "プレイヤー",
+    aliasesCount: (n) => `別名: ${n}件`,
+    edit: "編集",
+    filters: "フィルター",
+    yourCharacter: "使用キャラ",
+    oppCharacter: "相手キャラ",
+    opponent: "対戦相手",
+    stage: "ステージ",
+    all: "すべて",
+    resetFilters: "リセット",
+    overallHeader: (tot, dl) => `全体 · 計${tot}試合 (プププランド: ${dl}試合)`,
+    lowSampleWarning: "試行数少",
+    vsAll: (v) => `全体比 ${v}`,
+    byOpponentCharacter: "相手キャラクター別",
+    characterCol: "キャラ",
+    gamesCol: "試合数",
+    winLossCol: "勝-敗",
+    recovCol: "復帰",
+    edgeGCol: "復帰阻止",
+    ledgeGCol: "崖上がり",
+    ledgeTCol: "崖狩り",
+    angelCol: "無敵",
+    nhPerStockCol: "ヒット/撃墜",
+    gamesListHeader: (c) => `試合一覧 (${c})`,
+    sortNewestFirst: "新しい順",
+    sortOldestFirst: "古い順",
+    ambiguousIdentity: "プレイヤー特定不可",
+    imPlayer: (name) => `自分は${name}`,
+    notSupportedPlayers: "3〜4人対戦 (非対応)",
+    identityModalTitle: "あなたのアカウントを選択",
+    identityModalSubtitle:
+      "スタッツを集計するために、あなたが使用しているプレイヤー名を選択してください。",
+    addCustomAlias: "名前を追加",
+    add: "追加",
+    save: "保存",
+    cancel: "キャンセル",
+    noGamesMatched: "条件に一致する試合がありません。",
   },
 };
 
