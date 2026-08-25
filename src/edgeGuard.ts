@@ -26,7 +26,7 @@ function xThresholdAtY(y: number): number {
   return ZONE_X_AT_Y_LO + t * (ZONE_X_AT_Y_HI - ZONE_X_AT_Y_LO);
 }
 
-function isOutsideZone(x: number, y: number): boolean {
+export function isOutsideZone(x: number, y: number): boolean {
   return Math.abs(x) > xThresholdAtY(y);
 }
 

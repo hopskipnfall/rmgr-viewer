@@ -1,5 +1,6 @@
 import { getSeatedPorts, type PortIndex, type Replay } from "@rmg-k/rmgr";
-import { isHitstunState } from "./edgeGuard.js";
+import { isHitstunState, isOutsideZone } from "./edgeGuard.js";
+import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 
 const LEDGE_STATES = new Set([0x054, 0x055, 0x056, 0x059]); // CliffCatch, CliffWait, CliffQuick, CliffSlow
 const DEAD_OR_RESPAWNING_STATES = new Set([
@@ -35,16 +36,6 @@ interface ActiveLedgeSituation {
   hasTouchedGround: boolean;
   readonly ledgeStocksAtEntry: number;
   readonly trapStocksAtEntry: number;
-}
-
-function isOutsideDangerZone(x: number, y: number): boolean {
-  const ZONE_Y_LO = 58;
-  const ZONE_Y_HI = 4158;
-  const ZONE_X_AT_Y_LO = 2916;
-  const ZONE_X_AT_Y_HI = 3570;
-  const t = Math.max(0, Math.min(1, (y - ZONE_Y_LO) / (ZONE_Y_HI - ZONE_Y_LO)));
-  const xThresh = ZONE_X_AT_Y_LO + t * (ZONE_X_AT_Y_HI - ZONE_X_AT_Y_LO);
-  return Math.abs(x) > xThresh;
 }
 
 /**
@@ -123,8 +114,8 @@ function buildRecoveryMap(
       continue;
     }
 
-    const aOutside = isOutsideDangerZone(postA.positionX, postA.positionY);
-    const bOutside = isOutsideDangerZone(postB.positionX, postB.positionY);
+    const aOutside = isOutsideZone(postA.positionX, postA.positionY);
+    const bOutside = isOutsideZone(postB.positionX, postB.positionY);
 
     if (!aOutside && !bOutside) continue;
 
@@ -176,6 +167,9 @@ function buildRecoveryMap(
  */
 export function computeLedgeTrapEvents(replay: Replay): LedgeTrapEvent[] {
   const events: LedgeTrapEvent[] = [];
+
+  // Only meaningful on Dream Land, 2-player matches.
+  if (replay.gameStart.stageId !== DREAM_LAND_STAGE_ID) return events;
   const seated = getSeatedPorts(replay);
   if (seated.length !== 2) return events;
 

@@ -35,23 +35,19 @@
           sans-serif;
         display: flex;
         flex-direction: column;
-        /* The page itself never scrolls - header and footer are fixed-height
-         flex items, #main is the only flexible one, and its own children
-         (#stageWrap, #players) each handle their own overflow. Without this,
-         content that doesn't fit just grows the page past the viewport
-         instead of the canvas/panels shrinking to fit - which is exactly
-         what was cutting off the transport bar at smaller window sizes. */
         overflow: hidden;
       }
       header {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 14px;
         padding: 10px 16px;
         border-bottom: 1px solid var(--panel-border);
         background: var(--panel);
         flex-shrink: 0;
         flex-wrap: wrap;
+        position: relative;
+        z-index: 20;
       }
       header h1 {
         font-size: 15px;
@@ -59,6 +55,104 @@
         margin: 0;
         color: var(--text-dim);
         white-space: nowrap;
+      }
+      .back-btn {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 4px;
+        border: 1px solid var(--panel-border);
+        background: #22252f;
+        color: var(--text);
+        cursor: pointer;
+        transition: background 0.1s;
+      }
+      .back-btn:hover {
+        background: #2c3040;
+      }
+      .import-container {
+        position: relative;
+      }
+      .btn-primary {
+        background: var(--accent);
+        border: 1px solid transparent;
+        color: #fff;
+        font-weight: 600;
+        font-size: 12px;
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        transition: opacity 0.1s;
+      }
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+      .btn-secondary {
+        background: #22252f;
+        border: 1px solid var(--panel-border);
+        color: var(--text);
+        font-size: 12px;
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+      .btn-secondary:hover {
+        background: #2c3040;
+      }
+      .btn-secondary:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .dropdown-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        display: flex;
+        flex-direction: column;
+        min-width: 170px;
+        z-index: 30;
+        overflow: hidden;
+      }
+      .dropdown-menu button {
+        background: transparent;
+        border: none;
+        color: var(--text);
+        text-align: left;
+        padding: 8px 12px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .dropdown-menu button:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .import-progress-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+      .import-progress-bar {
+        width: 80px;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        overflow: hidden;
+        position: relative;
+      }
+      .import-progress-bar::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: var(--progress-pct, 0%);
+        background: var(--accent);
+        transition: width 0.1s linear;
       }
       #fileInfo {
         font-size: 13px;
@@ -68,17 +162,575 @@
         white-space: nowrap;
         min-width: 0;
       }
-      #filePicker {
+      #loadStatus {
         font-size: 12px;
-        color: var(--text-dim);
+        color: #e0473f;
       }
+      #langToggle {
+        display: flex;
+        gap: 4px;
+        margin-left: auto;
+        flex-shrink: 0;
+      }
+      .lang-btn {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--panel-border);
+        cursor: pointer;
+        background: transparent;
+        color: var(--text-dim);
+        transition:
+          background 0.1s,
+          color 0.1s,
+          border-color 0.1s;
+      }
+      .lang-btn:hover {
+        color: var(--text);
+        border-color: var(--text-dim);
+      }
+      .lang-btn.active {
+        color: var(--text);
+        border-color: var(--accent);
+        background: rgba(79, 127, 219, 0.15);
+      }
+
+      /* View containers */
       main {
         flex: 1;
         display: flex;
-        gap: 12px;
-        padding: 12px;
         min-height: 0;
         min-width: 0;
+        position: relative;
+      }
+      .view-container {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+        min-width: 0;
+      }
+
+      /* =========================================================================
+         Library View Layout
+         ========================================================================= */
+      #libraryView {
+        gap: 16px;
+        padding: 16px;
+        overflow: hidden;
+      }
+      .library-sidebar {
+        width: 300px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        overflow-y: auto;
+      }
+      .identity-card,
+      .filter-panel-wrap {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 14px;
+      }
+      .identity-card-header,
+      .filter-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-dim);
+      }
+      .edit-identity-btn {
+        background: transparent;
+        border: none;
+        color: var(--accent);
+        font-size: 11px;
+        cursor: pointer;
+        padding: 0;
+        text-decoration: underline;
+      }
+      .identity-name {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .identity-name.not-selected {
+        color: var(--text-dim);
+        font-style: italic;
+        font-size: 15px;
+      }
+      .identity-aliases-count {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+      .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 10px;
+      }
+      .filter-group label {
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      .filter-group select,
+      .game-list-sort select {
+        background: #0f1015;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        color: var(--text);
+        padding: 6px 8px;
+        font-size: 12px;
+      }
+      .filter-actions {
+        margin-top: 14px;
+      }
+      .filter-actions button {
+        width: 100%;
+      }
+
+      .library-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .overall-header h2 {
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-dim);
+        margin: 0;
+      }
+
+      /* Stat Cards Grid */
+      .stat-cards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+      }
+      .stat-card {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .stat-card.no-data {
+        opacity: 0.6;
+      }
+      .stat-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .stat-card-title {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-dim);
+      }
+      .stat-card-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      .stat-card-bar-wrap {
+        width: 100%;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .stat-card-bar {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 3px;
+      }
+      .stat-card-bar.low-n {
+        background: #8b8f9c;
+        opacity: 0.5;
+      }
+      .stat-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+      }
+      .low-n-badge {
+        font-size: 10px;
+        color: #ff9f43;
+        background: rgba(255, 159, 67, 0.12);
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-weight: 600;
+      }
+      .stat-card-delta.delta-pos {
+        color: #4fbf6a;
+        font-weight: 600;
+      }
+      .stat-card-delta.delta-neg {
+        color: #e0473f;
+        font-weight: 600;
+      }
+
+      /* Breakdown Table */
+      .breakdown-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .breakdown-section-header h3,
+      .game-list-header h3 {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-dim);
+        margin: 0;
+      }
+      .breakdown-table-wrap {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      .breakdown-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .breakdown-table th,
+      .breakdown-table td {
+        padding: 8px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--panel-border);
+      }
+      .breakdown-table th {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .breakdown-table tbody tr:last-child td {
+        border-bottom: none;
+      }
+      .breakdown-table tbody tr:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .table-low-n {
+        color: #ff9f43;
+        font-size: 10px;
+      }
+
+      /* Game List */
+      .game-list-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .game-list-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .game-list-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .game-row {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 10px 14px;
+        display: grid;
+        grid-template-columns: 240px 1fr auto;
+        align-items: center;
+        gap: 16px;
+        cursor: pointer;
+        transition:
+          background 0.1s,
+          border-color 0.1s;
+      }
+      .game-row:hover {
+        background: #1b1d26;
+        border-color: var(--text-dim);
+      }
+      .game-row.ambiguous {
+        border-left: 4px solid #ff9f43;
+      }
+      .game-row.unsupported {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .game-row-meta {
+        font-size: 11px;
+        color: var(--text-dim);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        white-space: nowrap;
+      }
+      .meta-dot {
+        opacity: 0.5;
+      }
+      .game-row-players {
+        font-size: 13px;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .you-player {
+        color: #fff;
+        font-weight: 700;
+      }
+      .char-label {
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      .vs-label {
+        color: var(--text-dim);
+        font-size: 11px;
+        text-transform: uppercase;
+        margin: 0 4px;
+      }
+      .game-row.row-won {
+        border-left: 3px solid #4fbf6a;
+      }
+      .game-row.row-lost {
+        border-left: 3px solid rgba(224, 71, 63, 0.4);
+      }
+      .result-badge {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .result-badge.win {
+        color: #4fbf6a;
+        background: rgba(79, 191, 106, 0.15);
+      }
+      .result-badge.loss {
+        color: #e0473f;
+        background: rgba(224, 71, 63, 0.15);
+      }
+      .game-row-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-self: end;
+      }
+      .remove-game-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        font-size: 13px;
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 4px;
+        line-height: 1;
+        opacity: 0.5;
+        transition:
+          opacity 0.1s,
+          color 0.1s,
+          background 0.1s;
+      }
+      .remove-game-btn:hover {
+        opacity: 1;
+        color: #e0473f;
+        background: rgba(224, 71, 63, 0.15);
+      }
+      .drill-in-arrow {
+        font-size: 18px;
+        color: var(--text-dim);
+      }
+      .inline-perspective-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .inline-perspective-btn {
+        background: #22252f;
+        border: 1px solid var(--panel-border);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: 4px;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+      .inline-perspective-btn:hover {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+      .ambiguous-badge {
+        color: #ff9f43;
+        font-weight: 700;
+      }
+      .unsupported-badge {
+        color: var(--text-dim);
+        font-size: 10px;
+        margin-left: 6px;
+      }
+      .game-list-empty {
+        padding: 24px;
+        text-align: center;
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+
+      /* Modal Dialog */
+      .modal-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-backdrop {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+      }
+      .modal-dialog {
+        position: relative;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        width: 90%;
+        max-width: 460px;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+        z-index: 101;
+        overflow: hidden;
+      }
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--panel-border);
+      }
+      .modal-header h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .modal-close {
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        font-size: 16px;
+        cursor: pointer;
+      }
+      .modal-subtitle {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin: 12px 18px 0;
+      }
+      .modal-body {
+        padding: 14px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow-y: auto;
+      }
+      .modal-selection-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+      }
+      .btn-link {
+        background: transparent;
+        border: none;
+        color: var(--accent);
+        font-size: 11px;
+        cursor: pointer;
+        padding: 0;
+        text-decoration: underline;
+      }
+      .btn-link:hover {
+        opacity: 0.8;
+      }
+      .alias-checkbox-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 240px;
+        overflow-y: auto;
+        padding: 6px 8px;
+        background: #0f1015;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+      }
+      .alias-checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        padding: 4px 0;
+      }
+      .alias-checkbox-row input {
+        cursor: pointer;
+      }
+      .alias-label-count {
+        color: var(--text-dim);
+        font-size: 11px;
+      }
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 12px 18px;
+        border-top: 1px solid var(--panel-border);
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      /* =========================================================================
+         Match View Layout (Existing)
+         ========================================================================= */
+      #matchView {
+        gap: 12px;
+        padding: 12px;
       }
       #stageWrap {
         position: relative;
@@ -150,28 +802,32 @@
         border-left-color: var(--accent);
       }
       .hud-toggle-btn {
-        margin-left: auto;
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
-        padding: 2px 6px;
-        border-radius: 4px;
+        letter-spacing: 0.04em;
+        padding: 6px 10px;
+        border-radius: 6px;
         border: 1px solid var(--panel-border);
         cursor: pointer;
-        background: transparent;
-        color: var(--text-dim);
+        background: #181a20;
+        color: #717684;
         transition:
           background 0.1s,
           color 0.1s,
           border-color 0.1s;
       }
       .hud-toggle-btn:hover {
-        color: var(--text);
-        border-color: var(--text-dim);
+        background: #22252f;
+        color: #9da3b4;
+        border-color: #3b4050;
       }
       .hud-toggle-btn.active {
-        color: #fff;
-        border-color: var(--accent);
-        background: var(--accent);
+        background: #22252f;
+        border: 1px solid var(--panel-border);
+        color: var(--text);
+      }
+      .hud-toggle-btn.active:hover {
+        background: #2c3040;
       }
       #stage {
         display: block;
@@ -194,8 +850,7 @@
         flex-direction: column;
         gap: 10px;
       }
-      #matchStats,
-      #eventLog {
+      #matchStats {
         flex-shrink: 0;
         display: flex;
         flex-direction: column;
@@ -205,8 +860,7 @@
         border-radius: 8px;
         overflow: hidden;
       }
-      #matchStatsHeader,
-      #eventLogHeader {
+      #matchStatsHeader {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -313,88 +967,20 @@
       .stat-pct.pct-failure {
         color: #e0473f;
       }
-      #eventLogList {
-        overflow-y: auto;
-        max-height: 240px;
-        padding: 4px 0;
-      }
-      #eventLogEmpty {
-        font-size: 12px;
-        color: var(--text-dim);
-        padding: 10px 12px;
-        margin: 0;
-      }
-      .event-log-entry {
-        font-size: 12px;
+      .stat-match-delta {
+        font-size: 11px;
+        font-weight: 600;
+        margin-left: 4px;
         font-variant-numeric: tabular-nums;
-        padding: 4px 12px;
-        color: var(--text-dim);
-        border-left: 3px solid transparent;
-        cursor: default;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
-      .event-log-entry.is-current {
-        color: var(--text);
-        background: rgba(79, 127, 219, 0.12);
-        border-left-color: var(--accent);
-      }
-      .event-log-entry.kind-entered {
-        color: var(--text-dim);
-      }
-      .event-log-entry.kind-neutral-hit {
-        color: var(--text-dim);
-      }
-      .event-log-entry.kind-success {
+      .stat-match-delta.pct-delta-pos {
         color: #4fbf6a;
       }
-      .event-log-entry.kind-failure {
+      .stat-match-delta.pct-delta-neg {
         color: #e0473f;
       }
-      .event-log-entry.is-current.kind-neutral-hit {
-        background: rgba(139, 143, 156, 0.14);
-        border-left-color: var(--text-dim);
-      }
-      .event-log-entry.is-current.kind-success {
-        background: rgba(79, 191, 106, 0.12);
-        border-left-color: #4fbf6a;
-      }
-      .event-log-entry.is-current.kind-failure {
-        background: rgba(224, 71, 63, 0.12);
-        border-left-color: #e0473f;
-      }
-      footer {
-        flex-shrink: 0;
-        flex-wrap: wrap;
-      }
-      /* Narrow windows: stack the player panels below the stage instead of
-       squeezing them into a fixed 320px column beside it. */
-      @media (max-width: 860px) {
-        main {
-          flex-direction: column;
-        }
-        #sidebar {
-          width: 100%;
-          flex-direction: row;
-          flex-wrap: wrap;
-          max-height: 45%;
-        }
-        #matchStats {
-          width: 100%;
-        }
-        #players {
-          width: 100%;
-          flex-direction: row;
-          flex-wrap: wrap;
-        }
-        #eventLog {
-          width: 100%;
-        }
-        .player-panel {
-          flex: 1 1 260px;
-        }
-      }
+
+      /* Player panel */
       .player-panel {
         background: var(--panel);
         border: 1px solid var(--panel-border);
@@ -437,7 +1023,10 @@
         width: 100%;
         height: auto;
       }
+
+      /* Match footer playback controls */
       footer {
+        flex-shrink: 0;
         display: flex;
         align-items: center;
         gap: 12px;
@@ -472,97 +1061,129 @@
         min-width: 220px;
         text-align: right;
       }
-      #loadStatus {
-        font-size: 12px;
-        color: #e0473f;
-      }
-      #langToggle {
-        display: flex;
-        gap: 4px;
-        margin-left: auto;
-        flex-shrink: 0;
-      }
-      .lang-btn {
-        font-size: 11px;
-        font-weight: 600;
-        padding: 3px 8px;
-        border-radius: 4px;
-        border: 1px solid var(--panel-border);
-        cursor: pointer;
-        background: transparent;
-        color: var(--text-dim);
-        transition:
-          background 0.1s,
-          color 0.1s,
-          border-color 0.1s;
-      }
-      .lang-btn:hover {
-        color: var(--text);
-        border-color: var(--text-dim);
-      }
-      .lang-btn.active {
-        color: var(--text);
-        border-color: var(--accent);
-        background: rgba(79, 127, 219, 0.15);
+
+      /* Narrow / responsive layout */
+      @media (max-width: 860px) {
+        #libraryView {
+          flex-direction: column;
+          overflow-y: auto;
+        }
+        .library-sidebar {
+          width: 100%;
+        }
+        #matchView {
+          flex-direction: column;
+        }
+        #sidebar {
+          width: 100%;
+          flex-direction: row;
+          flex-wrap: wrap;
+          max-height: 45%;
+        }
+        #matchStats {
+          width: 100%;
+        }
+        #players {
+          width: 100%;
+          flex-direction: row;
+          flex-wrap: wrap;
+        }
+        .player-panel {
+          flex: 1 1 260px;
+        }
       }
     </style>
   </head>
   <body>
     <header>
       <h1>rmgr-viewer</h1>
-      <input type="file" id="filePicker" accept=".rmgr" />
-      <span id="fileInfo"></span>
+      <button id="backToLibraryBtn" class="back-btn" hidden>← Library</button>
+
+      <div class="import-container" id="importContainer">
+        <button id="importBtn" class="btn-primary">+ Import replays</button>
+        <div id="importDropdownMenu" class="dropdown-menu" hidden>
+          <button id="importFilesBtn">Select files (.rmgr)</button>
+          <button id="importFolderBtn">Select folder</button>
+        </div>
+        <input type="file" id="filePicker" accept=".rmgr" multiple hidden />
+        <input
+          type="file"
+          id="folderPicker"
+          webkitdirectory
+          directory
+          multiple
+          hidden
+        />
+      </div>
+
+      <div id="importProgressWrap" class="import-progress-wrap" hidden>
+        <div class="import-progress-bar" id="importProgressBar"></div>
+        <span id="importProgressText"></span>
+      </div>
+
+      <span id="fileInfo" hidden></span>
       <span id="loadStatus"></span>
+
       <div id="langToggle">
         <button class="lang-btn active" data-lang="en">EN</button>
         <button class="lang-btn" data-lang="ja">日本語</button>
       </div>
     </header>
+
     <main>
-      <div id="stageWrap">
-        <canvas id="stage" width="960" height="540"></canvas>
-        <div id="stageOverlay">
-          <div id="stageOverlayList"></div>
+      <!-- Library View -->
+      <div id="libraryView" class="view-container"></div>
+
+      <!-- Match View -->
+      <div id="matchView" class="view-container" hidden>
+        <div id="stageWrap">
+          <canvas id="stage" width="960" height="540"></canvas>
+          <div id="stageOverlay">
+            <div id="stageOverlayList"></div>
+          </div>
         </div>
+        <aside id="sidebar">
+          <section id="matchStats">
+            <div id="matchStatsHeader">
+              <button
+                id="statsCollapseBtn"
+                title="Collapse / expand Match Stats"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2>Match Stats</h2>
+              </button>
+              <div id="perspectiveToggle"></div>
+            </div>
+            <div id="statsPanel">
+              <p id="statsEmpty">
+                No stats — load a Dream Land 2-player replay.
+              </p>
+            </div>
+          </section>
+          <div id="players"></div>
+        </aside>
       </div>
-      <aside id="sidebar">
-        <section id="matchStats">
-          <div id="matchStatsHeader">
-            <button id="statsCollapseBtn" title="Collapse / expand Match Stats">
-              <span class="collapse-icon">▼</span>
-              <h2>Match Stats</h2>
-            </button>
-            <div id="perspectiveToggle"></div>
-          </div>
-          <div id="statsPanel">
-            <p id="statsEmpty">No stats — load a Dream Land 2-player replay.</p>
-          </div>
-        </section>
-        <div id="players"></div>
-        <section id="eventLog">
-          <div id="eventLogHeader">
-            <h2>Event Log</h2>
-            <button
-              id="hudToggleBtn"
-              class="hud-toggle-btn active"
-              title="Toggle on-screen event HUD"
-            >
-              HUD
-            </button>
-          </div>
-          <div id="eventLogList">
-            <p id="eventLogEmpty">No events yet.</p>
-          </div>
-        </section>
-      </aside>
     </main>
-    <footer>
+
+    <!-- Modal for Onboarding and Alias Editing -->
+    <div id="modalContainer" class="modal-container" hidden></div>
+
+    <!-- Match View Footer Playback Controls -->
+    <footer id="matchFooter" hidden>
       <button id="stepBack" title="Previous frame">⏮</button>
       <button id="playPause" title="Play/Pause">▶</button>
       <button id="stepForward" title="Next frame">⏭</button>
+      <button
+        id="hudToggleBtn"
+        class="hud-toggle-btn active"
+        title="Toggle on-screen event log"
+      >
+        LOG
+      </button>
       <input type="range" id="scrubber" min="0" max="0" value="0" />
       <span id="frameLabel"></span>
     </footer>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
