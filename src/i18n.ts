@@ -176,8 +176,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     eventLog: "Event Log",
     eventLogEmpty: "No events yet.",
-    hudOverlay: "HUD",
-    hudOverlayTitle: "Toggle on-screen event HUD",
+    hudOverlay: "LOG",
+    hudOverlayTitle: "Toggle on-screen event log",
 
     recovering: "Recovering",
     edgeGuarding: "Edge guarding",
@@ -309,8 +309,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     eventLog: "イベントログ",
     eventLogEmpty: "イベントはまだありません。",
-    hudOverlay: "HUD",
-    hudOverlayTitle: "画面上のイベントHUDの表示切替",
+    hudOverlay: "ログ",
+    hudOverlayTitle: "画面上のイベントログの表示切替",
 
     recovering: "復帰中",
     edgeGuarding: "復帰阻止中",
