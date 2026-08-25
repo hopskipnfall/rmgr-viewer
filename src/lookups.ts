@@ -3,6 +3,7 @@
  * Source: docs/RMGR_SPEC.md sections 7.1-7.3 at the repository root.
  * Display-layer only, deliberately not part of @rmg-k/rmgr itself.
  */
+import { getLanguage, type Language } from "./i18n.js";
 
 export const CHARACTER_NAMES: Record<number, string> = {
   0x00: "Mario",
@@ -103,8 +104,114 @@ export const CHARACTER_NAMES: Record<number, string> = {
   0x60: "Polygon Crash",
 };
 
-export function characterName(id: number): string {
-  return CHARACTER_NAMES[id] ?? `Character 0x${id.toString(16)}`;
+export const CHARACTER_NAMES_JA: Record<number, string> = {
+  0x00: "マリオ",
+  0x01: "フォックス",
+  0x02: "ドンキーコング",
+  0x03: "サムス",
+  0x04: "ルイージ",
+  0x05: "リンク",
+  0x06: "ヨッシー",
+  0x07: "キャプテン・ファルコン",
+  0x08: "カービィ",
+  0x09: "ピカチュウ",
+  0x0a: "プリン",
+  0x0b: "ネス",
+  0x0c: "マスターハンド",
+  0x0d: "メタルマリオ",
+  0x0e: "謎のザコ敵 (マリオ)",
+  0x0f: "謎のザコ敵 (フォックス)",
+  0x10: "謎のザコ敵 (DK)",
+  0x11: "謎のザコ敵 (サムス)",
+  0x12: "謎のザコ敵 (ルイージ)",
+  0x13: "謎のザコ敵 (リンク)",
+  0x14: "謎のザコ敵 (ヨッシー)",
+  0x15: "謎のザコ敵 (ファルコン)",
+  0x16: "謎のザコ敵 (カービィ)",
+  0x17: "謎のザコ敵 (ピカチュウ)",
+  0x18: "謎のザコ敵 (プリン)",
+  0x19: "謎のザコ敵 (ネス)",
+  0x1a: "巨大ドンキーコング",
+  0x1b: "おまかせ",
+  0x1d: "ファルコ",
+  0x1e: "ガノンドロフ",
+  0x1f: "こどもリンク",
+  0x20: "ドクターマリオ",
+  0x21: "ワリオ",
+  0x22: "ダークサムス",
+  0x23: "リンク (EU)",
+  0x24: "サムス (JP)",
+  0x25: "ネス (JP)",
+  0x26: "リュカ",
+  0x27: "リンク (JP)",
+  0x28: "ファルコン (JP)",
+  0x29: "フォックス (JP)",
+  0x2a: "マリオ (JP)",
+  0x2b: "ルイージ (JP)",
+  0x2c: "DK (JP)",
+  0x2d: "ピカチュウ (EU)",
+  0x2e: "プリン (JP)",
+  0x2f: "プリン (EU)",
+  0x30: "カービィ (JP)",
+  0x31: "ヨッシー (JP)",
+  0x32: "ピカチュウ (JP)",
+  0x33: "サムス (EU)",
+  0x34: "クッパ",
+  0x35: "ギガクッパ",
+  0x36: "マッドピアノ",
+  0x37: "ウルフ",
+  0x38: "コンカー",
+  0x39: "ミュウツー",
+  0x3a: "マルス",
+  0x3b: "ソニック",
+  0x3c: "サンドバッグ",
+  0x3d: "スーパーソニック",
+  0x3e: "シーク",
+  0x3f: "マリナ",
+  0x40: "デデデ大王",
+  0x41: "ゴエモン",
+  0x42: "ペッピー",
+  0x43: "スリッピー",
+  0x44: "バンジョー",
+  0x45: "メタルルイージ",
+  0x46: "エビス丸",
+  0x47: "竜王",
+  0x48: "クラッシュ",
+  0x49: "ピーチ",
+  0x4a: "ロイ",
+  0x4b: "ドクタールイージ",
+  0x4c: "ランキーコング",
+  0x4d: "ポリゴンワリオ",
+  0x4e: "ポリゴンリュカ",
+  0x4f: "ポリゴンクッパ",
+  0x50: "ポリゴンウルフ",
+  0x51: "ポリゴンドクターマリオ",
+  0x52: "ポリゴンソニック",
+  0x53: "ポリゴンシーク",
+  0x54: "ポリゴンマリナ",
+  0x55: "ポリゴンファルコ",
+  0x56: "ポリゴンガノンドロフ",
+  0x57: "ポリゴンダークサムス",
+  0x58: "ポリゴンマルス",
+  0x59: "ポリゴンミュウツー",
+  0x5a: "ポリゴンデデデ",
+  0x5b: "ポリゴンこどもリンク",
+  0x5c: "ポリゴンゴエモン",
+  0x5d: "ポリゴンコンカー",
+  0x5e: "ポリゴンバンジョー",
+  0x5f: "ポリゴンピーチ",
+  0x60: "ポリゴンクラッシュ",
+};
+
+export function characterName(id: number, lang?: Language): string {
+  const language = lang ?? getLanguage();
+  const table = language === "ja" ? CHARACTER_NAMES_JA : CHARACTER_NAMES;
+  return (
+    table[id] ??
+    (language === "ja"
+      ? `キャラクター 0x${id.toString(16)}`
+      : `Character 0x${id.toString(16)}`)
+  );
 }
 
 export const STAGE_NAMES: Record<number, string> = {
@@ -122,8 +229,30 @@ export const STAGE_NAMES: Record<number, string> = {
   0x39: "Fountain of Dreams",
 };
 
-export function stageName(id: number): string {
-  return STAGE_NAMES[id] ?? `Stage 0x${id.toString(16)}`;
+export const STAGE_NAMES_JA: Record<number, string> = {
+  0x00: "ピーチ城上空",
+  0x01: "セクターZ",
+  0x02: "コンゴジャングル",
+  0x03: "惑星ゼーベス",
+  0x04: "ハイラル城",
+  0x05: "ヨッシーアイランド",
+  0x06: "プププランド",
+  0x07: "ヤマブキシティ",
+  0x08: "いにしえの王国",
+  0x10: "終点",
+  0x31: "戦場",
+  0x39: "夢の泉",
+};
+
+export function stageName(id: number, lang?: Language): string {
+  const language = lang ?? getLanguage();
+  const table = language === "ja" ? STAGE_NAMES_JA : STAGE_NAMES;
+  return (
+    table[id] ??
+    (language === "ja"
+      ? `ステージ 0x${id.toString(16)}`
+      : `Stage 0x${id.toString(16)}`)
+  );
 }
 
 /** Shared action-state table, 0x000-0x0DB. >= 0x0DC is character-specific with no shared table. */

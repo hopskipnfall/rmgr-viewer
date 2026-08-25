@@ -392,6 +392,35 @@
         font-size: 12px;
         color: #e0473f;
       }
+      #langToggle {
+        display: flex;
+        gap: 4px;
+        margin-left: auto;
+        flex-shrink: 0;
+      }
+      .lang-btn {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--panel-border);
+        cursor: pointer;
+        background: transparent;
+        color: var(--text-dim);
+        transition:
+          background 0.1s,
+          color 0.1s,
+          border-color 0.1s;
+      }
+      .lang-btn:hover {
+        color: var(--text);
+        border-color: var(--text-dim);
+      }
+      .lang-btn.active {
+        color: var(--text);
+        border-color: var(--accent);
+        background: rgba(79, 127, 219, 0.15);
+      }
     </style>
   </head>
   <body>
@@ -400,6 +429,10 @@
       <input type="file" id="filePicker" accept=".rmgr" />
       <span id="fileInfo"></span>
       <span id="loadStatus"></span>
+      <div id="langToggle">
+        <button class="lang-btn active" data-lang="en">EN</button>
+        <button class="lang-btn" data-lang="ja">日本語</button>
+      </div>
     </header>
     <main>
       <div id="stageWrap">
