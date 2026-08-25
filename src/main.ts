@@ -56,7 +56,6 @@ const importProgressText = document.getElementById(
 ) as HTMLSpanElement;
 const loadStatus = document.getElementById("loadStatus") as HTMLSpanElement;
 const langToggleEl = document.getElementById("langToggle") as HTMLDivElement;
-const fileInfoEl = document.getElementById("fileInfo") as HTMLSpanElement;
 
 // Controllers
 let matchController: MatchViewController;
@@ -157,7 +156,6 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchViewEl.hidden = true;
     matchFooterEl.hidden = true;
     backToLibraryBtn.hidden = true;
-    fileInfoEl.hidden = true;
 
     libraryViewEl.hidden = false;
     libraryController.render();
@@ -175,7 +173,6 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchViewEl.hidden = false;
     matchFooterEl.hidden = false;
     backToLibraryBtn.hidden = false;
-    fileInfoEl.hidden = false;
 
     loadStatus.textContent = "Loading replay...";
     try {

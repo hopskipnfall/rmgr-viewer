@@ -154,14 +154,6 @@
         background: var(--accent);
         transition: width 0.1s linear;
       }
-      #fileInfo {
-        font-size: 13px;
-        color: var(--text-dim);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        min-width: 0;
-      }
       #loadStatus {
         font-size: 12px;
         color: #e0473f;
@@ -1228,9 +1220,20 @@
         .player-panel {
           flex: 1 1 260px;
         }
+        #frameLabel {
+          display: none;
+        }
+        footer {
+          padding: 8px 12px;
+          gap: 8px;
+        }
       }
 
       @media (max-width: 480px) {
+        footer button {
+          padding: 6px 8px;
+          font-size: 12px;
+        }
         .stat-cards-grid {
           grid-template-columns: repeat(2, 1fr);
           gap: 8px;
@@ -1282,7 +1285,6 @@
         <span id="importProgressText"></span>
       </div>
 
-      <span id="fileInfo" hidden></span>
       <span id="loadStatus"></span>
 
       <div id="langToggle">
