@@ -11,6 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "preserveSymlinks": true,
     "noEmit": true
   },
   "include": ["src/**/*.ts"]
