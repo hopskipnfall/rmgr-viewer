@@ -6,6 +6,7 @@ import {
   computeAngelInvincibilityStats,
 } from "../angelInvincibility.js";
 import { computeNeutralHitsStats } from "../neutralHits.js";
+import { computeKillCombos } from "../combos.js";
 import type { LoadedReplay } from "../replaySource.js";
 
 export interface RawCounters {
@@ -21,6 +22,7 @@ export interface RawCounters {
   angelAvoidSuccesses: number;
   neutralHitsLanded: number;
   stocksTaken: number;
+  killCombos?: number;
 }
 
 export interface GamePortSummary {
@@ -59,6 +61,7 @@ export function createEmptyCounters(): RawCounters {
     angelAvoidSuccesses: 0,
     neutralHitsLanded: 0,
     stocksTaken: 0,
+    killCombos: 0,
   };
 }
 
@@ -82,6 +85,8 @@ export function computeRawCountersForPort(
   const ledgeStats = computeLedgeTrapStats(ledgeEvents, port);
   const angelStats = computeAngelInvincibilityStats(angelEvents, port);
   const neutralStats = computeNeutralHitsStats(replay, port);
+  const allCombos = computeKillCombos(replay);
+  const killCombos = allCombos.filter((c) => c.attackerPort === port).length;
 
   return {
     recoverySituations: edgeStats.recoverySituations,
@@ -96,6 +101,7 @@ export function computeRawCountersForPort(
     angelAvoidSuccesses: angelStats.avoidSuccesses,
     neutralHitsLanded: neutralStats.totalHitsLanded,
     stocksTaken: neutralStats.stocksTaken,
+    killCombos,
   };
 }
 

@@ -8,11 +8,18 @@ import { Camera } from "../camera.js";
 import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_LABELS, getPlayerColor } from "../players.js";
-import { StageRenderer, isCrouchState, isDeadState } from "../renderer.js";
+import {
+  StageRenderer,
+  isCrouchState,
+  isDeadState,
+  isPikachuCharacter,
+  extractAllQuickAttackPaths,
+} from "../renderer.js";
 import { characterSize } from "../characterSizes.js";
 import { actionStateName, characterName } from "../lookups.js";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { t } from "../i18n.js";
+import { computeKillCombos } from "../combos.js";
 import {
   computeNeutralHitEvents,
   computeNeutralHitsStats,
@@ -125,10 +132,15 @@ export class MatchViewController {
   private ledgeTrapCollapseBtn: HTMLButtonElement;
   private ledgeTrapWidgetTitleEl: HTMLHeadingElement;
   private ledgeTrapList: HTMLDivElement;
+  private combosWidget: HTMLElement;
+  private combosCollapseBtn: HTMLButtonElement;
+  private combosWidgetTitleEl: HTMLHeadingElement;
+  private combosList: HTMLDivElement;
   private recoveryCollapsed = false;
   private edgeGuardCollapsed = false;
   private ledgeGetupCollapsed = false;
   private ledgeTrapCollapsed = false;
+  private combosCollapsed = false;
   private replayInfoWidget: HTMLElement;
   private replayInfoCollapseBtn: HTMLButtonElement;
   private replayInfoHeaderTitle: HTMLHeadingElement;
@@ -279,6 +291,15 @@ export class MatchViewController {
       "ledgeTrapList",
     ) as HTMLDivElement;
 
+    this.combosWidget = document.getElementById("combosWidget") as HTMLElement;
+    this.combosCollapseBtn = document.getElementById(
+      "combosCollapseBtn",
+    ) as HTMLButtonElement;
+    this.combosWidgetTitleEl = document.getElementById(
+      "combosWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.combosList = document.getElementById("combosList") as HTMLDivElement;
+
     this.replayInfoWidget = document.getElementById(
       "replayInfoWidget",
     ) as HTMLElement;
@@ -382,6 +403,15 @@ export class MatchViewController {
       this.ledgeTrapCollapseBtn.classList.toggle(
         "collapsed",
         this.ledgeTrapCollapsed,
+      );
+    });
+
+    this.combosCollapseBtn.addEventListener("click", () => {
+      this.combosCollapsed = !this.combosCollapsed;
+      this.combosList.hidden = this.combosCollapsed;
+      this.combosCollapseBtn.classList.toggle(
+        "collapsed",
+        this.combosCollapsed,
       );
     });
 
@@ -532,6 +562,12 @@ export class MatchViewController {
     if (this.ledgeTrapCollapseBtn)
       this.ledgeTrapCollapseBtn.title = tr.situationCollapseTitle(
         tr.ledgeTrapWidgetTitle,
+      );
+    if (this.combosWidgetTitleEl)
+      this.combosWidgetTitleEl.textContent = tr.combosWidgetTitle;
+    if (this.combosCollapseBtn)
+      this.combosCollapseBtn.title = tr.situationCollapseTitle(
+        tr.combosWidgetTitle,
       );
     if (this.hudToggleBtn) {
       this.hudToggleBtn.textContent = tr.hudOverlay;
@@ -991,6 +1027,8 @@ export class MatchViewController {
 
       btn.addEventListener("click", () => {
         this.perspectivePort = port;
+        this.stageRenderer.setQuickAttackOverlay(null);
+        this.stageRenderer.setHoveredQuickAttackIndex(null);
         this.onPerspectiveChangedCb?.(port);
         this.updatePlayerPanelColors();
         this.renderStatsPanel(replay);
@@ -1177,6 +1215,7 @@ export class MatchViewController {
       this.edgeGuardWidget.hidden = true;
       this.ledgeGetupWidget.hidden = true;
       this.ledgeTrapWidget.hidden = true;
+      this.renderCombosPanel(replay);
       this.renderCharacterMetaPanel(replay);
       return;
     }
@@ -1402,6 +1441,7 @@ export class MatchViewController {
     );
 
     this.buildSituationWidgets(replay);
+    this.renderCombosPanel(replay);
     this.renderCharacterMetaPanel(replay);
   }
 
@@ -1630,6 +1670,70 @@ export class MatchViewController {
       ledgeTrapSituations,
       (outcome) => outcome === "failure",
     );
+  }
+
+  private renderCombosPanel(replay: Replay): void {
+    const tr = t();
+    this.combosList.innerHTML = "";
+
+    if (replay.frames.length === 0) {
+      this.combosWidget.hidden = true;
+      return;
+    }
+
+    const allCombos = computeKillCombos(replay);
+    const combos =
+      this.perspectivePort !== null
+        ? allCombos.filter((c) => c.attackerPort === this.perspectivePort)
+        : allCombos;
+
+    this.combosWidget.hidden = false;
+
+    if (combos.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "situation-empty";
+      empty.textContent = tr.noCombos;
+      this.combosList.appendChild(empty);
+      return;
+    }
+
+    combos.forEach((c, index) => {
+      const row = document.createElement("div");
+      row.className = "situation-row";
+
+      const indexEl = document.createElement("span");
+      indexEl.className = "situation-index";
+      indexEl.textContent = `#${index + 1}`;
+
+      const timeEl = document.createElement("span");
+      timeEl.className = "situation-time";
+      timeEl.textContent = `${formatElapsed(c.startFrameIndex)} (${c.startFrame}F)`;
+
+      const hitsEl = document.createElement("span");
+      hitsEl.className = "combo-hits-badge";
+      hitsEl.textContent = tr.comboHitsBadge(c.hitCount);
+
+      const dmgEl = document.createElement("span");
+      dmgEl.className = "combo-damage";
+      dmgEl.textContent = `${Math.round(c.startDamage)}% → ${Math.round(c.endDamage)}%`;
+
+      const koBadgeEl = document.createElement("span");
+      koBadgeEl.className = "combo-kill-badge";
+      koBadgeEl.textContent = tr.comboKillBadge;
+
+      row.appendChild(indexEl);
+      row.appendChild(timeEl);
+      row.appendChild(hitsEl);
+      row.appendChild(dmgEl);
+      row.appendChild(koBadgeEl);
+
+      row.addEventListener("click", () => {
+        this.playback?.seek(c.jumpFrameIndex);
+        this.playback?.play();
+      });
+
+      this.combosList.appendChild(row);
+    });
   }
 
   private renderCharacterMetaPanel(replay: Replay): void {
@@ -1864,6 +1968,97 @@ export class MatchViewController {
       return;
     }
 
+    if (isPikachuCharacter(charId)) {
+      this.characterMetaWidget.hidden = false;
+      this.characterMetaHeaderTitle.textContent = tr.characterMetaTitle(
+        characterName(charId),
+      );
+      this.characterMetaPanel.innerHTML = "";
+
+      const pikaPaths = extractAllQuickAttackPaths(
+        replay,
+        this.perspectivePort,
+      );
+
+      const isOverlayActive = this.stageRenderer.isQuickAttackOverlayActive();
+
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = `qa-overlay-btn ${isOverlayActive ? "active" : ""}`;
+      toggleBtn.textContent = isOverlayActive
+        ? tr.hideQuickAttackOverlayBtn
+        : tr.overlayQuickAttackBtn;
+
+      toggleBtn.addEventListener("click", () => {
+        if (this.stageRenderer.isQuickAttackOverlayActive()) {
+          this.stageRenderer.setQuickAttackOverlay(null);
+          this.stageRenderer.setHoveredQuickAttackIndex(null);
+        } else {
+          this.stageRenderer.setQuickAttackOverlay(pikaPaths);
+          this.stageRenderer.setHoveredQuickAttackIndex(null);
+        }
+        this.renderCharacterMetaPanel(replay);
+        if (this.lastFrame !== undefined) {
+          const currIdx = this.playback?.currentIndex ?? 0;
+          this.renderFrame(this.lastFrame, currIdx, false);
+        }
+      });
+
+      this.characterMetaPanel.appendChild(toggleBtn);
+
+      if (isOverlayActive && pikaPaths.length > 0) {
+        const listEl = document.createElement("div");
+        listEl.className = "situation-list qa-overlay-list";
+
+        pikaPaths.forEach((path) => {
+          const itemRow = document.createElement("div");
+          itemRow.className = "situation-row";
+
+          const indexEl = document.createElement("span");
+          indexEl.className = "situation-index";
+          indexEl.textContent = `#${path.index}`;
+
+          const timeEl = document.createElement("span");
+          timeEl.className = "situation-time";
+          timeEl.textContent = `${formatElapsed(path.startFrameIndex)} (${path.startFrame}F)`;
+
+          const zipsEl = document.createElement("span");
+          zipsEl.className = "situation-bracket bracket-under100";
+          zipsEl.textContent = `${path.zipCount} ${path.zipCount === 1 ? "zip" : "zips"}`;
+
+          itemRow.appendChild(indexEl);
+          itemRow.appendChild(timeEl);
+          itemRow.appendChild(zipsEl);
+
+          itemRow.addEventListener("mouseenter", () => {
+            this.stageRenderer.setHoveredQuickAttackIndex(path.index);
+            if (this.lastFrame !== undefined) {
+              const currIdx = this.playback?.currentIndex ?? 0;
+              this.renderFrame(this.lastFrame, currIdx, false);
+            }
+          });
+
+          itemRow.addEventListener("mouseleave", () => {
+            this.stageRenderer.setHoveredQuickAttackIndex(null);
+            if (this.lastFrame !== undefined) {
+              const currIdx = this.playback?.currentIndex ?? 0;
+              this.renderFrame(this.lastFrame, currIdx, false);
+            }
+          });
+
+          itemRow.addEventListener("click", () => {
+            const targetFrameIndex = Math.max(0, path.startFrameIndex - 30);
+            this.playback?.seek(targetFrameIndex);
+            this.playback?.play();
+          });
+
+          listEl.appendChild(itemRow);
+        });
+
+        this.characterMetaPanel.appendChild(listEl);
+      }
+      return;
+    }
+
     this.characterMetaWidget.hidden = true;
   }
 
@@ -1946,6 +2141,8 @@ export class MatchViewController {
     const width = Math.max(200, Math.floor(rect.width));
     const height = Math.max(150, Math.floor(rect.height));
     this.stageRenderer.resize(width, height);
+    this.stageRenderer.setQuickAttackOverlay(null);
+    this.stageRenderer.setHoveredQuickAttackIndex(null);
     this.camera = new Camera(width, height);
 
     this.buildPlayerPanels(replay);

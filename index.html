@@ -591,9 +591,13 @@
         border-radius: 8px;
         padding: 10px 14px;
         display: grid;
-        grid-template-columns: 240px 1fr auto;
+        grid-template-columns: 210px 1fr auto;
+        grid-template-rows: auto auto;
+        grid-template-areas:
+          "meta players actions"
+          "details details details";
         align-items: center;
-        gap: 16px;
+        gap: 6px 16px;
         cursor: pointer;
         transition:
           background 0.1s,
@@ -625,6 +629,7 @@
         cursor: default;
       }
       .game-row-meta {
+        grid-area: meta;
         font-size: 11px;
         color: var(--text-dim);
         display: flex;
@@ -636,6 +641,7 @@
         opacity: 0.5;
       }
       .game-row-players {
+        grid-area: players;
         font-size: 13px;
         color: var(--text);
         display: flex;
@@ -643,6 +649,43 @@
         justify-content: center;
         flex-wrap: wrap;
         gap: 4px 6px;
+      }
+      .game-row-details {
+        grid-area: details;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 11px;
+        color: var(--text-dim);
+        padding-top: 4px;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .detail-stocks {
+        font-weight: 600;
+        color: #fff;
+      }
+      .detail-divider {
+        opacity: 0.35;
+      }
+      .game-stat-chips {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      .game-stat-chip {
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 10.5px;
+        color: #cbd5e1;
+      }
+      .game-stat-chip .chip-label {
+        color: var(--text-dim);
+        font-weight: 600;
+        margin-right: 2px;
       }
       .you-player {
         color: #fff;
@@ -1417,6 +1460,62 @@
         color: var(--text-dim);
         font-style: italic;
       }
+      .combo-hits-badge {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(245, 158, 11, 0.18);
+        color: #fbbf24;
+        flex-shrink: 0;
+      }
+      .combo-damage {
+        font-size: 11px;
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+        flex-shrink: 0;
+      }
+      .combo-kill-badge {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(239, 68, 68, 0.22);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        flex-shrink: 0;
+      }
+      .qa-overlay-btn {
+        width: 100%;
+        background: #22252f;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          border-color 0.15s,
+          box-shadow 0.15s,
+          color 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .qa-overlay-btn:hover {
+        background: #2c3040;
+        border-color: #ffd700;
+        color: #ffd700;
+      }
+      .qa-overlay-btn.active {
+        background: rgba(255, 215, 0, 0.15);
+        border-color: #ffd700;
+        color: #ffd700;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.25);
+      }
       #logFilterWidget {
         flex-shrink: 0;
         display: flex;
@@ -1881,10 +1980,11 @@
         .game-row {
           display: grid;
           grid-template-columns: 1fr auto;
-          grid-template-rows: auto auto;
+          grid-template-rows: auto auto auto;
           grid-template-areas:
             "meta actions"
-            "players players";
+            "players players"
+            "details details";
           gap: 6px 10px;
           padding: 10px 12px;
           align-items: center;
@@ -2119,6 +2219,21 @@
               </button>
             </div>
             <div id="ledgeTrapList" class="situation-list"></div>
+          </section>
+          <section id="combosWidget" class="situation-widget" hidden>
+            <div class="situation-widget-header">
+              <button
+                id="combosCollapseBtn"
+                class="situation-collapse-btn"
+                title="Collapse / expand Kill Combos"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="combosWidgetTitle" class="situation-widget-title">
+                  Kill Combos
+                </h2>
+              </button>
+            </div>
+            <div id="combosList" class="situation-list"></div>
           </section>
           <section id="characterMetaWidget" hidden>
             <div id="characterMetaHeader">

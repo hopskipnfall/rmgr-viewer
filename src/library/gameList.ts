@@ -215,11 +215,58 @@ export class GameList {
     let resultBadge = "";
     if (yourP.finalStocks >= 0 && oppP.finalStocks >= 0) {
       if (yourP.finalStocks > oppP.finalStocks) {
-        resultBadge = `<span class="result-badge win">🏆 ${escapeHtml(tr.win)}</span>`;
+        resultBadge = `<span class="result-badge win">${escapeHtml(tr.win)}</span>`;
       } else if (oppP.finalStocks > yourP.finalStocks) {
         resultBadge = `<span class="result-badge loss">${escapeHtml(tr.loss)}</span>`;
       }
     }
+
+    const stats = summary.statsByPort[yourPort];
+    const statChips: string[] = [];
+    if (stats) {
+      if (stats.recoverySituations > 0) {
+        const pct = Math.round(
+          (stats.recoverySuccesses / stats.recoverySituations) * 100,
+        );
+        statChips.push(
+          `<span class="game-stat-chip"><span class="chip-label">Rec</span> ${pct}% (${stats.recoverySuccesses}/${stats.recoverySituations})</span>`,
+        );
+      }
+      if (stats.edgeGuardSituations > 0) {
+        const pct = Math.round(
+          (stats.edgeGuardSuccesses / stats.edgeGuardSituations) * 100,
+        );
+        statChips.push(
+          `<span class="game-stat-chip"><span class="chip-label">EG</span> ${pct}% (${stats.edgeGuardSuccesses}/${stats.edgeGuardSituations})</span>`,
+        );
+      }
+      if (stats.ledgeGetupSituations > 0) {
+        const pct = Math.round(
+          (stats.ledgeGetupSuccesses / stats.ledgeGetupSituations) * 100,
+        );
+        statChips.push(
+          `<span class="game-stat-chip"><span class="chip-label">Getup</span> ${pct}% (${stats.ledgeGetupSuccesses}/${stats.ledgeGetupSituations})</span>`,
+        );
+      }
+      if (stats.stocksTaken > 0) {
+        const hitsPerStock = (
+          stats.neutralHitsLanded / stats.stocksTaken
+        ).toFixed(1);
+        statChips.push(
+          `<span class="game-stat-chip"><span class="chip-label">Neutral</span> ${hitsPerStock}/st.</span>`,
+        );
+      }
+      if (stats.killCombos && stats.killCombos > 0) {
+        statChips.push(
+          `<span class="game-stat-chip"><span class="chip-label">Combos</span> ${stats.killCombos}</span>`,
+        );
+      }
+    }
+
+    const stocksDetail =
+      yourP.finalStocks >= 0 && oppP.finalStocks >= 0
+        ? `<span class="detail-stocks">${escapeHtml(tr.finalStocksDetail(yourP.finalStocks, oppP.finalStocks))}</span>`
+        : "";
 
     return `
       <div class="game-row ${pulseClass} ${yourP.finalStocks > oppP.finalStocks ? "row-won" : yourP.finalStocks < oppP.finalStocks ? "row-lost" : ""}" data-id="${summary.id}">
@@ -236,6 +283,10 @@ export class GameList {
           <span class="vs-label">vs</span>
           <span class="opp-player">${escapeHtml(oppName)}</span>
           <span class="char-label">(${escapeHtml(characterName(oppP.characterId))})</span>
+        </div>
+        <div class="game-row-details">
+          ${stocksDetail}
+          ${statChips.length > 0 ? `<span class="detail-divider">·</span><div class="game-stat-chips">${statChips.join("")}</div>` : ""}
         </div>
         <div class="game-row-actions">
           ${resultBadge}

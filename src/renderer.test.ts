@@ -39,6 +39,7 @@ import {
   isPikachuCharacter,
   isProneState,
   isQuickAttackState,
+  extractAllQuickAttackPaths,
   isRollForward,
   isRollState,
   isSamusCharacter,
@@ -267,6 +268,108 @@ describe("isQuickAttackState", () => {
     expect(isQuickAttackState(0x01a)).toBe(false); // Fall
     expect(isQuickAttackState(0x03a)).toBe(false); // FallSpecial
     expect(isQuickAttackState(0x0e3)).toBe(false); // Thunder
+  });
+});
+
+describe("extractAllQuickAttackPaths", () => {
+  it("extracts all Quick Attack path segments for Pikachu", () => {
+    const replay = {
+      gameStart: {
+        stageId: DREAM_LAND_STAGE_ID,
+        ports: [
+          { characterId: 0x09 }, // Pikachu
+          { characterId: 0x01 }, // Fox
+        ],
+      },
+      frames: [
+        // Frame 0: Idle
+        {
+          frame: 0,
+          ports: [
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        // Frame 1-3: Quick Attack 1 (Startup -> Zip 1 -> End)
+        {
+          frame: 1,
+          ports: [
+            { post: { actionStateId: 0x0e8, positionX: 10, positionY: 0 } },
+          ],
+        },
+        {
+          frame: 2,
+          ports: [
+            { post: { actionStateId: 0x0ec, positionX: 100, positionY: 50 } },
+          ],
+        },
+        {
+          frame: 3,
+          ports: [
+            { post: { actionStateId: 0x0e9, positionX: 150, positionY: 50 } },
+          ],
+        },
+        // Frame 4: Landed / Idle
+        {
+          frame: 4,
+          ports: [
+            { post: { actionStateId: 0x0a, positionX: 150, positionY: 0 } },
+          ],
+        },
+        // Frame 5-8: Quick Attack 2 (Startup -> Zip 1 -> Zip 2 -> End)
+        {
+          frame: 5,
+          ports: [
+            { post: { actionStateId: 0x0eb, positionX: 200, positionY: 100 } },
+          ],
+        },
+        {
+          frame: 6,
+          ports: [
+            { post: { actionStateId: 0x0ec, positionX: 300, positionY: 200 } },
+          ],
+        },
+        {
+          frame: 7,
+          ports: [
+            { post: { actionStateId: 0x0ed, positionX: 400, positionY: 250 } },
+          ],
+        },
+        {
+          frame: 8,
+          ports: [
+            { post: { actionStateId: 0x0ea, positionX: 450, positionY: 250 } },
+          ],
+        },
+      ],
+    } as unknown as Replay;
+
+    const paths = extractAllQuickAttackPaths(replay, 0);
+    expect(paths.length).toBe(2);
+
+    expect(paths[0]?.index).toBe(1);
+    expect(paths[0]?.startFrame).toBe(1);
+    expect(paths[0]?.endFrame).toBe(3);
+    expect(paths[0]?.zipCount).toBe(1);
+    expect(paths[0]?.points.length).toBe(3);
+
+    expect(paths[1]?.index).toBe(2);
+    expect(paths[1]?.startFrame).toBe(5);
+    expect(paths[1]?.endFrame).toBe(8);
+    expect(paths[1]?.zipCount).toBe(2);
+    expect(paths[1]?.points.length).toBe(4);
+  });
+
+  it("returns empty array for non-Pikachu characters", () => {
+    const replay = {
+      gameStart: {
+        stageId: DREAM_LAND_STAGE_ID,
+        ports: [{ characterId: 0x01 }], // Fox
+      },
+      frames: [],
+    } as unknown as Replay;
+
+    const paths = extractAllQuickAttackPaths(replay, 0);
+    expect(paths).toEqual([]);
   });
 });
 

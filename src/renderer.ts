@@ -713,6 +713,102 @@ export function isQuickAttackState(actionStateId: number): boolean {
   return QUICK_ATTACK_STATES.has(actionStateId);
 }
 
+export interface QuickAttackPath {
+  readonly index: number;
+  readonly port: PortIndex;
+  readonly startFrame: number;
+  readonly startFrameIndex: number;
+  readonly endFrame: number;
+  readonly endFrameIndex: number;
+  readonly points: Array<{ x: number; y: number }>;
+  readonly zipCount: number;
+}
+
+/**
+ * Extracts all Quick Attack (Up-B) trajectories for a Pikachu player across an entire replay.
+ */
+export function extractAllQuickAttackPaths(
+  replay: Replay,
+  port: PortIndex,
+): QuickAttackPath[] {
+  const paths: QuickAttackPath[] = [];
+  const charId = replay.gameStart.ports[port]?.characterId ?? 0x09;
+  if (!isPikachuCharacter(charId)) return paths;
+
+  const size = characterSize(charId);
+  const halfHeight = size.height * 0.5;
+
+  let currentPoints: Array<{ x: number; y: number }> = [];
+  let startFrame = 0;
+  let startFrameIndex = 0;
+  let inQuickAttack = false;
+  let zipCount = 0;
+
+  for (let i = 0; i < replay.frames.length; i++) {
+    const f = replay.frames[i];
+    if (!f) continue;
+    const pData = f.ports[port]?.post;
+    if (!pData) continue;
+
+    const isQA = isQuickAttackState(pData.actionStateId);
+
+    if (isQA) {
+      if (!inQuickAttack) {
+        inQuickAttack = true;
+        startFrame = f.frame;
+        startFrameIndex = i;
+        currentPoints = [];
+        zipCount = 0;
+      }
+      currentPoints.push({
+        x: pData.positionX,
+        y: pData.positionY + halfHeight,
+      });
+      if (pData.actionStateId === 0x0ec || pData.actionStateId === 0x0ed) {
+        const prevAction =
+          i > 0 ? replay.frames[i - 1]?.ports[port]?.post?.actionStateId : null;
+        if (prevAction !== pData.actionStateId) {
+          zipCount++;
+        }
+      }
+    } else {
+      if (inQuickAttack) {
+        if (currentPoints.length >= 2) {
+          paths.push({
+            index: paths.length + 1,
+            port,
+            startFrame,
+            startFrameIndex,
+            endFrame: replay.frames[i - 1]?.frame ?? startFrame,
+            endFrameIndex: i - 1,
+            points: currentPoints,
+            zipCount: Math.max(1, zipCount),
+          });
+        }
+        inQuickAttack = false;
+        currentPoints = [];
+        zipCount = 0;
+      }
+    }
+  }
+
+  if (inQuickAttack && currentPoints.length >= 2) {
+    const lastIdx = replay.frames.length - 1;
+    paths.push({
+      index: paths.length + 1,
+      port,
+      startFrame,
+      startFrameIndex,
+      endFrame: replay.frames[lastIdx]?.frame ?? startFrame,
+      endFrameIndex: lastIdx,
+      points: currentPoints,
+      zipCount: Math.max(1, zipCount),
+    });
+  }
+
+  return paths;
+}
+
 export function isFoxCharacter(characterId: number): boolean {
   return (
     characterId === 0x01 || // Fox
@@ -1098,11 +1194,28 @@ export interface CharacterAnimState {
 
 export class StageRenderer {
   private readonly ctx: CanvasRenderingContext2D;
+  private quickAttackOverlayPaths: QuickAttackPath[] | null = null;
+  private hoveredQuickAttackIndex: number | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2D canvas context unavailable");
     this.ctx = ctx;
+  }
+
+  public setQuickAttackOverlay(paths: QuickAttackPath[] | null): void {
+    this.quickAttackOverlayPaths = paths;
+  }
+
+  public setHoveredQuickAttackIndex(index: number | null): void {
+    this.hoveredQuickAttackIndex = index;
+  }
+
+  public isQuickAttackOverlayActive(): boolean {
+    return (
+      this.quickAttackOverlayPaths !== null &&
+      this.quickAttackOverlayPaths.length > 0
+    );
   }
 
   render(
@@ -1121,6 +1234,20 @@ export class StageRenderer {
     this.drawBlastZone(camera, stageId);
     this.drawEdgeGuardZone(camera, stageId);
     this.drawStage(camera, stageId);
+
+    // If Quick Attack Overlay mode is active:
+    if (
+      this.quickAttackOverlayPaths &&
+      this.quickAttackOverlayPaths.length > 0
+    ) {
+      this.drawQuickAttackOverlay(
+        camera,
+        this.quickAttackOverlayPaths,
+        this.hoveredQuickAttackIndex,
+      );
+      // Temporarily hide character models while overlay is displayed
+      return;
+    }
 
     if (frame) {
       // Draw motion trails (Pikachu Quick Attack streaks, Fox Fire Fox streaks, Roll trails) before characters
@@ -7874,6 +8001,92 @@ export class StageRenderer {
     ctx.fill();
 
     ctx.restore();
+  }
+
+  /**
+   * Draws all Pikachu Quick Attack trajectories overlayed simultaneously on the stage.
+   */
+  private drawQuickAttackOverlay(
+    camera: Camera,
+    paths: QuickAttackPath[],
+    hoveredIndex: number | null,
+  ): void {
+    const { ctx } = this;
+
+    for (const path of paths) {
+      if (path.points.length < 2) continue;
+      const isHovered = hoveredIndex !== null && path.index === hoveredIndex;
+      const screenPts = path.points.map((pt) =>
+        camera.worldToScreen(pt.x, pt.y),
+      );
+
+      ctx.save();
+      if (hoveredIndex !== null && !isHovered) {
+        // Dim other paths when a specific path is hovered
+        ctx.globalAlpha = 0.35;
+      }
+
+      // 1. Wide outer electric golden-yellow aura glow
+      ctx.beginPath();
+      ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+      for (let i = 1; i < screenPts.length; i++) {
+        ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+      }
+      ctx.strokeStyle = isHovered
+        ? "rgba(255, 240, 0, 0.95)"
+        : "rgba(255, 215, 0, 0.55)";
+      ctx.lineWidth = isHovered ? 13 : 8;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = isHovered ? "#ffffff" : "#ffd700";
+      ctx.shadowBlur = isHovered ? 24 : 12;
+      ctx.stroke();
+
+      // 2. Vibrant electric yellow mid-stroke
+      ctx.beginPath();
+      ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+      for (let i = 1; i < screenPts.length; i++) {
+        ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+      }
+      ctx.strokeStyle = isHovered ? "#ffffff" : "#ffe600";
+      ctx.lineWidth = isHovered ? 6 : 3.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+
+      // 3. Crisp bright white central lightning core
+      ctx.beginPath();
+      ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+      for (let i = 1; i < screenPts.length; i++) {
+        ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+      }
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = isHovered ? 2.5 : 1.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+
+      // 4. Start origin spark flare
+      const start = screenPts[0]!;
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, isHovered ? 6 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = isHovered ? "#ffffff" : "#ffe600";
+      ctx.shadowColor = "#ffd700";
+      ctx.shadowBlur = isHovered ? 16 : 8;
+      ctx.fill();
+
+      // 5. Index badge label above start point
+      if (isHovered) {
+        ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+        ctx.shadowBlur = 4;
+        ctx.fillText(`#${path.index}`, start.x, start.y - 12);
+      }
+
+      ctx.restore();
+    }
   }
 
   /**
