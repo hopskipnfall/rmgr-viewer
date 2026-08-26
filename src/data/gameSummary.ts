@@ -138,7 +138,7 @@ export function summarizeReplay(
 
   const ports: GamePortSummary[] = seated.map((port) => {
     const settings = replay.gameStart.ports[port];
-    const name = replay.gameStart.playerNames[port] || "";
+    const name = replay.gameStart?.playerNames?.[port] || "";
     let finalStocks = 0;
     if (replay.gameEnd) {
       const p = replay.gameEnd.placements[port];

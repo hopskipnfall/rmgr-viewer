@@ -1943,7 +1943,7 @@ export class StageRenderer {
     // Player name tag at match start (fades out after initial frames)
     const nameAlpha = getStartNameAlpha(frameIndex);
     if (nameAlpha > 0) {
-      const rawName = replay?.gameStart.playerNames[port]?.trim();
+      const rawName = replay?.gameStart?.playerNames?.[port]?.trim();
       const playerName =
         rawName && rawName.length > 0 ? rawName : PORT_LABELS[port];
       const hasPerspective =

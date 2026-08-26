@@ -786,6 +786,7 @@ export class CharacterPreviewController {
       gameStart: {
         stageId: 0,
         ports: { 0: { characterId: this.characterId } },
+        playerNames: { 0: charName },
       },
       frames: [
         {

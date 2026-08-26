@@ -590,7 +590,7 @@ export class MatchViewController {
       panel.className = "player-panel";
       panel.style.setProperty("--player-color", color);
 
-      const name = replay.gameStart.playerNames[port] || PORT_LABELS[port];
+      const name = replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
       panel.innerHTML = `
         <div class="player-name">${escapeHtml(name)} <span class="character">— ${escapeHtml(characterName(settings.characterId))} (${escapeHtml(PORT_LABELS[port])})</span></div>
         <div class="player-stats">
@@ -710,7 +710,7 @@ export class MatchViewController {
     }
 
     const name = (port: PortIndex) =>
-      replay.gameStart.playerNames[port] || PORT_LABELS[port];
+      replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
 
     if (
       ev.kind === "ledge-getup-entered" ||
@@ -986,7 +986,7 @@ export class MatchViewController {
     for (const port of seated) {
       const btn = document.createElement("button");
       btn.className = "perspective-btn";
-      const name = replay.gameStart.playerNames[port] || PORT_LABELS[port];
+      const name = replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
       btn.textContent = name;
 
       btn.addEventListener("click", () => {
