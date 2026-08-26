@@ -19,6 +19,7 @@ import {
   ZONE_X_AT_Y_LO,
   ZONE_X_AT_Y_HI,
   isHitstunState,
+  computeEdgeGuardEvents,
 } from "./edgeGuard.js";
 
 const SHIELD_ACTION_STATES = new Set([
@@ -49,6 +50,14 @@ const LANDING_ACTION_STATES = new Set([
 
 export function isLandingState(actionStateId: number): boolean {
   return LANDING_ACTION_STATES.has(actionStateId);
+}
+
+export function isHeavyLandingState(actionStateId: number): boolean {
+  return (
+    actionStateId === 0x020 ||
+    actionStateId === 0x03b ||
+    actionStateId === 0x0db
+  );
 }
 
 const DEAD_ACTION_STATES = new Set([
@@ -667,34 +676,19 @@ export function getJigglypuffSpecialType(
   actionStateId: number,
 ): JigglypuffSpecialType | null {
   if (!isJigglypuffCharacter(characterId)) return null;
-  // Neutral-B: Pound (0x0dc - 0x0de)
+  // Neutral-B: Pound (0x0dc - 0x0e1, 0x0e6 - 0x0e8: Straight, Angled Up, Angled Down, Ground & Air)
   if (
-    actionStateId === 0x0dc ||
-    actionStateId === 0x0dd ||
-    actionStateId === 0x0de
+    (actionStateId >= 0x0dc && actionStateId <= 0x0e1) ||
+    (actionStateId >= 0x0e6 && actionStateId <= 0x0e8)
   ) {
     return "pound";
   }
-  // Up-B: Sing (0x0df - 0x0e1, 0x0e4 - 0x0e6)
-  if (
-    actionStateId === 0x0df ||
-    actionStateId === 0x0e0 ||
-    actionStateId === 0x0e1 ||
-    actionStateId === 0x0e4 ||
-    actionStateId === 0x0e5 ||
-    actionStateId === 0x0e6
-  ) {
+  // Up-B: Sing (0x0e2 - 0x0e5: Ground & Air)
+  if (actionStateId >= 0x0e2 && actionStateId <= 0x0e5) {
     return "sing";
   }
-  // Down-B: Rest (0x0e2 - 0x0e4, 0x0e7 - 0x0e9)
-  if (
-    actionStateId === 0x0e2 ||
-    actionStateId === 0x0e3 ||
-    actionStateId === 0x0e4 ||
-    actionStateId === 0x0e7 ||
-    actionStateId === 0x0e8 ||
-    actionStateId === 0x0e9
-  ) {
+  // Down-B: Rest (0x0e9 - 0x0eb: Ground & Air, Sleep)
+  if (actionStateId >= 0x0e9 && actionStateId <= 0x0eb) {
     return "rest";
   }
   return null;
@@ -711,6 +705,142 @@ const QUICK_ATTACK_STATES = new Set([
 
 export function isQuickAttackState(actionStateId: number): boolean {
   return QUICK_ATTACK_STATES.has(actionStateId);
+}
+
+export interface QuickAttackPath {
+  readonly index: number;
+  readonly port: PortIndex;
+  readonly startFrame: number;
+  readonly startFrameIndex: number;
+  readonly endFrame: number;
+  readonly endFrameIndex: number;
+  readonly points: Array<{ x: number; y: number }>;
+  readonly zipCount: number;
+}
+
+function getRecoveryWindowsForPort(
+  replay: Replay,
+  port: PortIndex,
+): Array<{ start: number; end: number }> {
+  const events = computeEdgeGuardEvents(replay);
+  const windows: Array<{ start: number; end: number }> = [];
+  let currentStart: number | null = null;
+
+  for (const ev of events) {
+    if (ev.recoveringPort !== port) continue;
+    if (ev.kind === "situation-entered") {
+      if (currentStart !== null) {
+        windows.push({ start: currentStart, end: ev.frameIndex });
+      }
+      currentStart = ev.frameIndex;
+    } else if (
+      ev.kind === "recovery-success" ||
+      ev.kind === "recovery-failure"
+    ) {
+      if (currentStart !== null) {
+        windows.push({ start: currentStart, end: ev.frameIndex });
+        currentStart = null;
+      }
+    }
+  }
+  if (currentStart !== null) {
+    windows.push({
+      start: currentStart,
+      end: Math.max(0, replay.frames.length - 1),
+    });
+  }
+  return windows;
+}
+
+/**
+ * Extracts Quick Attack (Up-B) trajectories for a Pikachu player across a replay.
+ * By default (`recoveryOnly: true`), filters to only those executed during classified recovery situations.
+ */
+export function extractAllQuickAttackPaths(
+  replay: Replay,
+  port: PortIndex,
+  recoveryOnly = true,
+): QuickAttackPath[] {
+  const paths: QuickAttackPath[] = [];
+  const charId = replay.gameStart.ports[port]?.characterId ?? 0x09;
+  if (!isPikachuCharacter(charId)) return paths;
+
+  const recoveryWindows = recoveryOnly
+    ? getRecoveryWindowsForPort(replay, port)
+    : null;
+
+  const size = characterSize(charId);
+  const halfHeight = size.height * 0.5;
+
+  let currentPoints: Array<{ x: number; y: number }> = [];
+  let startFrame = 0;
+  let startFrameIndex = 0;
+  let inQuickAttack = false;
+  let zipCount = 0;
+
+  const addPathIfEligible = (endFrame: number, endFrameIndex: number) => {
+    if (currentPoints.length < 2) return;
+    if (recoveryWindows !== null) {
+      const inRecovery = recoveryWindows.some(
+        (w) => startFrameIndex >= w.start - 10 && startFrameIndex <= w.end + 10,
+      );
+      if (!inRecovery) return;
+    }
+    paths.push({
+      index: paths.length + 1,
+      port,
+      startFrame,
+      startFrameIndex,
+      endFrame,
+      endFrameIndex,
+      points: currentPoints,
+      zipCount: Math.max(1, zipCount),
+    });
+  };
+
+  for (let i = 0; i < replay.frames.length; i++) {
+    const f = replay.frames[i];
+    if (!f) continue;
+    const pData = f.ports[port]?.post;
+    if (!pData) continue;
+
+    const isQA = isQuickAttackState(pData.actionStateId);
+
+    if (isQA) {
+      if (!inQuickAttack) {
+        inQuickAttack = true;
+        startFrame = f.frame;
+        startFrameIndex = i;
+        currentPoints = [];
+        zipCount = 0;
+      }
+      currentPoints.push({
+        x: pData.positionX,
+        y: pData.positionY + halfHeight,
+      });
+      if (pData.actionStateId === 0x0ec || pData.actionStateId === 0x0ed) {
+        const prevAction =
+          i > 0 ? replay.frames[i - 1]?.ports[port]?.post?.actionStateId : null;
+        if (prevAction !== pData.actionStateId) {
+          zipCount++;
+        }
+      }
+    } else {
+      if (inQuickAttack) {
+        addPathIfEligible(replay.frames[i - 1]?.frame ?? startFrame, i - 1);
+        inQuickAttack = false;
+        currentPoints = [];
+        zipCount = 0;
+      }
+    }
+  }
+
+  if (inQuickAttack && currentPoints.length >= 2) {
+    const lastIdx = replay.frames.length - 1;
+    addPathIfEligible(replay.frames[lastIdx]?.frame ?? startFrame, lastIdx);
+  }
+
+  return paths;
 }
 
 export function isFoxCharacter(characterId: number): boolean {
@@ -1056,13 +1186,83 @@ export function toGrayscale(colorStr: string, overrideAlpha?: number): string {
   return colorStr;
 }
 
+export function toBlandPalette(
+  colorStr: string,
+  overrideAlpha?: number,
+): string {
+  const SATURATION_FACTOR = 0.35;
+
+  if (colorStr.startsWith("#")) {
+    let hex = colorStr.slice(1);
+    if (hex.length === 3) {
+      hex = hex
+        .split("")
+        .map((c) => c + c)
+        .join("");
+    }
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const a = hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1;
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const nr = Math.round(
+      lum * (1 - SATURATION_FACTOR) + r * SATURATION_FACTOR,
+    );
+    const ng = Math.round(
+      lum * (1 - SATURATION_FACTOR) + g * SATURATION_FACTOR,
+    );
+    const nb = Math.round(
+      lum * (1 - SATURATION_FACTOR) + b * SATURATION_FACTOR,
+    );
+    const finalAlpha = overrideAlpha ?? a;
+    return finalAlpha < 1
+      ? `rgba(${nr}, ${ng}, ${nb}, ${finalAlpha})`
+      : `rgb(${nr}, ${ng}, ${nb})`;
+  }
+  if (colorStr.startsWith("rgba(") || colorStr.startsWith("rgb(")) {
+    const match = colorStr.match(
+      /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/,
+    );
+    if (match && match[1] && match[2] && match[3]) {
+      const r = parseInt(match[1], 10);
+      const g = parseInt(match[2], 10);
+      const b = parseInt(match[3], 10);
+      const a = match[4] !== undefined ? parseFloat(match[4]) : 1;
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const nr = Math.round(
+        lum * (1 - SATURATION_FACTOR) + r * SATURATION_FACTOR,
+      );
+      const ng = Math.round(
+        lum * (1 - SATURATION_FACTOR) + g * SATURATION_FACTOR,
+      );
+      const nb = Math.round(
+        lum * (1 - SATURATION_FACTOR) + b * SATURATION_FACTOR,
+      );
+      const finalAlpha = overrideAlpha ?? a;
+      return finalAlpha < 1
+        ? `rgba(${nr}, ${ng}, ${nb}, ${finalAlpha})`
+        : `rgb(${nr}, ${ng}, ${nb})`;
+    }
+  }
+  if (colorStr.startsWith("hsl(")) {
+    return colorStr.replace(
+      /hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%?\s*,\s*([\d.]+%?)\s*\)/,
+      (_match, h, s, l) => {
+        const sat = Math.round(parseFloat(s) * SATURATION_FACTOR);
+        return `hsl(${h}, ${sat}%, ${l})`;
+      },
+    );
+  }
+  return colorStr;
+}
+
 function resolveColor(
   hexOrCss: string,
   isOpponent: boolean,
   alpha?: number,
 ): string {
   if (isOpponent) {
-    return toGrayscale(hexOrCss, alpha);
+    return toBlandPalette(hexOrCss, alpha);
   }
   if (alpha !== undefined && alpha < 1) {
     return hexToRgba(hexOrCss, alpha);
@@ -1090,6 +1290,7 @@ export interface CharacterAnimState {
   isInvulnerable: boolean;
   isSpecial: boolean;
   isLanding: boolean;
+  isHeavyLanding?: boolean;
   isDizzy: boolean;
   isSleep: boolean;
   isOpponent: boolean;
@@ -1098,11 +1299,32 @@ export interface CharacterAnimState {
 
 export class StageRenderer {
   private readonly ctx: CanvasRenderingContext2D;
+  private quickAttackOverlayPaths: QuickAttackPath[] | null = null;
+  private hoveredQuickAttackIndex: number | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2D canvas context unavailable");
     this.ctx = ctx;
+  }
+
+  public setQuickAttackOverlay(paths: QuickAttackPath[] | null): void {
+    this.quickAttackOverlayPaths = paths;
+  }
+
+  public getQuickAttackOverlayPaths(): QuickAttackPath[] | null {
+    return this.quickAttackOverlayPaths;
+  }
+
+  public setHoveredQuickAttackIndex(index: number | null): void {
+    this.hoveredQuickAttackIndex = index;
+  }
+
+  public isQuickAttackOverlayActive(): boolean {
+    return (
+      this.quickAttackOverlayPaths !== null &&
+      this.quickAttackOverlayPaths.length > 0
+    );
   }
 
   render(
@@ -1121,6 +1343,20 @@ export class StageRenderer {
     this.drawBlastZone(camera, stageId);
     this.drawEdgeGuardZone(camera, stageId);
     this.drawStage(camera, stageId);
+
+    // If Quick Attack Overlay mode is active:
+    if (
+      this.quickAttackOverlayPaths &&
+      this.quickAttackOverlayPaths.length > 0
+    ) {
+      this.drawQuickAttackOverlay(
+        camera,
+        this.quickAttackOverlayPaths,
+        this.hoveredQuickAttackIndex,
+      );
+      // Temporarily hide character models while overlay is displayed
+      return;
+    }
 
     if (frame) {
       // Draw motion trails (Pikachu Quick Attack streaks, Fox Fire Fox streaks, Roll trails) before characters
@@ -1934,6 +2170,7 @@ export class StageRenderer {
         color,
         puffSpecial,
         post.actionFrameCounter,
+        post.actionStateId,
       );
       if (puffSpecial === "sing" || puffSpecial === "rest") {
         labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
@@ -1972,6 +2209,7 @@ export class StageRenderer {
     const comboHits = inHitstun ? (post.comboHitCount ?? 0) : 0;
     const isSpecial = isSpecialState(post.actionStateId);
     const isLanding = isLandingState(post.actionStateId);
+    const isHeavyLanding = isHeavyLandingState(post.actionStateId);
     const isDizzy = isDizzyState(post.actionStateId);
     const isSleep = isSleepState(post.actionStateId);
     const isOpponent =
@@ -1997,6 +2235,7 @@ export class StageRenderer {
       isInvulnerable,
       isSpecial,
       isLanding,
+      isHeavyLanding,
       isDizzy,
       isSleep,
       isOpponent,
@@ -2278,50 +2517,27 @@ export class StageRenderer {
         ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
         ctx.lineWidth = 1.4;
         ctx.stroke();
-      } else if (isRoll) {
-        // Ethereal silver glow during roll (with brighter cyan aura when actively intangible)
-        ctx.save();
-        ctx.strokeStyle = isInvulnerable
-          ? "rgba(220, 235, 255, 0.95)"
-          : "rgba(190, 205, 225, 0.95)";
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = isInvulnerable
-          ? "rgba(180, 215, 255, 0.85)"
-          : "rgba(170, 195, 230, 0.7)";
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-        ctx.restore();
-
-        ctx.beginPath();
-        ctx.moveTo(noseX, noseY);
-        ctx.lineTo(backX, topY);
-        ctx.lineTo(backX, y);
-        ctx.closePath();
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-      } else if (isSpecial || isLanding) {
-        // Special move & Landing animation: neutral cool-silver/gray energy outline
-        ctx.save();
-        ctx.strokeStyle = "rgba(190, 205, 225, 0.95)";
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = "rgba(170, 195, 230, 0.7)";
-        ctx.shadowBlur = 6;
-        ctx.stroke();
-        ctx.restore();
-
-        ctx.beginPath();
-        ctx.moveTo(noseX, noseY);
-        ctx.lineTo(backX, topY);
-        ctx.lineTo(backX, y);
-        ctx.closePath();
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
       } else {
         ctx.strokeStyle = "rgba(0,0,0,0.5)";
         ctx.lineWidth = 1.5;
         ctx.stroke();
+      }
+
+      if (isLanding) {
+        // Ground impact compression line along floor (y)
+        ctx.save();
+        const impactSpread = isHeavyLanding
+          ? halfWidth * 1.35
+          : halfWidth * 0.9;
+        ctx.beginPath();
+        ctx.moveTo(x - impactSpread, y);
+        ctx.lineTo(x + impactSpread, y);
+        ctx.strokeStyle = isHeavyLanding
+          ? "rgba(251, 191, 36, 0.9)"
+          : "rgba(226, 232, 240, 0.75)";
+        ctx.lineWidth = isHeavyLanding ? 3 : 1.8;
+        ctx.stroke();
+        ctx.restore();
       }
 
       ctx.restore();
@@ -2802,16 +3018,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -3037,19 +3244,7 @@ export class StageRenderer {
       ctx.stroke();
     }
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -3068,16 +3263,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -3327,19 +3513,7 @@ export class StageRenderer {
     ctx.fillStyle = goldColor;
     ctx.fill();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -3358,16 +3532,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -3616,19 +3781,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -3647,16 +3800,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -3904,19 +4048,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -3935,16 +4067,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -4131,19 +4254,7 @@ export class StageRenderer {
       ctx.stroke();
     }
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -4162,16 +4273,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -4355,19 +4457,7 @@ export class StageRenderer {
       ctx.stroke();
     }
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -4386,16 +4476,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -4616,19 +4697,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -4647,16 +4716,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -4771,7 +4831,40 @@ export class StageRenderer {
     ctx.fillStyle = whiteColor;
     ctx.fill();
 
-    // Head, Eyes & Big Snout
+    // Big Rounded Green Snout
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.48 * dir * w,
+      y - 0.72 * h,
+      Math.max(0.1, 0.38 * w),
+      Math.max(0.1, 0.22 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = greenColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Nostril
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + 0.68 * dir * w,
+        y - 0.76 * h,
+        Math.max(0.1, 0.035 * w),
+        Math.max(0.1, 0.045 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#18181b", isOpponent);
+      ctx.fill();
+    }
+
+    // Eye White (on top of snout bridge)
     ctx.beginPath();
     ctx.ellipse(
       posX + 0.1 * dir * w,
@@ -4784,12 +4877,15 @@ export class StageRenderer {
     );
     ctx.fillStyle = whiteColor;
     ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
     ctx.stroke();
 
+    // Eye Pupil (properly directional-flipped)
     if (Math.abs(dir) > 0.15) {
       ctx.beginPath();
       ctx.ellipse(
-        posX + (0.1 + 0.04 * dir) * w,
+        posX + 0.14 * dir * w,
         y - 0.85 * h,
         Math.max(0.1, 0.05 * w),
         Math.max(0.1, 0.08 * h),
@@ -4801,21 +4897,6 @@ export class StageRenderer {
       ctx.fill();
     }
 
-    // Big Rounded Green Snout
-    ctx.beginPath();
-    ctx.ellipse(
-      posX + 0.52 * dir * w,
-      y - 0.72 * h,
-      Math.max(0.1, 0.38 * w),
-      Math.max(0.1, 0.22 * h),
-      0,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fillStyle = greenColor;
-    ctx.fill();
-    ctx.stroke();
-
     // Red Spines along neck
     ctx.beginPath();
     ctx.moveTo(posX - 0.2 * dir * w, y - 0.82 * h);
@@ -4825,19 +4906,7 @@ export class StageRenderer {
     ctx.fillStyle = redShell;
     ctx.fill();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -4856,16 +4925,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -5008,19 +5068,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -5039,16 +5087,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -5206,19 +5245,7 @@ export class StageRenderer {
     ctx.fillStyle = blondeHair;
     ctx.fill();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -5237,16 +5264,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -5445,19 +5463,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -5476,16 +5482,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -5668,24 +5665,12 @@ export class StageRenderer {
     ctx.fillStyle = visorGreen;
     ctx.fill();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
   /**
-   * Helper to draw combo hitstun, roll invulnerability, and landing energy outlines consistently.
+   * Helper to draw combo hitstun outlines and ground-level landing impact shockwaves consistently.
    */
   private drawCharacterStateAuras(
     ctx: CanvasRenderingContext2D,
@@ -5693,13 +5678,11 @@ export class StageRenderer {
     y: number,
     w: number,
     h: number,
-    dir: number,
-    inCombo: boolean,
-    isRoll: boolean,
-    isInvulnerable: boolean,
-    isSpecial: boolean,
-    isLanding: boolean,
+    _dir: number,
+    state: CharacterAnimState,
   ): void {
+    const { inCombo, isLanding, isHeavyLanding } = state;
+
     if (inCombo) {
       ctx.save();
       ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
@@ -5733,45 +5716,75 @@ export class StageRenderer {
       ctx.lineWidth = 1.8;
       ctx.stroke();
       ctx.restore();
-    } else if (isRoll) {
+    }
+
+    if (isLanding) {
+      // Ground impact shockwave & outward kicking dust puffs at floor level (y)
       ctx.save();
-      ctx.strokeStyle = isInvulnerable
-        ? "rgba(220, 235, 255, 0.95)"
-        : "rgba(190, 205, 225, 0.95)";
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = isInvulnerable
-        ? "rgba(180, 215, 255, 0.85)"
-        : "rgba(170, 195, 230, 0.7)";
-      ctx.shadowBlur = 8;
+      const impactSpread = isHeavyLanding ? w * 1.35 : w * 0.9;
+
+      // 1. Horizontal ground impact compression line along floor
       ctx.beginPath();
-      ctx.ellipse(
-        posX,
-        y - 0.5 * h,
-        Math.max(0.1, 0.8 * w),
-        Math.max(0.1, 0.5 * h),
-        0,
+      ctx.moveTo(posX - impactSpread, y);
+      ctx.lineTo(posX + impactSpread, y);
+      ctx.strokeStyle = isHeavyLanding
+        ? "rgba(251, 191, 36, 0.9)" // Amber/yellow warning impact for heavy landing lag
+        : "rgba(226, 232, 240, 0.75)"; // Light silver impact line
+      ctx.lineWidth = isHeavyLanding ? 3 : 1.8;
+      ctx.stroke();
+
+      // 2. Outward dust puff clouds kicking left and right along the ground
+      ctx.fillStyle = isHeavyLanding
+        ? "rgba(245, 158, 11, 0.65)"
+        : "rgba(226, 232, 240, 0.55)";
+
+      // Left ground dust puffs
+      ctx.beginPath();
+      ctx.arc(
+        posX - impactSpread * 0.75,
+        y - 3,
+        isHeavyLanding ? 4.5 : 3,
         0,
         Math.PI * 2,
       );
-      ctx.stroke();
-      ctx.restore();
-    } else if (isSpecial || isLanding) {
-      ctx.save();
-      ctx.strokeStyle = "rgba(190, 205, 225, 0.95)";
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = "rgba(170, 195, 230, 0.7)";
-      ctx.shadowBlur = 6;
-      ctx.beginPath();
-      ctx.ellipse(
-        posX,
-        y - 0.5 * h,
-        Math.max(0.1, 0.8 * w),
-        Math.max(0.1, 0.5 * h),
-        0,
+      ctx.arc(
+        posX - impactSpread * 1.05,
+        y - 2,
+        isHeavyLanding ? 3.5 : 2,
         0,
         Math.PI * 2,
       );
-      ctx.stroke();
+      ctx.fill();
+
+      // Right ground dust puffs
+      ctx.beginPath();
+      ctx.arc(
+        posX + impactSpread * 0.75,
+        y - 3,
+        isHeavyLanding ? 4.5 : 3,
+        0,
+        Math.PI * 2,
+      );
+      ctx.arc(
+        posX + impactSpread * 1.05,
+        y - 2,
+        isHeavyLanding ? 3.5 : 2,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      if (isHeavyLanding) {
+        // Heavy landing recovery lag markers (downward floor compression ticks)
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.85)";
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(posX - w * 0.45, y);
+        ctx.lineTo(posX - w * 0.65, y - 5);
+        ctx.moveTo(posX + w * 0.45, y);
+        ctx.lineTo(posX + w * 0.65, y - 5);
+        ctx.stroke();
+      }
       ctx.restore();
     }
   }
@@ -7364,7 +7377,7 @@ export class StageRenderer {
 
   /**
    * Visualizes Jigglypuff's signature special moves:
-   * - Pound (Neutral-B): Forward-lunging punch with vibrant pink star impact burst.
+   * - Pound (Neutral-B): Sideways lunging punch attack with outstretched arm, clenched fist, and horizontal strike arc.
    * - Sing (Up-B): Concentric musical soundwave rings radiating outward with floating notes.
    * - Rest (Down-B): Explosive critical hit star bloom with flower petals and Zzz sparkles.
    */
@@ -7377,6 +7390,7 @@ export class StageRenderer {
     _color: string,
     specialType: JigglypuffSpecialType,
     frameCounter: number,
+    actionStateId?: number,
   ): void {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
@@ -7384,37 +7398,137 @@ export class StageRenderer {
 
     if (specialType === "pound") {
       ctx.save();
-      // Forward thrusting punch impact with large pink burst star
-      const punchX = noseX + dir * (halfWidth * 0.85);
-      const starR = Math.max(10, halfWidth * 0.75);
+      // Sideways Punch (Pound): Dynamic horizontal/angled lunging fist with punch strike arc & impact sparks
+      const isAngledUp =
+        actionStateId === 0x0dd ||
+        actionStateId === 0x0e0 ||
+        actionStateId === 0x0e1 ||
+        actionStateId === 0x0e7;
+      const isAngledDown = actionStateId === 0x0de || actionStateId === 0x0e8;
 
-      // Thrust speed lines
+      const angleOffsetY = isAngledUp
+        ? -heightPx * 0.18
+        : isAngledDown
+          ? heightPx * 0.15
+          : -heightPx * 0.05;
+
+      const punchProgress = Math.min(1, frameCounter / 15);
+      const extendDist =
+        halfWidth * (0.35 + 0.85 * Math.sin(punchProgress * Math.PI * 0.75));
+      const fistX = noseX + dir * extendDist;
+      const fistY = centerY + angleOffsetY;
+      const armHeight = Math.max(4, heightPx * 0.18);
+
+      // 1. Horizontal/Angled thrust speed lines
       ctx.beginPath();
-      ctx.moveTo(x, centerY - heightPx * 0.2);
-      ctx.lineTo(punchX - dir * 4, centerY - heightPx * 0.2);
-      ctx.moveTo(x, centerY + heightPx * 0.2);
-      ctx.lineTo(punchX - dir * 4, centerY + heightPx * 0.2);
-      ctx.strokeStyle = "rgba(244, 114, 182, 0.75)";
+      ctx.moveTo(x + dir * (halfWidth * 0.2), fistY - armHeight * 0.85);
+      ctx.lineTo(fistX + dir * 6, fistY - armHeight * 0.85);
+      ctx.moveTo(x + dir * (halfWidth * 0.2), fistY + armHeight * 0.85);
+      ctx.lineTo(fistX + dir * 6, fistY + armHeight * 0.85);
+      ctx.moveTo(x + dir * (halfWidth * 0.1), fistY);
+      ctx.lineTo(fistX + dir * 10, fistY);
+      ctx.strokeStyle = "rgba(244, 114, 182, 0.65)";
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // 4-point impact star
+      // 2. Punching Arm (extended from body to fist)
       ctx.beginPath();
-      ctx.moveTo(punchX - starR, centerY);
-      ctx.quadraticCurveTo(punchX, centerY, punchX, centerY - starR);
-      ctx.quadraticCurveTo(punchX, centerY, punchX + starR, centerY);
-      ctx.quadraticCurveTo(punchX, centerY, punchX, centerY + starR);
-      ctx.quadraticCurveTo(punchX, centerY, punchX - starR, centerY);
+      ctx.moveTo(x + dir * (halfWidth * 0.4), centerY - armHeight * 0.4);
+      ctx.lineTo(fistX, fistY - armHeight * 0.6);
+      ctx.lineTo(fistX, fistY + armHeight * 0.6);
+      ctx.lineTo(x + dir * (halfWidth * 0.4), centerY + armHeight * 0.4);
+      ctx.closePath();
       ctx.fillStyle = "#f472b6";
-      ctx.shadowColor = "#ec4899";
-      ctx.shadowBlur = 12;
       ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
 
-      // White inner core
+      // 3. Clenched Fist at punch tip
+      const fistR = Math.max(6, halfWidth * 0.4);
+      const rotationAngle = isAngledUp
+        ? facingRight
+          ? -0.28
+          : 0.28
+        : isAngledDown
+          ? facingRight
+            ? 0.28
+            : -0.28
+          : 0;
+
       ctx.beginPath();
-      ctx.arc(punchX, centerY, starR * 0.4, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff";
+      ctx.ellipse(
+        fistX,
+        fistY,
+        fistR * 1.1,
+        fistR * 0.9,
+        rotationAngle,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#f9a8d4";
       ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.7)";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      // Knuckle details on the punching fist
+      ctx.beginPath();
+      ctx.arc(
+        fistX + dir * (fistR * 0.5),
+        fistY - fistR * 0.35,
+        fistR * 0.35,
+        0,
+        Math.PI * 2,
+      );
+      ctx.arc(
+        fistX + dir * (fistR * 0.5),
+        fistY + fistR * 0.35,
+        fistR * 0.35,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#f472b6";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // 4. Curved Punch Strike Swipe Arc (crescent impact slash)
+      const arcDist = fistX + dir * (fistR * 0.7);
+      const arcR = fistR * 1.7;
+      ctx.beginPath();
+      ctx.ellipse(
+        arcDist,
+        fistY,
+        Math.max(3, arcR * 0.45),
+        arcR,
+        rotationAngle,
+        facingRight ? -Math.PI * 0.45 : Math.PI * 0.55,
+        facingRight ? Math.PI * 0.45 : Math.PI * 1.45,
+      );
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = "#f472b6";
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // 5. Kinetic punch impact flash / shockwave sparks
+      const impactProg = (frameCounter % 8) / 8;
+      const sparkRadius = fistR * 1.2 + impactProg * (halfWidth * 0.75);
+      ctx.beginPath();
+      ctx.ellipse(
+        fistX + dir * (fistR * 0.6),
+        fistY,
+        sparkRadius * 0.6,
+        sparkRadius,
+        rotationAngle,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = resolveColor("#ec4899", false, (1 - impactProg) * 0.8);
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
       ctx.restore();
       return;
@@ -7874,6 +7988,92 @@ export class StageRenderer {
     ctx.fill();
 
     ctx.restore();
+  }
+
+  /**
+   * Draws all Pikachu Quick Attack trajectories overlayed simultaneously on the stage.
+   */
+  private drawQuickAttackOverlay(
+    camera: Camera,
+    paths: QuickAttackPath[],
+    hoveredIndex: number | null,
+  ): void {
+    const { ctx } = this;
+
+    for (const path of paths) {
+      if (path.points.length < 2) continue;
+      const isHovered = hoveredIndex !== null && path.index === hoveredIndex;
+      const screenPts = path.points.map((pt) =>
+        camera.worldToScreen(pt.x, pt.y),
+      );
+
+      ctx.save();
+      if (hoveredIndex !== null && !isHovered) {
+        // Dim other paths when a specific path is hovered
+        ctx.globalAlpha = 0.35;
+      }
+
+      // 1. Wide outer electric golden-yellow aura glow
+      ctx.beginPath();
+      ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+      for (let i = 1; i < screenPts.length; i++) {
+        ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+      }
+      ctx.strokeStyle = isHovered
+        ? "rgba(255, 240, 0, 0.95)"
+        : "rgba(255, 215, 0, 0.55)";
+      ctx.lineWidth = isHovered ? 13 : 8;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = isHovered ? "#ffffff" : "#ffd700";
+      ctx.shadowBlur = isHovered ? 24 : 12;
+      ctx.stroke();
+
+      // 2. Vibrant electric yellow mid-stroke
+      ctx.beginPath();
+      ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+      for (let i = 1; i < screenPts.length; i++) {
+        ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+      }
+      ctx.strokeStyle = isHovered ? "#ffffff" : "#ffe600";
+      ctx.lineWidth = isHovered ? 6 : 3.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+
+      // 3. Crisp bright white central lightning core
+      ctx.beginPath();
+      ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+      for (let i = 1; i < screenPts.length; i++) {
+        ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+      }
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = isHovered ? 2.5 : 1.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+
+      // 4. Start origin spark flare
+      const start = screenPts[0]!;
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, isHovered ? 6 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = isHovered ? "#ffffff" : "#ffe600";
+      ctx.shadowColor = "#ffd700";
+      ctx.shadowBlur = isHovered ? 16 : 8;
+      ctx.fill();
+
+      // 5. Index badge label above start point
+      if (isHovered) {
+        ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+        ctx.shadowBlur = 4;
+        ctx.fillText(`#${path.index}`, start.x, start.y - 12);
+      }
+
+      ctx.restore();
+    }
   }
 
   /**

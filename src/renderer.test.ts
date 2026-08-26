@@ -30,6 +30,7 @@ import {
   isJigglypuffCharacter,
   isKirbyCharacter,
   isLandingState,
+  isHeavyLandingState,
   isLinkCharacter,
   isLuigiCharacter,
   isMarioCharacter,
@@ -39,6 +40,7 @@ import {
   isPikachuCharacter,
   isProneState,
   isQuickAttackState,
+  extractAllQuickAttackPaths,
   isRollForward,
   isRollState,
   isSamusCharacter,
@@ -54,6 +56,7 @@ import {
   isTurnState,
   isYoshiCharacter,
   toGrayscale,
+  toBlandPalette,
 } from "./renderer.js";
 import type { Replay } from "@rmg-k/rmgr";
 import {
@@ -113,6 +116,20 @@ describe("isLandingState", () => {
     expect(isLandingState(0x01a)).toBe(false); // Fall
     expect(isLandingState(0x01c)).toBe(false); // Crouch
     expect(isLandingState(0x099)).toBe(false); // Shield
+  });
+});
+
+describe("isHeavyLandingState", () => {
+  it("identifies heavy landing action states correctly", () => {
+    expect(isHeavyLandingState(0x020)).toBe(true); // LandingHeavy
+    expect(isHeavyLandingState(0x03b)).toBe(true); // LandingSpecial
+    expect(isHeavyLandingState(0x0db)).toBe(true); // LandingAirX
+  });
+
+  it("returns false for light landing or other states", () => {
+    expect(isHeavyLandingState(0x01f)).toBe(false); // LandingLight
+    expect(isHeavyLandingState(0x00a)).toBe(false); // Idle
+    expect(isHeavyLandingState(0x01a)).toBe(false); // Fall
   });
 });
 
@@ -267,6 +284,158 @@ describe("isQuickAttackState", () => {
     expect(isQuickAttackState(0x01a)).toBe(false); // Fall
     expect(isQuickAttackState(0x03a)).toBe(false); // FallSpecial
     expect(isQuickAttackState(0x0e3)).toBe(false); // Thunder
+  });
+});
+
+describe("extractAllQuickAttackPaths", () => {
+  it("extracts all Quick Attack path segments for Pikachu", () => {
+    const replay = {
+      gameStart: {
+        stageId: DREAM_LAND_STAGE_ID,
+        ports: [
+          { characterId: 0x09 }, // Pikachu
+          { characterId: 0x01 }, // Fox
+        ],
+      },
+      frames: [
+        // Frame 0: Idle
+        {
+          frame: 0,
+          ports: [
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        // Frame 1-3: Quick Attack 1 (Startup -> Zip 1 -> End)
+        {
+          frame: 1,
+          ports: [
+            { post: { actionStateId: 0x0e8, positionX: 10, positionY: 0 } },
+          ],
+        },
+        {
+          frame: 2,
+          ports: [
+            { post: { actionStateId: 0x0ec, positionX: 100, positionY: 50 } },
+          ],
+        },
+        {
+          frame: 3,
+          ports: [
+            { post: { actionStateId: 0x0e9, positionX: 150, positionY: 50 } },
+          ],
+        },
+        // Frame 4: Landed / Idle
+        {
+          frame: 4,
+          ports: [
+            { post: { actionStateId: 0x0a, positionX: 150, positionY: 0 } },
+          ],
+        },
+        // Frame 5-8: Quick Attack 2 (Startup -> Zip 1 -> Zip 2 -> End)
+        {
+          frame: 5,
+          ports: [
+            { post: { actionStateId: 0x0eb, positionX: 200, positionY: 100 } },
+          ],
+        },
+        {
+          frame: 6,
+          ports: [
+            { post: { actionStateId: 0x0ec, positionX: 300, positionY: 200 } },
+          ],
+        },
+        {
+          frame: 7,
+          ports: [
+            { post: { actionStateId: 0x0ed, positionX: 400, positionY: 250 } },
+          ],
+        },
+        {
+          frame: 8,
+          ports: [
+            { post: { actionStateId: 0x0ea, positionX: 450, positionY: 250 } },
+          ],
+        },
+      ],
+    } as unknown as Replay;
+
+    const paths = extractAllQuickAttackPaths(replay, 0, false);
+    expect(paths.length).toBe(2);
+
+    expect(paths[0]?.index).toBe(1);
+    expect(paths[0]?.startFrame).toBe(1);
+    expect(paths[0]?.endFrame).toBe(3);
+    expect(paths[0]?.zipCount).toBe(1);
+    expect(paths[0]?.points.length).toBe(3);
+
+    expect(paths[1]?.index).toBe(2);
+    expect(paths[1]?.startFrame).toBe(5);
+    expect(paths[1]?.endFrame).toBe(8);
+    expect(paths[1]?.zipCount).toBe(2);
+    expect(paths[1]?.points.length).toBe(4);
+  });
+
+  it("filters Quick Attacks to only those during recovery situations by default", () => {
+    // Replay with port 0 (Pikachu) in a recovery situation (offstage outside danger zone)
+    const replay = {
+      gameStart: {
+        stageId: DREAM_LAND_STAGE_ID,
+        ports: [{ characterId: 0x09 }, { characterId: 0x01 }],
+      },
+      frames: [
+        // Frame 0: Offstage outside danger zone (starts recovery situation)
+        {
+          frame: 0,
+          ports: [
+            { post: { actionStateId: 0x18, positionX: -3500, positionY: 500 } },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        // Frame 1-3: Quick Attack during recovery
+        {
+          frame: 1,
+          ports: [
+            {
+              post: { actionStateId: 0x0e8, positionX: -3500, positionY: 500 },
+            },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        {
+          frame: 2,
+          ports: [
+            {
+              post: { actionStateId: 0x0ec, positionX: -2000, positionY: 500 },
+            },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        {
+          frame: 3,
+          ports: [
+            { post: { actionStateId: 0x0e9, positionX: -500, positionY: 500 } },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+      ],
+    } as unknown as Replay;
+
+    const paths = extractAllQuickAttackPaths(replay, 0);
+    expect(paths.length).toBe(1);
+    expect(paths[0]?.startFrame).toBe(1);
+  });
+
+  it("returns empty array for non-Pikachu characters", () => {
+    const replay = {
+      gameStart: {
+        stageId: DREAM_LAND_STAGE_ID,
+        ports: [{ characterId: 0x01 }], // Fox
+      },
+      frames: [],
+    } as unknown as Replay;
+
+    const paths = extractAllQuickAttackPaths(replay, 0);
+    expect(paths).toEqual([]);
   });
 });
 
@@ -794,6 +963,33 @@ describe("toGrayscale", () => {
   });
 });
 
+describe("toBlandPalette", () => {
+  it("converts hex colors to a muted, bland palette preserving hue nuance", () => {
+    expect(toBlandPalette("#ffffff")).toBe("rgb(255, 255, 255)");
+    expect(toBlandPalette("#000000")).toBe("rgb(0, 0, 0)");
+    // Yellow should still retain warm red/green bias rather than pure identical gray channels
+    const yellow = toBlandPalette("#facc15");
+    expect(yellow).toMatch(/^rgb\(\d+,\s*\d+,\s*\d+\)$/);
+    const match = yellow.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    expect(match).toBeTruthy();
+    const r = parseInt(match![1]!, 10);
+    const g = parseInt(match![2]!, 10);
+    const b = parseInt(match![3]!, 10);
+    expect(r).toBeGreaterThan(b);
+    expect(g).toBeGreaterThan(b);
+  });
+
+  it("preserves alpha for rgba strings", () => {
+    expect(toBlandPalette("rgba(255, 0, 0, 0.5)")).toMatch(
+      /^rgba\(\d+,\s*\d+,\s*\d+,\s*0\.5\)$/,
+    );
+  });
+
+  it("reduces saturation for hsl strings to 35% of original", () => {
+    expect(toBlandPalette("hsl(120, 80%, 50%)")).toBe("hsl(120, 28%, 50%)");
+  });
+});
+
 describe("getStartNameAlpha", () => {
   it("returns 1.0 during the solid display window at match start", () => {
     expect(getStartNameAlpha(0)).toBe(1);
@@ -1080,10 +1276,19 @@ describe("getKirbySpecialType", () => {
 
 describe("getJigglypuffSpecialType", () => {
   it("classifies Jigglypuff special moves correctly", () => {
+    // Pound variations (0x0dc - 0x0e1, 0x0e6 - 0x0e8)
     expect(getJigglypuffSpecialType(0x0a, 0x0dc)).toBe("pound");
-    expect(getJigglypuffSpecialType(0x0a, 0x0df)).toBe("sing");
-    expect(getJigglypuffSpecialType(0x0a, 0x0e2)).toBe("rest");
-    expect(getJigglypuffSpecialType(0x0a, 0x0e7)).toBe("rest");
+    expect(getJigglypuffSpecialType(0x0a, 0x0df)).toBe("pound");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e1)).toBe("pound");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e7)).toBe("pound");
+
+    // Sing (0x0e2 - 0x0e5)
+    expect(getJigglypuffSpecialType(0x0a, 0x0e2)).toBe("sing");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e3)).toBe("sing");
+
+    // Rest (0x0e9 - 0x0eb)
+    expect(getJigglypuffSpecialType(0x0a, 0x0ea)).toBe("rest");
+    expect(getJigglypuffSpecialType(0x0a, 0x0eb)).toBe("rest");
   });
 
   it("returns null for non-Jigglypuff or non-special states", () => {

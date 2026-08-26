@@ -73,8 +73,8 @@ export function computeJigglypuffFThrowEvents(
     let inThrowSequence = false;
     let throwAnimationActive = false;
     let baseComboCount = 0;
+    let baseThrowDamage = 0;
     let resetFrame: number | null = null;
-    let lastOppDamage = 0;
 
     for (let f = 0; f < replay.frames.length; f++) {
       const puffPost = replay.frames[f]?.ports[puffPort]?.post;
@@ -87,8 +87,8 @@ export function computeJigglypuffFThrowEvents(
         throwAnimationActive = true;
         inThrowSequence = true;
         resetFrame = null;
-        baseComboCount = Math.max(1, oppPost.comboHitCount);
-        lastOppDamage = oppPost.damagePercent;
+        baseComboCount = oppPost.comboHitCount;
+        baseThrowDamage = oppPost.damagePercent;
 
         events.push({
           frame: f,
@@ -97,79 +97,56 @@ export function computeJigglypuffFThrowEvents(
           puffPort,
           victimPort: oppPort,
         });
-      } else if (throwAnimationActive && !isThrowF) {
-        throwAnimationActive = false;
-        // The throw animation ended; update baseComboCount with the throw's final hit count
+      } else if (throwAnimationActive) {
+        // While Puff is performing ThrowF, update base values with the throw's release hit
         baseComboCount = Math.max(baseComboCount, oppPost.comboHitCount);
-        lastOppDamage = oppPost.damagePercent;
+        baseThrowDamage = Math.max(baseThrowDamage, oppPost.damagePercent);
+
+        if (!isThrowF) {
+          throwAnimationActive = false;
+        }
       }
 
-      if (inThrowSequence) {
-        // Direct combo continuation (combo hit count incremented while active)
-        if (oppPost.comboHitCount > baseComboCount) {
+      if (inThrowSequence && !throwAnimationActive) {
+        // Puff has finished the throw animation. Now check for follow-up hits.
+        const hitLanded =
+          oppPost.damagePercent > baseThrowDamage ||
+          (resetFrame === null
+            ? oppPost.comboHitCount > baseComboCount
+            : oppPost.comboHitCount > 0);
+
+        if (hitLanded) {
           events.push({
             frame: f,
             frameIndex: f,
             kind: "fthrow-success",
             puffPort,
             victimPort: oppPort,
-            followupHits: oppPost.comboHitCount,
+            followupHits: oppPost.comboHitCount || 1,
           });
           inThrowSequence = false;
           resetFrame = null;
-        } else if (!throwAnimationActive) {
-          if (oppPost.comboHitCount === 0) {
-            if (resetFrame === null) {
-              resetFrame = f;
-            } else {
-              // During the grace window: check if opponent received a new hit / damage from Puff
-              if (
-                oppPost.comboHitCount > 0 ||
-                oppPost.damagePercent > lastOppDamage
-              ) {
-                events.push({
-                  frame: f,
-                  frameIndex: f,
-                  kind: "fthrow-success",
-                  puffPort,
-                  victimPort: oppPort,
-                  followupHits: oppPost.comboHitCount || 1,
-                });
-                inThrowSequence = false;
-                resetFrame = null;
-              } else if (f - resetFrame >= FTHROW_GRACE_WINDOW_FRAMES) {
-                events.push({
-                  frame: f,
-                  frameIndex: f,
-                  kind: "fthrow-failure",
-                  puffPort,
-                  victimPort: oppPort,
-                });
-                inThrowSequence = false;
-                resetFrame = null;
-              }
-            }
-          } else if (resetFrame !== null) {
-            // Combo counter became > 0 during the grace window
+        } else if (oppPost.comboHitCount === 0) {
+          // If opponent combo counter is 0 or hitstun ended
+          if (resetFrame === null) {
+            resetFrame = f;
+          } else if (f - resetFrame >= FTHROW_GRACE_WINDOW_FRAMES) {
             events.push({
               frame: f,
               frameIndex: f,
-              kind: "fthrow-success",
+              kind: "fthrow-failure",
               puffPort,
               victimPort: oppPort,
-              followupHits: oppPost.comboHitCount,
             });
             inThrowSequence = false;
             resetFrame = null;
           }
         }
       }
-
-      lastOppDamage = oppPost.damagePercent;
     }
 
-    if (inThrowSequence && resetFrame !== null) {
-      // Replay ended during grace window without hit
+    if (inThrowSequence) {
+      // Replay ended without follow-up hit
       events.push({
         frame: replay.frames.length - 1,
         frameIndex: replay.frames.length - 1,

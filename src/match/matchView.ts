@@ -8,11 +8,18 @@ import { Camera } from "../camera.js";
 import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_LABELS, getPlayerColor } from "../players.js";
-import { StageRenderer, isCrouchState, isDeadState } from "../renderer.js";
+import {
+  StageRenderer,
+  isCrouchState,
+  isDeadState,
+  isPikachuCharacter,
+  extractAllQuickAttackPaths,
+} from "../renderer.js";
 import { characterSize } from "../characterSizes.js";
 import { actionStateName, characterName } from "../lookups.js";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { t } from "../i18n.js";
+import { computeKillCombos } from "../combos.js";
 import {
   computeNeutralHitEvents,
   computeNeutralHitsStats,
@@ -108,6 +115,7 @@ export class MatchViewController {
   private logFilterChips: HTMLDivElement;
   private stageOverlay: HTMLDivElement;
   private stageOverlayList: HTMLDivElement;
+  private qaOverlayExitBtn: HTMLButtonElement;
   private hudToggleBtn: HTMLButtonElement;
   private recoveryWidget: HTMLElement;
   private recoveryCollapseBtn: HTMLButtonElement;
@@ -125,10 +133,15 @@ export class MatchViewController {
   private ledgeTrapCollapseBtn: HTMLButtonElement;
   private ledgeTrapWidgetTitleEl: HTMLHeadingElement;
   private ledgeTrapList: HTMLDivElement;
+  private combosWidget: HTMLElement;
+  private combosCollapseBtn: HTMLButtonElement;
+  private combosWidgetTitleEl: HTMLHeadingElement;
+  private combosList: HTMLDivElement;
   private recoveryCollapsed = false;
   private edgeGuardCollapsed = false;
   private ledgeGetupCollapsed = false;
   private ledgeTrapCollapsed = false;
+  private combosCollapsed = false;
   private replayInfoWidget: HTMLElement;
   private replayInfoCollapseBtn: HTMLButtonElement;
   private replayInfoHeaderTitle: HTMLHeadingElement;
@@ -223,6 +236,12 @@ export class MatchViewController {
     this.stageOverlayList = document.getElementById(
       "stageOverlayList",
     ) as HTMLDivElement;
+    this.qaOverlayExitBtn = document.getElementById(
+      "qaOverlayExitBtn",
+    ) as HTMLButtonElement;
+    this.qaOverlayExitBtn.addEventListener("click", () => {
+      this.dismissQuickAttackOverlay();
+    });
     this.hudToggleBtn = document.getElementById(
       "hudToggleBtn",
     ) as HTMLButtonElement;
@@ -278,6 +297,15 @@ export class MatchViewController {
     this.ledgeTrapList = document.getElementById(
       "ledgeTrapList",
     ) as HTMLDivElement;
+
+    this.combosWidget = document.getElementById("combosWidget") as HTMLElement;
+    this.combosCollapseBtn = document.getElementById(
+      "combosCollapseBtn",
+    ) as HTMLButtonElement;
+    this.combosWidgetTitleEl = document.getElementById(
+      "combosWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.combosList = document.getElementById("combosList") as HTMLDivElement;
 
     this.replayInfoWidget = document.getElementById(
       "replayInfoWidget",
@@ -385,6 +413,15 @@ export class MatchViewController {
       );
     });
 
+    this.combosCollapseBtn.addEventListener("click", () => {
+      this.combosCollapsed = !this.combosCollapsed;
+      this.combosList.hidden = this.combosCollapsed;
+      this.combosCollapseBtn.classList.toggle(
+        "collapsed",
+        this.combosCollapsed,
+      );
+    });
+
     this.characterMetaCollapseBtn.addEventListener("click", () => {
       this.characterMetaCollapsed = !this.characterMetaCollapsed;
       this.characterMetaPanel.hidden = this.characterMetaCollapsed;
@@ -425,14 +462,20 @@ export class MatchViewController {
 
     this.hudToggleBtn.classList.toggle("active", this.hudOverlayEnabled);
 
-    this.playPauseBtn.addEventListener("click", () => this.playback?.toggle());
-    this.stepBackBtn.addEventListener("click", () =>
-      this.playback?.stepBackward(),
-    );
-    this.stepForwardBtn.addEventListener("click", () =>
-      this.playback?.stepForward(),
-    );
+    this.playPauseBtn.addEventListener("click", () => {
+      this.dismissQuickAttackOverlay();
+      this.playback?.toggle();
+    });
+    this.stepBackBtn.addEventListener("click", () => {
+      this.dismissQuickAttackOverlay();
+      this.playback?.stepBackward();
+    });
+    this.stepForwardBtn.addEventListener("click", () => {
+      this.dismissQuickAttackOverlay();
+      this.playback?.stepForward();
+    });
     this.scrubber.addEventListener("input", () => {
+      this.dismissQuickAttackOverlay();
       this.playback?.pause();
       this.playback?.seek(Number(this.scrubber.value));
     });
@@ -533,9 +576,18 @@ export class MatchViewController {
       this.ledgeTrapCollapseBtn.title = tr.situationCollapseTitle(
         tr.ledgeTrapWidgetTitle,
       );
+    if (this.combosWidgetTitleEl)
+      this.combosWidgetTitleEl.textContent = tr.combosWidgetTitle;
+    if (this.combosCollapseBtn)
+      this.combosCollapseBtn.title = tr.situationCollapseTitle(
+        tr.combosWidgetTitle,
+      );
     if (this.hudToggleBtn) {
       this.hudToggleBtn.textContent = tr.hudOverlay;
       this.hudToggleBtn.title = tr.hudOverlayTitle;
+    }
+    if (this.qaOverlayExitBtn) {
+      this.qaOverlayExitBtn.textContent = "✕ " + tr.hideQuickAttackOverlayBtn;
     }
     if (this.replayInfoHeaderTitle)
       this.replayInfoHeaderTitle.textContent = tr.replayInfoWidgetTitle;
@@ -561,6 +613,23 @@ export class MatchViewController {
         this.playback?.isPlaying ?? false,
         "jump",
       );
+    }
+  }
+
+  private dismissQuickAttackOverlay(): void {
+    if (this.stageRenderer.isQuickAttackOverlayActive()) {
+      this.stageRenderer.setQuickAttackOverlay(null);
+      this.stageRenderer.setHoveredQuickAttackIndex(null);
+      if (this.qaOverlayExitBtn) {
+        this.qaOverlayExitBtn.hidden = true;
+      }
+      if (this.currentReplay) {
+        this.renderCharacterMetaPanel(this.currentReplay);
+      }
+      if (this.lastFrame !== undefined) {
+        const currIdx = this.playback?.currentIndex ?? 0;
+        this.renderFrame(this.lastFrame, currIdx, true);
+      }
     }
   }
 
@@ -626,26 +695,42 @@ export class MatchViewController {
   ): void {
     this.lastFrame = frame;
     const targets: Array<{ x: number; y: number }> = [];
-    for (const panel of this.panels) {
-      const post = frame?.ports[panel.port]?.post;
-      if (
-        !post ||
-        isDeadState(post.actionStateId) ||
-        post.stocksRemaining < 0
-      ) {
-        continue;
+    if (this.stageRenderer.isQuickAttackOverlayActive()) {
+      const overlayPaths = this.stageRenderer.getQuickAttackOverlayPaths();
+      if (overlayPaths && overlayPaths.length > 0) {
+        for (const path of overlayPaths) {
+          for (const pt of path.points) {
+            targets.push(pt);
+          }
+        }
       }
-      const size = characterSize(post.characterId);
-      const crouching = isCrouchState(post.actionStateId);
-      const height = size.height * (crouching ? 0.5 : 1.0);
-      const halfWidth = size.width / 2;
+      // Include stage boundaries and upper platform area so stage is well framed
+      targets.push({ x: -400, y: 0 }, { x: 400, y: 0 }, { x: 0, y: 250 });
+    } else {
+      for (const panel of this.panels) {
+        const post = frame?.ports[panel.port]?.post;
+        if (
+          !post ||
+          isDeadState(post.actionStateId) ||
+          post.stocksRemaining < 0
+        ) {
+          continue;
+        }
+        const size = characterSize(post.characterId);
+        const crouching = isCrouchState(post.actionStateId);
+        const height = size.height * (crouching ? 0.5 : 1.0);
+        const halfWidth = size.width / 2;
 
-      targets.push(
-        { x: post.positionX - halfWidth, y: post.positionY },
-        { x: post.positionX + halfWidth, y: post.positionY + height },
-      );
+        targets.push(
+          { x: post.positionX - halfWidth, y: post.positionY },
+          { x: post.positionX + halfWidth, y: post.positionY + height },
+        );
+      }
     }
-    this.camera.update(targets, snap);
+    this.camera.update(
+      targets,
+      snap || this.stageRenderer.isQuickAttackOverlayActive(),
+    );
 
     this.stageRenderer.render(
       this.camera,
@@ -656,6 +741,11 @@ export class MatchViewController {
       _frameIndex,
       this.perspectivePort,
     );
+
+    if (this.qaOverlayExitBtn) {
+      this.qaOverlayExitBtn.hidden =
+        !this.stageRenderer.isQuickAttackOverlayActive();
+    }
 
     const tr = t();
     for (const panel of this.panels) {
@@ -990,7 +1080,18 @@ export class MatchViewController {
       btn.textContent = name;
 
       btn.addEventListener("click", () => {
+        const wasOverlayActive =
+          this.stageRenderer.isQuickAttackOverlayActive();
         this.perspectivePort = port;
+        const newCharId = replay.gameStart.ports[port]?.characterId;
+        if (wasOverlayActive && isPikachuCharacter(newCharId)) {
+          const newPaths = extractAllQuickAttackPaths(replay, port, true);
+          this.stageRenderer.setQuickAttackOverlay(newPaths);
+          this.stageRenderer.setHoveredQuickAttackIndex(null);
+        } else {
+          this.stageRenderer.setQuickAttackOverlay(null);
+          this.stageRenderer.setHoveredQuickAttackIndex(null);
+        }
         this.onPerspectiveChangedCb?.(port);
         this.updatePlayerPanelColors();
         this.renderStatsPanel(replay);
@@ -1177,6 +1278,7 @@ export class MatchViewController {
       this.edgeGuardWidget.hidden = true;
       this.ledgeGetupWidget.hidden = true;
       this.ledgeTrapWidget.hidden = true;
+      this.renderCombosPanel(replay);
       this.renderCharacterMetaPanel(replay);
       return;
     }
@@ -1402,6 +1504,7 @@ export class MatchViewController {
     );
 
     this.buildSituationWidgets(replay);
+    this.renderCombosPanel(replay);
     this.renderCharacterMetaPanel(replay);
   }
 
@@ -1600,6 +1703,7 @@ export class MatchViewController {
         row.appendChild(badgeEl);
 
         row.addEventListener("click", () => {
+          this.dismissQuickAttackOverlay();
           // Seek 1.5 seconds (90 frames at 60fps) before the situation began and play automatically
           const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
           this.playback?.seek(targetFrameIndex);
@@ -1630,6 +1734,71 @@ export class MatchViewController {
       ledgeTrapSituations,
       (outcome) => outcome === "failure",
     );
+  }
+
+  private renderCombosPanel(replay: Replay): void {
+    const tr = t();
+    this.combosList.innerHTML = "";
+
+    if (replay.frames.length === 0) {
+      this.combosWidget.hidden = true;
+      return;
+    }
+
+    const allCombos = computeKillCombos(replay);
+    const combos =
+      this.perspectivePort !== null
+        ? allCombos.filter((c) => c.attackerPort === this.perspectivePort)
+        : allCombos;
+
+    this.combosWidget.hidden = false;
+
+    if (combos.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "situation-empty";
+      empty.textContent = tr.noCombos;
+      this.combosList.appendChild(empty);
+      return;
+    }
+
+    combos.forEach((c, index) => {
+      const row = document.createElement("div");
+      row.className = "situation-row";
+
+      const indexEl = document.createElement("span");
+      indexEl.className = "situation-index";
+      indexEl.textContent = `#${index + 1}`;
+
+      const timeEl = document.createElement("span");
+      timeEl.className = "situation-time";
+      timeEl.textContent = `${formatElapsed(c.startFrameIndex)} (${c.startFrame}F)`;
+
+      const hitsEl = document.createElement("span");
+      hitsEl.className = "combo-hits-badge";
+      hitsEl.textContent = tr.comboHitsBadge(c.hitCount);
+
+      const dmgEl = document.createElement("span");
+      dmgEl.className = "combo-damage";
+      dmgEl.textContent = `${Math.round(c.startDamage)}% → ${Math.round(c.endDamage)}%`;
+
+      const koBadgeEl = document.createElement("span");
+      koBadgeEl.className = "combo-kill-badge";
+      koBadgeEl.textContent = tr.comboKillBadge;
+
+      row.appendChild(indexEl);
+      row.appendChild(timeEl);
+      row.appendChild(hitsEl);
+      row.appendChild(dmgEl);
+      row.appendChild(koBadgeEl);
+
+      row.addEventListener("click", () => {
+        this.dismissQuickAttackOverlay();
+        this.playback?.seek(c.jumpFrameIndex);
+        this.playback?.play();
+      });
+
+      this.combosList.appendChild(row);
+    });
   }
 
   private renderCharacterMetaPanel(replay: Replay): void {
@@ -1737,6 +1906,7 @@ export class MatchViewController {
           itemRow.appendChild(badgeEl);
 
           itemRow.addEventListener("click", () => {
+            this.dismissQuickAttackOverlay();
             const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
             this.playback?.seek(targetFrameIndex);
             this.playback?.play();
@@ -1850,8 +2020,107 @@ export class MatchViewController {
           itemRow.appendChild(badgeEl);
 
           itemRow.addEventListener("click", () => {
-            // Seek 1.5 seconds (90 frames at 60fps) before the shield pressure began and play automatically
+            this.dismissQuickAttackOverlay();
             const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
+            this.playback?.seek(targetFrameIndex);
+            this.playback?.play();
+          });
+
+          listEl.appendChild(itemRow);
+        });
+
+        this.characterMetaPanel.appendChild(listEl);
+      }
+      return;
+    }
+
+    if (isPikachuCharacter(charId)) {
+      this.characterMetaWidget.hidden = false;
+      this.characterMetaHeaderTitle.textContent = tr.characterMetaTitle(
+        characterName(charId),
+      );
+      this.characterMetaPanel.innerHTML = "";
+
+      const pikaPaths = extractAllQuickAttackPaths(
+        replay,
+        this.perspectivePort,
+        true,
+      );
+
+      const isOverlayActive = this.stageRenderer.isQuickAttackOverlayActive();
+      if (this.qaOverlayExitBtn) {
+        this.qaOverlayExitBtn.hidden = !isOverlayActive;
+      }
+
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = `qa-overlay-btn ${isOverlayActive ? "active" : ""}`;
+      toggleBtn.textContent = isOverlayActive
+        ? tr.hideQuickAttackOverlayBtn
+        : tr.overlayQuickAttackBtn;
+
+      toggleBtn.addEventListener("click", () => {
+        if (this.stageRenderer.isQuickAttackOverlayActive()) {
+          this.dismissQuickAttackOverlay();
+        } else {
+          this.playback?.pause();
+          this.stageRenderer.setQuickAttackOverlay(pikaPaths);
+          this.stageRenderer.setHoveredQuickAttackIndex(null);
+          if (this.qaOverlayExitBtn) {
+            this.qaOverlayExitBtn.hidden = false;
+          }
+          this.renderCharacterMetaPanel(replay);
+          if (this.lastFrame !== undefined) {
+            const currIdx = this.playback?.currentIndex ?? 0;
+            this.renderFrame(this.lastFrame, currIdx, true);
+          }
+        }
+      });
+
+      this.characterMetaPanel.appendChild(toggleBtn);
+
+      if (isOverlayActive && pikaPaths.length > 0) {
+        const listEl = document.createElement("div");
+        listEl.className = "situation-list qa-overlay-list";
+
+        pikaPaths.forEach((path) => {
+          const itemRow = document.createElement("div");
+          itemRow.className = "situation-row";
+
+          const indexEl = document.createElement("span");
+          indexEl.className = "situation-index";
+          indexEl.textContent = `#${path.index}`;
+
+          const timeEl = document.createElement("span");
+          timeEl.className = "situation-time";
+          timeEl.textContent = `${formatElapsed(path.startFrameIndex)} (${path.startFrame}F)`;
+
+          const zipsEl = document.createElement("span");
+          zipsEl.className = "situation-bracket bracket-under100";
+          zipsEl.textContent = `${path.zipCount} ${path.zipCount === 1 ? "zip" : "zips"}`;
+
+          itemRow.appendChild(indexEl);
+          itemRow.appendChild(timeEl);
+          itemRow.appendChild(zipsEl);
+
+          itemRow.addEventListener("mouseenter", () => {
+            this.stageRenderer.setHoveredQuickAttackIndex(path.index);
+            if (this.lastFrame !== undefined) {
+              const currIdx = this.playback?.currentIndex ?? 0;
+              this.renderFrame(this.lastFrame, currIdx, false);
+            }
+          });
+
+          itemRow.addEventListener("mouseleave", () => {
+            this.stageRenderer.setHoveredQuickAttackIndex(null);
+            if (this.lastFrame !== undefined) {
+              const currIdx = this.playback?.currentIndex ?? 0;
+              this.renderFrame(this.lastFrame, currIdx, false);
+            }
+          });
+
+          itemRow.addEventListener("click", () => {
+            this.dismissQuickAttackOverlay();
+            const targetFrameIndex = Math.max(0, path.startFrameIndex - 30);
             this.playback?.seek(targetFrameIndex);
             this.playback?.play();
           });
@@ -1946,6 +2215,11 @@ export class MatchViewController {
     const width = Math.max(200, Math.floor(rect.width));
     const height = Math.max(150, Math.floor(rect.height));
     this.stageRenderer.resize(width, height);
+    this.stageRenderer.setQuickAttackOverlay(null);
+    this.stageRenderer.setHoveredQuickAttackIndex(null);
+    if (this.qaOverlayExitBtn) {
+      this.qaOverlayExitBtn.hidden = true;
+    }
     this.camera = new Camera(width, height);
 
     this.buildPlayerPanels(replay);

@@ -172,9 +172,14 @@ function getCharacterSpecialStates(characterId: number): StateOption[] {
   // Jigglypuff
   if (characterId === 0x0a || characterId === 0x18) {
     return [
-      { id: 0x0dc, name: "Pound (Neutral-B)", category: "special" },
-      { id: 0x0e4, name: "Sing (Up-B)", category: "special" },
-      { id: 0x0e7, name: "Rest (Down-B)", category: "special" },
+      { id: 0x0dc, name: "Pound Ground (Neutral-B)", category: "special" },
+      { id: 0x0df, name: "Pound Air Straight", category: "special" },
+      { id: 0x0e1, name: "Pound Air Angled Up", category: "special" },
+      { id: 0x0e7, name: "Pound Air Angled Punch", category: "special" },
+      { id: 0x0e2, name: "Sing Ground (Up-B)", category: "special" },
+      { id: 0x0e3, name: "Sing Air (Up-B)", category: "special" },
+      { id: 0x0ea, name: "Rest Ground (Down-B)", category: "special" },
+      { id: 0x0eb, name: "Rest Air (Down-B)", category: "special" },
     ];
   }
 

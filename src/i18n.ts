@@ -218,10 +218,28 @@ export interface Translations {
   noSituations: string;
   situationCollapseTitle: (name: string) => string;
 
+  // Combos widget
+  combosWidgetTitle: string;
+  comboHitsBadge: (count: number) => string;
+  comboKillBadge: string;
+  combosCountChip: (count: number) => string;
+  noCombos: string;
+
+  // Pikachu Up-B Quick Attack Overlay
+  overlayQuickAttackBtn: string;
+  hideQuickAttackOverlayBtn: string;
+  quickAttackPathItem: (
+    idx: number,
+    time: string,
+    frame: number,
+    zips: number,
+  ) => string;
+
   // Replay Info widget
   replayInfoWidgetTitle: string;
   replayInfoFileLabel: string;
   replayInfoRecordedLabel: string;
+  finalStocksDetail: (yourStocks: number, oppStocks: number) => string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -417,7 +435,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     gamesWonFraction: (w, tot) => `${w} / ${tot} won`,
     winner: (name) => `Winner: ${name}`,
     win: "WIN",
-    loss: "LOSS",
+    loss: "LOSE",
     tie: "TIE",
     matchupAverage: "Matchup avg",
     vsMatchup: (v) => `${v} vs matchup`,
@@ -444,9 +462,23 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noSituations: "None in this replay.",
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
 
+    combosWidgetTitle: "Kill Combos",
+    comboHitsBadge: (count) => `${count} hits`,
+    comboKillBadge: "KO",
+    combosCountChip: (count) =>
+      `${count} ${count === 1 ? "kill combo" : "kill combos"}`,
+    noCombos: "No kill combos (≥3 hits) in this match.",
+
+    overlayQuickAttackBtn: "Overlay Quick Attack Paths",
+    hideQuickAttackOverlayBtn: "Exit Overlay",
+    quickAttackPathItem: (idx, time, frame, zips) =>
+      `#${idx} ${time} (${frame}F) · ${zips} ${zips === 1 ? "zip" : "zips"}`,
+
     replayInfoWidgetTitle: "Replay Info",
     replayInfoFileLabel: "File",
     replayInfoRecordedLabel: "Recorded",
+    finalStocksDetail: (yourStocks, oppStocks) =>
+      `Stocks: ${yourStocks} – ${oppStocks}`,
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -657,9 +689,22 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noSituations: "このリプレイには該当なし。",
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
 
+    combosWidgetTitle: "撃墜コンボ",
+    comboHitsBadge: (count) => `${count}ヒット`,
+    comboKillBadge: "撃墜",
+    combosCountChip: (count) => `${count} 撃墜コンボ`,
+    noCombos: "この試合で撃墜コンボ（3ヒット以上）はありません。",
+
+    overlayQuickAttackBtn: "電光石火の軌跡を重ねて表示",
+    hideQuickAttackOverlayBtn: "重ねて表示を終了",
+    quickAttackPathItem: (idx, time, frame, zips) =>
+      `#${idx} ${time} (${frame}F) · ${zips}回ジップ`,
+
     replayInfoWidgetTitle: "リプレイ情報",
     replayInfoFileLabel: "ファイル",
     replayInfoRecordedLabel: "録画日時",
+    finalStocksDetail: (yourStocks, oppStocks) =>
+      `残ストック: ${yourStocks} – ${oppStocks}`,
   },
 };
 
