@@ -1686,7 +1686,7 @@ export class StageRenderer {
       post.actionStateId,
       post.hitstunCounter ?? 0,
     );
-    const inCombo = inHitstun && (post.comboHitCount ?? 0) > 0;
+    const inCombo = inHitstun || (post.comboHitCount ?? 0) > 0;
     const comboHits = inHitstun ? (post.comboHitCount ?? 0) : 0;
     const isSpecial = isSpecialState(post.actionStateId);
     const isLanding = isLandingState(post.actionStateId);
@@ -1959,12 +1959,12 @@ export class StageRenderer {
       ctx.fill();
 
       if (inCombo) {
-        // Active combo hit stun electric outline & outer glow (taking damage)
+        // Active hitstun / combo electric outline & outer glow (taking damage)
         ctx.save();
         ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 5.0; // 2x thicker for legibility
         ctx.shadowColor = "rgba(255, 120, 0, 0.85)";
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 10;
         ctx.stroke();
         ctx.restore();
 
@@ -1973,8 +1973,8 @@ export class StageRenderer {
         ctx.lineTo(backX, topY);
         ctx.lineTo(backX, y);
         ctx.closePath();
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(255, 220, 180, 0.9)";
+        ctx.lineWidth = 1.8;
         ctx.stroke();
       } else if (isTechRoll) {
         // High-speed vibrant cyan/teal tech roll aura
@@ -5421,9 +5421,9 @@ export class StageRenderer {
     if (inCombo) {
       ctx.save();
       ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 5.0; // 2x thicker for high legibility during spins & tumble
       ctx.shadowColor = "rgba(255, 120, 0, 0.85)";
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 10;
       ctx.beginPath();
       ctx.ellipse(
         posX,
@@ -5434,6 +5434,21 @@ export class StageRenderer {
         0,
         Math.PI * 2,
       );
+      ctx.stroke();
+
+      // Bright inner core highlight for extra legibility
+      ctx.beginPath();
+      ctx.ellipse(
+        posX,
+        y - 0.5 * h,
+        Math.max(0.1, 0.8 * w),
+        Math.max(0.1, 0.5 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = "rgba(255, 220, 180, 0.9)";
+      ctx.lineWidth = 1.8;
       ctx.stroke();
       ctx.restore();
     } else if (isRoll) {
