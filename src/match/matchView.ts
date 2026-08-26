@@ -857,15 +857,39 @@ export class MatchViewController {
     kind: "neutral-hit" | "entered" | "success" | "failure";
   } {
     const tr = t();
-    if (ev.kind === "neutral-hit") {
-      return {
-        text: `${ev.frame} — ${ev.hitType === "grab" ? tr.neutralHitGrab : tr.neutralHitAttack}`,
-        kind: "neutral-hit",
-      };
-    }
-
     const name = (port: PortIndex) =>
       replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
+
+    if (ev.kind === "neutral-hit") {
+      let reasonLabel: string;
+      switch (ev.reason) {
+        case "landing-lag":
+          reasonLabel = tr.neutralReasonLandingLag;
+          break;
+        case "whiff-punish":
+          reasonLabel = tr.neutralReasonWhiffPunish;
+          break;
+        case "jump-punish":
+          reasonLabel = tr.neutralReasonJumpPunish;
+          break;
+        case "standing-hit":
+          reasonLabel = tr.neutralReasonStandingHit;
+          break;
+        default:
+          reasonLabel =
+            ev.hitType === "grab" ? tr.neutralHitGrab : tr.neutralHitAttack;
+          break;
+      }
+
+      const attackerName = name(ev.attackerPort);
+      const isLanded = perspective === null || ev.attackerPort === perspective;
+      const text = `${ev.frame} — ${attackerName}: ${reasonLabel}`;
+
+      return {
+        text,
+        kind: isLanded ? "neutral-hit" : "failure",
+      };
+    }
 
     if (
       ev.kind === "ledge-getup-entered" ||
@@ -1829,12 +1853,6 @@ export class MatchViewController {
       timeEl.className = "situation-time";
       timeEl.textContent = `${formatElapsed(e.frameIndex)} (${e.frame}F)`;
 
-      const playersEl = document.createElement("span");
-      playersEl.className = "situation-players";
-      const attackerName = PORT_LABELS[e.attackerPort];
-      const victimName = PORT_LABELS[e.victimPort];
-      playersEl.textContent = `${attackerName} → ${victimName}`;
-
       const badgeEl = document.createElement("span");
       switch (e.reason) {
         case "landing-lag":
@@ -1864,7 +1882,6 @@ export class MatchViewController {
 
       row.appendChild(indexEl);
       row.appendChild(timeEl);
-      row.appendChild(playersEl);
       row.appendChild(badgeEl);
 
       row.addEventListener("click", () => {
