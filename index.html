@@ -1708,6 +1708,61 @@
         border-color: #fbbf24;
         color: #fbbf24;
       }
+      .neutral-badge-landing {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(168, 85, 247, 0.18);
+        color: #c084fc;
+        border: 1px solid rgba(168, 85, 247, 0.35);
+        font-family: monospace, system-ui, sans-serif;
+        flex-shrink: 0;
+      }
+      .neutral-badge-whiff {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(245, 158, 11, 0.18);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        font-family: monospace, system-ui, sans-serif;
+        flex-shrink: 0;
+      }
+      .neutral-badge-jump {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(56, 189, 248, 0.18);
+        color: #38bdf8;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        font-family: monospace, system-ui, sans-serif;
+        flex-shrink: 0;
+      }
+      .neutral-badge-standing {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(34, 197, 94, 0.18);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.35);
+        font-family: monospace, system-ui, sans-serif;
+        flex-shrink: 0;
+      }
+      .neutral-badge-unknown {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(148, 163, 184, 0.15);
+        color: #94a3b8;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        font-family: monospace, system-ui, sans-serif;
+        flex-shrink: 0;
+      }
       .qa-overlay-btn {
         width: 100%;
         background: #22252f;
@@ -2449,6 +2504,21 @@
               </button>
             </div>
             <div id="ledgeTrapList" class="situation-list"></div>
+          </section>
+          <section id="neutralHitsWidget" class="situation-widget" hidden>
+            <div class="situation-widget-header">
+              <button
+                id="neutralHitsCollapseBtn"
+                class="situation-collapse-btn"
+                title="Collapse / expand Neutral Openings"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="neutralHitsWidgetTitle" class="situation-widget-title">
+                  Neutral Openings
+                </h2>
+              </button>
+            </div>
+            <div id="neutralHitsList" class="situation-list"></div>
           </section>
           <section id="combosWidget" class="situation-widget" hidden>
             <div class="situation-widget-header">

@@ -138,6 +138,12 @@ export class MatchViewController {
   private ledgeTrapCollapseBtn: HTMLButtonElement;
   private ledgeTrapWidgetTitleEl: HTMLHeadingElement;
   private ledgeTrapList: HTMLDivElement;
+  private neutralHitsWidget: HTMLElement;
+  private neutralHitsCollapseBtn: HTMLButtonElement;
+  private neutralHitsWidgetTitleEl: HTMLHeadingElement;
+  private neutralHitsList: HTMLDivElement;
+  private neutralHitsCollapsed = false;
+  private neutralHitEvents: NeutralHitEvent[] = [];
   private combosWidget: HTMLElement;
   private combosCollapseBtn: HTMLButtonElement;
   private combosWidgetTitleEl: HTMLHeadingElement;
@@ -310,6 +316,19 @@ export class MatchViewController {
       "ledgeTrapList",
     ) as HTMLDivElement;
 
+    this.neutralHitsWidget = document.getElementById(
+      "neutralHitsWidget",
+    ) as HTMLElement;
+    this.neutralHitsCollapseBtn = document.getElementById(
+      "neutralHitsCollapseBtn",
+    ) as HTMLButtonElement;
+    this.neutralHitsWidgetTitleEl = document.getElementById(
+      "neutralHitsWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.neutralHitsList = document.getElementById(
+      "neutralHitsList",
+    ) as HTMLDivElement;
+
     this.combosWidget = document.getElementById("combosWidget") as HTMLElement;
     this.combosCollapseBtn = document.getElementById(
       "combosCollapseBtn",
@@ -431,6 +450,15 @@ export class MatchViewController {
       this.ledgeTrapCollapseBtn.classList.toggle(
         "collapsed",
         this.ledgeTrapCollapsed,
+      );
+    });
+
+    this.neutralHitsCollapseBtn.addEventListener("click", () => {
+      this.neutralHitsCollapsed = !this.neutralHitsCollapsed;
+      this.neutralHitsList.hidden = this.neutralHitsCollapsed;
+      this.neutralHitsCollapseBtn.classList.toggle(
+        "collapsed",
+        this.neutralHitsCollapsed,
       );
     });
 
@@ -602,6 +630,12 @@ export class MatchViewController {
     if (this.ledgeTrapCollapseBtn)
       this.ledgeTrapCollapseBtn.title = tr.situationCollapseTitle(
         tr.ledgeTrapWidgetTitle,
+      );
+    if (this.neutralHitsWidgetTitleEl)
+      this.neutralHitsWidgetTitleEl.textContent = tr.neutralHitsWidgetTitle;
+    if (this.neutralHitsCollapseBtn)
+      this.neutralHitsCollapseBtn.title = tr.situationCollapseTitle(
+        tr.neutralHitsWidgetTitle,
       );
     if (this.combosWidgetTitleEl)
       this.combosWidgetTitleEl.textContent = tr.combosWidgetTitle;
@@ -1309,6 +1343,7 @@ export class MatchViewController {
       this.edgeGuardWidget.hidden = true;
       this.ledgeGetupWidget.hidden = true;
       this.ledgeTrapWidget.hidden = true;
+      this.renderNeutralHitsPanel(replay);
       this.renderCombosPanel(replay);
       this.renderDIPanel(replay);
       this.renderCharacterMetaPanel(replay);
@@ -1536,6 +1571,7 @@ export class MatchViewController {
     );
 
     this.buildSituationWidgets(replay);
+    this.renderNeutralHitsPanel(replay);
     this.renderCombosPanel(replay);
     this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
@@ -1767,6 +1803,92 @@ export class MatchViewController {
       ledgeTrapSituations,
       (outcome) => outcome === "failure",
     );
+  }
+
+  private renderNeutralHitsPanel(replay: Replay): void {
+    const tr = t();
+    this.neutralHitsList.innerHTML = "";
+
+    if (replay.frames.length === 0 || this.neutralHitEvents.length === 0) {
+      this.neutralHitsWidget.hidden = true;
+      return;
+    }
+
+    const filteredEvents =
+      this.perspectivePort !== null
+        ? this.neutralHitEvents.filter(
+            (e) => e.attackerPort === this.perspectivePort,
+          )
+        : this.neutralHitEvents;
+
+    this.neutralHitsWidget.hidden = false;
+
+    if (filteredEvents.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "situation-empty";
+      empty.textContent = tr.noNeutralHits;
+      this.neutralHitsList.appendChild(empty);
+      return;
+    }
+
+    filteredEvents.forEach((e, index) => {
+      const row = document.createElement("div");
+      row.className = "situation-row";
+
+      const indexEl = document.createElement("span");
+      indexEl.className = "situation-index";
+      indexEl.textContent = `#${index + 1}`;
+
+      const timeEl = document.createElement("span");
+      timeEl.className = "situation-time";
+      timeEl.textContent = `${formatElapsed(e.frameIndex)} (${e.frame}F)`;
+
+      const playersEl = document.createElement("span");
+      playersEl.className = "situation-players";
+      const attackerName = PORT_LABELS[e.attackerPort];
+      const victimName = PORT_LABELS[e.victimPort];
+      playersEl.textContent = `${attackerName} → ${victimName}`;
+
+      const badgeEl = document.createElement("span");
+      switch (e.reason) {
+        case "landing-lag":
+          badgeEl.className = "neutral-badge-landing";
+          badgeEl.textContent = tr.neutralReasonLandingLag;
+          break;
+        case "whiff-punish":
+          badgeEl.className = "neutral-badge-whiff";
+          badgeEl.textContent = tr.neutralReasonWhiffPunish;
+          break;
+        case "jump-punish":
+          badgeEl.className = "neutral-badge-jump";
+          badgeEl.textContent = tr.neutralReasonJumpPunish;
+          break;
+        case "standing-hit":
+          badgeEl.className = "neutral-badge-standing";
+          badgeEl.textContent = tr.neutralReasonStandingHit;
+          break;
+        default:
+          badgeEl.className = "neutral-badge-unknown";
+          badgeEl.textContent = tr.neutralReasonUnknown;
+          break;
+      }
+      if (e.reasonDetail) {
+        badgeEl.title = e.reasonDetail;
+      }
+
+      row.appendChild(indexEl);
+      row.appendChild(timeEl);
+      row.appendChild(playersEl);
+      row.appendChild(badgeEl);
+
+      row.addEventListener("click", () => {
+        this.dismissQuickAttackOverlay();
+        this.playback?.seek(e.frameIndex);
+        this.playback?.play();
+      });
+
+      this.neutralHitsList.appendChild(row);
+    });
   }
 
   private renderCombosPanel(replay: Replay): void {
@@ -2479,6 +2601,7 @@ export class MatchViewController {
     const ledgeEvents = computeLedgeTrapEvents(replay);
     const angelEvents = computeAngelInvincibilityEvents(replay);
     const neutralEvents = computeNeutralHitEvents(replay);
+    this.neutralHitEvents = neutralEvents;
     const puffEvents = computeJigglypuffFThrowEvents(replay);
     const shieldEvents = computeShieldPressureEvents(replay);
     this.matchEvents = [

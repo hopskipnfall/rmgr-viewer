@@ -218,6 +218,15 @@ export interface Translations {
   noSituations: string;
   situationCollapseTitle: (name: string) => string;
 
+  // Neutral Openings widget
+  neutralHitsWidgetTitle: string;
+  noNeutralHits: string;
+  neutralReasonLandingLag: string;
+  neutralReasonWhiffPunish: string;
+  neutralReasonJumpPunish: string;
+  neutralReasonStandingHit: string;
+  neutralReasonUnknown: string;
+
   // Combos widget
   combosWidgetTitle: string;
   comboHitsBadge: (count: number) => string;
@@ -470,6 +479,14 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noSituations: "None in this replay.",
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
 
+    neutralHitsWidgetTitle: "Neutral Openings",
+    noNeutralHits: "No neutral hits in this match.",
+    neutralReasonLandingLag: "Landing Lag",
+    neutralReasonWhiffPunish: "Whiff Punish",
+    neutralReasonJumpPunish: "Jump Punish",
+    neutralReasonStandingHit: "Standing Hit",
+    neutralReasonUnknown: "Neutral Hit",
+
     combosWidgetTitle: "Kill Combos",
     comboHitsBadge: (count) => `${count} hits`,
     comboKillBadge: "KO",
@@ -704,6 +721,14 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationOpenBadge: "…",
     noSituations: "このリプレイには該当なし。",
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
+
+    neutralHitsWidgetTitle: "ニュートラルからの差し込み",
+    noNeutralHits: "この試合で差し込みヒットはありません。",
+    neutralReasonLandingLag: "着地隙狩り",
+    neutralReasonWhiffPunish: "後隙狩り (空振り)",
+    neutralReasonJumpPunish: "ジャンプ狩り",
+    neutralReasonStandingHit: "地上ヒット",
+    neutralReasonUnknown: "ニュートラルヒット",
 
     combosWidgetTitle: "撃墜コンボ",
     comboHitsBadge: (count) => `${count}ヒット`,
