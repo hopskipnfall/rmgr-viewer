@@ -339,11 +339,27 @@ export function calculateHitDI(
   const angleRad = Math.atan2(dy, dx);
   const angleDeg = (angleRad * 180) / Math.PI;
   const endPos = { x: startPos.x + dx, y: startPos.y + dy };
-
   const attackerX = attackerPost ? attackerPost.positionX : null;
 
-  const cardinal = classifyDICardinal(dx, dy);
-  const relative = classifyDIRelative(dx, dy, startPos.x, attackerX);
+  // If displacement was constrained (e.g. grounded character DIing down into the floor),
+  // derive direction from the actual joystick stick vector on activation frames.
+  let effectiveDx = dx;
+  let effectiveDy = dy;
+  if (Math.hypot(dx, dy) < 8 && inputCount > 0) {
+    const activeInputs = inputs.filter((i) => i.isActivation);
+    if (activeInputs.length > 0) {
+      effectiveDx = activeInputs.reduce((sum, i) => sum + i.stickX, 0);
+      effectiveDy = activeInputs.reduce((sum, i) => sum + i.stickY, 0);
+    }
+  }
+
+  const cardinal = classifyDICardinal(effectiveDx, effectiveDy);
+  const relative = classifyDIRelative(
+    effectiveDx,
+    effectiveDy,
+    startPos.x,
+    attackerX,
+  );
 
   // Theoretical max displacement per DI frame in 64: max ~1 activation per 2 frames, ~168 units per activation
   const maxPossibleActivations = Math.max(1, Math.floor(diWindow / 2) + 1);
