@@ -1257,10 +1257,19 @@ describe("getKirbySpecialType", () => {
 
 describe("getJigglypuffSpecialType", () => {
   it("classifies Jigglypuff special moves correctly", () => {
+    // Pound variations (0x0dc - 0x0e1, 0x0e6 - 0x0e8)
     expect(getJigglypuffSpecialType(0x0a, 0x0dc)).toBe("pound");
-    expect(getJigglypuffSpecialType(0x0a, 0x0df)).toBe("sing");
-    expect(getJigglypuffSpecialType(0x0a, 0x0e2)).toBe("rest");
-    expect(getJigglypuffSpecialType(0x0a, 0x0e7)).toBe("rest");
+    expect(getJigglypuffSpecialType(0x0a, 0x0df)).toBe("pound");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e1)).toBe("pound");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e7)).toBe("pound");
+
+    // Sing (0x0e2 - 0x0e5)
+    expect(getJigglypuffSpecialType(0x0a, 0x0e2)).toBe("sing");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e3)).toBe("sing");
+
+    // Rest (0x0e9 - 0x0eb)
+    expect(getJigglypuffSpecialType(0x0a, 0x0ea)).toBe("rest");
+    expect(getJigglypuffSpecialType(0x0a, 0x0eb)).toBe("rest");
   });
 
   it("returns null for non-Jigglypuff or non-special states", () => {

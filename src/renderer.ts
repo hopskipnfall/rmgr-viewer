@@ -668,34 +668,19 @@ export function getJigglypuffSpecialType(
   actionStateId: number,
 ): JigglypuffSpecialType | null {
   if (!isJigglypuffCharacter(characterId)) return null;
-  // Neutral-B: Pound (0x0dc - 0x0de)
+  // Neutral-B: Pound (0x0dc - 0x0e1, 0x0e6 - 0x0e8: Straight, Angled Up, Angled Down, Ground & Air)
   if (
-    actionStateId === 0x0dc ||
-    actionStateId === 0x0dd ||
-    actionStateId === 0x0de
+    (actionStateId >= 0x0dc && actionStateId <= 0x0e1) ||
+    (actionStateId >= 0x0e6 && actionStateId <= 0x0e8)
   ) {
     return "pound";
   }
-  // Up-B: Sing (0x0df - 0x0e1, 0x0e4 - 0x0e6)
-  if (
-    actionStateId === 0x0df ||
-    actionStateId === 0x0e0 ||
-    actionStateId === 0x0e1 ||
-    actionStateId === 0x0e4 ||
-    actionStateId === 0x0e5 ||
-    actionStateId === 0x0e6
-  ) {
+  // Up-B: Sing (0x0e2 - 0x0e5: Ground & Air)
+  if (actionStateId >= 0x0e2 && actionStateId <= 0x0e5) {
     return "sing";
   }
-  // Down-B: Rest (0x0e2 - 0x0e4, 0x0e7 - 0x0e9)
-  if (
-    actionStateId === 0x0e2 ||
-    actionStateId === 0x0e3 ||
-    actionStateId === 0x0e4 ||
-    actionStateId === 0x0e7 ||
-    actionStateId === 0x0e8 ||
-    actionStateId === 0x0e9
-  ) {
+  // Down-B: Rest (0x0e9 - 0x0eb: Ground & Air, Sleep)
+  if (actionStateId >= 0x0e9 && actionStateId <= 0x0eb) {
     return "rest";
   }
   return null;
@@ -2170,6 +2155,7 @@ export class StageRenderer {
         color,
         puffSpecial,
         post.actionFrameCounter,
+        post.actionStateId,
       );
       if (puffSpecial === "sing" || puffSpecial === "rest") {
         labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
@@ -7634,6 +7620,7 @@ export class StageRenderer {
     _color: string,
     specialType: JigglypuffSpecialType,
     frameCounter: number,
+    actionStateId?: number,
   ): void {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
@@ -7641,15 +7628,29 @@ export class StageRenderer {
 
     if (specialType === "pound") {
       ctx.save();
-      // Sideways Punch (Pound): Dynamic horizontal lunging fist with punch strike arc & impact sparks
+      // Sideways Punch (Pound): Dynamic horizontal/angled lunging fist with punch strike arc & impact sparks
+      const isAngledUp =
+        actionStateId === 0x0dd ||
+        actionStateId === 0x0e0 ||
+        actionStateId === 0x0e1 ||
+        actionStateId === 0x0e7;
+      const isAngledDown =
+        actionStateId === 0x0de || actionStateId === 0x0e8;
+
+      const angleOffsetY = isAngledUp
+        ? -heightPx * 0.18
+        : isAngledDown
+          ? heightPx * 0.15
+          : -heightPx * 0.05;
+
       const punchProgress = Math.min(1, frameCounter / 15);
       const extendDist =
         halfWidth * (0.35 + 0.85 * Math.sin(punchProgress * Math.PI * 0.75));
       const fistX = noseX + dir * extendDist;
-      const fistY = centerY - heightPx * 0.05;
+      const fistY = centerY + angleOffsetY;
       const armHeight = Math.max(4, heightPx * 0.18);
 
-      // 1. Horizontal thrust speed lines
+      // 1. Horizontal/Angled thrust speed lines
       ctx.beginPath();
       ctx.moveTo(x + dir * (halfWidth * 0.2), fistY - armHeight * 0.85);
       ctx.lineTo(fistX + dir * 6, fistY - armHeight * 0.85);
@@ -7661,12 +7662,12 @@ export class StageRenderer {
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // 2. Punching Arm (extended from body)
+      // 2. Punching Arm (extended from body to fist)
       ctx.beginPath();
-      ctx.moveTo(x + dir * (halfWidth * 0.4), fistY - armHeight * 0.5);
+      ctx.moveTo(x + dir * (halfWidth * 0.4), centerY - armHeight * 0.4);
       ctx.lineTo(fistX, fistY - armHeight * 0.6);
       ctx.lineTo(fistX, fistY + armHeight * 0.6);
-      ctx.lineTo(x + dir * (halfWidth * 0.4), fistY + armHeight * 0.5);
+      ctx.lineTo(x + dir * (halfWidth * 0.4), centerY + armHeight * 0.4);
       ctx.closePath();
       ctx.fillStyle = "#f472b6";
       ctx.fill();
@@ -7676,13 +7677,19 @@ export class StageRenderer {
 
       // 3. Clenched Fist at punch tip
       const fistR = Math.max(6, halfWidth * 0.4);
+      const rotationAngle = isAngledUp
+        ? (facingRight ? -0.28 : 0.28)
+        : isAngledDown
+          ? (facingRight ? 0.28 : -0.28)
+          : 0;
+
       ctx.beginPath();
       ctx.ellipse(
         fistX,
         fistY,
         fistR * 1.1,
         fistR * 0.9,
-        0,
+        rotationAngle,
         0,
         Math.PI * 2,
       );
@@ -7723,7 +7730,7 @@ export class StageRenderer {
         fistY,
         Math.max(3, arcR * 0.45),
         arcR,
-        0,
+        rotationAngle,
         facingRight ? -Math.PI * 0.45 : Math.PI * 0.55,
         facingRight ? Math.PI * 0.45 : Math.PI * 1.45,
       );
@@ -7742,7 +7749,7 @@ export class StageRenderer {
         fistY,
         sparkRadius * 0.6,
         sparkRadius,
-        0,
+        rotationAngle,
         0,
         Math.PI * 2,
       );
