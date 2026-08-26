@@ -1865,17 +1865,27 @@
           flex-direction: row;
           flex-wrap: wrap;
           max-height: 45%;
+          gap: 10px;
         }
-        #matchStats {
-          width: 100%;
+        #perspectiveWidget,
+        #matchStats,
+        .situation-widget,
+        #characterMetaWidget,
+        #logFilterWidget,
+        #replayInfoWidget {
+          flex: 1 1 280px;
+          min-width: 0;
+          width: auto;
         }
         #players {
           width: 100%;
           flex-direction: row;
           flex-wrap: wrap;
+          gap: 10px;
         }
         .player-panel {
           flex: 1 1 260px;
+          min-width: 0;
         }
         #frameLabel {
           display: none;
@@ -1887,6 +1897,15 @@
       }
 
       @media (max-width: 480px) {
+        #perspectiveWidget,
+        #matchStats,
+        .situation-widget,
+        #characterMetaWidget,
+        #logFilterWidget,
+        #replayInfoWidget,
+        .player-panel {
+          flex: 1 1 100%;
+        }
         footer button {
           padding: 6px 8px;
           font-size: 12px;
