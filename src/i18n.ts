@@ -222,6 +222,9 @@ export interface Translations {
 
   // Neutral Openings widget
   neutralHitsWidgetTitle: string;
+  neutralFilterAll: (count: number) => string;
+  neutralFilterOpenings: (count: number) => string;
+  neutralFilterPunishes: (count: number) => string;
   neutralOpeningsGroupTitle: (count: number) => string;
   neutralPunishesGroupTitle: (count: number) => string;
   noNeutralHits: string;
@@ -489,6 +492,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
 
     neutralHitsWidgetTitle: "Neutral Game",
+    neutralFilterAll: (count) => `All (${count})`,
+    neutralFilterOpenings: (count) => `Openings (${count})`,
+    neutralFilterPunishes: (count) => `Punishes (${count})`,
     neutralOpeningsGroupTitle: (count) => `Neutral Openings (${count})`,
     neutralPunishesGroupTitle: (count) => `Neutral Punishes Taken (${count})`,
     noNeutralHits: "No neutral hits in this match.",
@@ -739,6 +745,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
 
     neutralHitsWidgetTitle: "ニュートラルの攻防",
+    neutralFilterAll: (count) => `すべて (${count})`,
+    neutralFilterOpenings: (count) => `差し込み (${count})`,
+    neutralFilterPunishes: (count) => `被弾 (${count})`,
     neutralOpeningsGroupTitle: (count) => `差し込み成功 (${count})`,
     neutralPunishesGroupTitle: (count) => `被弾・被差し返し (${count})`,
     noNeutralHits: "この試合で差し込みヒットはありません。",

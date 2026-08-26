@@ -149,6 +149,7 @@ export class MatchViewController {
   private neutralHitsList: HTMLDivElement;
   private neutralHitsCollapsed = false;
   private neutralHitEvents: NeutralHitEvent[] = [];
+  private neutralHitFilter: "all" | "openings" | "punishes" = "all";
   private combosWidget: HTMLElement;
   private combosCollapseBtn: HTMLButtonElement;
   private combosWidgetTitleEl: HTMLHeadingElement;
@@ -1949,93 +1950,82 @@ export class MatchViewController {
     };
 
     if (this.perspectivePort !== null) {
-      const openings = this.neutralHitEvents.filter(
+      const openingsCount = this.neutralHitEvents.filter(
         (e) => e.attackerPort === this.perspectivePort,
-      );
-      const punishes = this.neutralHitEvents.filter(
+      ).length;
+      const punishesCount = this.neutralHitEvents.filter(
         (e) => e.victimPort === this.perspectivePort,
-      );
+      ).length;
 
-      // Group 1: Neutral Openings (Landed)
-      const openingsHeader = document.createElement("div");
-      openingsHeader.className = "situation-group-header";
-      openingsHeader.innerHTML = `<span>${tr.neutralOpeningsGroupTitle(openings.length)}</span>`;
-      this.neutralHitsList.appendChild(openingsHeader);
+      // Filter chips bar
+      const filterContainer = document.createElement("div");
+      filterContainer.className = "neutral-filters";
 
-      if (openings.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "situation-empty";
-        empty.textContent = tr.noNeutralOpeningsLanded;
-        this.neutralHitsList.appendChild(empty);
-      } else {
-        openings.forEach((e, idx) => {
-          this.neutralHitsList.appendChild(createRow(e, idx));
-        });
+      const allBtn = document.createElement("button");
+      allBtn.className = `neutral-filter-btn filter-all${this.neutralHitFilter === "all" ? " active" : ""}`;
+      allBtn.textContent = tr.neutralFilterAll(this.neutralHitEvents.length);
+      allBtn.addEventListener("click", () => {
+        this.neutralHitFilter = "all";
+        this.renderNeutralHitsPanel(replay);
+      });
+
+      const openingsBtn = document.createElement("button");
+      openingsBtn.className = `neutral-filter-btn filter-openings${this.neutralHitFilter === "openings" ? " active" : ""}`;
+      openingsBtn.textContent = tr.neutralFilterOpenings(openingsCount);
+      openingsBtn.addEventListener("click", () => {
+        this.neutralHitFilter = "openings";
+        this.renderNeutralHitsPanel(replay);
+      });
+
+      const punishesBtn = document.createElement("button");
+      punishesBtn.className = `neutral-filter-btn filter-punishes${this.neutralHitFilter === "punishes" ? " active" : ""}`;
+      punishesBtn.textContent = tr.neutralFilterPunishes(punishesCount);
+      punishesBtn.addEventListener("click", () => {
+        this.neutralHitFilter = "punishes";
+        this.renderNeutralHitsPanel(replay);
+      });
+
+      filterContainer.appendChild(allBtn);
+      filterContainer.appendChild(openingsBtn);
+      filterContainer.appendChild(punishesBtn);
+      this.neutralHitsList.appendChild(filterContainer);
+    }
+
+    let eventsToRender = this.neutralHitEvents;
+    if (this.perspectivePort !== null) {
+      if (this.neutralHitFilter === "openings") {
+        eventsToRender = this.neutralHitEvents.filter(
+          (e) => e.attackerPort === this.perspectivePort,
+        );
+      } else if (this.neutralHitFilter === "punishes") {
+        eventsToRender = this.neutralHitEvents.filter(
+          (e) => e.victimPort === this.perspectivePort,
+        );
       }
+    }
 
-      // Group 2: Neutral Punishes (Taken)
-      const punishesHeader = document.createElement("div");
-      punishesHeader.className = "situation-group-header";
-      punishesHeader.innerHTML = `<span>${tr.neutralPunishesGroupTitle(punishes.length)}</span>`;
-      this.neutralHitsList.appendChild(punishesHeader);
-
-      if (punishes.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "situation-empty";
-        empty.textContent = tr.noNeutralPunishesTaken;
-        this.neutralHitsList.appendChild(empty);
-      } else {
-        punishes.forEach((e, idx) => {
-          this.neutralHitsList.appendChild(createRow(e, idx));
-        });
-      }
+    if (eventsToRender.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "situation-empty";
+      empty.textContent =
+        this.neutralHitFilter === "openings"
+          ? tr.noNeutralOpeningsLanded
+          : this.neutralHitFilter === "punishes"
+            ? tr.noNeutralPunishesTaken
+            : tr.noNeutralHits;
+      this.neutralHitsList.appendChild(empty);
     } else {
-      const seated = getSeatedPorts(replay);
-      if (seated.length === 2) {
-        const [portA, portB] = seated as [PortIndex, PortIndex];
-        const hitsA = this.neutralHitEvents.filter(
-          (e) => e.attackerPort === portA,
-        );
-        const hitsB = this.neutralHitEvents.filter(
-          (e) => e.attackerPort === portB,
-        );
-
-        const headerA = document.createElement("div");
-        headerA.className = "situation-group-header";
-        headerA.innerHTML = `<span>${PORT_LABELS[portA]} Neutral Openings (${hitsA.length})</span>`;
-        this.neutralHitsList.appendChild(headerA);
-
-        if (hitsA.length === 0) {
-          const empty = document.createElement("div");
-          empty.className = "situation-empty";
-          empty.textContent = tr.noNeutralOpeningsLanded;
-          this.neutralHitsList.appendChild(empty);
-        } else {
-          hitsA.forEach((e, idx) => {
-            this.neutralHitsList.appendChild(createRow(e, idx));
-          });
+      eventsToRender.forEach((e, idx) => {
+        const row = createRow(e, idx);
+        if (this.perspectivePort !== null) {
+          if (e.attackerPort === this.perspectivePort) {
+            row.classList.add("neutral-row-opening");
+          } else {
+            row.classList.add("neutral-row-punish");
+          }
         }
-
-        const headerB = document.createElement("div");
-        headerB.className = "situation-group-header";
-        headerB.innerHTML = `<span>${PORT_LABELS[portB]} Neutral Openings (${hitsB.length})</span>`;
-        this.neutralHitsList.appendChild(headerB);
-
-        if (hitsB.length === 0) {
-          const empty = document.createElement("div");
-          empty.className = "situation-empty";
-          empty.textContent = tr.noNeutralOpeningsLanded;
-          this.neutralHitsList.appendChild(empty);
-        } else {
-          hitsB.forEach((e, idx) => {
-            this.neutralHitsList.appendChild(createRow(e, idx));
-          });
-        }
-      } else {
-        this.neutralHitEvents.forEach((e, idx) => {
-          this.neutralHitsList.appendChild(createRow(e, idx));
-        });
-      }
+        this.neutralHitsList.appendChild(row);
+      });
     }
   }
 
@@ -2047,7 +2037,11 @@ export class MatchViewController {
       const frameIndex = Number(row.dataset.frameIndex);
       const isActive =
         currentFrameIndex >= frameIndex && currentFrameIndex <= frameIndex + 60;
+      const wasActive = row.classList.contains("active");
       row.classList.toggle("active", isActive);
+      if (isActive && !wasActive) {
+        row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
     });
   }
 
