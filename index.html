@@ -1273,15 +1273,15 @@
         align-items: center;
       }
       .speed-toggle-btn {
-        font-size: 11px;
-        font-weight: 700;
+        font-size: 13px;
+        font-weight: 600;
         letter-spacing: 0.02em;
-        padding: 6px 9px;
+        padding: 6px 11px;
         border-radius: 6px;
         border: 1px solid var(--panel-border);
         cursor: pointer;
-        background: #181a20;
-        color: #717684;
+        background: #22252f;
+        color: var(--text);
         transition:
           background 0.1s,
           color 0.1s,
@@ -1293,9 +1293,10 @@
         gap: 3px;
       }
       .speed-toggle-btn:hover {
-        background: #22252f;
-        color: #9da3b4;
-        border-color: #3b4050;
+        background: #2c3040;
+      }
+      .speed-toggle-btn:active {
+        background: var(--accent);
       }
       .speed-toggle-btn.has-modified-speed {
         color: var(--accent);
@@ -1320,7 +1321,7 @@
       .speed-dropdown[hidden] {
         display: none !important;
       }
-      .speed-option-btn {
+      .speed-dropdown .speed-option-btn {
         background: transparent;
         border: none;
         color: #9da3b4;
@@ -1336,11 +1337,11 @@
         font-variant-numeric: tabular-nums;
         font-family: inherit;
       }
-      .speed-option-btn:hover {
+      .speed-dropdown .speed-option-btn:hover {
         background: rgba(255, 255, 255, 0.08);
         color: var(--text);
       }
-      .speed-option-btn.active {
+      .speed-dropdown .speed-option-btn.active {
         background: rgba(56, 189, 248, 0.18);
         color: #38bdf8;
         font-weight: 700;
