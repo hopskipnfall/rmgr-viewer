@@ -2008,6 +2008,17 @@ export class MatchViewController {
         }
       `;
 
+      const pipEls = detail.querySelectorAll<HTMLElement>(".di-stick-pip");
+      pipEls.forEach((pipEl) => {
+        const frameIdx = Number(pipEl.dataset.frame);
+        pipEl.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.dismissQuickAttackOverlay();
+          this.playback?.seek(frameIdx);
+          this.playback?.pause();
+        });
+      });
+
       row.addEventListener("click", () => {
         this.dismissQuickAttackOverlay();
         if (this.selectedDIHitId === h.id && !detail.hidden) {
