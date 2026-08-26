@@ -1261,6 +1261,39 @@
       .hud-toggle-btn.active:hover {
         background: #2c3040;
       }
+      .speed-controls {
+        display: inline-flex;
+        align-items: center;
+        background: #181a20;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        padding: 2px;
+        gap: 2px;
+      }
+      .speed-btn {
+        background: transparent;
+        border: none;
+        color: #717684;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 7px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          background 0.1s,
+          color 0.1s;
+        font-variant-numeric: tabular-nums;
+        font-family: inherit;
+        line-height: 1;
+      }
+      .speed-btn:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #9da3b4;
+      }
+      .speed-btn.active {
+        background: #2b3042;
+        color: var(--accent);
+      }
       #stage {
         display: block;
         width: 100%;
@@ -2693,6 +2726,37 @@
       <button id="stepBack" title="Previous frame">⏮</button>
       <button id="playPause" title="Play/Pause">▶</button>
       <button id="stepForward" title="Next frame">⏭</button>
+      <div
+        id="speedControls"
+        class="speed-controls"
+        role="group"
+        aria-label="Playback speed"
+      >
+        <button
+          id="speed1xBtn"
+          class="speed-btn active"
+          data-speed="1"
+          title="1x Speed"
+        >
+          1x
+        </button>
+        <button
+          id="speed05xBtn"
+          class="speed-btn"
+          data-speed="0.5"
+          title="0.5x Half Speed"
+        >
+          0.5x
+        </button>
+        <button
+          id="speed025xBtn"
+          class="speed-btn"
+          data-speed="0.25"
+          title="0.25x Quarter Speed"
+        >
+          0.25x
+        </button>
+      </div>
       <button
         id="hudToggleBtn"
         class="hud-toggle-btn active"

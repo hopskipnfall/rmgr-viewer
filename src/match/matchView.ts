@@ -104,6 +104,8 @@ export class MatchViewController {
   private stepForwardBtn: HTMLButtonElement;
   private scrubber: HTMLInputElement;
   private frameLabel: HTMLSpanElement;
+  private speedButtons: HTMLButtonElement[] = [];
+  private currentPlaybackSpeed = 1;
   private matchStatsHeaderTitle: HTMLHeadingElement;
   private perspectiveToggleEl: HTMLDivElement;
   private statsCollapseBtn: HTMLButtonElement;
@@ -529,6 +531,18 @@ export class MatchViewController {
       this.dismissQuickAttackOverlay();
       this.playback?.stepForward();
     });
+
+    const speedBtns = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("#speedControls .speed-btn"),
+    );
+    this.speedButtons = speedBtns;
+    speedBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const speed = parseFloat(btn.dataset.speed || "1");
+        this.setPlaybackSpeed(speed);
+      });
+    });
+
     this.scrubber.addEventListener("input", () => {
       this.dismissQuickAttackOverlay();
       this.playback?.pause();
@@ -2774,7 +2788,17 @@ export class MatchViewController {
       replay.frames.length,
       (idx, isPlaying, reason) => this.onFrameChange(idx, isPlaying, reason),
     );
+    this.playback.setPlaybackSpeed(this.currentPlaybackSpeed);
     this.onFrameChange(0, false, "jump");
+  }
+
+  public setPlaybackSpeed(speed: number): void {
+    this.currentPlaybackSpeed = speed;
+    this.playback?.setPlaybackSpeed(speed);
+    this.speedButtons.forEach((btn) => {
+      const btnSpeed = parseFloat(btn.dataset.speed || "1");
+      btn.classList.toggle("active", btnSpeed === speed);
+    });
   }
 
   private renderReplayInfo(loaded: LoadedReplay | null): void {
