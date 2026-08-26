@@ -121,6 +121,42 @@ export function isSleepState(actionStateId: number): boolean {
   return actionStateId === 0x0a5;
 }
 
+const IDLE_ACTION_STATES = new Set([
+  0x00a, // Idle
+]);
+
+export function isIdleState(actionStateId: number): boolean {
+  return IDLE_ACTION_STATES.has(actionStateId);
+}
+
+const WALK_ACTION_STATES = new Set([
+  0x00b, // Walk1
+  0x00c, // Walk2
+  0x00d, // Walk3
+]);
+
+export function isWalkState(actionStateId: number): boolean {
+  return WALK_ACTION_STATES.has(actionStateId);
+}
+
+const DASH_RUN_ACTION_STATES = new Set([
+  0x00f, // Dash
+  0x010, // Run
+]);
+
+export function isDashOrRunState(actionStateId: number): boolean {
+  return DASH_RUN_ACTION_STATES.has(actionStateId);
+}
+
+const TEETER_ACTION_STATES = new Set([
+  0x023, // Teeter
+  0x024, // TeeterStart
+]);
+
+export function isTeeterState(actionStateId: number): boolean {
+  return TEETER_ACTION_STATES.has(actionStateId);
+}
+
 const TURN_ACTION_STATES = new Set([
   0x012, // Turn (standing turnaround)
   0x013, // TurnRun (pivot turnaround during dash/run)
@@ -1514,6 +1550,42 @@ export class StageRenderer {
       // Flattened prone against stage floor at feet pivot (x, y)
       ctx.translate(x, y);
       ctx.scale(1.35, 0.35);
+      ctx.translate(-x, -y);
+    } else if (isIdleState(post.actionStateId)) {
+      // Subtle organic breathing stance rhythm
+      const breath = Math.sin(post.actionFrameCounter * 0.12);
+      const bobY = breath * 1.5;
+      const scaleX = 1 + breath * 0.025;
+      const scaleY = 1 - breath * 0.025;
+      ctx.translate(x, y);
+      ctx.scale(scaleX, scaleY);
+      ctx.translate(-x, -y + bobY);
+    } else if (isWalkState(post.actionStateId)) {
+      // Walking stride bob & tilt
+      const walkPhase = post.actionFrameCounter * 0.25;
+      const walkBob = Math.abs(Math.sin(walkPhase)) * 2;
+      const walkTilt = Math.sin(walkPhase) * 0.06 * (facingRight ? 1 : -1);
+      ctx.translate(x, y);
+      ctx.rotate(walkTilt);
+      ctx.translate(-x, -y + walkBob);
+    } else if (isDashOrRunState(post.actionStateId)) {
+      // Dynamic running forward lean & stride bounce
+      const runPhase = post.actionFrameCounter * 0.35;
+      const runBounce = Math.abs(Math.sin(runPhase)) * 2.5;
+      const runLean = 0.14 * (facingRight ? 1 : -1);
+      ctx.translate(x, y);
+      ctx.rotate(runLean);
+      ctx.translate(-x, -y + runBounce);
+    } else if (isCrouchState(post.actionStateId)) {
+      // Compressed crouch stance
+      ctx.translate(x, y);
+      ctx.scale(1.15, 0.72);
+      ctx.translate(-x, -y);
+    } else if (isTeeterState(post.actionStateId)) {
+      // Teetering ledge balance sway
+      const teeterAngle = Math.sin(post.actionFrameCounter * 0.28) * 0.14;
+      ctx.translate(x, y);
+      ctx.rotate(teeterAngle);
       ctx.translate(-x, -y);
     }
 

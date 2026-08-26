@@ -537,6 +537,9 @@ export class CharacterPreviewController {
     this.playPauseBtn.addEventListener("click", () => {
       this.isPlaying = !this.isPlaying;
       this.playPauseBtn.textContent = this.isPlaying ? "⏸ Pause" : "▶ Play";
+      if (this.isPlaying && this.animFrameId === null) {
+        this.startAnimationLoop();
+      }
     });
 
     const stepBackBtn = this.container.querySelector(
@@ -696,14 +699,20 @@ export class CharacterPreviewController {
   private startAnimationLoop(): void {
     this.stopAnimationLoop();
     let lastTime = performance.now();
+    const frameDuration = 1000 / 60;
+
     const tick = (now: number) => {
-      const delta = now - lastTime;
-      if (this.isPlaying && delta >= 1000 / 60) {
+      if (this.isPlaying) {
+        const delta = now - lastTime;
+        if (delta >= frameDuration) {
+          lastTime = now - (delta % frameDuration);
+          this.actionFrameCounter = (this.actionFrameCounter + 1) % 61;
+          this.frameSliderEl.value = String(this.actionFrameCounter);
+          this.frameValEl.textContent = `#${this.actionFrameCounter}`;
+          this.render();
+        }
+      } else {
         lastTime = now;
-        this.actionFrameCounter = (this.actionFrameCounter + 1) % 61;
-        this.frameSliderEl.value = String(this.actionFrameCounter);
-        this.frameValEl.textContent = `#${this.actionFrameCounter}`;
-        this.render();
       }
       this.animFrameId = requestAnimationFrame(tick);
     };
