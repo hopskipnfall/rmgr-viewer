@@ -328,4 +328,105 @@ describe("Ledge Trap & Getup analysis", () => {
     expect(p1Stats.ledgeGetupUnder100Situations).toBe(1);
     expect(p1Stats.ledgeGetupUnder100Successes).toBe(1);
   });
+
+  it("correctly classifies ledge getup onto platform with shield and attack as success", () => {
+    const frames: Frame[] = [];
+
+    // F0: Port 1 grabs ledge at 104% (CliffWait)
+    frames.push(
+      makeFrame(
+        0,
+        { state: 0x0a, x: -1800, y: 0, dmg: 156 },
+        { state: 0x55, x: -2378, y: -450, dmg: 104 },
+      ),
+    );
+    // F1..F20: Drop and jump aerial toward platform
+    for (let f = 1; f <= 20; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: -1800, y: 0, dmg: 156 },
+          { state: 0xd2, x: -2378 + f * 50, y: -450 + f * 60, dmg: 104 },
+        ),
+      );
+    }
+    // F21..F25: Land on platform (y = 904) in LandingLight (0x1f)
+    for (let f = 21; f <= 25; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0xcc, x: -1400, y: 0, dmg: 156 },
+          { state: 0x1f, x: -1275, y: 904, dmg: 104, grounded: true },
+        ),
+      );
+    }
+    // F26..F30: Shield on platform
+    for (let f = 26; f <= 30; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0xcc, x: -1400, y: 0, dmg: 156 },
+          { state: 0x99, x: -1275, y: 904, dmg: 104, grounded: true },
+        ),
+      );
+    }
+    // F31..F60: Platform drop through (0x22 Pass) and remain safe on stage for 30+ frames
+    for (let f = 31; f <= 60; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0xcc, x: -1400, y: 0, dmg: 156 },
+          { state: 0x22, x: -1275, y: 904 - (f - 30) * 15, dmg: 104 },
+        ),
+      );
+    }
+
+    const replay = makeMockReplay(frames);
+    const events = computeLedgeTrapEvents(replay);
+
+    expect(events.length).toBe(2);
+    expect(events[0]?.kind).toBe("ledge-getup-entered");
+    expect(events[0]?.ledgePort).toBe(1);
+    expect(events[1]?.kind).toBe("ledge-getup-success");
+    expect(events[1]?.ledgePort).toBe(1);
+  });
+
+  it("detects successful ledge getup when ledge-hopping with aerial counter-attack onto stage", () => {
+    const frames: Frame[] = [];
+
+    // F0: Port 0 grabs ledge at 80% (CliffWait)
+    frames.push(
+      makeFrame(
+        0,
+        { state: 0x55, x: -2378, y: -450, dmg: 80 },
+        { state: 0x0a, x: -1800, y: 0, dmg: 50 },
+      ),
+    );
+    // F1..F10: Ledge hop aerial (Fall 0x1a -> JumpAerial 0x18 -> Fair 0xd2)
+    for (let f = 1; f <= 10; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0xd2, x: -2000 + f * 50, y: 100, dmg: 80 },
+          { state: 0x0a, x: -1600, y: 0, dmg: 50 },
+        ),
+      );
+    }
+    // F11: Attack lands on opponent (Port 1 enters hitstun 0x33, dmg 50 -> 64)
+    frames.push(
+      makeFrame(
+        11,
+        { state: 0xd2, x: -1500, y: 80, dmg: 80 },
+        { state: 0x33, x: -1300, y: 50, dmg: 64, hitstun: 30 },
+      ),
+    );
+
+    const replay = makeMockReplay(frames);
+    const events = computeLedgeTrapEvents(replay);
+
+    expect(events.length).toBe(2);
+    expect(events[0]?.kind).toBe("ledge-getup-entered");
+    expect(events[1]?.kind).toBe("ledge-getup-success");
+    expect(events[1]?.frame).toBe(11);
+  });
 });
