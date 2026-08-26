@@ -294,6 +294,19 @@ export function computeRateDeltas(
 }
 
 /**
+ * Computes the overall baseline across all resolved games for the user's identity.
+ * Returns null if fewer than 2 resolved games exist.
+ */
+export function computeOverallBaseline(
+  summaries: GameSummary[],
+  identity: Identity,
+): DerivedRates | null {
+  const resolved = filterGameSummaries(summaries, identity, {});
+  if (resolved.length < 2) return null;
+  return aggregateFilteredGames(resolved);
+}
+
+/**
  * Computes the aggregate baseline for a specific character matchup across all games.
  * If matchup games exist, aggregates those; otherwise aggregates all games for your character.
  */

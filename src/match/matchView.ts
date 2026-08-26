@@ -1221,7 +1221,7 @@ export class MatchViewController {
         const deltaSpan = document.createElement("span");
         deltaSpan.className = `stat-match-delta ${diff > 0 ? "pct-delta-pos" : diff < 0 ? "pct-delta-neg" : ""}`;
         deltaSpan.textContent = ` (${sign}${diff}%)`;
-        deltaSpan.title = `${tr.vsMatchup(`${sign}${diff}%`)} (${Math.round(baselinePct)}% avg)`;
+        deltaSpan.title = `${tr.vsOverall(`${sign}${diff}%`)} (${Math.round(baselinePct)}% avg)`;
         val.appendChild(deltaSpan);
       }
 
@@ -1266,7 +1266,7 @@ export class MatchViewController {
         // For neutral hits per stock, fewer is better
         deltaSpan.className = `stat-match-delta ${diff < 0 ? "pct-delta-pos" : diff > 0 ? "pct-delta-neg" : ""}`;
         deltaSpan.textContent = ` (${sign}${diff.toFixed(1)})`;
-        deltaSpan.title = `${tr.vsMatchup(`${sign}${diff.toFixed(1)}`)} (${baselineHits.toFixed(1)} avg)`;
+        deltaSpan.title = `${tr.vsOverall(`${sign}${diff.toFixed(1)}`)} (${baselineHits.toFixed(1)} avg)`;
         val.appendChild(deltaSpan);
       }
 

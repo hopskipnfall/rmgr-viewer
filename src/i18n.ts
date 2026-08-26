@@ -194,6 +194,7 @@ export interface Translations {
   tie: string;
   matchupAverage: string;
   vsMatchup: (v: string) => string;
+  vsOverall: (v: string) => string;
   hitsPerStockUnit: (val: string) => string;
   hitsPerStockFraction: (hits: number, stocks: number) => string;
 
@@ -420,6 +421,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     tie: "TIE",
     matchupAverage: "Matchup avg",
     vsMatchup: (v) => `${v} vs matchup`,
+    vsOverall: (v) => `${v} vs overall avg`,
     hitsPerStockUnit: (val) => `${val} /st.`,
     hitsPerStockFraction: (hits, stocks) => `${hits} hits / ${stocks} st.`,
 
@@ -632,6 +634,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     tie: "引分",
     matchupAverage: "同カード平均",
     vsMatchup: (v) => `同カード比 ${v}`,
+    vsOverall: (v) => `全体平均比 ${v}`,
     hitsPerStockUnit: (val) => `${val} /スト`,
     hitsPerStockFraction: (hits, stocks) => `${hits}ヒット / ${stocks}スト`,
 
