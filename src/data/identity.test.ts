@@ -144,4 +144,14 @@ describe("identity module", () => {
       { name: "FoxMaster", count: 1 },
     ]);
   });
+
+  it("creates default identity with initial name and supports reset", () => {
+    const demoIdentity = createDefaultIdentity("George");
+    expect(demoIdentity.displayName).toBe("George");
+    expect(demoIdentity.aliases.has("George")).toBe(true);
+
+    const clearedIdentity = createDefaultIdentity("");
+    expect(clearedIdentity.displayName).toBe("");
+    expect(clearedIdentity.aliases.size).toBe(0);
+  });
 });

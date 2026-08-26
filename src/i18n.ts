@@ -24,6 +24,7 @@ export interface Translations {
   notOnScreen: string;
 
   // Match stats
+  perspectiveTitle: string;
   matchStats: string;
   statsCollapseTitle: string;
   statsEmpty: string;
@@ -37,9 +38,33 @@ export interface Translations {
   neutralHitsTakenSummary: (hits: number, stocks: number) => string;
   noStocksTaken: string;
 
+  // Character Meta
+  characterMetaTitle: (charName: string) => string;
+  fthrowFollowup: string;
+  fthrowFollowupSummary: (
+    followed: number,
+    total: number,
+    noFollow: number,
+  ) => string;
+  noFthrows: string;
+  shieldPressureTwoHits: string;
+  shieldPressureBreakdown: (
+    breaks: number,
+    grabs: number,
+    neither: number,
+    total: number,
+  ) => string;
+  noShieldPressures: string;
+
   // Event log
   eventLog: string;
   eventLogEmpty: string;
+  logFiltersTitle: string;
+  logFilterRecovery: string;
+  logFilterLedge: string;
+  logFilterAngel: string;
+  logFilterNeutral: string;
+  logFilterCharacter: string;
 
   // Events (Perspective)
   recovering: string;
@@ -63,6 +88,22 @@ export interface Translations {
   angelHitLanded: (dmg: number) => string;
   angelAvoidFailed: (dmg: number) => string;
 
+  fthrowEntered: string;
+  opponentFthrowEntered: string;
+  fthrowFollowupSuccess: (hits?: number) => string;
+  fthrowNoFollowup: string;
+  opponentFthrowFollowupHit: (hits?: number) => string;
+  opponentFthrowEscaped: string;
+
+  shieldPressureEntered: (hits?: number) => string;
+  opponentShieldPressureEntered: (hits?: number) => string;
+  shieldBreakForced: string;
+  shieldBroken: string;
+  shieldPressureGrab: string;
+  opponentShieldPressureGrab: string;
+  shieldPressureEscaped: string;
+  opponentShieldPressureEscaped: string;
+
   neutralHitAttack: string;
   neutralHitGrab: string;
 
@@ -73,6 +114,13 @@ export interface Translations {
   playerAngelEntered: (player: string) => string;
   playerAngelAvoidSuccess: (player: string) => string;
   playerAngelAvoidFailure: (player: string, dmg: number) => string;
+  playerFthrowEntered: (player: string) => string;
+  playerFthrowFollowup: (player: string, hits?: number) => string;
+  playerFthrowNoFollowup: (player: string) => string;
+  playerShieldPressureEntered: (player: string, hits?: number) => string;
+  playerShieldBreakForced: (player: string) => string;
+  playerShieldPressureGrab: (player: string) => string;
+  playerShieldPressureEscaped: (player: string) => string;
 
   // Controls
   prevFrameTooltip: string;
@@ -138,6 +186,31 @@ export interface Translations {
   vsMatchup: (v: string) => string;
   hitsPerStockUnit: (val: string) => string;
   hitsPerStockFraction: (hits: number, stocks: number) => string;
+
+  // About modal
+  aboutTitle: string;
+  aboutDescription: string;
+  authorLabel: string;
+  authorName: string;
+  twitterLabel: string;
+  githubLabel: string;
+  close: string;
+
+  // Situation widgets (Recovery / Edge Guard / Ledge Getup / Ledge Trap)
+  recoveryWidgetTitle: string;
+  edgeGuardWidgetTitle: string;
+  ledgeGetupWidgetTitle: string;
+  ledgeTrapWidgetTitle: string;
+  situationSuccessBadge: string;
+  situationFailureBadge: string;
+  situationOpenBadge: string;
+  noSituations: string;
+  situationCollapseTitle: (name: string) => string;
+
+  // Replay Info widget
+  replayInfoWidgetTitle: string;
+  replayInfoFileLabel: string;
+  replayInfoRecordedLabel: string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -160,6 +233,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     hitstunUnit: (f) => ` (${f}f hitstun)`,
     notOnScreen: "not on screen",
 
+    perspectiveTitle: "Perspective",
     matchStats: "Match Stats",
     statsCollapseTitle: "Collapse / expand Match Stats",
     statsEmpty: "No stats — load a Dream Land 2-player replay.",
@@ -174,8 +248,24 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       `${hits} hit${hits !== 1 ? "s" : ""} across ${stocks} stock${stocks !== 1 ? "s" : ""} taken`,
     noStocksTaken: "no stocks taken",
 
+    characterMetaTitle: (char) => char,
+    fthrowFollowup: "F-throw follow-up",
+    fthrowFollowupSummary: (s, t, n) =>
+      `${s} / ${t} throw${t !== 1 ? "s" : ""} (${n} missed)`,
+    noFthrows: "no forward throws",
+    shieldPressureTwoHits: "Shield pressure (2+ hits)",
+    shieldPressureBreakdown: (b, g, n, t) =>
+      `${t} attempt${t !== 1 ? "s" : ""}: ${b} break${b !== 1 ? "s" : ""}, ${g} grab${g !== 1 ? "s" : ""}, ${n} neither`,
+    noShieldPressures: "no multi-hit shield pressures",
+
     eventLog: "Event Log",
     eventLogEmpty: "No events yet.",
+    logFiltersTitle: "Log Filters",
+    logFilterRecovery: "Recovery",
+    logFilterLedge: "Ledge",
+    logFilterAngel: "Angel",
+    logFilterNeutral: "Neutral",
+    logFilterCharacter: "Character",
     hudOverlay: "LOG",
     hudOverlayTitle: "Toggle on-screen event log",
 
@@ -200,6 +290,32 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     angelHitLanded: (dmg) => `Angel: hit landed (+${dmg}%)`,
     angelAvoidFailed: (dmg) => `Angel avoid: failed (+${dmg}%)`,
 
+    fthrowEntered: "F-throw",
+    opponentFthrowEntered: "Opponent F-throw",
+    fthrowFollowupSuccess: (hits) =>
+      hits ? `F-throw: follow-up hit (${hits} hits)` : "F-throw: follow-up hit",
+    fthrowNoFollowup: "F-throw: no follow-up",
+    opponentFthrowFollowupHit: (hits) =>
+      hits
+        ? `Opponent F-throw: follow-up hit (${hits} hits)`
+        : "Opponent F-throw: follow-up hit",
+    opponentFthrowEscaped: "Opponent F-throw: escaped (no follow-up)",
+
+    shieldPressureEntered: (hits) =>
+      hits
+        ? `Shield pressure (${hits} hits on shield)`
+        : "Shield pressure (2+ hits)",
+    opponentShieldPressureEntered: (hits) =>
+      hits
+        ? `Opponent shield pressure (${hits} hits on shield)`
+        : "Opponent shield pressure (2+ hits)",
+    shieldBreakForced: "Shield pressure: Shield break!",
+    shieldBroken: "Shield broken!",
+    shieldPressureGrab: "Shield pressure: Grab landed",
+    opponentShieldPressureGrab: "Shield pressure: Grabbed",
+    shieldPressureEscaped: "Shield pressure: Neither (escaped)",
+    opponentShieldPressureEscaped: "Shield pressure: Escaped",
+
     neutralHitAttack: "Neutral hit (attack)",
     neutralHitGrab: "Neutral hit (grab)",
 
@@ -209,6 +325,20 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     playerAngelEntered: (p) => `${p} angel invincibility`,
     playerAngelAvoidSuccess: (p) => `${p} avoided angel (0 dmg)`,
     playerAngelAvoidFailure: (p, dmg) => `${p} hit during angel (+${dmg}%)`,
+    playerFthrowEntered: (p) => `${p} F-throw`,
+    playerFthrowFollowup: (p, hits) =>
+      hits
+        ? `${p} F-throw: follow-up hit (${hits} hits)`
+        : `${p} F-throw: follow-up hit`,
+    playerFthrowNoFollowup: (p) => `${p} F-throw: no follow-up`,
+    playerShieldPressureEntered: (p, hits) =>
+      hits
+        ? `${p} shield pressure (${hits} hits on shield)`
+        : `${p} shield pressure (2+ hits)`,
+    playerShieldBreakForced: (p) => `${p} forced shield break!`,
+    playerShieldPressureGrab: (p) => `${p} grabbed out of shield pressure`,
+    playerShieldPressureEscaped: (p) =>
+      `${p} shield pressure: neither (escaped)`,
 
     prevFrameTooltip: "Previous frame",
     playPauseTooltip: "Play / pause",
@@ -272,6 +402,29 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     vsMatchup: (v) => `${v} vs matchup`,
     hitsPerStockUnit: (val) => `${val} /st.`,
     hitsPerStockFraction: (hits, stocks) => `${hits} hits / ${stocks} st.`,
+
+    aboutTitle: "About rmgr-viewer",
+    aboutDescription:
+      "Real-time visual playback and analytics viewer for Super Smash Bros. 64 (.rmgr) replay files.",
+    authorLabel: "Author",
+    authorName: "nue",
+    twitterLabel: "Twitter / X",
+    githubLabel: "GitHub Repository",
+    close: "Close",
+
+    recoveryWidgetTitle: "Recovery",
+    edgeGuardWidgetTitle: "Edge Guard",
+    ledgeGetupWidgetTitle: "Ledge Getup",
+    ledgeTrapWidgetTitle: "Ledge Trap",
+    situationSuccessBadge: "✓",
+    situationFailureBadge: "✗",
+    situationOpenBadge: "…",
+    noSituations: "None in this replay.",
+    situationCollapseTitle: (name) => `Collapse / expand ${name}`,
+
+    replayInfoWidgetTitle: "Replay Info",
+    replayInfoFileLabel: "File",
+    replayInfoRecordedLabel: "Recorded",
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -292,6 +445,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     hitstunUnit: (f) => ` (${f}F 硬直)`,
     notOnScreen: "画面外",
 
+    perspectiveTitle: "視点",
     matchStats: "対戦データ",
     statsCollapseTitle: "対戦データの折りたたみ / 展開",
     statsEmpty:
@@ -307,8 +461,23 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       `${stocks}ストック撃墜・計${hits}ヒット`,
     noStocksTaken: "撃墜なし",
 
+    characterMetaTitle: (char) => char,
+    fthrowFollowup: "前投げ追撃",
+    fthrowFollowupSummary: (s, t, n) => `${t}回中 ${s}回成功 (${n}回追撃なし)`,
+    noFthrows: "前投げなし",
+    shieldPressureTwoHits: "ガード固め (2+ヒット)",
+    shieldPressureBreakdown: (b, g, n, t) =>
+      `${t}回中: ガード割れ ${b}回, つかみ ${g}回, 回避 ${n}回`,
+    noShieldPressures: "2+ヒット固めなし",
+
     eventLog: "イベントログ",
     eventLogEmpty: "イベントはまだありません。",
+    logFiltersTitle: "ログ フィルター",
+    logFilterRecovery: "復帰・阻止",
+    logFilterLedge: "崖",
+    logFilterAngel: "復活無敵",
+    logFilterNeutral: "立ち回り",
+    logFilterCharacter: "固有",
     hudOverlay: "ログ",
     hudOverlayTitle: "画面上のイベントログの表示切替",
 
@@ -333,6 +502,28 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     angelHitLanded: (dmg) => `無敵: ヒット成功 (+${dmg}%)`,
     angelAvoidFailed: (dmg) => `無敵回避: 失敗 (+${dmg}%)`,
 
+    fthrowEntered: "前投げ",
+    opponentFthrowEntered: "相手の前投げ",
+    fthrowFollowupSuccess: (hits) =>
+      hits ? `前投げ: 追撃成功 (${hits}ヒット)` : "前投げ: 追撃成功",
+    fthrowNoFollowup: "前投げ: 追撃なし",
+    opponentFthrowFollowupHit: (hits) =>
+      hits
+        ? `相手の前投げ: 追撃被弾 (${hits}ヒット)`
+        : "相手の前投げ: 追撃被弾",
+    opponentFthrowEscaped: "相手の前投げ: 追撃回避 (追撃なし)",
+
+    shieldPressureEntered: (hits) =>
+      hits ? `ガード固め (${hits}ヒット)` : "ガード固め (2+ヒット)",
+    opponentShieldPressureEntered: (hits) =>
+      hits ? `相手のガード固め (${hits}ヒット)` : "相手のガード固め (2+ヒット)",
+    shieldBreakForced: "ガード固め: ガード割れ成功!",
+    shieldBroken: "ガード割れ被弾!",
+    shieldPressureGrab: "ガード固め: つかみ成功",
+    opponentShieldPressureGrab: "ガード固め: つかまれ",
+    shieldPressureEscaped: "ガード固め: 抜け (回避)",
+    opponentShieldPressureEscaped: "ガード固め: 回避成功",
+
     neutralHitAttack: "立ち回りヒット (攻撃)",
     neutralHitGrab: "立ち回りヒット (つかみ)",
 
@@ -342,6 +533,15 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     playerAngelEntered: (p) => `${p} 復活無敵`,
     playerAngelAvoidSuccess: (p) => `${p} 無敵回避: 成功 (0%被弾)`,
     playerAngelAvoidFailure: (p, dmg) => `${p} 無敵中に被弾 (+${dmg}%)`,
+    playerFthrowEntered: (p) => `${p} 前投げ`,
+    playerFthrowFollowup: (p, hits) =>
+      hits ? `${p} 前投げ: 追撃成功 (${hits}ヒット)` : `${p} 前投げ: 追撃成功`,
+    playerFthrowNoFollowup: (p) => `${p} 前投げ: 追撃なし`,
+    playerShieldPressureEntered: (p, hits) =>
+      hits ? `${p} ガード固め (${hits}ヒット)` : `${p} ガード固め (2+ヒット)`,
+    playerShieldBreakForced: (p) => `${p} ガード割れ成功!`,
+    playerShieldPressureGrab: (p) => `${p} ガード固めからつかみ成功`,
+    playerShieldPressureEscaped: (p) => `${p} ガード固め: 抜け`,
 
     prevFrameTooltip: "前のフレーム",
     playPauseTooltip: "再生 / 一時停止",
@@ -404,6 +604,29 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     vsMatchup: (v) => `同カード比 ${v}`,
     hitsPerStockUnit: (val) => `${val} /スト`,
     hitsPerStockFraction: (hits, stocks) => `${hits}ヒット / ${stocks}スト`,
+
+    aboutTitle: "rmgr-viewer について",
+    aboutDescription:
+      "ニンテンドウオールスター! 大乱闘スマッシュブラザーズ（スマブラ64）の .rmgr リプレイファイル用リアルタイム再生・分析ビューアーです。",
+    authorLabel: "作者",
+    authorName: "鵺",
+    twitterLabel: "Twitter / X",
+    githubLabel: "GitHub リポジトリ",
+    close: "閉じる",
+
+    recoveryWidgetTitle: "復帰",
+    edgeGuardWidgetTitle: "崖外",
+    ledgeGetupWidgetTitle: "崖上がり",
+    ledgeTrapWidgetTitle: "崖狩り",
+    situationSuccessBadge: "✓",
+    situationFailureBadge: "✗",
+    situationOpenBadge: "…",
+    noSituations: "このリプレイには該当なし。",
+    situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
+
+    replayInfoWidgetTitle: "リプレイ情報",
+    replayInfoFileLabel: "ファイル",
+    replayInfoRecordedLabel: "録画日時",
   },
 };
 

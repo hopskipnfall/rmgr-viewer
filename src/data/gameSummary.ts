@@ -41,6 +41,7 @@ export interface GameSummary {
   statsByPort: Partial<Record<PortIndex, RawCounters>>;
   manualPerspectivePort?: PortIndex | null;
   fileRef: File | null;
+  url?: string;
   isBundledSample?: boolean;
 }
 

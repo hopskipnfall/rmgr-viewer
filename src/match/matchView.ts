@@ -7,9 +7,11 @@ import {
 import { Camera } from "../camera.js";
 import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
-import { PORT_COLORS, PORT_LABELS } from "../players.js";
-import { StageRenderer, isDeadState } from "../renderer.js";
+import { PORT_LABELS, getPlayerColor } from "../players.js";
+import { StageRenderer, isCrouchState, isDeadState } from "../renderer.js";
+import { characterSize } from "../characterSizes.js";
 import { actionStateName, characterName } from "../lookups.js";
+import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { t } from "../i18n.js";
 import {
   computeNeutralHitEvents,
@@ -32,11 +34,28 @@ import {
   computeAngelInvincibilityStats,
   type AngelInvincibilityEvent,
 } from "../angelInvincibility.js";
+import {
+  computeJigglypuffFThrowEvents,
+  computeJigglypuffFThrowStats,
+  computeShieldPressureEvents,
+  computeShieldPressureStats,
+  isJigglypuffCharacter,
+  isNessCharacter,
+  isYoshiCharacter,
+  getCharacterIconicColor,
+  type JigglypuffFThrowEvent,
+  type ShieldPressureEvent,
+} from "../characterMeta.js";
 import type { LoadedReplay } from "../replaySource.js";
 import type { DerivedRates } from "../data/aggregate.js";
 
 export type MatchEvent =
-  EdgeGuardEvent | NeutralHitEvent | LedgeTrapEvent | AngelInvincibilityEvent;
+  | EdgeGuardEvent
+  | NeutralHitEvent
+  | LedgeTrapEvent
+  | AngelInvincibilityEvent
+  | JigglypuffFThrowEvent
+  | ShieldPressureEvent;
 
 interface PlayerPanel {
   port: PortIndex;
@@ -76,9 +95,47 @@ export class MatchViewController {
   private statsCollapseBtn: HTMLButtonElement;
   private statsPanel: HTMLDivElement;
   private statsEmpty: HTMLParagraphElement;
+  private characterMetaWidget: HTMLElement;
+  private characterMetaHeaderTitle: HTMLHeadingElement;
+  private characterMetaCollapseBtn: HTMLButtonElement;
+  private characterMetaPanel: HTMLDivElement;
+  private logFilterWidget: HTMLElement;
+  private logFilterHeaderTitle: HTMLHeadingElement;
+  private logFilterCollapseBtn: HTMLButtonElement;
+  private logFilterPanel: HTMLDivElement;
+  private logFilterChips: HTMLDivElement;
   private stageOverlay: HTMLDivElement;
   private stageOverlayList: HTMLDivElement;
   private hudToggleBtn: HTMLButtonElement;
+  private recoveryWidget: HTMLElement;
+  private recoveryCollapseBtn: HTMLButtonElement;
+  private recoveryWidgetTitleEl: HTMLHeadingElement;
+  private recoveryList: HTMLDivElement;
+  private edgeGuardWidget: HTMLElement;
+  private edgeGuardCollapseBtn: HTMLButtonElement;
+  private edgeGuardWidgetTitleEl: HTMLHeadingElement;
+  private edgeGuardList: HTMLDivElement;
+  private ledgeGetupWidget: HTMLElement;
+  private ledgeGetupCollapseBtn: HTMLButtonElement;
+  private ledgeGetupWidgetTitleEl: HTMLHeadingElement;
+  private ledgeGetupList: HTMLDivElement;
+  private ledgeTrapWidget: HTMLElement;
+  private ledgeTrapCollapseBtn: HTMLButtonElement;
+  private ledgeTrapWidgetTitleEl: HTMLHeadingElement;
+  private ledgeTrapList: HTMLDivElement;
+  private recoveryCollapsed = false;
+  private edgeGuardCollapsed = false;
+  private ledgeGetupCollapsed = false;
+  private ledgeTrapCollapsed = false;
+  private replayInfoWidget: HTMLElement;
+  private replayInfoCollapseBtn: HTMLButtonElement;
+  private replayInfoHeaderTitle: HTMLHeadingElement;
+  private replayInfoPanel: HTMLDivElement;
+  private replayInfoFileLabel: HTMLSpanElement;
+  private replayInfoFileName: HTMLSpanElement;
+  private replayInfoDateLabel: HTMLSpanElement;
+  private replayInfoDateLocal: HTMLSpanElement;
+  private replayInfoCollapsed = false;
 
   private stageRenderer: StageRenderer;
   private camera!: Camera;
@@ -92,6 +149,11 @@ export class MatchViewController {
   private currentLogEvents: MatchEvent[] = [];
   private perspectivePort: PortIndex | null = null;
   private statsCollapsed = false;
+  private characterMetaCollapsed = false;
+  private logFilterCollapsed = false;
+  private activeLogCategories: Set<
+    "recovery" | "ledge" | "angel" | "neutral" | "character"
+  >;
   private hudOverlayEnabled = true;
   private matchupBaseline: DerivedRates | null = null;
   private onPerspectiveChangedCb?: (port: PortIndex) => void;
@@ -126,6 +188,33 @@ export class MatchViewController {
     this.statsEmpty = document.getElementById(
       "statsEmpty",
     ) as HTMLParagraphElement;
+    this.characterMetaWidget = document.getElementById(
+      "characterMetaWidget",
+    ) as HTMLElement;
+    this.characterMetaHeaderTitle = document.getElementById(
+      "characterMetaHeaderTitle",
+    ) as HTMLHeadingElement;
+    this.characterMetaCollapseBtn = document.getElementById(
+      "characterMetaCollapseBtn",
+    ) as HTMLButtonElement;
+    this.characterMetaPanel = document.getElementById(
+      "characterMetaPanel",
+    ) as HTMLDivElement;
+    this.logFilterWidget = document.getElementById(
+      "logFilterWidget",
+    ) as HTMLElement;
+    this.logFilterHeaderTitle = document.getElementById(
+      "logFilterHeaderTitle",
+    ) as HTMLHeadingElement;
+    this.logFilterCollapseBtn = document.getElementById(
+      "logFilterCollapseBtn",
+    ) as HTMLButtonElement;
+    this.logFilterPanel = document.getElementById(
+      "logFilterPanel",
+    ) as HTMLDivElement;
+    this.logFilterChips = document.getElementById(
+      "logFilterChips",
+    ) as HTMLDivElement;
     this.stageOverlay = document.getElementById(
       "stageOverlay",
     ) as HTMLDivElement;
@@ -136,6 +225,83 @@ export class MatchViewController {
       "hudToggleBtn",
     ) as HTMLButtonElement;
 
+    this.recoveryWidget = document.getElementById(
+      "recoveryWidget",
+    ) as HTMLElement;
+    this.recoveryCollapseBtn = document.getElementById(
+      "recoveryCollapseBtn",
+    ) as HTMLButtonElement;
+    this.recoveryWidgetTitleEl = document.getElementById(
+      "recoveryWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.recoveryList = document.getElementById(
+      "recoveryList",
+    ) as HTMLDivElement;
+
+    this.edgeGuardWidget = document.getElementById(
+      "edgeGuardWidget",
+    ) as HTMLElement;
+    this.edgeGuardCollapseBtn = document.getElementById(
+      "edgeGuardCollapseBtn",
+    ) as HTMLButtonElement;
+    this.edgeGuardWidgetTitleEl = document.getElementById(
+      "edgeGuardWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.edgeGuardList = document.getElementById(
+      "edgeGuardList",
+    ) as HTMLDivElement;
+
+    this.ledgeGetupWidget = document.getElementById(
+      "ledgeGetupWidget",
+    ) as HTMLElement;
+    this.ledgeGetupCollapseBtn = document.getElementById(
+      "ledgeGetupCollapseBtn",
+    ) as HTMLButtonElement;
+    this.ledgeGetupWidgetTitleEl = document.getElementById(
+      "ledgeGetupWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.ledgeGetupList = document.getElementById(
+      "ledgeGetupList",
+    ) as HTMLDivElement;
+
+    this.ledgeTrapWidget = document.getElementById(
+      "ledgeTrapWidget",
+    ) as HTMLElement;
+    this.ledgeTrapCollapseBtn = document.getElementById(
+      "ledgeTrapCollapseBtn",
+    ) as HTMLButtonElement;
+    this.ledgeTrapWidgetTitleEl = document.getElementById(
+      "ledgeTrapWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.ledgeTrapList = document.getElementById(
+      "ledgeTrapList",
+    ) as HTMLDivElement;
+
+    this.replayInfoWidget = document.getElementById(
+      "replayInfoWidget",
+    ) as HTMLElement;
+    this.replayInfoCollapseBtn = document.getElementById(
+      "replayInfoCollapseBtn",
+    ) as HTMLButtonElement;
+    this.replayInfoHeaderTitle = document.getElementById(
+      "replayInfoHeaderTitle",
+    ) as HTMLHeadingElement;
+    this.replayInfoPanel = document.getElementById(
+      "replayInfoPanel",
+    ) as HTMLDivElement;
+    this.replayInfoFileLabel = document.getElementById(
+      "replayInfoFileLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoFileName = document.getElementById(
+      "replayInfoFileName",
+    ) as HTMLSpanElement;
+    this.replayInfoDateLabel = document.getElementById(
+      "replayInfoDateLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoDateLocal = document.getElementById(
+      "replayInfoDateLocal",
+    ) as HTMLSpanElement;
+
     this.stageRenderer = new StageRenderer(this.stageCanvas);
 
     try {
@@ -143,6 +309,29 @@ export class MatchViewController {
         localStorage.getItem("rmgr-viewer-hud") !== "false";
     } catch {
       // Ignore localStorage read error
+    }
+
+    try {
+      const savedCats = localStorage.getItem("rmgr-viewer-log-categories");
+      if (savedCats) {
+        this.activeLogCategories = new Set(JSON.parse(savedCats));
+      } else {
+        this.activeLogCategories = new Set([
+          "recovery",
+          "ledge",
+          "angel",
+          "neutral",
+          "character",
+        ]);
+      }
+    } catch {
+      this.activeLogCategories = new Set([
+        "recovery",
+        "ledge",
+        "angel",
+        "neutral",
+        "character",
+      ]);
     }
 
     this.boundOnKeyDown = (e: KeyboardEvent) => this.handleKeyDown(e);
@@ -156,6 +345,69 @@ export class MatchViewController {
       this.statsCollapsed = !this.statsCollapsed;
       this.statsPanel.hidden = this.statsCollapsed;
       this.statsCollapseBtn.classList.toggle("collapsed", this.statsCollapsed);
+    });
+
+    this.recoveryCollapseBtn.addEventListener("click", () => {
+      this.recoveryCollapsed = !this.recoveryCollapsed;
+      this.recoveryList.hidden = this.recoveryCollapsed;
+      this.recoveryCollapseBtn.classList.toggle(
+        "collapsed",
+        this.recoveryCollapsed,
+      );
+    });
+
+    this.edgeGuardCollapseBtn.addEventListener("click", () => {
+      this.edgeGuardCollapsed = !this.edgeGuardCollapsed;
+      this.edgeGuardList.hidden = this.edgeGuardCollapsed;
+      this.edgeGuardCollapseBtn.classList.toggle(
+        "collapsed",
+        this.edgeGuardCollapsed,
+      );
+    });
+
+    this.ledgeGetupCollapseBtn.addEventListener("click", () => {
+      this.ledgeGetupCollapsed = !this.ledgeGetupCollapsed;
+      this.ledgeGetupList.hidden = this.ledgeGetupCollapsed;
+      this.ledgeGetupCollapseBtn.classList.toggle(
+        "collapsed",
+        this.ledgeGetupCollapsed,
+      );
+    });
+
+    this.ledgeTrapCollapseBtn.addEventListener("click", () => {
+      this.ledgeTrapCollapsed = !this.ledgeTrapCollapsed;
+      this.ledgeTrapList.hidden = this.ledgeTrapCollapsed;
+      this.ledgeTrapCollapseBtn.classList.toggle(
+        "collapsed",
+        this.ledgeTrapCollapsed,
+      );
+    });
+
+    this.characterMetaCollapseBtn.addEventListener("click", () => {
+      this.characterMetaCollapsed = !this.characterMetaCollapsed;
+      this.characterMetaPanel.hidden = this.characterMetaCollapsed;
+      this.characterMetaCollapseBtn.classList.toggle(
+        "collapsed",
+        this.characterMetaCollapsed,
+      );
+    });
+
+    this.logFilterCollapseBtn.addEventListener("click", () => {
+      this.logFilterCollapsed = !this.logFilterCollapsed;
+      this.logFilterPanel.hidden = this.logFilterCollapsed;
+      this.logFilterCollapseBtn.classList.toggle(
+        "collapsed",
+        this.logFilterCollapsed,
+      );
+    });
+
+    this.replayInfoCollapseBtn.addEventListener("click", () => {
+      this.replayInfoCollapsed = !this.replayInfoCollapsed;
+      this.replayInfoPanel.hidden = this.replayInfoCollapsed;
+      this.replayInfoCollapseBtn.classList.toggle(
+        "collapsed",
+        this.replayInfoCollapsed,
+      );
     });
 
     this.hudToggleBtn.addEventListener("click", () => {
@@ -193,6 +445,7 @@ export class MatchViewController {
         this.hoverScreen,
         this.currentReplay,
         this.playback?.currentIndex ?? 0,
+        this.perspectivePort,
       );
     });
 
@@ -206,6 +459,7 @@ export class MatchViewController {
         this.hoverScreen,
         this.currentReplay,
         this.playback?.currentIndex ?? 0,
+        this.perspectivePort,
       );
     });
   }
@@ -243,15 +497,54 @@ export class MatchViewController {
 
   public updateStaticTranslations(): void {
     const tr = t();
+    const perspectiveTitleEl = document.getElementById(
+      "perspectiveHeaderTitle",
+    );
+    if (perspectiveTitleEl)
+      perspectiveTitleEl.textContent = tr.perspectiveTitle;
     if (this.matchStatsHeaderTitle)
       this.matchStatsHeaderTitle.textContent = tr.matchStats;
     if (this.statsEmpty) this.statsEmpty.textContent = tr.statsEmpty;
     if (this.statsCollapseBtn)
       this.statsCollapseBtn.title = tr.statsCollapseTitle;
+    if (this.recoveryWidgetTitleEl)
+      this.recoveryWidgetTitleEl.textContent = tr.recoveryWidgetTitle;
+    if (this.recoveryCollapseBtn)
+      this.recoveryCollapseBtn.title = tr.situationCollapseTitle(
+        tr.recoveryWidgetTitle,
+      );
+    if (this.edgeGuardWidgetTitleEl)
+      this.edgeGuardWidgetTitleEl.textContent = tr.edgeGuardWidgetTitle;
+    if (this.edgeGuardCollapseBtn)
+      this.edgeGuardCollapseBtn.title = tr.situationCollapseTitle(
+        tr.edgeGuardWidgetTitle,
+      );
+    if (this.ledgeGetupWidgetTitleEl)
+      this.ledgeGetupWidgetTitleEl.textContent = tr.ledgeGetupWidgetTitle;
+    if (this.ledgeGetupCollapseBtn)
+      this.ledgeGetupCollapseBtn.title = tr.situationCollapseTitle(
+        tr.ledgeGetupWidgetTitle,
+      );
+    if (this.ledgeTrapWidgetTitleEl)
+      this.ledgeTrapWidgetTitleEl.textContent = tr.ledgeTrapWidgetTitle;
+    if (this.ledgeTrapCollapseBtn)
+      this.ledgeTrapCollapseBtn.title = tr.situationCollapseTitle(
+        tr.ledgeTrapWidgetTitle,
+      );
     if (this.hudToggleBtn) {
       this.hudToggleBtn.textContent = tr.hudOverlay;
       this.hudToggleBtn.title = tr.hudOverlayTitle;
     }
+    if (this.replayInfoHeaderTitle)
+      this.replayInfoHeaderTitle.textContent = tr.replayInfoWidgetTitle;
+    if (this.replayInfoCollapseBtn)
+      this.replayInfoCollapseBtn.title = tr.situationCollapseTitle(
+        tr.replayInfoWidgetTitle,
+      );
+    if (this.replayInfoFileLabel)
+      this.replayInfoFileLabel.textContent = tr.replayInfoFileLabel;
+    if (this.replayInfoDateLabel)
+      this.replayInfoDateLabel.textContent = tr.replayInfoRecordedLabel;
     if (this.stepBackBtn) this.stepBackBtn.title = tr.prevFrameTooltip;
     if (this.playPauseBtn) this.playPauseBtn.title = tr.playPauseTooltip;
     if (this.stepForwardBtn) this.stepForwardBtn.title = tr.nextFrameTooltip;
@@ -269,13 +562,27 @@ export class MatchViewController {
     }
   }
 
+  private updatePlayerPanelColors(): void {
+    for (const panel of this.panels) {
+      const panelEl = panel.damageEl.closest(
+        ".player-panel",
+      ) as HTMLElement | null;
+      if (panelEl) {
+        panelEl.style.setProperty(
+          "--player-color",
+          getPlayerColor(panel.port, this.perspectivePort),
+        );
+      }
+    }
+  }
+
   private buildPlayerPanels(replay: Replay): void {
     this.playersEl.innerHTML = "";
     const tr = t();
 
     this.panels = getSeatedPorts(replay).map((port) => {
       const settings = replay.gameStart.ports[port];
-      const color = PORT_COLORS[port];
+      const color = getPlayerColor(port, this.perspectivePort);
 
       const panel = document.createElement("div");
       panel.className = "player-panel";
@@ -316,14 +623,27 @@ export class MatchViewController {
     snap: boolean,
   ): void {
     this.lastFrame = frame;
-    const positions = this.panels
-      .map((panel) => frame?.ports[panel.port]?.post)
-      .filter((post): post is NonNullable<typeof post> => post !== undefined)
-      .filter(
-        (post) => !isDeadState(post.actionStateId) && post.stocksRemaining >= 0,
-      )
-      .map((post) => ({ x: post.positionX, y: post.positionY }));
-    this.camera.update(positions, snap);
+    const targets: Array<{ x: number; y: number }> = [];
+    for (const panel of this.panels) {
+      const post = frame?.ports[panel.port]?.post;
+      if (
+        !post ||
+        isDeadState(post.actionStateId) ||
+        post.stocksRemaining < 0
+      ) {
+        continue;
+      }
+      const size = characterSize(post.characterId);
+      const crouching = isCrouchState(post.actionStateId);
+      const height = size.height * (crouching ? 0.5 : 1.0);
+      const halfWidth = size.width / 2;
+
+      targets.push(
+        { x: post.positionX - halfWidth, y: post.positionY },
+        { x: post.positionX + halfWidth, y: post.positionY + height },
+      );
+    }
+    this.camera.update(targets, snap);
 
     this.stageRenderer.render(
       this.camera,
@@ -332,6 +652,7 @@ export class MatchViewController {
       this.hoverScreen,
       this.currentReplay,
       _frameIndex,
+      this.perspectivePort,
     );
 
     const tr = t();
@@ -484,6 +805,132 @@ export class MatchViewController {
       }
     }
 
+    if (
+      ev.kind === "fthrow-entered" ||
+      ev.kind === "fthrow-success" ||
+      ev.kind === "fthrow-failure"
+    ) {
+      if (perspective === null) {
+        switch (ev.kind) {
+          case "fthrow-entered":
+            return {
+              text: `${ev.frame} — ${tr.playerFthrowEntered(name(ev.puffPort))}`,
+              kind: "entered",
+            };
+          case "fthrow-success":
+            return {
+              text: `${ev.frame} — ${tr.playerFthrowFollowup(name(ev.puffPort), ev.followupHits)}`,
+              kind: "success",
+            };
+          case "fthrow-failure":
+            return {
+              text: `${ev.frame} — ${tr.playerFthrowNoFollowup(name(ev.puffPort))}`,
+              kind: "failure",
+            };
+        }
+      }
+
+      const isPuff = ev.puffPort === perspective;
+      switch (ev.kind) {
+        case "fthrow-entered":
+          return {
+            text: `${ev.frame} — ${isPuff ? tr.fthrowEntered : tr.opponentFthrowEntered}`,
+            kind: "entered",
+          };
+        case "fthrow-success":
+          return isPuff
+            ? {
+                text: `${ev.frame} — ${tr.fthrowFollowupSuccess(ev.followupHits)}`,
+                kind: "success",
+              }
+            : {
+                text: `${ev.frame} — ${tr.opponentFthrowFollowupHit(ev.followupHits)}`,
+                kind: "failure",
+              };
+        case "fthrow-failure":
+          return isPuff
+            ? {
+                text: `${ev.frame} — ${tr.fthrowNoFollowup}`,
+                kind: "failure",
+              }
+            : {
+                text: `${ev.frame} — ${tr.opponentFthrowEscaped}`,
+                kind: "success",
+              };
+      }
+    }
+
+    if (
+      ev.kind === "shield-pressure-entered" ||
+      ev.kind === "shield-break" ||
+      ev.kind === "shield-grab" ||
+      ev.kind === "shield-escape"
+    ) {
+      if (perspective === null) {
+        switch (ev.kind) {
+          case "shield-pressure-entered":
+            return {
+              text: `${ev.frame} — ${tr.playerShieldPressureEntered(name(ev.attackerPort), ev.hitsOnShield)}`,
+              kind: "entered",
+            };
+          case "shield-break":
+            return {
+              text: `${ev.frame} — ${tr.playerShieldBreakForced(name(ev.attackerPort))}`,
+              kind: "success",
+            };
+          case "shield-grab":
+            return {
+              text: `${ev.frame} — ${tr.playerShieldPressureGrab(name(ev.attackerPort))}`,
+              kind: "success",
+            };
+          case "shield-escape":
+            return {
+              text: `${ev.frame} — ${tr.playerShieldPressureEscaped(name(ev.attackerPort))}`,
+              kind: "failure",
+            };
+        }
+      }
+
+      const isAttacker = ev.attackerPort === perspective;
+      switch (ev.kind) {
+        case "shield-pressure-entered":
+          return {
+            text: `${ev.frame} — ${isAttacker ? tr.shieldPressureEntered(ev.hitsOnShield) : tr.opponentShieldPressureEntered(ev.hitsOnShield)}`,
+            kind: "entered",
+          };
+        case "shield-break":
+          return isAttacker
+            ? {
+                text: `${ev.frame} — ${tr.shieldBreakForced}`,
+                kind: "success",
+              }
+            : {
+                text: `${ev.frame} — ${tr.shieldBroken}`,
+                kind: "failure",
+              };
+        case "shield-grab":
+          return isAttacker
+            ? {
+                text: `${ev.frame} — ${tr.shieldPressureGrab}`,
+                kind: "success",
+              }
+            : {
+                text: `${ev.frame} — ${tr.opponentShieldPressureGrab}`,
+                kind: "failure",
+              };
+        case "shield-escape":
+          return isAttacker
+            ? {
+                text: `${ev.frame} — ${tr.shieldPressureEscaped}`,
+                kind: "failure",
+              }
+            : {
+                text: `${ev.frame} — ${tr.opponentShieldPressureEscaped}`,
+                kind: "success",
+              };
+      }
+    }
+
     const edgeEv = ev as EdgeGuardEvent;
     if (perspective === null) {
       switch (edgeEv.kind) {
@@ -537,14 +984,22 @@ export class MatchViewController {
     for (const port of seated) {
       const btn = document.createElement("button");
       btn.className = "perspective-btn";
-      btn.textContent = replay.gameStart.playerNames[port] || PORT_LABELS[port];
-      btn.style.color = PORT_COLORS[port];
+      const name = replay.gameStart.playerNames[port] || PORT_LABELS[port];
+      btn.textContent = name;
+
       btn.addEventListener("click", () => {
         this.perspectivePort = port;
         this.onPerspectiveChangedCb?.(port);
+        this.updatePlayerPanelColors();
         this.renderStatsPanel(replay);
+        this.renderCharacterMetaPanel(replay);
         this.buildEventLog();
         this.updateEventLogHighlight(this.playback?.currentIndex ?? 0);
+        this.onFrameChange(
+          this.playback?.currentIndex ?? 0,
+          this.playback?.isPlaying ?? false,
+          "jump",
+        );
         for (const b of this.perspectiveToggleEl.querySelectorAll(
           ".perspective-btn",
         )) {
@@ -563,6 +1018,48 @@ export class MatchViewController {
     });
   }
 
+  private renderLogFilterWidget(): void {
+    const tr = t();
+    this.logFilterHeaderTitle.textContent = tr.logFiltersTitle;
+    this.logFilterChips.innerHTML = "";
+
+    const categories: Array<{
+      id: "recovery" | "ledge" | "angel" | "neutral" | "character";
+      label: string;
+    }> = [
+      { id: "recovery", label: tr.logFilterRecovery },
+      { id: "ledge", label: tr.logFilterLedge },
+      { id: "angel", label: tr.logFilterAngel },
+      { id: "neutral", label: tr.logFilterNeutral },
+      { id: "character", label: tr.logFilterCharacter },
+    ];
+
+    for (const cat of categories) {
+      const chip = document.createElement("button");
+      chip.className = `log-filter-chip ${this.activeLogCategories.has(cat.id) ? "active" : ""}`;
+      chip.textContent = cat.label;
+      chip.addEventListener("click", () => {
+        if (this.activeLogCategories.has(cat.id)) {
+          this.activeLogCategories.delete(cat.id);
+        } else {
+          this.activeLogCategories.add(cat.id);
+        }
+        try {
+          localStorage.setItem(
+            "rmgr-viewer-log-categories",
+            JSON.stringify([...this.activeLogCategories]),
+          );
+        } catch {
+          // Ignore localStorage write error
+        }
+        this.renderLogFilterWidget();
+        this.buildEventLog();
+        this.updateEventLogHighlight(this.playback?.currentIndex ?? 0);
+      });
+      this.logFilterChips.appendChild(chip);
+    }
+  }
+
   private buildEventLog(): void {
     if (this.perspectivePort === null) {
       this.currentLogEvents = [];
@@ -571,7 +1068,40 @@ export class MatchViewController {
 
     this.currentLogEvents = this.matchEvents.filter((ev) => {
       if (ev.kind === "neutral-hit") {
+        if (!this.activeLogCategories.has("neutral")) return false;
         return ev.attackerPort === this.perspectivePort;
+      }
+      if (
+        ev.kind === "situation-entered" ||
+        ev.kind === "recovery-success" ||
+        ev.kind === "recovery-failure"
+      ) {
+        return this.activeLogCategories.has("recovery");
+      }
+      if (
+        ev.kind === "ledge-getup-entered" ||
+        ev.kind === "ledge-getup-success" ||
+        ev.kind === "ledge-getup-failure"
+      ) {
+        return this.activeLogCategories.has("ledge");
+      }
+      if (
+        ev.kind === "angel-entered" ||
+        ev.kind === "angel-avoid-success" ||
+        ev.kind === "angel-avoid-failure"
+      ) {
+        return this.activeLogCategories.has("angel");
+      }
+      if (
+        ev.kind === "fthrow-entered" ||
+        ev.kind === "fthrow-success" ||
+        ev.kind === "fthrow-failure" ||
+        ev.kind === "shield-pressure-entered" ||
+        ev.kind === "shield-break" ||
+        ev.kind === "shield-grab" ||
+        ev.kind === "shield-escape"
+      ) {
+        return this.activeLogCategories.has("character");
       }
       return true;
     });
@@ -641,6 +1171,11 @@ export class MatchViewController {
     if (this.perspectivePort === null || this.matchEvents.length === 0) {
       this.statsPanel.appendChild(this.statsEmpty);
       this.statsEmpty.hidden = false;
+      this.recoveryWidget.hidden = true;
+      this.edgeGuardWidget.hidden = true;
+      this.ledgeGetupWidget.hidden = true;
+      this.ledgeTrapWidget.hidden = true;
+      this.renderCharacterMetaPanel(replay);
       return;
     }
 
@@ -651,9 +1186,6 @@ export class MatchViewController {
       this.perspectivePort,
     );
     const neutralStats = computeNeutralHitsStats(replay, this.perspectivePort);
-    const name =
-      replay.gameStart.playerNames[this.perspectivePort] ||
-      PORT_LABELS[this.perspectivePort];
 
     const pct = (n: number, d: number): string =>
       d === 0 ? "—" : `${Math.round((n / d) * 100)}%`;
@@ -745,13 +1277,6 @@ export class MatchViewController {
       this.statsPanel.appendChild(row);
     };
 
-    const header = document.createElement("div");
-    header.className = "stat-row-label";
-    header.style.color = PORT_COLORS[this.perspectivePort];
-    header.style.marginBottom = "2px";
-    header.textContent = name;
-    this.statsPanel.appendChild(header);
-
     addRow(
       tr.recovery,
       stats.recoverySuccesses,
@@ -766,18 +1291,91 @@ export class MatchViewController {
       "pct-success",
       this.matchupBaseline?.edgeGuardPct,
     );
-    addRow(
+    const addLedgeRow = (
+      label: string,
+      successes: number,
+      total: number,
+      under100Successes: number,
+      under100Total: number,
+      over100Successes: number,
+      over100Total: number,
+      baselinePct?: number | null,
+    ): void => {
+      const row = document.createElement("div");
+      row.className = "stat-row";
+
+      const lbl = document.createElement("span");
+      lbl.className = "stat-row-label";
+      lbl.textContent = label;
+
+      const val = document.createElement("div");
+      val.className = "stat-row-value";
+
+      const pctSpan = document.createElement("span");
+      if (total === 0) {
+        pctSpan.className = "stat-pct";
+        pctSpan.textContent = "—";
+      } else {
+        const pct = Math.round((successes / total) * 100);
+        pctSpan.className = "stat-pct pct-success";
+        pctSpan.textContent = `${pct}%`;
+      }
+
+      const countSpan = document.createElement("span");
+      countSpan.className = "stat-count";
+      countSpan.textContent = ` (${successes}/${total})`;
+
+      val.appendChild(pctSpan);
+      val.appendChild(countSpan);
+
+      if (baselinePct !== undefined && baselinePct !== null && total > 0) {
+        const currentPct = (successes / total) * 100;
+        const delta = Math.round(currentPct - baselinePct);
+        const deltaSpan = document.createElement("span");
+        deltaSpan.className = `stat-match-delta ${delta >= 0 ? "pct-delta-pos" : "pct-delta-neg"}`;
+        deltaSpan.textContent = delta >= 0 ? `+${delta}%` : `${delta}%`;
+        val.appendChild(deltaSpan);
+      }
+
+      row.appendChild(lbl);
+      row.appendChild(val);
+
+      if (total > 0) {
+        const sub = document.createElement("div");
+        sub.className = "stat-subdetail";
+        const uPct =
+          under100Total > 0
+            ? `${Math.round((under100Successes / under100Total) * 100)}%`
+            : "—";
+        const oPct =
+          over100Total > 0
+            ? `${Math.round((over100Successes / over100Total) * 100)}%`
+            : "—";
+        sub.textContent = `<100%: ${under100Successes}/${under100Total} (${uPct}) | ≥100%: ${over100Successes}/${over100Total} (${oPct})`;
+        row.appendChild(sub);
+      }
+
+      this.statsPanel.appendChild(row);
+    };
+
+    addLedgeRow(
       tr.ledgeGetup,
       ledgeStats.ledgeGetupSuccesses,
       ledgeStats.ledgeGetupSituations,
-      "pct-success",
+      ledgeStats.ledgeGetupUnder100Successes,
+      ledgeStats.ledgeGetupUnder100Situations,
+      ledgeStats.ledgeGetupOver100Successes,
+      ledgeStats.ledgeGetupOver100Situations,
       this.matchupBaseline?.ledgeGetupPct,
     );
-    addRow(
+    addLedgeRow(
       tr.ledgeTrap,
       ledgeStats.ledgeTrapSuccesses,
       ledgeStats.ledgeTrapSituations,
-      "pct-success",
+      ledgeStats.ledgeTrapUnder100Successes,
+      ledgeStats.ledgeTrapUnder100Situations,
+      ledgeStats.ledgeTrapOver100Successes,
+      ledgeStats.ledgeTrapOver100Situations,
       this.matchupBaseline?.ledgeTrapPct,
     );
     addRow(
@@ -800,6 +1398,364 @@ export class MatchViewController {
         : tr.noStocksTaken,
       this.matchupBaseline?.neutralHitsPerStock,
     );
+
+    this.buildSituationWidgets(replay);
+    this.renderCharacterMetaPanel(replay);
+  }
+
+  private buildSituationWidgets(replay: Replay): void {
+    const tr = t();
+    this.recoveryList.innerHTML = "";
+    this.edgeGuardList.innerHTML = "";
+    this.ledgeGetupList.innerHTML = "";
+    this.ledgeTrapList.innerHTML = "";
+
+    const edgeEvents = this.matchEvents.filter(
+      (ev): ev is EdgeGuardEvent =>
+        ev.kind === "situation-entered" ||
+        ev.kind === "recovery-success" ||
+        ev.kind === "recovery-failure",
+    );
+    const ledgeEvents = this.matchEvents.filter(
+      (ev): ev is LedgeTrapEvent =>
+        ev.kind === "ledge-getup-entered" ||
+        ev.kind === "ledge-getup-success" ||
+        ev.kind === "ledge-getup-failure",
+    );
+
+    if (
+      this.perspectivePort === null ||
+      this.matchEvents.length === 0 ||
+      replay.gameStart.stageId !== DREAM_LAND_STAGE_ID
+    ) {
+      this.recoveryWidget.hidden = true;
+      this.edgeGuardWidget.hidden = true;
+      this.ledgeGetupWidget.hidden = true;
+      this.ledgeTrapWidget.hidden = true;
+      return;
+    }
+
+    this.recoveryWidget.hidden = false;
+    this.edgeGuardWidget.hidden = false;
+    this.ledgeGetupWidget.hidden = false;
+    this.ledgeTrapWidget.hidden = false;
+
+    interface EdgeSituationRecord {
+      enteredFrameIndex: number;
+      enteredFrame: number;
+      outcome: "success" | "failure" | "open";
+      recoveringPort: PortIndex;
+      edgeGuardingPort: PortIndex;
+    }
+
+    const edgeSituations: EdgeSituationRecord[] = [];
+    let currentEdgeSit: EdgeSituationRecord | null = null;
+
+    for (const ev of edgeEvents) {
+      if (ev.kind === "situation-entered") {
+        if (currentEdgeSit) {
+          edgeSituations.push(currentEdgeSit);
+        }
+        currentEdgeSit = {
+          enteredFrameIndex: ev.frameIndex,
+          enteredFrame: ev.frame,
+          outcome: "open",
+          recoveringPort: ev.recoveringPort,
+          edgeGuardingPort: ev.edgeGuardingPort,
+        };
+      } else if (
+        ev.kind === "recovery-success" ||
+        ev.kind === "recovery-failure"
+      ) {
+        if (currentEdgeSit) {
+          currentEdgeSit.outcome =
+            ev.kind === "recovery-success" ? "success" : "failure";
+          edgeSituations.push(currentEdgeSit);
+          currentEdgeSit = null;
+        }
+      }
+    }
+    if (currentEdgeSit) {
+      edgeSituations.push(currentEdgeSit);
+    }
+
+    interface LedgeSituationRecord {
+      enteredFrameIndex: number;
+      enteredFrame: number;
+      outcome: "success" | "failure" | "open";
+      ledgePort: PortIndex;
+      trapPort: PortIndex;
+      damageAtEntry: number;
+      isUnder100: boolean;
+    }
+
+    const ledgeSituations: LedgeSituationRecord[] = [];
+    let currentLedgeSit: LedgeSituationRecord | null = null;
+
+    for (const ev of ledgeEvents) {
+      if (ev.kind === "ledge-getup-entered") {
+        if (currentLedgeSit) {
+          ledgeSituations.push(currentLedgeSit);
+        }
+        currentLedgeSit = {
+          enteredFrameIndex: ev.frameIndex,
+          enteredFrame: ev.frame,
+          outcome: "open",
+          ledgePort: ev.ledgePort,
+          trapPort: ev.trapPort,
+          damageAtEntry: ev.damageAtEntry,
+          isUnder100: ev.isUnder100,
+        };
+      } else if (
+        ev.kind === "ledge-getup-success" ||
+        ev.kind === "ledge-getup-failure"
+      ) {
+        if (currentLedgeSit) {
+          currentLedgeSit.outcome =
+            ev.kind === "ledge-getup-success" ? "success" : "failure";
+          ledgeSituations.push(currentLedgeSit);
+          currentLedgeSit = null;
+        }
+      }
+    }
+    if (currentLedgeSit) {
+      ledgeSituations.push(currentLedgeSit);
+    }
+
+    const recoverySituations = edgeSituations.filter(
+      (s) => s.recoveringPort === this.perspectivePort,
+    );
+    const edgeGuardSituations = edgeSituations.filter(
+      (s) => s.edgeGuardingPort === this.perspectivePort,
+    );
+    const ledgeGetupSituations = ledgeSituations.filter(
+      (s) => s.ledgePort === this.perspectivePort,
+    );
+    const ledgeTrapSituations = ledgeSituations.filter(
+      (s) => s.trapPort === this.perspectivePort,
+    );
+
+    const renderList = (
+      container: HTMLDivElement,
+      items: Array<{
+        enteredFrameIndex: number;
+        enteredFrame: number;
+        outcome: "success" | "failure" | "open";
+        damageAtEntry?: number;
+        isUnder100?: boolean;
+      }>,
+      isSuccessOutcome: (outcome: "success" | "failure") => boolean,
+    ): void => {
+      if (items.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "situation-empty";
+        empty.textContent = tr.noSituations;
+        container.appendChild(empty);
+        return;
+      }
+
+      items.forEach((sit, index) => {
+        const row = document.createElement("div");
+        row.className = "situation-row";
+
+        const indexEl = document.createElement("span");
+        indexEl.className = "situation-index";
+        indexEl.textContent = `#${index + 1}`;
+
+        const timeEl = document.createElement("span");
+        timeEl.className = "situation-time";
+        timeEl.textContent = `${formatElapsed(sit.enteredFrameIndex)} (${sit.enteredFrame}F)`;
+
+        let isSuccess: boolean | null;
+        if (sit.outcome === "open") {
+          isSuccess = null;
+        } else {
+          isSuccess = isSuccessOutcome(sit.outcome);
+        }
+
+        row.appendChild(indexEl);
+        row.appendChild(timeEl);
+
+        if (sit.damageAtEntry !== undefined) {
+          const bracketEl = document.createElement("span");
+          const isUnder100 = sit.isUnder100 ?? sit.damageAtEntry < 100;
+          bracketEl.className = `situation-bracket ${isUnder100 ? "bracket-under100" : "bracket-over100"}`;
+          bracketEl.textContent = `${isUnder100 ? "<100%" : "≥100%"} (${sit.damageAtEntry}%)`;
+          row.appendChild(bracketEl);
+        }
+
+        const badgeEl = document.createElement("span");
+        if (isSuccess === true) {
+          badgeEl.className = "situation-badge success";
+          badgeEl.textContent = tr.situationSuccessBadge;
+        } else if (isSuccess === false) {
+          badgeEl.className = "situation-badge failure";
+          badgeEl.textContent = tr.situationFailureBadge;
+        } else {
+          badgeEl.className = "situation-badge open";
+          badgeEl.textContent = tr.situationOpenBadge;
+        }
+        row.appendChild(badgeEl);
+
+        row.addEventListener("click", () => {
+          // Seek 1.5 seconds (90 frames at 60fps) before the situation began and play automatically
+          const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
+          this.playback?.seek(targetFrameIndex);
+          this.playback?.play();
+        });
+
+        container.appendChild(row);
+      });
+    };
+
+    renderList(
+      this.recoveryList,
+      recoverySituations,
+      (outcome) => outcome === "success",
+    );
+    renderList(
+      this.edgeGuardList,
+      edgeGuardSituations,
+      (outcome) => outcome === "failure",
+    );
+    renderList(
+      this.ledgeGetupList,
+      ledgeGetupSituations,
+      (outcome) => outcome === "success",
+    );
+    renderList(
+      this.ledgeTrapList,
+      ledgeTrapSituations,
+      (outcome) => outcome === "failure",
+    );
+  }
+
+  private renderCharacterMetaPanel(replay: Replay): void {
+    const tr = t();
+    if (this.perspectivePort === null) {
+      this.characterMetaWidget.hidden = true;
+      return;
+    }
+
+    const charId = replay.gameStart.ports[this.perspectivePort]?.characterId;
+    if (charId === undefined) {
+      this.characterMetaWidget.hidden = true;
+      return;
+    }
+
+    const iconicColor = getCharacterIconicColor(charId);
+    this.characterMetaWidget.style.setProperty(
+      "--char-iconic-color",
+      iconicColor,
+    );
+
+    if (isJigglypuffCharacter(charId)) {
+      this.characterMetaWidget.hidden = false;
+      this.characterMetaHeaderTitle.textContent = tr.characterMetaTitle(
+        characterName(charId),
+      );
+      this.characterMetaPanel.innerHTML = "";
+
+      const puffEvents = this.matchEvents.filter(
+        (ev): ev is JigglypuffFThrowEvent =>
+          ev.kind === "fthrow-entered" ||
+          ev.kind === "fthrow-success" ||
+          ev.kind === "fthrow-failure",
+      );
+      const stats = computeJigglypuffFThrowStats(
+        puffEvents,
+        this.perspectivePort,
+      );
+
+      const row = document.createElement("div");
+      row.className = "stat-row";
+
+      const lbl = document.createElement("div");
+      lbl.className = "stat-row-label";
+      lbl.textContent = tr.fthrowFollowup;
+
+      const val = document.createElement("div");
+      val.className = "stat-row-value";
+
+      const pctSpan = document.createElement("span");
+      pctSpan.className = `stat-pct ${stats.totalThrows > 0 ? "pct-success" : ""}`;
+      pctSpan.textContent =
+        stats.followupRate !== null
+          ? `${Math.round(stats.followupRate)}%`
+          : "—";
+      val.appendChild(pctSpan);
+
+      if (stats.totalThrows > 0) {
+        val.append(
+          `  ${tr.fthrowFollowupSummary(stats.followupSuccesses, stats.totalThrows, stats.noFollowups)}`,
+        );
+      } else {
+        val.append(`  ${tr.noFthrows}`);
+      }
+
+      row.appendChild(lbl);
+      row.appendChild(val);
+      this.characterMetaPanel.appendChild(row);
+      return;
+    }
+
+    if (isNessCharacter(charId) || isYoshiCharacter(charId)) {
+      this.characterMetaWidget.hidden = false;
+      this.characterMetaHeaderTitle.textContent = tr.characterMetaTitle(
+        characterName(charId),
+      );
+      this.characterMetaPanel.innerHTML = "";
+
+      const shieldEvents = this.matchEvents.filter(
+        (ev): ev is ShieldPressureEvent =>
+          ev.kind === "shield-pressure-entered" ||
+          ev.kind === "shield-break" ||
+          ev.kind === "shield-grab" ||
+          ev.kind === "shield-escape",
+      );
+      const stats = computeShieldPressureStats(
+        shieldEvents,
+        this.perspectivePort,
+      );
+
+      const row = document.createElement("div");
+      row.className = "stat-row";
+
+      const lbl = document.createElement("div");
+      lbl.className = "stat-row-label";
+      lbl.textContent = tr.shieldPressureTwoHits;
+
+      const val = document.createElement("div");
+      val.className = "stat-row-value";
+
+      const pctSpan = document.createElement("span");
+      pctSpan.className = `stat-pct ${stats.totalPressures > 0 ? "pct-success" : ""}`;
+      pctSpan.textContent =
+        stats.conversionRate !== null
+          ? `${Math.round(stats.conversionRate)}%`
+          : "—";
+      val.appendChild(pctSpan);
+
+      if (stats.totalPressures > 0) {
+        val.append(
+          `  ${tr.shieldPressureBreakdown(
+            stats.shieldBreaks,
+            stats.grabs,
+            stats.neither,
+            stats.totalPressures,
+          )}`,
+        );
+      } else {
+        val.append(`  ${tr.noShieldPressures}`);
+      }
+
+      row.appendChild(lbl);
+      row.appendChild(val);
+      this.characterMetaPanel.appendChild(row);
+      return;
+    }
+
+    this.characterMetaWidget.hidden = true;
   }
 
   private onFrameChange(
@@ -847,11 +1803,15 @@ export class MatchViewController {
     const ledgeEvents = computeLedgeTrapEvents(replay);
     const angelEvents = computeAngelInvincibilityEvents(replay);
     const neutralEvents = computeNeutralHitEvents(replay);
+    const puffEvents = computeJigglypuffFThrowEvents(replay);
+    const shieldEvents = computeShieldPressureEvents(replay);
     this.matchEvents = [
       ...edgeEvents,
       ...ledgeEvents,
       ...angelEvents,
       ...neutralEvents,
+      ...puffEvents,
+      ...shieldEvents,
     ].sort((a, b) =>
       a.frameIndex === b.frameIndex
         ? a.kind === "neutral-hit"
@@ -882,6 +1842,9 @@ export class MatchViewController {
     this.buildPlayerPanels(replay);
     this.buildPerspectiveToggle(replay);
     this.renderStatsPanel(replay);
+    this.renderCharacterMetaPanel(replay);
+    this.renderLogFilterWidget();
+    this.renderReplayInfo(loaded);
     this.buildEventLog();
     this.loadStatus.textContent = "";
 
@@ -893,6 +1856,27 @@ export class MatchViewController {
       (idx, isPlaying, reason) => this.onFrameChange(idx, isPlaying, reason),
     );
     this.onFrameChange(0, false, "jump");
+  }
+
+  private renderReplayInfo(loaded: LoadedReplay | null): void {
+    if (!loaded) {
+      this.replayInfoWidget.hidden = true;
+      return;
+    }
+    this.replayInfoWidget.hidden = false;
+    this.replayInfoFileName.textContent = loaded.sourceName;
+    this.replayInfoFileName.title = loaded.sourceName;
+
+    const d = loaded.recordedAt;
+    const yyyy = d.getFullYear();
+    const mm = (d.getMonth() + 1).toString().padStart(2, "0");
+    const dd = d.getDate().toString().padStart(2, "0");
+    const hh = d.getHours().toString().padStart(2, "0");
+    const min = d.getMinutes().toString().padStart(2, "0");
+    const ss = d.getSeconds().toString().padStart(2, "0");
+    const localStr = `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+    this.replayInfoDateLocal.textContent = localStr;
+    this.replayInfoDateLocal.title = `UTC: ${d.toISOString().replace(".000Z", "Z").replace("T", " ")}`;
   }
 
   public setOnPerspectiveChanged(cb: (port: PortIndex) => void): void {

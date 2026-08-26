@@ -8,6 +8,8 @@
  * exact float across hundreds of samples and many characters, so these are
  * ground truth, not estimates. No other stage has been measured yet.
  */
+import { StageId } from "@rmg-k/rmgr";
+
 export interface PlatformSpec {
   leftX: number;
   rightX: number;
@@ -15,7 +17,7 @@ export interface PlatformSpec {
   kind: "ground" | "platform";
 }
 
-export const DREAM_LAND_STAGE_ID = 0x06;
+export const DREAM_LAND_STAGE_ID = StageId.DreamLand;
 
 const DREAM_LAND_GROUND: PlatformSpec = {
   leftX: -2278,

@@ -1,6 +1,10 @@
 import { t } from "../i18n.js";
 import type { GameSummary } from "../data/gameSummary.js";
-import { type Identity, loadIdentity } from "../data/identity.js";
+import {
+  type Identity,
+  loadIdentity,
+  createDefaultIdentity,
+} from "../data/identity.js";
 import {
   type FilterCriteria,
   filterGameSummaries,
@@ -152,16 +156,33 @@ export class LibraryViewController {
     );
   }
 
+  private isDemoMode = false;
+
+  public setDemoMode(isDemo: boolean): void {
+    this.isDemoMode = isDemo;
+  }
+
+  public setIdentity(identity: Identity): void {
+    this.identity = identity;
+    this.identityPanel.setIdentity(this.identity);
+    this.render();
+  }
+
   public setSummaries(summaries: GameSummary[]): void {
     this.summaries = summaries;
     this.render();
   }
 
   public addSummaries(newSummaries: GameSummary[]): void {
-    // When adding user-imported replays, remove the default preloaded bundled file if present
+    // When adding user-imported replays, remove the default preloaded demo files and clear demo identity
     const hasUserImported = newSummaries.some((s) => !s.isBundledSample);
     if (hasUserImported) {
       this.summaries = this.summaries.filter((s) => !s.isBundledSample);
+      if (this.isDemoMode) {
+        this.isDemoMode = false;
+        this.identity = createDefaultIdentity("");
+        this.identityPanel.setIdentity(this.identity);
+      }
     }
 
     // Avoid duplicate IDs

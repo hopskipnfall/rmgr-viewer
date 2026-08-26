@@ -15,7 +15,9 @@ import { summarizeReplay, type GameSummary } from "./data/gameSummary.js";
 import { importReplayFiles } from "./data/importer.js";
 import { MatchViewController } from "./match/matchView.js";
 import { LibraryViewController } from "./library/libraryView.js";
+import { CharacterPreviewController } from "./preview/characterPreview.js";
 import {
+  createDefaultIdentity,
   resolvePerspectivePort,
   resolveOpponentPort,
 } from "./data/identity.js";
@@ -23,6 +25,7 @@ import { computeMatchupBaseline, type DerivedRates } from "./data/aggregate.js";
 
 // DOM Elements
 const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
+const previewViewEl = document.getElementById("previewView") as HTMLDivElement;
 const matchViewEl = document.getElementById("matchView") as HTMLDivElement;
 const matchFooterEl = document.getElementById("matchFooter") as HTMLElement;
 const modalContainerEl = document.getElementById(
@@ -59,13 +62,47 @@ const importProgressText = document.getElementById(
 ) as HTMLSpanElement;
 const loadStatus = document.getElementById("loadStatus") as HTMLSpanElement;
 const langToggleEl = document.getElementById("langToggle") as HTMLDivElement;
+const appTitleBtn = document.getElementById("appTitleBtn") as HTMLButtonElement;
+const aboutModal = document.getElementById("aboutModal") as HTMLDivElement;
+const aboutModalTitle = document.getElementById(
+  "aboutModalTitle",
+) as HTMLHeadingElement;
+const aboutModalDesc = document.getElementById(
+  "aboutModalDesc",
+) as HTMLParagraphElement;
+const aboutAuthorLabel = document.getElementById(
+  "aboutAuthorLabel",
+) as HTMLSpanElement;
+const aboutAuthorLink = document.getElementById(
+  "aboutAuthorLink",
+) as HTMLAnchorElement;
+const aboutTwitterLabel = document.getElementById(
+  "aboutTwitterLabel",
+) as HTMLSpanElement;
+const aboutGithubLabel = document.getElementById(
+  "aboutGithubLabel",
+) as HTMLSpanElement;
+const aboutModalCloseBtn = document.getElementById(
+  "aboutModalCloseBtn",
+) as HTMLButtonElement;
+const aboutModalFooterCloseBtn = document.getElementById(
+  "aboutModalFooterCloseBtn",
+) as HTMLButtonElement;
+const aboutModalBackdrop = document.getElementById(
+  "aboutModalBackdrop",
+) as HTMLDivElement;
 
 // Controllers
 let matchController: MatchViewController;
 let libraryController: LibraryViewController;
+let previewController: CharacterPreviewController;
 
-const DEFAULT_SAMPLE_URL = `${import.meta.env.BASE_URL}replays/20260825-105731-Marcela-Penelope.rmgr`;
-let bundledSampleSummary: GameSummary | null = null;
+const DEMO_REPLAY_URLS = [
+  `${import.meta.env.BASE_URL}replays/20260822-222803-George-Harold-6.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260822-222803-Harold-George-23.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260822-222803-Harold-George-37.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260825-105731-George-Harold.rmgr`,
+];
 
 function updateHeaderTranslations(): void {
   const tr = t();
@@ -73,6 +110,14 @@ function updateHeaderTranslations(): void {
   importFilesBtn.textContent = tr.importFiles;
   importFolderBtn.textContent = tr.importFolder;
   backToLibraryBtn.textContent = tr.backToLibrary;
+  // About modal labels
+  aboutModalTitle.textContent = tr.aboutTitle;
+  aboutModalDesc.textContent = tr.aboutDescription;
+  aboutAuthorLabel.textContent = tr.authorLabel;
+  aboutAuthorLink.textContent = tr.authorName;
+  aboutTwitterLabel.textContent = tr.twitterLabel;
+  aboutGithubLabel.textContent = tr.githubLabel;
+  aboutModalFooterCloseBtn.textContent = tr.close;
 }
 
 function applyLanguage(lang: Language): void {
@@ -156,13 +201,26 @@ async function handleRouteChange(route: Route): Promise<void> {
     currentMatchSummary = null;
     // Show Library View
     matchController.deactivate();
+    previewController?.deactivate();
     matchViewEl.hidden = true;
     matchFooterEl.hidden = true;
+    previewViewEl.hidden = true;
     backToLibraryBtn.hidden = true;
     importContainer.hidden = false;
 
     libraryViewEl.hidden = false;
     libraryController.render();
+  } else if (route.view === "preview") {
+    currentMatchSummary = null;
+    // Show Character Preview View
+    matchController.deactivate();
+    matchViewEl.hidden = true;
+    matchFooterEl.hidden = true;
+    libraryViewEl.hidden = true;
+    backToLibraryBtn.hidden = false;
+    importContainer.hidden = true;
+
+    previewController.activate();
   } else if (route.view === "match") {
     // Show Match View
     const summary = libraryController.getSummaryById(route.id);
@@ -173,6 +231,8 @@ async function handleRouteChange(route: Route): Promise<void> {
     }
     currentMatchSummary = summary;
 
+    previewController?.deactivate();
+    previewViewEl.hidden = true;
     libraryViewEl.hidden = true;
     matchViewEl.hidden = false;
     matchFooterEl.hidden = false;
@@ -184,8 +244,10 @@ async function handleRouteChange(route: Route): Promise<void> {
       let loaded: LoadedReplay;
       if (summary.fileRef) {
         loaded = await loadReplayFromFile(summary.fileRef);
+      } else if (summary.url) {
+        loaded = await loadReplayFromUrl(summary.url);
       } else {
-        loaded = await loadReplayFromUrl(DEFAULT_SAMPLE_URL);
+        loaded = await loadReplayFromUrl(DEMO_REPLAY_URLS[0]!);
       }
 
       const identity = libraryController.getIdentity();
@@ -232,6 +294,8 @@ async function init(): Promise<void> {
       navigateToMatch(selectedSummary.id);
     },
   );
+
+  previewController = new CharacterPreviewController(previewViewEl);
 
   // 2. Wire Header controls
   backToLibraryBtn.addEventListener("click", () => {
@@ -295,14 +359,39 @@ async function init(): Promise<void> {
     }
   });
 
-  // 3. Seed Bundled Replay (§5.4)
-  try {
-    const sampleLoaded = await loadReplayFromUrl(DEFAULT_SAMPLE_URL);
-    bundledSampleSummary = summarizeReplay(sampleLoaded, null);
-    bundledSampleSummary.isBundledSample = true;
-    libraryController.addSummaries([bundledSampleSummary]);
-  } catch (err) {
-    console.warn("Could not load default bundled sample:", err);
+  // About modal
+  const openAboutModal = (): void => {
+    aboutModal.hidden = false;
+  };
+  const closeAboutModal = (): void => {
+    aboutModal.hidden = true;
+  };
+  appTitleBtn.addEventListener("click", openAboutModal);
+  aboutModalCloseBtn.addEventListener("click", closeAboutModal);
+  aboutModalFooterCloseBtn.addEventListener("click", closeAboutModal);
+  aboutModalBackdrop.addEventListener("click", closeAboutModal);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !aboutModal.hidden) closeAboutModal();
+  });
+
+  // 3. Seed Demo Replays
+  const demoSummaries: GameSummary[] = [];
+  for (const url of DEMO_REPLAY_URLS) {
+    try {
+      const sampleLoaded = await loadReplayFromUrl(url);
+      const summary = summarizeReplay(sampleLoaded, null);
+      summary.isBundledSample = true;
+      summary.url = url;
+      demoSummaries.push(summary);
+    } catch (err) {
+      console.warn("Could not load demo sample:", url, err);
+    }
+  }
+
+  if (demoSummaries.length > 0) {
+    libraryController.setDemoMode(true);
+    libraryController.setIdentity(createDefaultIdentity("George"));
+    libraryController.addSummaries(demoSummaries);
   }
 
   // 4. Initialize Language
