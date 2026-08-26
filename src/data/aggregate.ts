@@ -5,6 +5,7 @@ import {
   resolveOpponentPort,
   type Identity,
 } from "./identity.js";
+import { getCharacterGroup, type CharacterGroup } from "../lookups.js";
 
 export interface FilterCriteria {
   yourCharacterId?: number | "all";
@@ -450,4 +451,48 @@ export function computeOpponentCharacterBreakdown(
   // Sort descending by games count, then character ID
   rows.sort((a, b) => b.games - a.games || a.characterId - b.characterId);
   return rows;
+}
+
+export interface GroupedCharacterBreakdown {
+  group: CharacterGroup;
+  rows: CharacterBreakdownRow[];
+}
+
+/**
+ * Computes opponent character breakdown grouped by character roster category:
+ * 1. North America (Original 12)
+ * 2. Japan (Original 12 J)
+ * 3. Remix Characters
+ */
+export function computeGroupedOpponentCharacterBreakdown(
+  resolvedGames: { summary: GameSummary; yourPort: number; oppPort: number }[],
+): GroupedCharacterBreakdown[] {
+  const allRows = computeOpponentCharacterBreakdown(resolvedGames);
+  const naRows: CharacterBreakdownRow[] = [];
+  const jpRows: CharacterBreakdownRow[] = [];
+  const remixRows: CharacterBreakdownRow[] = [];
+
+  for (const row of allRows) {
+    const group = getCharacterGroup(row.characterId);
+    if (group === "na") {
+      naRows.push(row);
+    } else if (group === "jp") {
+      jpRows.push(row);
+    } else {
+      remixRows.push(row);
+    }
+  }
+
+  const groups: GroupedCharacterBreakdown[] = [];
+  if (naRows.length > 0) {
+    groups.push({ group: "na", rows: naRows });
+  }
+  if (jpRows.length > 0) {
+    groups.push({ group: "jp", rows: jpRows });
+  }
+  if (remixRows.length > 0) {
+    groups.push({ group: "remix", rows: remixRows });
+  }
+
+  return groups;
 }

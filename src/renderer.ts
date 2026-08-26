@@ -130,6 +130,90 @@ export function isTurnState(actionStateId: number): boolean {
   return TURN_ACTION_STATES.has(actionStateId);
 }
 
+const TECH_ROLL_ACTION_STATES = new Set([
+  0x049, // TechF (Tech forward roll)
+  0x04a, // TechB (Tech backward roll)
+]);
+
+export function isTechRollState(actionStateId: number): boolean {
+  return TECH_ROLL_ACTION_STATES.has(actionStateId);
+}
+
+const TECH_IN_PLACE_ACTION_STATES = new Set([
+  0x051, // Tech (Passive / Breakfall in place)
+  0x04b, // TechWall
+  0x04c, // TechCeil
+]);
+
+export function isTechInPlaceState(actionStateId: number): boolean {
+  return TECH_IN_PLACE_ACTION_STATES.has(actionStateId);
+}
+
+export function isAnyTechState(actionStateId: number): boolean {
+  return isTechRollState(actionStateId) || isTechInPlaceState(actionStateId);
+}
+
+const NORMAL_ROLL_ACTION_STATES = new Set([
+  0x09c, // RollF (Forward shield roll)
+  0x09d, // RollB (Backward shield roll)
+]);
+
+export function isNormalRollState(actionStateId: number): boolean {
+  return NORMAL_ROLL_ACTION_STATES.has(actionStateId);
+}
+
+const TUMBLE_ACTION_STATES = new Set([
+  0x039, // Tumble (DamageFall)
+  0x037, // DamageFlyRoll
+  0x033, // DamageFlyHigh
+  0x034, // DamageFlyMid
+  0x035, // DamageFlyLow
+  0x036, // DamageFlyTop
+]);
+
+export function isTumbleState(actionStateId: number): boolean {
+  return TUMBLE_ACTION_STATES.has(actionStateId);
+}
+
+const DOWN_BOUND_ACTION_STATES = new Set([
+  0x043, // DownBoundD (Ground bounce face down)
+  0x04a, // DownBoundU (Ground bounce face up)
+  0x0a0, // ShieldBreakDownBound
+  0x038, // WallBounce
+  0x042, // CeilingBonk
+]);
+
+export function isDownBoundState(actionStateId: number): boolean {
+  return DOWN_BOUND_ACTION_STATES.has(actionStateId);
+}
+
+const PRONE_ACTION_STATES = new Set([
+  0x044, // DownWaitD (Lying prone face down on floor)
+  0x04c, // DownWaitU (Lying prone face up on floor)
+  0x043, // DownBoundD
+  0x04a, // DownBoundU
+]);
+
+export function isProneState(actionStateId: number): boolean {
+  return PRONE_ACTION_STATES.has(actionStateId);
+}
+
+const MISSED_TECH_ACTION_STATES = new Set([
+  ...PRONE_ACTION_STATES,
+  0x045, // DownStandD (Getup neutral face down)
+  0x04d, // DownStandU (Getup neutral face up)
+  0x047, // DownForwardD (Getup roll forward face down)
+  0x048, // DownBackD (Getup roll back face down)
+  0x04b, // DownForwardU (Getup roll forward face up)
+  0x04c, // DownBackU (Getup roll back face up)
+  0x04f, // DownAttackD (Getup attack face down)
+  0x050, // DownAttackU (Getup attack face up)
+]);
+
+export function isMissedTechState(actionStateId: number): boolean {
+  return MISSED_TECH_ACTION_STATES.has(actionStateId);
+}
+
 const ROLL_ACTION_STATES = new Set([
   0x09c, // RollF (Forward shield roll)
   0x09d, // RollB (Backward shield roll)
@@ -647,6 +731,11 @@ export interface CharacterAnimState {
   taunting: boolean;
   inCombo: boolean;
   isRoll: boolean;
+  isTechRoll: boolean;
+  isTechInPlace: boolean;
+  isTumble: boolean;
+  isProne: boolean;
+  isDownBound: boolean;
   isInvulnerable: boolean;
   isSpecial: boolean;
   isLanding: boolean;
@@ -1335,8 +1424,14 @@ export class StageRenderer {
       }
     }
 
+    const isTechRoll = isTechRollState(post.actionStateId);
+    const isTechInPlace = isTechInPlaceState(post.actionStateId);
     const isRoll = isRollState(post.actionStateId);
-    const isInvulnerable = isRoll && post.hurtboxState === 0x03;
+    const isTumble = isTumbleState(post.actionStateId);
+    const isDownBound = isDownBoundState(post.actionStateId);
+    const isProne = isProneState(post.actionStateId);
+    const isInvulnerable =
+      (isRoll || isTechInPlace || isProne) && post.hurtboxState === 0x03;
 
     const taunting = isTauntState(post.actionStateId);
     let triangleColor = color;
@@ -1345,6 +1440,9 @@ export class StageRenderer {
       // Smoothly cycle through colors across the rainbow spectrum
       const hue = (post.actionFrameCounter * 10) % 360;
       triangleColor = `hsl(${hue}, 85%, 55%)`;
+    } else if (isTechRoll) {
+      // High-speed cyan/teal ghost appearance for tech roll
+      triangleColor = hexToRgba("#06b6d4", 0.5);
     } else if (isRoll) {
       // Ethereal / semi-translucent ghost appearance for the entire roll state
       triangleColor = hexToRgba(color, 0.45);
@@ -1365,7 +1463,9 @@ export class StageRenderer {
       perspectivePort !== undefined &&
       port !== perspectivePort;
 
-    if (isDizzy) {
+    if (isProne) {
+      labelY = y - 18;
+    } else if (isDizzy) {
       labelY = Math.min(labelY, topY - 26);
     }
 
@@ -1373,6 +1473,11 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
+      isTechRoll,
+      isTechInPlace,
+      isTumble,
+      isProne,
+      isDownBound,
       isInvulnerable,
       isSpecial,
       isLanding,
@@ -1397,6 +1502,19 @@ export class StageRenderer {
       // Gentle breathing rhythmic bobbing while asleep
       const sleepBobY = Math.sin(post.actionFrameCounter * 0.08) * 2;
       ctx.translate(0, sleepBobY);
+    } else if (isTumble) {
+      // Dynamic cartwheel spin during tumble reeling
+      const spinSpeed = 0.22;
+      const spinAngle =
+        post.actionFrameCounter * spinSpeed * (facingRight ? 1 : -1);
+      ctx.translate(x, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-x, -centerY);
+    } else if (isProne) {
+      // Flattened prone against stage floor at feet pivot (x, y)
+      ctx.translate(x, y);
+      ctx.scale(1.35, 0.35);
+      ctx.translate(-x, -y);
     }
 
     if (isPikachuCharacter(post.characterId)) {
@@ -1588,6 +1706,26 @@ export class StageRenderer {
         ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
         ctx.lineWidth = 1;
         ctx.stroke();
+      } else if (isTechRoll) {
+        // High-speed vibrant cyan/teal tech roll aura
+        ctx.save();
+        ctx.strokeStyle = isInvulnerable
+          ? "rgba(34, 211, 238, 0.95)"
+          : "rgba(6, 182, 212, 0.9)";
+        ctx.lineWidth = 2.8;
+        ctx.shadowColor = "rgba(6, 182, 212, 0.85)";
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.moveTo(noseX, noseY);
+        ctx.lineTo(backX, topY);
+        ctx.lineTo(backX, y);
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
       } else if (isRoll) {
         // Ethereal silver glow during roll (with brighter cyan aura when actively intangible)
         ctx.save();
@@ -1636,7 +1774,7 @@ export class StageRenderer {
 
       ctx.restore();
     }
-    ctx.restore(); // Closes the character sway/bob transform
+    ctx.restore(); // Closes the character sway/bob/tumble/prone transform
 
     if (isDizzy) {
       // 3 glowing golden stars orbiting in 3D ellipse above character's head
@@ -1646,6 +1784,52 @@ export class StageRenderer {
       this.drawSleepZzz(
         x + halfWidth * 0.5,
         topY - 4,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    } else if (isTumble) {
+      // Swirling wind/motion streaks indicating unstable free-fall reeling
+      this.drawTumbleAura(
+        x,
+        centerY,
+        halfWidth,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    } else if (isDownBound) {
+      // Ground impact dust shockwave and sparks on missed tech floor bounce
+      this.drawMissedTechBounce(
+        x,
+        y,
+        halfWidth,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    } else if (isTechInPlace) {
+      // Breakfall ground flash and upward recovery burst on tech in place
+      this.drawTechBreakfall(
+        x,
+        y,
+        halfWidth,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    } else if (isTechRoll) {
+      if (post.actionFrameCounter < 10) {
+        this.drawTechBreakfall(
+          x,
+          y,
+          halfWidth,
+          post.actionFrameCounter,
+          isOpponent,
+        );
+      }
+      this.drawTechRollSpeedLines(
+        x,
+        y,
+        topY,
+        effectiveDir,
+        halfWidth,
         post.actionFrameCounter,
         isOpponent,
       );
@@ -1883,6 +2067,166 @@ export class StageRenderer {
       ctx.shadowBlur = 4;
       ctx.fillText(i === 0 ? "Z" : "z", 0, 0);
       ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Draws a dynamic swirling wind/motion aura around a character reeling in tumble.
+   */
+  private drawTumbleAura(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const radius = halfWidth * 1.35;
+    const speed = 0.2;
+    ctx.save();
+    ctx.lineWidth = 1.8;
+
+    for (let i = 0; i < 3; i++) {
+      const angle = frameCounter * speed + (i * Math.PI * 2) / 3;
+      const alpha = 0.4 + 0.3 * Math.sin(angle);
+      ctx.strokeStyle = resolveColor("#f59e0b", isOpponent, alpha); // Amber/orange wind streak
+      ctx.shadowColor = resolveColor("#d97706", isOpponent, alpha * 0.6);
+      ctx.shadowBlur = 4;
+
+      ctx.beginPath();
+      ctx.arc(x, centerY, radius + i * 2, angle, angle + Math.PI * 0.55);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Draws ground impact dust shockwaves and sparks when a player misses a tech
+   * and bounces hard on the floor (DownBound).
+   */
+  private drawMissedTechBounce(
+    x: number,
+    y: number,
+    halfWidth: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const progress = Math.min(frameCounter / 14, 1);
+    const alpha = 1 - progress;
+    if (alpha <= 0) return;
+
+    ctx.save();
+
+    // 1. Horizontal expanding floor dust ellipse
+    const dustRadiusX = halfWidth * 1.5 + progress * 24;
+    const dustRadiusY = 4 + progress * 3;
+    ctx.beginPath();
+    ctx.ellipse(x, y, dustRadiusX, dustRadiusY, 0, 0, Math.PI * 2);
+    ctx.fillStyle = resolveColor(
+      "rgba(148, 163, 184, 0.45)",
+      isOpponent,
+      alpha * 0.5,
+    );
+    ctx.fill();
+    ctx.strokeStyle = resolveColor("#f97316", isOpponent, alpha * 0.8); // Orange impact ring
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 2. Upward impact spark lines
+    const sparkCount = 5;
+    for (let i = 0; i < sparkCount; i++) {
+      const sparkAngle =
+        -Math.PI * 0.85 + (i * Math.PI * 0.7) / (sparkCount - 1);
+      const sparkDist = 8 + progress * 16;
+      const sx = x + Math.cos(sparkAngle) * (dustRadiusX * 0.6);
+      const sy = y + Math.sin(sparkAngle) * sparkDist;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(sparkAngle) * 4, y);
+      ctx.lineTo(sx, sy);
+      ctx.strokeStyle = resolveColor("#fde047", isOpponent, alpha);
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws a crisp breakfall ground flash and upward recovery burst on a successful Tech.
+   */
+  private drawTechBreakfall(
+    x: number,
+    y: number,
+    halfWidth: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const progress = Math.min(frameCounter / 16, 1);
+    const alpha = 1 - progress;
+    if (alpha <= 0) return;
+
+    ctx.save();
+
+    // 1. Cyan tech impact ring on floor
+    const ringRadiusX = halfWidth * 1.2 + progress * 20;
+    const ringRadiusY = 3 + progress * 3;
+    ctx.beginPath();
+    ctx.ellipse(x, y, ringRadiusX, ringRadiusY, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = resolveColor("#22d3ee", isOpponent, alpha * 0.9);
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = resolveColor("#06b6d4", isOpponent, alpha * 0.8);
+    ctx.shadowBlur = 8;
+    ctx.stroke();
+
+    // 2. Rising green/cyan tech recovery sparks
+    for (let i = 0; i < 4; i++) {
+      const sparkX = x + (i - 1.5) * (halfWidth * 0.8);
+      const sparkY = y - progress * 22 - (i % 2) * 4;
+      const sparkSize = Math.max(1, (1 - progress) * 3);
+      ctx.beginPath();
+      ctx.arc(sparkX, sparkY, sparkSize, 0, Math.PI * 2);
+      ctx.fillStyle = resolveColor("#34d399", isOpponent, alpha);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws electric speed lines and cyan trail for Tech Rolls.
+   */
+  private drawTechRollSpeedLines(
+    x: number,
+    y: number,
+    topY: number,
+    effectiveDir: number,
+    halfWidth: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    ctx.save();
+    const trailDir = -effectiveDir; // Speed lines trail behind movement
+    const lineCount = 4;
+    const height = y - topY;
+
+    for (let i = 0; i < lineCount; i++) {
+      const lineY = topY + (height * (i + 1)) / (lineCount + 1);
+      const startX = x + trailDir * (halfWidth * 0.4);
+      const lineLen = 14 + ((frameCounter * 7 + i * 11) % 16);
+      const endX = startX + trailDir * lineLen;
+
+      ctx.beginPath();
+      ctx.moveTo(startX, lineY);
+      ctx.lineTo(endX, lineY);
+      ctx.strokeStyle = resolveColor("#22d3ee", isOpponent, 0.75);
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = resolveColor("#06b6d4", isOpponent, 0.7);
+      ctx.shadowBlur = 4;
+      ctx.stroke();
     }
     ctx.restore();
   }

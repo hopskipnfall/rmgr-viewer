@@ -1,5 +1,5 @@
 import { t } from "../i18n.js";
-import { characterName, stageName } from "../lookups.js";
+import { characterName, getCharacterGroup, stageName } from "../lookups.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import { type FilterCriteria, hasActiveFilters } from "../data/aggregate.js";
 import {
@@ -59,12 +59,6 @@ export class FilterPanel {
       stageIds.add(summary.stageId);
     }
 
-    const yourCharList = Array.from(yourCharIds).sort((a, b) =>
-      characterName(a).localeCompare(characterName(b)),
-    );
-    const oppCharList = Array.from(oppCharIds).sort((a, b) =>
-      characterName(a).localeCompare(characterName(b)),
-    );
     const oppNamesList = Array.from(opponentNames).sort((a, b) =>
       a.localeCompare(b),
     );
@@ -74,6 +68,59 @@ export class FilterPanel {
 
     const isResetDisabled = !hasActiveFilters(this.criteria);
 
+    const renderCharacterOptions = (
+      charIds: Set<number>,
+      selectedId: number | "all" | undefined,
+    ) => {
+      const allIds = Array.from(charIds);
+      const naIds = allIds
+        .filter((id) => getCharacterGroup(id) === "na")
+        .sort((a, b) => characterName(a).localeCompare(characterName(b)));
+      const jpIds = allIds
+        .filter((id) => getCharacterGroup(id) === "jp")
+        .sort((a, b) => characterName(a).localeCompare(characterName(b)));
+      const remixIds = allIds
+        .filter((id) => getCharacterGroup(id) === "remix")
+        .sort((a, b) => characterName(a).localeCompare(characterName(b)));
+
+      let html = `<option value="all">${escapeHtml(tr.all)}</option>`;
+
+      if (naIds.length > 0) {
+        html += `<optgroup label="${escapeHtml(tr.characterGroupNA)}">
+          ${naIds
+            .map(
+              (id) =>
+                `<option value="${id}" ${selectedId === id ? "selected" : ""}>${escapeHtml(characterName(id))}</option>`,
+            )
+            .join("")}
+        </optgroup>`;
+      }
+
+      if (jpIds.length > 0) {
+        html += `<optgroup label="${escapeHtml(tr.characterGroupJP)}">
+          ${jpIds
+            .map(
+              (id) =>
+                `<option value="${id}" ${selectedId === id ? "selected" : ""}>${escapeHtml(characterName(id))}</option>`,
+            )
+            .join("")}
+        </optgroup>`;
+      }
+
+      if (remixIds.length > 0) {
+        html += `<optgroup label="${escapeHtml(tr.characterGroupRemix)}">
+          ${remixIds
+            .map(
+              (id) =>
+                `<option value="${id}" ${selectedId === id ? "selected" : ""}>${escapeHtml(characterName(id))}</option>`,
+            )
+            .join("")}
+        </optgroup>`;
+      }
+
+      return html;
+    };
+
     this.container.innerHTML = `
       <div class="filter-section-header">
         <span class="section-title">${escapeHtml(tr.filters)}</span>
@@ -82,32 +129,14 @@ export class FilterPanel {
       <div class="filter-group">
         <label for="filterYourChar">${escapeHtml(tr.yourCharacter)}</label>
         <select id="filterYourChar">
-          <option value="all">${escapeHtml(tr.all)}</option>
-          ${yourCharList
-            .map(
-              (id) => `
-            <option value="${id}" ${this.criteria.yourCharacterId === id ? "selected" : ""}>
-              ${escapeHtml(characterName(id))}
-            </option>
-          `,
-            )
-            .join("")}
+          ${renderCharacterOptions(yourCharIds, this.criteria.yourCharacterId)}
         </select>
       </div>
 
       <div class="filter-group">
         <label for="filterOppChar">${escapeHtml(tr.oppCharacter)}</label>
         <select id="filterOppChar">
-          <option value="all">${escapeHtml(tr.all)}</option>
-          ${oppCharList
-            .map(
-              (id) => `
-            <option value="${id}" ${this.criteria.oppCharacterId === id ? "selected" : ""}>
-              ${escapeHtml(characterName(id))}
-            </option>
-          `,
-            )
-            .join("")}
+          ${renderCharacterOptions(oppCharIds, this.criteria.oppCharacterId)}
         </select>
       </div>
 

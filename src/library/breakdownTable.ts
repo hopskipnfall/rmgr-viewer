@@ -1,5 +1,5 @@
 import { t } from "../i18n.js";
-import { characterName } from "../lookups.js";
+import { characterName, getCharacterGroup } from "../lookups.js";
 import type { CharacterBreakdownRow } from "../data/aggregate.js";
 
 export class BreakdownTable {
@@ -29,10 +29,23 @@ export class BreakdownTable {
       return `${hits.toFixed(1)}${isLowN ? ' <span class="table-low-n" title="Low sample size">⚠</span>' : ""}`;
     };
 
-    this.container.innerHTML = `
-      <div class="breakdown-section-header">
-        <h3>${escapeHtml(tr.byOpponentCharacter)}</h3>
-      </div>
+    const naRows = rows.filter(
+      (r) => getCharacterGroup(r.characterId) === "na",
+    );
+    const jpRows = rows.filter(
+      (r) => getCharacterGroup(r.characterId) === "jp",
+    );
+    const remixRows = rows.filter(
+      (r) => getCharacterGroup(r.characterId) === "remix",
+    );
+
+    const sections = [
+      { name: tr.characterGroupNA, rows: naRows },
+      { name: tr.characterGroupJP, rows: jpRows },
+      { name: tr.characterGroupRemix, rows: remixRows },
+    ].filter((s) => s.rows.length > 0);
+
+    const renderTable = (sectionRows: CharacterBreakdownRow[]) => `
       <div class="breakdown-table-wrap">
         <table class="breakdown-table">
           <thead>
@@ -49,7 +62,7 @@ export class BreakdownTable {
             </tr>
           </thead>
           <tbody>
-            ${rows
+            ${sectionRows
               .map((row) => {
                 const char = characterName(row.characterId);
                 const r = row.rates;
@@ -71,6 +84,22 @@ export class BreakdownTable {
           </tbody>
         </table>
       </div>
+    `;
+
+    this.container.innerHTML = `
+      <div class="breakdown-section-header">
+        <h3>${escapeHtml(tr.byOpponentCharacter)}</h3>
+      </div>
+      ${sections
+        .map(
+          (section) => `
+        <div class="breakdown-group-section">
+          <div class="breakdown-group-title">${escapeHtml(section.name)}</div>
+          ${renderTable(section.rows)}
+        </div>
+      `,
+        )
+        .join("")}
     `;
   }
 }

@@ -4,6 +4,7 @@ import {
   aggregateFilteredGames,
   computeRateDeltas,
   computeOpponentCharacterBreakdown,
+  computeGroupedOpponentCharacterBreakdown,
 } from "./aggregate.js";
 import type { GameSummary, RawCounters } from "./gameSummary.js";
 import { createDefaultIdentity } from "./identity.js";
@@ -302,5 +303,36 @@ describe("aggregate module", () => {
     expect(agg.wins).toBe(1);
     expect(agg.losses).toBe(1);
     expect(agg.winRatePct).toBe(50);
+  });
+
+  it("computes grouped opponent character breakdown by NA, JP, and Remix categories", () => {
+    const naGame = makeSummary({
+      id: "na1",
+      oppChar: 0x01, // Fox (NA)
+      yourStats: {},
+    });
+    const jpGame = makeSummary({
+      id: "jp1",
+      oppChar: 0x29, // Fox JP (0x29)
+      yourStats: {},
+    });
+    const remixGame = makeSummary({
+      id: "remix1",
+      oppChar: 0x1d, // Falco (Remix)
+      yourStats: {},
+    });
+
+    const filtered = filterGameSummaries([naGame, jpGame, remixGame], identity);
+    const grouped = computeGroupedOpponentCharacterBreakdown(filtered);
+
+    expect(grouped.length).toBe(3);
+    expect(grouped[0]?.group).toBe("na");
+    expect(grouped[0]?.rows[0]?.characterId).toBe(0x01);
+
+    expect(grouped[1]?.group).toBe("jp");
+    expect(grouped[1]?.rows[0]?.characterId).toBe(0x29);
+
+    expect(grouped[2]?.group).toBe("remix");
+    expect(grouped[2]?.rows[0]?.characterId).toBe(0x1d);
   });
 });

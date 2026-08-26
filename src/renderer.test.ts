@@ -13,6 +13,7 @@ import {
   isDeadState,
   isDizzyState,
   isDonkeyKongCharacter,
+  isDownBoundState,
   isFalconCharacter,
   isFireFoxFlightState,
   isFoxCharacter,
@@ -23,8 +24,11 @@ import {
   isLinkCharacter,
   isLuigiCharacter,
   isMarioCharacter,
+  isMissedTechState,
   isNessCharacter,
+  isNormalRollState,
   isPikachuCharacter,
+  isProneState,
   isQuickAttackState,
   isRollForward,
   isRollState,
@@ -35,6 +39,9 @@ import {
   isSleepState,
   isSpecialState,
   isTauntState,
+  isTechInPlaceState,
+  isTechRollState,
+  isTumbleState,
   isTurnState,
   isYoshiCharacter,
   toGrayscale,
@@ -837,5 +844,55 @@ describe("isSleepState", () => {
   it("identifies sleeping state correctly", () => {
     expect(isSleepState(0x0a5)).toBe(true); // Sleep
     expect(isSleepState(0x00a)).toBe(false); // Idle
+  });
+});
+
+describe("Tech and Roll state helpers", () => {
+  it("distinguishes tech rolls from normal shield rolls", () => {
+    // Tech rolls
+    expect(isTechRollState(0x049)).toBe(true); // TechF
+    expect(isTechRollState(0x04a)).toBe(true); // TechB
+    expect(isTechRollState(0x09c)).toBe(false); // Normal RollF
+    expect(isTechRollState(0x09d)).toBe(false); // Normal RollB
+
+    // Normal rolls
+    expect(isNormalRollState(0x09c)).toBe(true); // RollF
+    expect(isNormalRollState(0x09d)).toBe(true); // RollB
+    expect(isNormalRollState(0x049)).toBe(false); // TechF
+    expect(isNormalRollState(0x04a)).toBe(false); // TechB
+
+    // Tech in place
+    expect(isTechInPlaceState(0x051)).toBe(true); // Tech
+    expect(isTechInPlaceState(0x049)).toBe(false); // TechF
+  });
+});
+
+describe("Tumble state helper", () => {
+  it("identifies tumble and reeling damage flight states correctly", () => {
+    expect(isTumbleState(0x039)).toBe(true); // Tumble
+    expect(isTumbleState(0x037)).toBe(true); // DamageFlyRoll
+    expect(isTumbleState(0x033)).toBe(true); // DamageFlyHigh
+    expect(isTumbleState(0x00a)).toBe(false); // Idle
+    expect(isTumbleState(0x01a)).toBe(false); // Normal Fall
+  });
+});
+
+describe("Missed Tech and Prone state helpers", () => {
+  it("identifies ground bounces and missed tech prone states", () => {
+    // Ground bound bounces
+    expect(isDownBoundState(0x043)).toBe(true); // DownBoundD
+    expect(isDownBoundState(0x04a)).toBe(true); // DownBoundU
+    expect(isDownBoundState(0x0a0)).toBe(true); // ShieldBreakDownBound
+
+    // Prone on floor
+    expect(isProneState(0x044)).toBe(true); // DownWaitD
+    expect(isProneState(0x04c)).toBe(true); // DownWaitU
+
+    // Full missed tech lifecycle
+    expect(isMissedTechState(0x044)).toBe(true); // DownWaitD
+    expect(isMissedTechState(0x045)).toBe(true); // DownStandD
+    expect(isMissedTechState(0x047)).toBe(true); // DownForwardD
+    expect(isMissedTechState(0x04f)).toBe(true); // DownAttackD
+    expect(isMissedTechState(0x00a)).toBe(false); // Idle
   });
 });

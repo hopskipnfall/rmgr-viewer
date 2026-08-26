@@ -151,6 +151,10 @@ export interface Translations {
   stage: string;
   all: string;
   resetFilters: string;
+  characterGroupNA: string;
+  characterGroupJP: string;
+  characterGroupRemix: string;
+  allGroups: string;
   overallHeader: (total: number, dl: number) => string;
   lowSampleWarning: string;
   vsAll: (val: string) => string;
@@ -371,6 +375,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     stage: "Stage",
     all: "All",
     resetFilters: "Reset",
+    characterGroupNA: "North America (Original 12)",
+    characterGroupJP: "Japan (Original 12 J)",
+    characterGroupRemix: "Remix Characters",
+    allGroups: "All Character Groups",
     overallHeader: (tot, dl) =>
       `OVERALL · ${tot} game${tot !== 1 ? "s" : ""} · ${dl} on Dream Land`,
     lowSampleWarning: "low n",
@@ -580,6 +588,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     stage: "ステージ",
     all: "すべて",
     resetFilters: "リセット",
+    characterGroupNA: "北米版 (オリジナル12)",
+    characterGroupJP: "日本版 (オリジナル12 J)",
+    characterGroupRemix: "Remix キャラクター",
+    allGroups: "すべてのグループ",
     overallHeader: (tot, dl) => `全体 · 計${tot}試合 (プププランド: ${dl}試合)`,
     lowSampleWarning: "試行数少",
     vsAll: (v) => `全体比 ${v}`,
