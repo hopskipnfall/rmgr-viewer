@@ -78,11 +78,40 @@ export class ControllerPad {
     ctx.strokeStyle = "rgba(255,255,255,0.25)";
     ctx.lineWidth = 1;
     ctx.stroke();
+
+    // Smash 64 DI activation threshold boundary (R = 53 / 80)
+    const diRadius = (53 / STICK_MAX) * STICK_RADIUS;
+    ctx.beginPath();
+    ctx.arc(STICK_CENTER.x, STICK_CENTER.y, diRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
     const dotX = STICK_CENTER.x + (pre.stickX / STICK_MAX) * STICK_RADIUS;
     const dotY = STICK_CENTER.y - (pre.stickY / STICK_MAX) * STICK_RADIUS;
+    const stickMag = Math.hypot(pre.stickX, pre.stickY);
+    const isDIActive = stickMag >= 53;
+
+    if (isDIActive) {
+      // Glowing DI active ring
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.fill();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1.2;
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.beginPath();
     ctx.arc(dotX, dotY, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = "#e0e0e0";
+    ctx.fillStyle = isDIActive ? "#38bdf8" : "#e0e0e0";
     ctx.fill();
 
     // C-buttons, drawn as a small diamond around a center point, lit when held

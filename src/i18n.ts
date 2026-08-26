@@ -71,6 +71,9 @@ export interface Translations {
   logFilterAngel: string;
   logFilterNeutral: string;
   logFilterCharacter: string;
+  logFilterDebug: string;
+  logOpeningPrefix: string;
+  logPunishPrefix: string;
 
   // Events (Perspective)
   recovering: string;
@@ -91,8 +94,8 @@ export interface Translations {
   opponentAngelEntered: string;
   angelNoHits: string;
   angelAvoidSuccess: string;
-  angelHitLanded: (dmg: number) => string;
-  angelAvoidFailed: (dmg: number) => string;
+  angelHitLanded: string;
+  angelAvoidFailed: string;
 
   fthrowEntered: string;
   opponentFthrowEntered: string;
@@ -119,7 +122,7 @@ export interface Translations {
   playerLedgeGetupFailure: (player: string) => string;
   playerAngelEntered: (player: string) => string;
   playerAngelAvoidSuccess: (player: string) => string;
-  playerAngelAvoidFailure: (player: string, dmg: number) => string;
+  playerAngelAvoidFailure: (player: string) => string;
   playerFthrowEntered: (player: string) => string;
   playerFthrowFollowup: (player: string, hits?: number) => string;
   playerFthrowNoFollowup: (player: string) => string;
@@ -133,6 +136,8 @@ export interface Translations {
   playPauseTooltip: string;
   nextFrameTooltip: string;
   hudOverlay: string;
+  hudOverlayShow: string;
+  hudOverlayHide: string;
   hudOverlayTitle: string;
 
   // Library View
@@ -218,12 +223,37 @@ export interface Translations {
   noSituations: string;
   situationCollapseTitle: (name: string) => string;
 
+  // Neutral Openings widget
+  neutralHitsWidgetTitle: string;
+  neutralFilterAll: (count: number) => string;
+  neutralFilterOpenings: (count: number) => string;
+  neutralFilterPunishes: (count: number) => string;
+  neutralOpeningsGroupTitle: (count: number) => string;
+  neutralPunishesGroupTitle: (count: number) => string;
+  noNeutralHits: string;
+  noNeutralOpeningsLanded: string;
+  noNeutralPunishesTaken: string;
+  neutralReasonLandingLag: string;
+  neutralReasonWhiffPunish: string;
+  neutralReasonJumpPunish: string;
+  neutralReasonStandingHit: string;
+  neutralReasonStandingGrab: string;
+  neutralReasonUnknown: string;
+
   // Combos widget
   combosWidgetTitle: string;
   comboHitsBadge: (count: number) => string;
   comboKillBadge: string;
   combosCountChip: (count: number) => string;
   noCombos: string;
+
+  // Directional Influence (DI) widget
+  diWidgetTitle: string;
+  noDIFound: string;
+  diActiveHit: string;
+  diLastHit: string;
+  diScrubPrompt: string;
+  diCancellationNotice: (gross: number, net: number, pct: number) => string;
 
   // Pikachu Up-B Quick Attack Overlay
   overlayQuickAttackBtn: string;
@@ -301,7 +331,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFilterAngel: "Angel",
     logFilterNeutral: "Neutral",
     logFilterCharacter: "Character",
+    logFilterDebug: "Window Starts (Debug)",
+    logOpeningPrefix: "Opening",
+    logPunishPrefix: "Punish",
     hudOverlay: "LOG",
+    hudOverlayShow: "LOG",
+    hudOverlayHide: "Hide Log",
     hudOverlayTitle: "Toggle on-screen event log",
 
     recovering: "Recovering",
@@ -321,9 +356,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     angelEntered: "Angel invincibility",
     opponentAngelEntered: "Opponent angel",
     angelNoHits: "Angel: 0 hits landed",
-    angelAvoidSuccess: "Angel avoid: success (0 dmg)",
-    angelHitLanded: (dmg) => `Angel: hit landed (+${dmg}%)`,
-    angelAvoidFailed: (dmg) => `Angel avoid: failed (+${dmg}%)`,
+    angelAvoidSuccess: "Angel avoid: success",
+    angelHitLanded: "Angel: hit landed",
+    angelAvoidFailed: "Angel avoid: failed",
 
     fthrowEntered: "F-throw",
     opponentFthrowEntered: "Opponent F-throw",
@@ -358,8 +393,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     playerLedgeGetupSuccess: (p) => `${p} getup: success`,
     playerLedgeGetupFailure: (p) => `${p} getup: failure`,
     playerAngelEntered: (p) => `${p} angel invincibility`,
-    playerAngelAvoidSuccess: (p) => `${p} avoided angel (0 dmg)`,
-    playerAngelAvoidFailure: (p, dmg) => `${p} hit during angel (+${dmg}%)`,
+    playerAngelAvoidSuccess: (p) => `${p} avoided angel`,
+    playerAngelAvoidFailure: (p) => `${p} hit during angel`,
     playerFthrowEntered: (p) => `${p} F-throw`,
     playerFthrowFollowup: (p, hits) =>
       hits
@@ -462,12 +497,36 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noSituations: "None in this replay.",
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
 
+    neutralHitsWidgetTitle: "Neutral Game",
+    neutralFilterAll: (count) => `All (${count})`,
+    neutralFilterOpenings: (count) => `Openings (${count})`,
+    neutralFilterPunishes: (count) => `Punishes (${count})`,
+    neutralOpeningsGroupTitle: (count) => `Neutral Openings (${count})`,
+    neutralPunishesGroupTitle: (count) => `Neutral Punishes Taken (${count})`,
+    noNeutralHits: "No neutral hits in this match.",
+    noNeutralOpeningsLanded: "No neutral openings landed.",
+    noNeutralPunishesTaken: "No neutral punishes taken.",
+    neutralReasonLandingLag: "Landing Lag",
+    neutralReasonWhiffPunish: "Whiff Punish",
+    neutralReasonJumpPunish: "Jump Punish",
+    neutralReasonStandingHit: "Standing Hit",
+    neutralReasonStandingGrab: "Standing Grab",
+    neutralReasonUnknown: "Neutral Hit",
+
     combosWidgetTitle: "Kill Combos",
     comboHitsBadge: (count) => `${count} hits`,
     comboKillBadge: "KO",
     combosCountChip: (count) =>
       `${count} ${count === 1 ? "kill combo" : "kill combos"}`,
     noCombos: "No kill combos (≥3 hits) in this match.",
+
+    diWidgetTitle: "Directional Influence (DI)",
+    noDIFound: "No hit events detected in this match.",
+    diActiveHit: "Live Hit",
+    diLastHit: "Last Hit",
+    diScrubPrompt: "Scrub to a hit to view live DI metrics.",
+    diCancellationNotice: (gross, net, pct) =>
+      `⚠️ Opposing inputs partially canceled DI: ${gross}u gross → ${net}u net (${pct}% canceled)`,
 
     overlayQuickAttackBtn: "Overlay Quick Attack Paths",
     hideQuickAttackOverlayBtn: "Exit Overlay",
@@ -538,7 +597,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFilterAngel: "復活無敵",
     logFilterNeutral: "立ち回り",
     logFilterCharacter: "固有",
+    logFilterDebug: "イベント開始 (デバッグ)",
+    logOpeningPrefix: "差し込み",
+    logPunishPrefix: "被弾",
     hudOverlay: "ログ",
+    hudOverlayShow: "ログ",
+    hudOverlayHide: "ログ非表示",
     hudOverlayTitle: "画面上のイベントログの表示切替",
 
     recovering: "復帰中",
@@ -558,9 +622,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     angelEntered: "復活無敵",
     opponentAngelEntered: "相手の復活無敵",
     angelNoHits: "無敵: ヒットなし",
-    angelAvoidSuccess: "無敵回避: 成功 (0%被弾)",
-    angelHitLanded: (dmg) => `無敵: ヒット成功 (+${dmg}%)`,
-    angelAvoidFailed: (dmg) => `無敵回避: 失敗 (+${dmg}%)`,
+    angelAvoidSuccess: "無敵回避: 成功",
+    angelHitLanded: "無敵: ヒット成功",
+    angelAvoidFailed: "無敵回避: 失敗",
 
     fthrowEntered: "前投げ",
     opponentFthrowEntered: "相手の前投げ",
@@ -591,8 +655,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     playerLedgeGetupSuccess: (p) => `${p} 崖上がり: 成功`,
     playerLedgeGetupFailure: (p) => `${p} 崖上がり: 失敗`,
     playerAngelEntered: (p) => `${p} 復活無敵`,
-    playerAngelAvoidSuccess: (p) => `${p} 無敵回避: 成功 (0%被弾)`,
-    playerAngelAvoidFailure: (p, dmg) => `${p} 無敵中に被弾 (+${dmg}%)`,
+    playerAngelAvoidSuccess: (p) => `${p} 無敵回避: 成功`,
+    playerAngelAvoidFailure: (p) => `${p} 無敵中に被弾`,
     playerFthrowEntered: (p) => `${p} 前投げ`,
     playerFthrowFollowup: (p, hits) =>
       hits ? `${p} 前投げ: 追撃成功 (${hits}ヒット)` : `${p} 前投げ: 追撃成功`,
@@ -689,11 +753,35 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noSituations: "このリプレイには該当なし。",
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
 
+    neutralHitsWidgetTitle: "ニュートラルの攻防",
+    neutralFilterAll: (count) => `すべて (${count})`,
+    neutralFilterOpenings: (count) => `差し込み (${count})`,
+    neutralFilterPunishes: (count) => `被弾 (${count})`,
+    neutralOpeningsGroupTitle: (count) => `差し込み成功 (${count})`,
+    neutralPunishesGroupTitle: (count) => `被弾・被差し返し (${count})`,
+    noNeutralHits: "この試合で差し込みヒットはありません。",
+    noNeutralOpeningsLanded: "差し込みヒットはありません。",
+    noNeutralPunishesTaken: "ニュートラルでの被弾はありません。",
+    neutralReasonLandingLag: "着地隙狩り",
+    neutralReasonWhiffPunish: "後隙狩り (空振り)",
+    neutralReasonJumpPunish: "ジャンプ狩り",
+    neutralReasonStandingHit: "地上ヒット",
+    neutralReasonStandingGrab: "地上掴み",
+    neutralReasonUnknown: "ニュートラルヒット",
+
     combosWidgetTitle: "撃墜コンボ",
     comboHitsBadge: (count) => `${count}ヒット`,
     comboKillBadge: "撃墜",
     combosCountChip: (count) => `${count} 撃墜コンボ`,
     noCombos: "この試合で撃墜コンボ（3ヒット以上）はありません。",
+
+    diWidgetTitle: "ベクトル変更 (DI)",
+    noDIFound: "この試合でヒットは検出されませんでした。",
+    diActiveHit: "リアルタイム ヒット",
+    diLastHit: "前回のヒット",
+    diScrubPrompt: "シークしてDIメトリクスを確認してください。",
+    diCancellationNotice: (gross, net, pct) =>
+      `⚠️ 逆方向の入力により一部DIが相殺: 合計 ${gross}u → 実質 ${net}u (${pct}% 相殺)`,
 
     overlayQuickAttackBtn: "電光石火の軌跡を重ねて表示",
     hideQuickAttackOverlayBtn: "重ねて表示を終了",

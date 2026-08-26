@@ -22,6 +22,8 @@ export class PlaybackController {
   private lastTimestampMs = 0;
   private accumulatedMs = 0;
 
+  private speed = 1;
+
   constructor(
     private frameCount: number,
     private readonly onChange: (
@@ -34,6 +36,14 @@ export class PlaybackController {
   setFrameCount(frameCount: number): void {
     this.frameCount = frameCount;
     this.seek(0);
+  }
+
+  get playbackSpeed(): number {
+    return this.speed;
+  }
+
+  setPlaybackSpeed(speed: number): void {
+    this.speed = Math.max(0.01, speed);
   }
 
   get currentIndex(): number {
@@ -87,7 +97,7 @@ export class PlaybackController {
     if (!this.playing) return;
     const deltaMs = nowMs - this.lastTimestampMs;
     this.lastTimestampMs = nowMs;
-    this.accumulatedMs += deltaMs;
+    this.accumulatedMs += deltaMs * this.speed;
 
     const msPerFrame = 1000 / FPS;
     let advanced = false;

@@ -21,6 +21,7 @@ import {
   isHitstunState,
   computeEdgeGuardEvents,
 } from "./edgeGuard.js";
+import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
 
 const SHIELD_ACTION_STATES = new Set([
   0x098, // ShieldOn
@@ -1301,6 +1302,16 @@ export class StageRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private quickAttackOverlayPaths: QuickAttackPath[] | null = null;
   private hoveredQuickAttackIndex: number | null = null;
+  private diEventsCache = new WeakMap<Replay, HitDIResult[]>();
+
+  private getDIEvents(replay: Replay): HitDIResult[] {
+    let events = this.diEventsCache.get(replay);
+    if (!events) {
+      events = extractAllHitsWithDI(replay);
+      this.diEventsCache.set(replay, events);
+    }
+    return events;
+  }
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
@@ -1397,6 +1408,19 @@ export class StageRenderer {
         );
       }
       this.drawDeathDirectionFlashes(frame);
+
+      // Draw Directional Influence (DI) shift vector and overhead badge during hitlag and early hitstun
+      if (replay && frameIndex !== undefined) {
+        const diEvents = this.getDIEvents(replay);
+        for (const hitDI of diEvents) {
+          if (
+            frameIndex >= hitDI.hitFrameIndex &&
+            frameIndex <= hitDI.endHitlagFrameIndex + 22
+          ) {
+            this.drawDIIndicator(camera, hitDI, frameIndex);
+          }
+        }
+      }
     }
 
     if (hoverScreen) {
@@ -1591,6 +1615,108 @@ export class StageRenderer {
       }
       ctx.restore();
     }
+  }
+
+  /**
+   * Visualizes Smash 64 Directional Influence (DI) during hitlag and the initial knockback frames.
+   * Draws a glowing displacement vector arrow and activation step pips on the stage canvas.
+   */
+  private drawDIIndicator(
+    camera: Camera,
+    hitDI: HitDIResult,
+    currentFrameIndex: number,
+  ): void {
+    // Only render vector if the player performed DI inputs and had noticeable displacement
+    if (hitDI.inputCount === 0 || hitDI.displacement.distance < 6) return;
+
+    const { ctx } = this;
+    const startScreen = camera.worldToScreen(
+      hitDI.startPos.x,
+      hitDI.startPos.y,
+    );
+    const endScreen = camera.worldToScreen(hitDI.endPos.x, hitDI.endPos.y);
+
+    const isDuringHitlag =
+      currentFrameIndex >= hitDI.hitFrameIndex &&
+      currentFrameIndex <= hitDI.endHitlagFrameIndex;
+    const framesAfterHitlag = currentFrameIndex - hitDI.endHitlagFrameIndex;
+    const maxPostFrames = 22;
+    if (framesAfterHitlag > maxPostFrames) return;
+
+    const alpha = isDuringHitlag
+      ? 1.0
+      : Math.max(0, 1.0 - framesAfterHitlag / maxPostFrames);
+
+    ctx.save();
+
+    const isStrongDI = hitDI.inputCount >= 2;
+    const strokeColor = isStrongDI
+      ? `rgba(251, 191, 36, ${alpha * 0.98})` // Bold amber gold for 2x+ DI
+      : `rgba(56, 189, 248, ${alpha * 0.98})`; // Bright cyan for 1x DI
+
+    const glowColor = isStrongDI
+      ? `rgba(245, 158, 11, ${alpha * 0.85})`
+      : `rgba(14, 165, 233, ${alpha * 0.85})`;
+
+    // Draw physical displacement vector arrow
+    ctx.strokeStyle = strokeColor;
+    ctx.fillStyle = strokeColor;
+    ctx.lineWidth = isStrongDI ? 4 : 2.5;
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = isStrongDI ? 10 : 6;
+
+    // Vector line
+    ctx.beginPath();
+    ctx.moveTo(startScreen.x, startScreen.y);
+    ctx.lineTo(endScreen.x, endScreen.y);
+    ctx.stroke();
+
+    // Bold Arrowhead at endScreen
+    const angle = Math.atan2(
+      endScreen.y - startScreen.y,
+      endScreen.x - startScreen.x,
+    );
+    const headLen = isStrongDI ? 11 : 9;
+    ctx.beginPath();
+    ctx.moveTo(endScreen.x, endScreen.y);
+    ctx.lineTo(
+      endScreen.x - headLen * Math.cos(angle - Math.PI / 5.5),
+      endScreen.y - headLen * Math.sin(angle - Math.PI / 5.5),
+    );
+    ctx.lineTo(
+      endScreen.x - headLen * Math.cos(angle + Math.PI / 5.5),
+      endScreen.y - headLen * Math.sin(angle + Math.PI / 5.5),
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // Start impact circle with white core
+    ctx.beginPath();
+    ctx.arc(startScreen.x, startScreen.y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(startScreen.x, startScreen.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
+    ctx.fill();
+
+    // Intermediate activation step pips for multi-input DI
+    if (hitDI.inputCount > 1) {
+      for (let i = 1; i < hitDI.inputCount; i++) {
+        const t = i / hitDI.inputCount;
+        const px = startScreen.x + (endScreen.x - startScreen.x) * t;
+        const py = startScreen.y + (endScreen.y - startScreen.y) * t;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.8, 0, Math.PI * 2);
+        ctx.fillStyle = strokeColor;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, 1.4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
   }
 
   /**

@@ -21,6 +21,11 @@ import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { t } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
 import {
+  DI_ARROW_GLYPHS,
+  extractAllHitsWithDI,
+  type HitDIResult,
+} from "../di.js";
+import {
   computeNeutralHitEvents,
   computeNeutralHitsStats,
   type NeutralHitEvent,
@@ -99,6 +104,11 @@ export class MatchViewController {
   private stepForwardBtn: HTMLButtonElement;
   private scrubber: HTMLInputElement;
   private frameLabel: HTMLSpanElement;
+  private speedMenuContainer: HTMLElement;
+  private speedToggleBtn: HTMLButtonElement;
+  private speedDropdown: HTMLElement;
+  private speedOptionButtons: HTMLButtonElement[] = [];
+  private currentPlaybackSpeed = 1;
   private matchStatsHeaderTitle: HTMLHeadingElement;
   private perspectiveToggleEl: HTMLDivElement;
   private statsCollapseBtn: HTMLButtonElement;
@@ -133,15 +143,29 @@ export class MatchViewController {
   private ledgeTrapCollapseBtn: HTMLButtonElement;
   private ledgeTrapWidgetTitleEl: HTMLHeadingElement;
   private ledgeTrapList: HTMLDivElement;
+  private neutralHitsWidget: HTMLElement;
+  private neutralHitsCollapseBtn: HTMLButtonElement;
+  private neutralHitsWidgetTitleEl: HTMLHeadingElement;
+  private neutralHitsList: HTMLDivElement;
+  private neutralHitsCollapsed = false;
+  private neutralHitEvents: NeutralHitEvent[] = [];
+  private neutralHitFilter: "all" | "openings" | "punishes" = "all";
   private combosWidget: HTMLElement;
   private combosCollapseBtn: HTMLButtonElement;
   private combosWidgetTitleEl: HTMLHeadingElement;
   private combosList: HTMLDivElement;
+  private diWidget: HTMLElement;
+  private diCollapseBtn: HTMLButtonElement;
+  private diWidgetTitleEl: HTMLHeadingElement;
+  private diList: HTMLDivElement;
+  private selectedDIHitId: string | null = null;
   private recoveryCollapsed = false;
   private edgeGuardCollapsed = false;
   private ledgeGetupCollapsed = false;
   private ledgeTrapCollapsed = false;
   private combosCollapsed = false;
+  private diCollapsed = false;
+  private diEvents: HitDIResult[] = [];
   private replayInfoWidget: HTMLElement;
   private replayInfoCollapseBtn: HTMLButtonElement;
   private replayInfoHeaderTitle: HTMLHeadingElement;
@@ -167,7 +191,7 @@ export class MatchViewController {
   private characterMetaCollapsed = false;
   private logFilterCollapsed = false;
   private activeLogCategories: Set<
-    "recovery" | "ledge" | "angel" | "neutral" | "character"
+    "recovery" | "ledge" | "angel" | "neutral" | "character" | "debug"
   >;
   private hudOverlayEnabled = true;
   private matchupBaseline: DerivedRates | null = null;
@@ -190,6 +214,20 @@ export class MatchViewController {
     ) as HTMLButtonElement;
     this.scrubber = document.getElementById("scrubber") as HTMLInputElement;
     this.frameLabel = document.getElementById("frameLabel") as HTMLSpanElement;
+    this.speedMenuContainer = document.getElementById(
+      "speedMenuContainer",
+    ) as HTMLElement;
+    this.speedToggleBtn = document.getElementById(
+      "speedToggleBtn",
+    ) as HTMLButtonElement;
+    this.speedDropdown = document.getElementById(
+      "speedDropdown",
+    ) as HTMLElement;
+    this.speedOptionButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        "#speedDropdown .speed-option-btn",
+      ),
+    );
     this.matchStatsHeaderTitle = document.querySelector(
       "#matchStatsHeader h2",
     ) as HTMLHeadingElement;
@@ -298,6 +336,19 @@ export class MatchViewController {
       "ledgeTrapList",
     ) as HTMLDivElement;
 
+    this.neutralHitsWidget = document.getElementById(
+      "neutralHitsWidget",
+    ) as HTMLElement;
+    this.neutralHitsCollapseBtn = document.getElementById(
+      "neutralHitsCollapseBtn",
+    ) as HTMLButtonElement;
+    this.neutralHitsWidgetTitleEl = document.getElementById(
+      "neutralHitsWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.neutralHitsList = document.getElementById(
+      "neutralHitsList",
+    ) as HTMLDivElement;
+
     this.combosWidget = document.getElementById("combosWidget") as HTMLElement;
     this.combosCollapseBtn = document.getElementById(
       "combosCollapseBtn",
@@ -306,6 +357,15 @@ export class MatchViewController {
       "combosWidgetTitle",
     ) as HTMLHeadingElement;
     this.combosList = document.getElementById("combosList") as HTMLDivElement;
+
+    this.diWidget = document.getElementById("diWidget") as HTMLElement;
+    this.diCollapseBtn = document.getElementById(
+      "diCollapseBtn",
+    ) as HTMLButtonElement;
+    this.diWidgetTitleEl = document.getElementById(
+      "diWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.diList = document.getElementById("diList") as HTMLDivElement;
 
     this.replayInfoWidget = document.getElementById(
       "replayInfoWidget",
@@ -413,6 +473,15 @@ export class MatchViewController {
       );
     });
 
+    this.neutralHitsCollapseBtn.addEventListener("click", () => {
+      this.neutralHitsCollapsed = !this.neutralHitsCollapsed;
+      this.neutralHitsList.hidden = this.neutralHitsCollapsed;
+      this.neutralHitsCollapseBtn.classList.toggle(
+        "collapsed",
+        this.neutralHitsCollapsed,
+      );
+    });
+
     this.combosCollapseBtn.addEventListener("click", () => {
       this.combosCollapsed = !this.combosCollapsed;
       this.combosList.hidden = this.combosCollapsed;
@@ -420,6 +489,12 @@ export class MatchViewController {
         "collapsed",
         this.combosCollapsed,
       );
+    });
+
+    this.diCollapseBtn.addEventListener("click", () => {
+      this.diCollapsed = !this.diCollapsed;
+      this.diList.hidden = this.diCollapsed;
+      this.diCollapseBtn.classList.toggle("collapsed", this.diCollapsed);
     });
 
     this.characterMetaCollapseBtn.addEventListener("click", () => {
@@ -474,6 +549,34 @@ export class MatchViewController {
       this.dismissQuickAttackOverlay();
       this.playback?.stepForward();
     });
+
+    this.speedToggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.toggleSpeedMenu();
+    });
+
+    this.speedMenuContainer.addEventListener("mouseenter", () => {
+      this.openSpeedMenu();
+    });
+    this.speedMenuContainer.addEventListener("mouseleave", () => {
+      this.closeSpeedMenu();
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!this.speedMenuContainer.contains(e.target as Node)) {
+        this.closeSpeedMenu();
+      }
+    });
+
+    this.speedOptionButtons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const speed = parseFloat(btn.dataset.speed || "1");
+        this.setPlaybackSpeed(speed);
+        this.closeSpeedMenu();
+      });
+    });
+
     this.scrubber.addEventListener("input", () => {
       this.dismissQuickAttackOverlay();
       this.playback?.pause();
@@ -576,12 +679,22 @@ export class MatchViewController {
       this.ledgeTrapCollapseBtn.title = tr.situationCollapseTitle(
         tr.ledgeTrapWidgetTitle,
       );
+    if (this.neutralHitsWidgetTitleEl)
+      this.neutralHitsWidgetTitleEl.textContent = tr.neutralHitsWidgetTitle;
+    if (this.neutralHitsCollapseBtn)
+      this.neutralHitsCollapseBtn.title = tr.situationCollapseTitle(
+        tr.neutralHitsWidgetTitle,
+      );
     if (this.combosWidgetTitleEl)
       this.combosWidgetTitleEl.textContent = tr.combosWidgetTitle;
     if (this.combosCollapseBtn)
       this.combosCollapseBtn.title = tr.situationCollapseTitle(
         tr.combosWidgetTitle,
       );
+    if (this.diWidgetTitleEl)
+      this.diWidgetTitleEl.textContent = tr.diWidgetTitle;
+    if (this.diCollapseBtn)
+      this.diCollapseBtn.title = tr.situationCollapseTitle(tr.diWidgetTitle);
     if (this.hudToggleBtn) {
       this.hudToggleBtn.textContent = tr.hudOverlay;
       this.hudToggleBtn.title = tr.hudOverlayTitle;
@@ -792,15 +905,48 @@ export class MatchViewController {
     kind: "neutral-hit" | "entered" | "success" | "failure";
   } {
     const tr = t();
+    const name = (port: PortIndex) =>
+      replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
+
     if (ev.kind === "neutral-hit") {
+      let reasonLabel: string;
+      switch (ev.reason) {
+        case "landing-lag":
+          reasonLabel = tr.neutralReasonLandingLag;
+          break;
+        case "whiff-punish":
+          reasonLabel = tr.neutralReasonWhiffPunish;
+          break;
+        case "jump-punish":
+          reasonLabel = tr.neutralReasonJumpPunish;
+          break;
+        case "standing-hit":
+          reasonLabel =
+            ev.hitType === "grab"
+              ? tr.neutralReasonStandingGrab
+              : tr.neutralReasonStandingHit;
+          break;
+        default:
+          reasonLabel =
+            ev.hitType === "grab" ? tr.neutralHitGrab : tr.neutralHitAttack;
+          break;
+      }
+
+      if (perspective !== null) {
+        const isOpening = ev.attackerPort === perspective;
+        const prefix = isOpening ? tr.logOpeningPrefix : tr.logPunishPrefix;
+        return {
+          text: `${ev.frame} — ${prefix}: ${reasonLabel}`,
+          kind: isOpening ? "success" : "failure",
+        };
+      }
+
+      const attackerName = name(ev.attackerPort);
       return {
-        text: `${ev.frame} — ${ev.hitType === "grab" ? tr.neutralHitGrab : tr.neutralHitAttack}`,
+        text: `${ev.frame} — ${attackerName} ${tr.logOpeningPrefix}: ${reasonLabel}`,
         kind: "neutral-hit",
       };
     }
-
-    const name = (port: PortIndex) =>
-      replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
 
     if (
       ev.kind === "ledge-getup-entered" ||
@@ -864,7 +1010,7 @@ export class MatchViewController {
             };
           case "angel-avoid-failure":
             return {
-              text: `${ev.frame} — ${tr.playerAngelAvoidFailure(name(ev.oppPort), ev.damageTaken ?? 0)}`,
+              text: `${ev.frame} — ${tr.playerAngelAvoidFailure(name(ev.oppPort))}`,
               kind: "failure",
             };
         }
@@ -887,11 +1033,11 @@ export class MatchViewController {
         case "angel-avoid-failure":
           return isRespawner
             ? {
-                text: `${ev.frame} — ${tr.angelHitLanded(ev.damageTaken ?? 0)}`,
+                text: `${ev.frame} — ${tr.angelHitLanded}`,
                 kind: "success",
               }
             : {
-                text: `${ev.frame} — ${tr.angelAvoidFailed(ev.damageTaken ?? 0)}`,
+                text: `${ev.frame} — ${tr.angelAvoidFailed}`,
                 kind: "failure",
               };
       }
@@ -1127,7 +1273,7 @@ export class MatchViewController {
     this.logFilterChips.innerHTML = "";
 
     const categories: Array<{
-      id: "recovery" | "ledge" | "angel" | "neutral" | "character";
+      id: "recovery" | "ledge" | "angel" | "neutral" | "character" | "debug";
       label: string;
     }> = [
       { id: "recovery", label: tr.logFilterRecovery },
@@ -1135,6 +1281,7 @@ export class MatchViewController {
       { id: "angel", label: tr.logFilterAngel },
       { id: "neutral", label: tr.logFilterNeutral },
       { id: "character", label: tr.logFilterCharacter },
+      { id: "debug", label: tr.logFilterDebug },
     ];
 
     for (const cat of categories) {
@@ -1170,9 +1317,23 @@ export class MatchViewController {
     }
 
     this.currentLogEvents = this.matchEvents.filter((ev) => {
+      const isStartEvent =
+        ev.kind === "situation-entered" ||
+        ev.kind === "angel-entered" ||
+        ev.kind === "ledge-getup-entered" ||
+        ev.kind === "fthrow-entered" ||
+        ev.kind === "shield-pressure-entered";
+
+      if (isStartEvent && !this.activeLogCategories.has("debug")) {
+        return false;
+      }
+
       if (ev.kind === "neutral-hit") {
         if (!this.activeLogCategories.has("neutral")) return false;
-        return ev.attackerPort === this.perspectivePort;
+        return (
+          ev.attackerPort === this.perspectivePort ||
+          ev.victimPort === this.perspectivePort
+        );
       }
       if (
         ev.kind === "situation-entered" ||
@@ -1278,7 +1439,9 @@ export class MatchViewController {
       this.edgeGuardWidget.hidden = true;
       this.ledgeGetupWidget.hidden = true;
       this.ledgeTrapWidget.hidden = true;
+      this.renderNeutralHitsPanel(replay);
       this.renderCombosPanel(replay);
+      this.renderDIPanel(replay);
       this.renderCharacterMetaPanel(replay);
       return;
     }
@@ -1504,7 +1667,9 @@ export class MatchViewController {
     );
 
     this.buildSituationWidgets(replay);
+    this.renderNeutralHitsPanel(replay);
     this.renderCombosPanel(replay);
+    this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
   }
 
@@ -1736,6 +1901,167 @@ export class MatchViewController {
     );
   }
 
+  private renderNeutralHitsPanel(replay: Replay): void {
+    const tr = t();
+    this.neutralHitsList.innerHTML = "";
+
+    if (replay.frames.length === 0 || this.neutralHitEvents.length === 0) {
+      this.neutralHitsWidget.hidden = true;
+      return;
+    }
+
+    this.neutralHitsWidget.hidden = false;
+
+    const createRow = (e: NeutralHitEvent, index: number): HTMLElement => {
+      const row = document.createElement("div");
+      row.className = "situation-row";
+      row.dataset.frameIndex = String(e.frameIndex);
+
+      const indexEl = document.createElement("span");
+      indexEl.className = "situation-index";
+      indexEl.textContent = `#${index + 1}`;
+
+      const timeEl = document.createElement("span");
+      timeEl.className = "situation-time";
+      timeEl.textContent = `${formatElapsed(e.frameIndex)} (${e.frame}F)`;
+
+      const badgeEl = document.createElement("span");
+      switch (e.reason) {
+        case "landing-lag":
+          badgeEl.className = "neutral-badge-landing";
+          badgeEl.textContent = tr.neutralReasonLandingLag;
+          break;
+        case "whiff-punish":
+          badgeEl.className = "neutral-badge-whiff";
+          badgeEl.textContent = tr.neutralReasonWhiffPunish;
+          break;
+        case "jump-punish":
+          badgeEl.className = "neutral-badge-jump";
+          badgeEl.textContent = tr.neutralReasonJumpPunish;
+          break;
+        case "standing-hit":
+          badgeEl.className = "neutral-badge-standing";
+          badgeEl.textContent =
+            e.hitType === "grab"
+              ? tr.neutralReasonStandingGrab
+              : tr.neutralReasonStandingHit;
+          break;
+        default:
+          badgeEl.className = "neutral-badge-unknown";
+          badgeEl.textContent = tr.neutralReasonUnknown;
+          break;
+      }
+      if (e.reasonDetail) {
+        badgeEl.title = e.reasonDetail;
+      }
+
+      row.appendChild(indexEl);
+      row.appendChild(timeEl);
+      row.appendChild(badgeEl);
+
+      row.addEventListener("click", () => {
+        this.dismissQuickAttackOverlay();
+        // Seek 1.5 seconds (90 frames) before the neutral opening happened
+        const seekTarget = Math.max(0, e.frameIndex - 90);
+        this.playback?.seek(seekTarget);
+        this.playback?.play();
+      });
+
+      return row;
+    };
+
+    if (this.perspectivePort !== null) {
+      const openingsCount = this.neutralHitEvents.filter(
+        (e) => e.attackerPort === this.perspectivePort,
+      ).length;
+      const punishesCount = this.neutralHitEvents.filter(
+        (e) => e.victimPort === this.perspectivePort,
+      ).length;
+
+      // Filter chips bar
+      const filterContainer = document.createElement("div");
+      filterContainer.className = "neutral-filters";
+
+      const allBtn = document.createElement("button");
+      allBtn.className = `neutral-filter-btn filter-all${this.neutralHitFilter === "all" ? " active" : ""}`;
+      allBtn.textContent = tr.neutralFilterAll(this.neutralHitEvents.length);
+      allBtn.addEventListener("click", () => {
+        this.neutralHitFilter = "all";
+        this.renderNeutralHitsPanel(replay);
+      });
+
+      const openingsBtn = document.createElement("button");
+      openingsBtn.className = `neutral-filter-btn filter-openings${this.neutralHitFilter === "openings" ? " active" : ""}`;
+      openingsBtn.textContent = tr.neutralFilterOpenings(openingsCount);
+      openingsBtn.addEventListener("click", () => {
+        this.neutralHitFilter = "openings";
+        this.renderNeutralHitsPanel(replay);
+      });
+
+      const punishesBtn = document.createElement("button");
+      punishesBtn.className = `neutral-filter-btn filter-punishes${this.neutralHitFilter === "punishes" ? " active" : ""}`;
+      punishesBtn.textContent = tr.neutralFilterPunishes(punishesCount);
+      punishesBtn.addEventListener("click", () => {
+        this.neutralHitFilter = "punishes";
+        this.renderNeutralHitsPanel(replay);
+      });
+
+      filterContainer.appendChild(allBtn);
+      filterContainer.appendChild(openingsBtn);
+      filterContainer.appendChild(punishesBtn);
+      this.neutralHitsList.appendChild(filterContainer);
+    }
+
+    let eventsToRender = this.neutralHitEvents;
+    if (this.perspectivePort !== null) {
+      if (this.neutralHitFilter === "openings") {
+        eventsToRender = this.neutralHitEvents.filter(
+          (e) => e.attackerPort === this.perspectivePort,
+        );
+      } else if (this.neutralHitFilter === "punishes") {
+        eventsToRender = this.neutralHitEvents.filter(
+          (e) => e.victimPort === this.perspectivePort,
+        );
+      }
+    }
+
+    if (eventsToRender.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "situation-empty";
+      empty.textContent =
+        this.neutralHitFilter === "openings"
+          ? tr.noNeutralOpeningsLanded
+          : this.neutralHitFilter === "punishes"
+            ? tr.noNeutralPunishesTaken
+            : tr.noNeutralHits;
+      this.neutralHitsList.appendChild(empty);
+    } else {
+      eventsToRender.forEach((e, idx) => {
+        const row = createRow(e, idx);
+        if (this.perspectivePort !== null) {
+          if (e.attackerPort === this.perspectivePort) {
+            row.classList.add("neutral-row-opening");
+          } else {
+            row.classList.add("neutral-row-punish");
+          }
+        }
+        this.neutralHitsList.appendChild(row);
+      });
+    }
+  }
+
+  private updateNeutralHitsHighlight(currentFrameIndex: number): void {
+    const rows = this.neutralHitsList.querySelectorAll<HTMLElement>(
+      ".situation-row[data-frame-index]",
+    );
+    rows.forEach((row) => {
+      const frameIndex = Number(row.dataset.frameIndex);
+      const isActive =
+        currentFrameIndex >= frameIndex && currentFrameIndex <= frameIndex + 60;
+      row.classList.toggle("active", isActive);
+    });
+  }
+
   private renderCombosPanel(replay: Replay): void {
     const tr = t();
     this.combosList.innerHTML = "";
@@ -1760,6 +2086,8 @@ export class MatchViewController {
       this.combosList.appendChild(empty);
       return;
     }
+
+    const allHits = extractAllHitsWithDI(replay);
 
     combos.forEach((c, index) => {
       const row = document.createElement("div");
@@ -1791,6 +2119,30 @@ export class MatchViewController {
       row.appendChild(dmgEl);
       row.appendChild(koBadgeEl);
 
+      // Find hits belonging to this combo to extract victim DI
+      const comboHits = allHits.filter(
+        (h) =>
+          h.victimPort === c.victimPort &&
+          h.hitFrameIndex >= c.startFrameIndex &&
+          h.hitFrameIndex <= c.endFrameIndex + 20,
+      );
+
+      if (comboHits.length > 0) {
+        const lastHit = comboHits[comboHits.length - 1];
+        if (lastHit) {
+          const diBadgeEl = document.createElement("span");
+          diBadgeEl.className = "combo-di-badge";
+          const dir =
+            lastHit.relative !== "neutral"
+              ? lastHit.relative
+              : lastHit.cardinal;
+          diBadgeEl.textContent =
+            lastHit.inputCount > 0 ? `${lastHit.inputCount}x DI` : `No DI`;
+          diBadgeEl.title = `Victim DI on final hit: ${lastHit.inputCount}x (${dir}), ${Math.round(lastHit.displacement.distance)}u displacement`;
+          row.appendChild(diBadgeEl);
+        }
+      }
+
       row.addEventListener("click", () => {
         this.dismissQuickAttackOverlay();
         this.playback?.seek(c.jumpFrameIndex);
@@ -1798,6 +2150,243 @@ export class MatchViewController {
       });
 
       this.combosList.appendChild(row);
+    });
+  }
+
+  private renderDIPanel(replay: Replay): void {
+    const tr = t();
+    this.diList.innerHTML = "";
+
+    if (replay.frames.length === 0 || this.diEvents.length === 0) {
+      this.diWidget.hidden = true;
+      return;
+    }
+
+    const filteredHits =
+      this.perspectivePort !== null
+        ? this.diEvents.filter((h) => h.victimPort === this.perspectivePort)
+        : this.diEvents;
+
+    this.diWidget.hidden = false;
+
+    if (filteredHits.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "situation-empty";
+      empty.textContent = tr.noDIFound;
+      this.diList.appendChild(empty);
+      return;
+    }
+
+    filteredHits.forEach((h, index) => {
+      const itemWrap = document.createElement("div");
+      itemWrap.className =
+        "di-item-wrapper" + (this.selectedDIHitId === h.id ? " selected" : "");
+      itemWrap.id = `di-item-${h.id}`;
+      itemWrap.dataset.hitId = h.id;
+
+      const row = document.createElement("div");
+      row.className = "di-item-row";
+
+      const indexEl = document.createElement("span");
+      indexEl.className = "situation-index";
+      indexEl.textContent = `#${index + 1}`;
+
+      const timeEl = document.createElement("span");
+      timeEl.className = "situation-time";
+      timeEl.textContent = `${formatElapsed(h.hitFrameIndex)} (${h.hitFrameNumber}F)`;
+
+      const dmgEl = document.createElement("span");
+      dmgEl.className = "combo-damage";
+      dmgEl.textContent = `+${Math.round(h.damageDealt)}%`;
+
+      const badgeEl = document.createElement("span");
+      const glyph = DI_ARROW_GLYPHS[h.cardinal] ?? "•";
+      const dir = h.relative !== "neutral" ? h.relative : h.cardinal;
+
+      if (h.inputCount >= 2) {
+        badgeEl.className = "di-badge-strong";
+        badgeEl.textContent = `${glyph} ${h.inputCount}x (${dir})`;
+      } else if (h.inputCount === 1) {
+        badgeEl.className = "di-badge-standard";
+        badgeEl.textContent = `${glyph} 1x (${dir})`;
+      } else {
+        badgeEl.className = "di-badge-none";
+        badgeEl.textContent = `No DI`;
+      }
+
+      row.appendChild(indexEl);
+      row.appendChild(timeEl);
+      row.appendChild(badgeEl);
+
+      const detail = document.createElement("div");
+      detail.className = "di-inline-detail";
+      detail.hidden = this.selectedDIHitId !== h.id;
+
+      const victimCharId =
+        this.currentReplay?.frames[0]?.ports[h.victimPort]?.post.characterId ??
+        0;
+      const victimChar = characterName(victimCharId);
+      const victimName = `${PORT_LABELS[h.victimPort]} (${victimChar})`;
+
+      let attackerName = "Opponent";
+      if (h.attackerPort !== null) {
+        const attackerCharId =
+          this.currentReplay?.frames[0]?.ports[h.attackerPort]?.post
+            .characterId ?? 0;
+        const attackerChar = characterName(attackerCharId);
+        attackerName = `${PORT_LABELS[h.attackerPort]} (${attackerChar})`;
+      }
+
+      let cancellationHtml = "";
+      if (h.inputs.length >= 2) {
+        const activeInps = h.inputs.filter((i) => i.isActivation);
+        if (activeInps.length >= 2) {
+          const grossDist = activeInps.reduce(
+            (sum, i) => sum + Math.hypot(i.stickX * 2.1, i.stickY * 2.1),
+            0,
+          );
+          const netDist = Math.hypot(
+            activeInps.reduce((sum, i) => sum + i.stickX * 2.1, 0),
+            activeInps.reduce((sum, i) => sum + i.stickY * 2.1, 0),
+          );
+          if (grossDist > 0 && netDist < grossDist * 0.85) {
+            const cancelPct = Math.round((1 - netDist / grossDist) * 100);
+            cancellationHtml = `<div class="di-cancel-warning">${tr.diCancellationNotice(Math.round(grossDist), Math.round(netDist), cancelPct)}</div>`;
+          }
+        }
+      }
+
+      const pipsHtml = h.inputs
+        .map((inp) => {
+          const activeClass = inp.isActivation
+            ? h.inputCount >= 2
+              ? "active-strong"
+              : "active"
+            : "";
+          const pipGlyph = inp.isActivation ? glyph : "·";
+          return `<span class="di-stick-pip ${activeClass}" data-frame="${inp.frameIndex}" title="Hitlag F+${inp.hitlagFrame}: Stick (${inp.stickX}, ${inp.stickY})">${pipGlyph}</span>`;
+        })
+        .join("");
+
+      detail.innerHTML = `
+        <div class="di-live-details">
+          <div class="di-live-detail-item">
+            <span class="di-live-label">Victim / Attacker</span>
+            <span class="di-live-val">${victimName} ← ${attackerName}</span>
+          </div>
+          <div class="di-live-detail-item">
+            <span class="di-live-label">Hitlag Window</span>
+            <span class="di-live-val">${h.diWindowFrames} frames</span>
+          </div>
+          <div class="di-live-detail-item">
+            <span class="di-live-label">Displacement</span>
+            <span class="di-live-val">${Math.round(h.displacement.distance)}u shift (${h.cardinal})</span>
+          </div>
+          <div class="di-live-detail-item">
+            <span class="di-live-label">Efficiency</span>
+            <span class="di-live-val">${h.efficiency}%</span>
+          </div>
+        </div>
+        ${cancellationHtml}
+        ${
+          h.inputs.length > 0
+            ? `
+          <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
+            <span class="di-live-label">Hitlag Stick Timeline (${h.inputs.length}F):</span>
+            <div class="di-stick-strip">${pipsHtml}</div>
+          </div>
+        `
+            : ""
+        }
+      `;
+
+      const pipEls = detail.querySelectorAll<HTMLElement>(".di-stick-pip");
+      pipEls.forEach((pipEl) => {
+        const frameIdx = Number(pipEl.dataset.frame);
+        pipEl.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.dismissQuickAttackOverlay();
+          this.playback?.seek(frameIdx);
+          this.playback?.pause();
+        });
+      });
+
+      row.addEventListener("click", () => {
+        this.dismissQuickAttackOverlay();
+        if (this.selectedDIHitId === h.id && !detail.hidden) {
+          this.selectedDIHitId = null;
+          itemWrap.classList.remove("selected");
+          detail.hidden = true;
+        } else {
+          this.selectedDIHitId = h.id;
+          const allWrappers =
+            this.diList.querySelectorAll<HTMLElement>(".di-item-wrapper");
+          allWrappers.forEach((w) => {
+            const isMatch = w.dataset.hitId === h.id;
+            w.classList.toggle("selected", isMatch);
+            const d = w.querySelector<HTMLElement>(".di-inline-detail");
+            if (d) d.hidden = !isMatch;
+          });
+          this.playback?.seek(h.hitFrameIndex);
+          this.playback?.play();
+        }
+      });
+
+      itemWrap.appendChild(row);
+      itemWrap.appendChild(detail);
+      this.diList.appendChild(itemWrap);
+    });
+
+    this.updateDILiveMonitor(this.playback?.currentIndex ?? 0);
+  }
+
+  private updateDILiveMonitor(frameIndex: number): void {
+    if (!this.currentReplay || this.diEvents.length === 0) return;
+
+    const filteredHits =
+      this.perspectivePort !== null
+        ? this.diEvents.filter((h) => h.victimPort === this.perspectivePort)
+        : this.diEvents;
+
+    // Leave the DI box active and expanded for 3 seconds (180 frames at 60 FPS) after the hit occurs
+    const POST_HIT_EXPAND_FRAMES = 180;
+    const activeHitsInRange = filteredHits.filter(
+      (h) =>
+        frameIndex >= h.hitFrameIndex &&
+        frameIndex <= h.endHitlagFrameIndex + POST_HIT_EXPAND_FRAMES,
+    );
+    const activeHit =
+      activeHitsInRange.length > 0
+        ? activeHitsInRange[activeHitsInRange.length - 1]
+        : undefined;
+
+    const allWrappers =
+      this.diList.querySelectorAll<HTMLElement>(".di-item-wrapper");
+
+    allWrappers.forEach((wrap) => {
+      const hitId = wrap.dataset.hitId;
+      const isSelected = this.selectedDIHitId === hitId;
+      const isActiveHit = Boolean(activeHit && activeHit.id === hitId);
+      const detail = wrap.querySelector<HTMLElement>(".di-inline-detail");
+
+      wrap.classList.toggle("active-playing", isActiveHit);
+      if (detail) {
+        detail.hidden = !isSelected && !isActiveHit;
+      }
+
+      if (isActiveHit && detail) {
+        const pips = detail.querySelectorAll<HTMLElement>(".di-stick-pip");
+        pips.forEach((pip) => {
+          const pipFrame = Number(pip.dataset.frame);
+          if (pipFrame === frameIndex) {
+            pip.style.borderColor = "#ffffff";
+            pip.style.outline = "1px solid #ffffff";
+          } else {
+            pip.style.borderColor = "";
+            pip.style.outline = "";
+          }
+        });
+      }
     });
   }
 
@@ -2150,6 +2739,8 @@ export class MatchViewController {
     const elapsed = formatElapsed(index);
     this.frameLabel.textContent = `Frame ${index} / ${Math.max(0, totalFrames - 1)} (${elapsed})`;
     this.updateEventLogHighlight(index);
+    this.updateDILiveMonitor(index);
+    this.updateNeutralHitsHighlight(index);
   }
 
   public resizeStageCanvas(): void {
@@ -2177,10 +2768,12 @@ export class MatchViewController {
     this.matchupBaseline = matchupBaseline;
     const { replay } = loaded;
     this.currentReplay = replay;
+    this.diEvents = extractAllHitsWithDI(replay);
     const edgeEvents = computeEdgeGuardEvents(replay);
     const ledgeEvents = computeLedgeTrapEvents(replay);
     const angelEvents = computeAngelInvincibilityEvents(replay);
     const neutralEvents = computeNeutralHitEvents(replay);
+    this.neutralHitEvents = neutralEvents;
     const puffEvents = computeJigglypuffFThrowEvents(replay);
     const shieldEvents = computeShieldPressureEvents(replay);
     this.matchEvents = [
@@ -2225,6 +2818,7 @@ export class MatchViewController {
     this.buildPlayerPanels(replay);
     this.buildPerspectiveToggle(replay);
     this.renderStatsPanel(replay);
+    this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
     this.renderLogFilterWidget();
     this.renderReplayInfo(loaded);
@@ -2238,7 +2832,37 @@ export class MatchViewController {
       replay.frames.length,
       (idx, isPlaying, reason) => this.onFrameChange(idx, isPlaying, reason),
     );
+    this.playback.setPlaybackSpeed(this.currentPlaybackSpeed);
     this.onFrameChange(0, false, "jump");
+  }
+
+  public openSpeedMenu(): void {
+    this.speedDropdown.hidden = false;
+    this.speedToggleBtn.setAttribute("aria-expanded", "true");
+  }
+
+  public closeSpeedMenu(): void {
+    this.speedDropdown.hidden = true;
+    this.speedToggleBtn.setAttribute("aria-expanded", "false");
+  }
+
+  public toggleSpeedMenu(): void {
+    if (this.speedDropdown.hidden) {
+      this.openSpeedMenu();
+    } else {
+      this.closeSpeedMenu();
+    }
+  }
+
+  public setPlaybackSpeed(speed: number): void {
+    this.currentPlaybackSpeed = speed;
+    this.playback?.setPlaybackSpeed(speed);
+    this.speedToggleBtn.textContent = `${speed}x`;
+    this.speedToggleBtn.classList.toggle("has-modified-speed", speed !== 1);
+    this.speedOptionButtons.forEach((btn) => {
+      const btnSpeed = parseFloat(btn.dataset.speed || "1");
+      btn.classList.toggle("active", btnSpeed === speed);
+    });
   }
 
   private renderReplayInfo(loaded: LoadedReplay | null): void {

@@ -5,14 +5,24 @@ const PORTS: readonly PortIndex[] = [0, 1, 2, 3];
 
 /** Action states where the player is captured/held/thrown by a grab. */
 const CAPTURE_STATES = new Set([
-  0x0ab, // CapturePull
+  0x0ab, // CapturePulled
   0x0ac, // CaptureWait
   0x0ad, // CaptureDamage
+  0x0ae,
+  0x0af,
+  0x0b0, // Yoshi egg lay capture
+  0x0b1,
+  0x0b2,
   0x0b3, // CaptureFalconDive (Captain Falcon & J Falcon Up-B grab)
+  0x0b4,
+  0x0b5,
   0x0b6, // CaptureCargo / CommandGrabHold
+  0x0b7,
+  0x0b8,
   0x0b9, // CapturePulled / ThrowTransition
   0x0ba, // DamageThrown / Thrown
   0x0bb,
+  0x0bc,
 ]);
 
 /**
@@ -84,6 +94,9 @@ export function computeNeutralHitsPerStock(
   return result;
 }
 
+export type NeutralOpeningReason =
+  "landing-lag" | "whiff-punish" | "jump-punish" | "standing-hit" | "unknown";
+
 export interface NeutralHitEvent {
   readonly frame: number;
   readonly frameIndex: number;
@@ -91,6 +104,185 @@ export interface NeutralHitEvent {
   readonly attackerPort: PortIndex;
   readonly victimPort: PortIndex;
   readonly hitType: "attack" | "grab";
+  readonly reason: NeutralOpeningReason;
+  readonly reasonDetail?: string;
+}
+
+/** Action states corresponding to landing lag. */
+const LANDING_LAG_STATES = new Set([
+  0x01f, // LandingLight
+  0x020, // LandingHeavy
+  0x03b, // LandingSpecial
+  0x0db, // LandingAirX
+]);
+
+/** Action states for jump squats and jumps. */
+const JUMP_STATES = new Set([
+  0x014, // JumpSquat
+  0x015, // ShieldJumpSquat
+  0x016, // JumpF
+  0x017, // JumpB
+  0x018, // JumpAerialF
+  0x019, // JumpAerialB
+]);
+
+/** Action states corresponding to airborne states. */
+const AIRBORNE_STATES = new Set([
+  0x016, // JumpF
+  0x017, // JumpB
+  0x018, // JumpAerialF
+  0x019, // JumpAerialB
+  0x01a, // Fall
+  0x01b, // FallAerial
+  0x021, // Pass
+  0x022, // ShieldDrop
+  0x02e, // DamageAir1
+  0x02f, // DamageAir2
+  0x030, // DamageAir3
+  0x038, // WallBounce
+  0x039, // Tumble
+  0x03a, // FallSpecial
+  0x0d1, // Nair
+  0x0d2, // Fair
+  0x0d3, // Bair
+  0x0d4, // Uair
+  0x0d5, // Dair
+]);
+
+/** Check if an action state is an attack (jab, tilt, smash, aerial, grab, special). */
+export function isAttackActionState(actionStateId: number): boolean {
+  // Standard ground/aerial attacks
+  if (actionStateId >= 0x0be && actionStateId <= 0x0d5) return true;
+  // Grabs
+  if (actionStateId >= 0x0a6 && actionStateId <= 0x0a8) return true;
+  // Special moves
+  if (actionStateId >= 0x0dc) return true;
+  return false;
+}
+
+/** Check if an action state is a landing lag state. */
+export function isLandingLagActionState(actionStateId: number): boolean {
+  return LANDING_LAG_STATES.has(actionStateId);
+}
+
+/** Check if an action state is a jump state. */
+export function isJumpActionState(actionStateId: number): boolean {
+  return JUMP_STATES.has(actionStateId);
+}
+
+/** Check if an action state is an airborne state. */
+export function isAirborneActionState(actionStateId: number): boolean {
+  return AIRBORNE_STATES.has(actionStateId);
+}
+
+/**
+ * Classifies why a neutral opening occurred on `victimPort` at `hitFrameIndex`.
+ * Evaluated strictly in order:
+ * 1. Landing lag (attacked/grabbed while in landing lag state)
+ * 2. Whiff punish (attacked within 0.5s = 30F of an attack ending without hitting)
+ * 3. Jump interception (jumped without attacking and attacked within 0.5s = 30F)
+ * 4. Standing hit (attacked while grounded in neutral)
+ * 5. Unknown (fallback)
+ */
+export function classifyNeutralOpening(
+  replay: Replay,
+  hitFrameIndex: number,
+  victimPort: PortIndex,
+  attackerPort: PortIndex,
+): { reason: NeutralOpeningReason; reasonDetail?: string } {
+  const victimPrevPost =
+    replay.frames[hitFrameIndex - 1]?.ports[victimPort]?.post;
+  if (!victimPrevPost) return { reason: "unknown" };
+
+  // Rule 1: Attacked/grabbed immediately after landing (while in a landing lag state)
+  // Check the victim's state immediately prior to hit impact (up to 3 frames back)
+  for (let k = 1; k <= 3; k++) {
+    const f = hitFrameIndex - k;
+    if (f < 0) break;
+    const post = replay.frames[f]?.ports[victimPort]?.post;
+    if (post && isLandingLagActionState(post.actionStateId)) {
+      return {
+        reason: "landing-lag",
+        reasonDetail: "Attacked/grabbed in landing lag",
+      };
+    }
+  }
+
+  // Rule 2: Attacked immediately after attacking and missing (within 0.5s = 30 frames of attack ending)
+  let foundAttackEnd = -1;
+  let attackHadHit = false;
+
+  for (let k = 1; k <= 45; k++) {
+    const f = hitFrameIndex - k;
+    if (f < 0) break;
+    const post = replay.frames[f]?.ports[victimPort]?.post;
+    if (!post) continue;
+
+    if (isAttackActionState(post.actionStateId)) {
+      if (foundAttackEnd === -1) {
+        foundAttackEnd = f + 1;
+      }
+      const attackerPost = replay.frames[f]?.ports[attackerPort]?.post;
+      if (attackerPost && attackerPost.comboHitCount > 0) {
+        attackHadHit = true;
+      }
+    } else if (foundAttackEnd !== -1) {
+      break;
+    }
+  }
+
+  if (foundAttackEnd !== -1 && !attackHadHit) {
+    const framesSinceAttack = hitFrameIndex - foundAttackEnd;
+    if (framesSinceAttack <= 30) {
+      return {
+        reason: "whiff-punish",
+        reasonDetail: `Attacked within ${(framesSinceAttack / 60).toFixed(2)}s of missed attack`,
+      };
+    }
+  }
+
+  // Rule 3: Jumped from ground or platform (without using an attack) and attacked within 0.5s (30 frames)
+  let foundJumpStart = -1;
+  let usedAttackDuringJump = false;
+
+  for (let k = 1; k <= 45; k++) {
+    const f = hitFrameIndex - k;
+    if (f < 0) break;
+    const post = replay.frames[f]?.ports[victimPort]?.post;
+    if (!post) continue;
+
+    if (isAttackActionState(post.actionStateId)) {
+      usedAttackDuringJump = true;
+    }
+
+    if (isJumpActionState(post.actionStateId)) {
+      foundJumpStart = f;
+    } else if (foundJumpStart !== -1) {
+      break;
+    }
+  }
+
+  if (foundJumpStart !== -1 && !usedAttackDuringJump) {
+    const framesSinceJump = hitFrameIndex - foundJumpStart;
+    if (framesSinceJump <= 30) {
+      return {
+        reason: "jump-punish",
+        reasonDetail: `Attacked within ${(framesSinceJump / 60).toFixed(2)}s of jumping without attacking`,
+      };
+    }
+  }
+
+  // Rule 4: Got hit with an attack while standing / grounded neutral
+  if (!isAirborneActionState(victimPrevPost.actionStateId)) {
+    return {
+      reason: "standing-hit",
+      reasonDetail: "Hit while grounded in neutral",
+    };
+  }
+
+  return {
+    reason: "unknown",
+  };
 }
 
 /**
@@ -133,6 +325,12 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
     const aGrabbedB = bInCapture && !lastBInCapture;
 
     if ((aHitB || aGrabbedB) && !bInDisadvantage) {
+      const { reason, reasonDetail } = classifyNeutralOpening(
+        replay,
+        i,
+        portB,
+        portA,
+      );
       events.push({
         frame: frameNumber,
         frameIndex: i,
@@ -140,6 +338,8 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
         attackerPort: portA,
         victimPort: portB,
         hitType: aGrabbedB ? "grab" : "attack",
+        reason,
+        reasonDetail,
       });
     }
 
@@ -151,6 +351,12 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
     const bGrabbedA = aInCapture && !lastAInCapture;
 
     if ((bHitA || bGrabbedA) && !aInDisadvantage) {
+      const { reason, reasonDetail } = classifyNeutralOpening(
+        replay,
+        i,
+        portA,
+        portB,
+      );
       events.push({
         frame: frameNumber,
         frameIndex: i,
@@ -158,6 +364,8 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
         attackerPort: portB,
         victimPort: portA,
         hitType: bGrabbedA ? "grab" : "attack",
+        reason,
+        reasonDetail,
       });
     }
 
