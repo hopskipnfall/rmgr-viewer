@@ -52,6 +52,14 @@ export function isLandingState(actionStateId: number): boolean {
   return LANDING_ACTION_STATES.has(actionStateId);
 }
 
+export function isHeavyLandingState(actionStateId: number): boolean {
+  return (
+    actionStateId === 0x020 ||
+    actionStateId === 0x03b ||
+    actionStateId === 0x0db
+  );
+}
+
 const DEAD_ACTION_STATES = new Set([
   0x000, // DeadD
   0x001, // DeadS
@@ -1276,6 +1284,7 @@ export interface CharacterAnimState {
   isInvulnerable: boolean;
   isSpecial: boolean;
   isLanding: boolean;
+  isHeavyLanding?: boolean;
   isDizzy: boolean;
   isSleep: boolean;
   isOpponent: boolean;
@@ -2194,6 +2203,7 @@ export class StageRenderer {
     const comboHits = inHitstun ? (post.comboHitCount ?? 0) : 0;
     const isSpecial = isSpecialState(post.actionStateId);
     const isLanding = isLandingState(post.actionStateId);
+    const isHeavyLanding = isHeavyLandingState(post.actionStateId);
     const isDizzy = isDizzyState(post.actionStateId);
     const isSleep = isSleepState(post.actionStateId);
     const isOpponent =
@@ -2219,6 +2229,7 @@ export class StageRenderer {
       isInvulnerable,
       isSpecial,
       isLanding,
+      isHeavyLanding,
       isDizzy,
       isSleep,
       isOpponent,
@@ -2500,50 +2511,25 @@ export class StageRenderer {
         ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
         ctx.lineWidth = 1.4;
         ctx.stroke();
-      } else if (isRoll) {
-        // Ethereal silver glow during roll (with brighter cyan aura when actively intangible)
-        ctx.save();
-        ctx.strokeStyle = isInvulnerable
-          ? "rgba(220, 235, 255, 0.95)"
-          : "rgba(190, 205, 225, 0.95)";
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = isInvulnerable
-          ? "rgba(180, 215, 255, 0.85)"
-          : "rgba(170, 195, 230, 0.7)";
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-        ctx.restore();
-
-        ctx.beginPath();
-        ctx.moveTo(noseX, noseY);
-        ctx.lineTo(backX, topY);
-        ctx.lineTo(backX, y);
-        ctx.closePath();
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-      } else if (isSpecial || isLanding) {
-        // Special move & Landing animation: neutral cool-silver/gray energy outline
-        ctx.save();
-        ctx.strokeStyle = "rgba(190, 205, 225, 0.95)";
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = "rgba(170, 195, 230, 0.7)";
-        ctx.shadowBlur = 6;
-        ctx.stroke();
-        ctx.restore();
-
-        ctx.beginPath();
-        ctx.moveTo(noseX, noseY);
-        ctx.lineTo(backX, topY);
-        ctx.lineTo(backX, y);
-        ctx.closePath();
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
       } else {
         ctx.strokeStyle = "rgba(0,0,0,0.5)";
         ctx.lineWidth = 1.5;
         ctx.stroke();
+      }
+
+      if (isLanding) {
+        // Ground impact compression line along floor (y)
+        ctx.save();
+        const impactSpread = isHeavyLanding ? halfWidth * 1.35 : halfWidth * 0.9;
+        ctx.beginPath();
+        ctx.moveTo(x - impactSpread, y);
+        ctx.lineTo(x + impactSpread, y);
+        ctx.strokeStyle = isHeavyLanding
+          ? "rgba(251, 191, 36, 0.9)"
+          : "rgba(226, 232, 240, 0.75)";
+        ctx.lineWidth = isHeavyLanding ? 3 : 1.8;
+        ctx.stroke();
+        ctx.restore();
       }
 
       ctx.restore();
@@ -3028,9 +3014,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -3259,19 +3242,7 @@ export class StageRenderer {
       ctx.stroke();
     }
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -3294,9 +3265,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -3549,19 +3517,7 @@ export class StageRenderer {
     ctx.fillStyle = goldColor;
     ctx.fill();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -3584,9 +3540,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -3838,19 +3791,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -3873,9 +3814,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -4126,19 +4064,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -4161,9 +4087,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -4353,19 +4276,7 @@ export class StageRenderer {
       ctx.stroke();
     }
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -4388,9 +4299,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -4577,19 +4485,7 @@ export class StageRenderer {
       ctx.stroke();
     }
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -4612,9 +4508,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -4838,19 +4731,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -4873,9 +4754,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -5068,19 +4946,7 @@ export class StageRenderer {
     ctx.fillStyle = redShell;
     ctx.fill();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -5103,9 +4969,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -5251,19 +5114,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -5286,9 +5137,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -5449,19 +5297,7 @@ export class StageRenderer {
     ctx.fillStyle = blondeHair;
     ctx.fill();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -5484,9 +5320,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -5688,19 +5521,7 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
@@ -5723,9 +5544,6 @@ export class StageRenderer {
       taunting,
       inCombo,
       isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
       isOpponent,
       actionFrameCounter,
     } = state;
@@ -5911,24 +5729,12 @@ export class StageRenderer {
     ctx.fillStyle = visorGreen;
     ctx.fill();
 
-    this.drawCharacterStateAuras(
-      ctx,
-      posX,
-      y,
-      w,
-      h,
-      dir,
-      inCombo,
-      isRoll,
-      isInvulnerable,
-      isSpecial,
-      isLanding,
-    );
+    this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
   }
 
   /**
-   * Helper to draw combo hitstun, roll invulnerability, and landing energy outlines consistently.
+   * Helper to draw combo hitstun outlines and ground-level landing impact shockwaves consistently.
    */
   private drawCharacterStateAuras(
     ctx: CanvasRenderingContext2D,
@@ -5936,13 +5742,11 @@ export class StageRenderer {
     y: number,
     w: number,
     h: number,
-    dir: number,
-    inCombo: boolean,
-    isRoll: boolean,
-    isInvulnerable: boolean,
-    isSpecial: boolean,
-    isLanding: boolean,
+    _dir: number,
+    state: CharacterAnimState,
   ): void {
+    const { inCombo, isLanding, isHeavyLanding } = state;
+
     if (inCombo) {
       ctx.save();
       ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
@@ -5976,45 +5780,75 @@ export class StageRenderer {
       ctx.lineWidth = 1.8;
       ctx.stroke();
       ctx.restore();
-    } else if (isRoll) {
+    }
+
+    if (isLanding) {
+      // Ground impact shockwave & outward kicking dust puffs at floor level (y)
       ctx.save();
-      ctx.strokeStyle = isInvulnerable
-        ? "rgba(220, 235, 255, 0.95)"
-        : "rgba(190, 205, 225, 0.95)";
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = isInvulnerable
-        ? "rgba(180, 215, 255, 0.85)"
-        : "rgba(170, 195, 230, 0.7)";
-      ctx.shadowBlur = 8;
+      const impactSpread = isHeavyLanding ? w * 1.35 : w * 0.9;
+
+      // 1. Horizontal ground impact compression line along floor
       ctx.beginPath();
-      ctx.ellipse(
-        posX,
-        y - 0.5 * h,
-        Math.max(0.1, 0.8 * w),
-        Math.max(0.1, 0.5 * h),
-        0,
+      ctx.moveTo(posX - impactSpread, y);
+      ctx.lineTo(posX + impactSpread, y);
+      ctx.strokeStyle = isHeavyLanding
+        ? "rgba(251, 191, 36, 0.9)" // Amber/yellow warning impact for heavy landing lag
+        : "rgba(226, 232, 240, 0.75)"; // Light silver impact line
+      ctx.lineWidth = isHeavyLanding ? 3 : 1.8;
+      ctx.stroke();
+
+      // 2. Outward dust puff clouds kicking left and right along the ground
+      ctx.fillStyle = isHeavyLanding
+        ? "rgba(245, 158, 11, 0.65)"
+        : "rgba(226, 232, 240, 0.55)";
+
+      // Left ground dust puffs
+      ctx.beginPath();
+      ctx.arc(
+        posX - impactSpread * 0.75,
+        y - 3,
+        isHeavyLanding ? 4.5 : 3,
         0,
         Math.PI * 2,
       );
-      ctx.stroke();
-      ctx.restore();
-    } else if (isSpecial || isLanding) {
-      ctx.save();
-      ctx.strokeStyle = "rgba(190, 205, 225, 0.95)";
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = "rgba(170, 195, 230, 0.7)";
-      ctx.shadowBlur = 6;
-      ctx.beginPath();
-      ctx.ellipse(
-        posX,
-        y - 0.5 * h,
-        Math.max(0.1, 0.8 * w),
-        Math.max(0.1, 0.5 * h),
-        0,
+      ctx.arc(
+        posX - impactSpread * 1.05,
+        y - 2,
+        isHeavyLanding ? 3.5 : 2,
         0,
         Math.PI * 2,
       );
-      ctx.stroke();
+      ctx.fill();
+
+      // Right ground dust puffs
+      ctx.beginPath();
+      ctx.arc(
+        posX + impactSpread * 0.75,
+        y - 3,
+        isHeavyLanding ? 4.5 : 3,
+        0,
+        Math.PI * 2,
+      );
+      ctx.arc(
+        posX + impactSpread * 1.05,
+        y - 2,
+        isHeavyLanding ? 3.5 : 2,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      if (isHeavyLanding) {
+        // Heavy landing recovery lag markers (downward floor compression ticks)
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.85)";
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(posX - w * 0.45, y);
+        ctx.lineTo(posX - w * 0.65, y - 5);
+        ctx.moveTo(posX + w * 0.45, y);
+        ctx.lineTo(posX + w * 0.65, y - 5);
+        ctx.stroke();
+      }
       ctx.restore();
     }
   }

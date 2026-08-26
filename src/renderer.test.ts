@@ -30,6 +30,7 @@ import {
   isJigglypuffCharacter,
   isKirbyCharacter,
   isLandingState,
+  isHeavyLandingState,
   isLinkCharacter,
   isLuigiCharacter,
   isMarioCharacter,
@@ -115,6 +116,20 @@ describe("isLandingState", () => {
     expect(isLandingState(0x01a)).toBe(false); // Fall
     expect(isLandingState(0x01c)).toBe(false); // Crouch
     expect(isLandingState(0x099)).toBe(false); // Shield
+  });
+});
+
+describe("isHeavyLandingState", () => {
+  it("identifies heavy landing action states correctly", () => {
+    expect(isHeavyLandingState(0x020)).toBe(true); // LandingHeavy
+    expect(isHeavyLandingState(0x03b)).toBe(true); // LandingSpecial
+    expect(isHeavyLandingState(0x0db)).toBe(true); // LandingAirX
+  });
+
+  it("returns false for light landing or other states", () => {
+    expect(isHeavyLandingState(0x01f)).toBe(false); // LandingLight
+    expect(isHeavyLandingState(0x00a)).toBe(false); // Idle
+    expect(isHeavyLandingState(0x01a)).toBe(false); // Fall
   });
 });
 
