@@ -89,6 +89,7 @@ interface ActiveLedgeSituation {
   safeFrameStreak: number;
   readonly ledgeStocksAtEntry: number;
   readonly trapStocksAtEntry: number;
+  readonly trapDamageAtEntry: number;
 }
 
 /**
@@ -256,7 +257,9 @@ export function computeLedgeTrapEvents(replay: Replay): LedgeTrapEvent[] {
       const ledgePost = ledgePort === portA ? postA : postB;
       const trapPost = trapPort === portA ? postA : postB;
       const ledgeInHitstun = ledgePort === portA ? aInHitstun : bInHitstun;
+      const trapInHitstun = trapPort === portA ? aInHitstun : bInHitstun;
       const ledgeInCapture = CAPTURE_STATES.has(ledgePost.actionStateId);
+      const trapInCapture = CAPTURE_STATES.has(trapPost.actionStateId);
       const ledgeInLedgeAction = LEDGE_ACTION_STATES.has(
         ledgePost.actionStateId,
       );
@@ -310,25 +313,48 @@ export function computeLedgeTrapEvents(replay: Replay): LedgeTrapEvent[] {
         continue;
       }
 
-      // 4. Safe ground frames on stage (must be outside of ledge action states)
-      if (!ledgeInLedgeAction && !ledgeInHitstun && !ledgeInCapture) {
-        if (ledgePost.grounded) {
-          situation.safeFrameStreak++;
-          if (situation.safeFrameStreak >= LEDGE_GETUP_GROUNDED_FRAMES) {
-            events.push({
-              frame: frameNumber,
-              frameIndex: i,
-              kind: "ledge-getup-success",
-              ledgePort,
-              trapPort,
-              damageAtEntry,
-              isUnder100,
-            });
-            situation = null;
-            continue;
-          }
-        } else {
-          situation.safeFrameStreak = 0;
+      // 4. Ledge player lands a hit on trapping player while on stage -> immediate getup success
+      if (
+        !ledgeInLedgeAction &&
+        !ledgeInHitstun &&
+        !ledgeInCapture &&
+        (trapInHitstun ||
+          trapInCapture ||
+          trapPost.damagePercent > situation.trapDamageAtEntry)
+      ) {
+        events.push({
+          frame: frameNumber,
+          frameIndex: i,
+          kind: "ledge-getup-success",
+          ledgePort,
+          trapPort,
+          damageAtEntry,
+          isUnder100,
+        });
+        situation = null;
+        continue;
+      }
+
+      // 5. Safe on-stage frames (must be outside of ledge action states and within on-stage bounds)
+      const isLedgePlayerOnStage =
+        !ledgeInLedgeAction &&
+        !isOutsideZone(ledgePost.positionX, ledgePost.positionY) &&
+        ledgePost.positionY >= -200;
+
+      if (isLedgePlayerOnStage && !ledgeInHitstun && !ledgeInCapture) {
+        situation.safeFrameStreak++;
+        if (situation.safeFrameStreak >= LEDGE_GETUP_GROUNDED_FRAMES) {
+          events.push({
+            frame: frameNumber,
+            frameIndex: i,
+            kind: "ledge-getup-success",
+            ledgePort,
+            trapPort,
+            damageAtEntry,
+            isUnder100,
+          });
+          situation = null;
+          continue;
         }
       } else {
         situation.safeFrameStreak = 0;
@@ -377,6 +403,7 @@ export function computeLedgeTrapEvents(replay: Replay): LedgeTrapEvent[] {
       safeFrameStreak: 0,
       ledgeStocksAtEntry: ledgePost.stocksRemaining,
       trapStocksAtEntry: trapPost.stocksRemaining,
+      trapDamageAtEntry: trapPost.damagePercent,
     };
 
     events.push({
