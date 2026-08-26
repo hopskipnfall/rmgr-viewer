@@ -5007,7 +5007,40 @@ export class StageRenderer {
     ctx.fillStyle = whiteColor;
     ctx.fill();
 
-    // Head, Eyes & Big Snout
+    // Big Rounded Green Snout
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.48 * dir * w,
+      y - 0.72 * h,
+      Math.max(0.1, 0.38 * w),
+      Math.max(0.1, 0.22 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = greenColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Nostril
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + 0.68 * dir * w,
+        y - 0.76 * h,
+        Math.max(0.1, 0.035 * w),
+        Math.max(0.1, 0.045 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#18181b", isOpponent);
+      ctx.fill();
+    }
+
+    // Eye White (on top of snout bridge)
     ctx.beginPath();
     ctx.ellipse(
       posX + 0.1 * dir * w,
@@ -5020,12 +5053,15 @@ export class StageRenderer {
     );
     ctx.fillStyle = whiteColor;
     ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
     ctx.stroke();
 
+    // Eye Pupil (properly directional-flipped)
     if (Math.abs(dir) > 0.15) {
       ctx.beginPath();
       ctx.ellipse(
-        posX + (0.1 + 0.04 * dir) * w,
+        posX + 0.14 * dir * w,
         y - 0.85 * h,
         Math.max(0.1, 0.05 * w),
         Math.max(0.1, 0.08 * h),
@@ -5036,21 +5072,6 @@ export class StageRenderer {
       ctx.fillStyle = resolveColor("#18181b", isOpponent);
       ctx.fill();
     }
-
-    // Big Rounded Green Snout
-    ctx.beginPath();
-    ctx.ellipse(
-      posX + 0.52 * dir * w,
-      y - 0.72 * h,
-      Math.max(0.1, 0.38 * w),
-      Math.max(0.1, 0.22 * h),
-      0,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fillStyle = greenColor;
-    ctx.fill();
-    ctx.stroke();
 
     // Red Spines along neck
     ctx.beginPath();
