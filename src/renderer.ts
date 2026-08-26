@@ -1,6 +1,11 @@
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
 import { Camera } from "./camera.js";
-import { getPlayerColor } from "./players.js";
+import {
+  getPlayerColor,
+  PORT_LABELS,
+  MAIN_PLAYER_COLOR,
+  OPPONENT_COLOR,
+} from "./players.js";
 import {
   stageGeometry,
   stageBlastZone,
@@ -123,6 +128,32 @@ export function isRollForward(actionStateId: number): boolean {
     actionStateId === 0x04b ||
     actionStateId === 0x058 ||
     actionStateId === 0x05b
+  );
+}
+
+/** Total frames at match start where player name tags are displayed (240 frames = 4.0s @ 60fps). */
+export const START_NAME_DISPLAY_FRAMES = 240;
+/** Frames at match start with 100% full opacity before fading out. */
+export const START_NAME_SOLID_FRAMES = 180;
+
+/**
+ * Calculates opacity alpha (0.0 to 1.0) for player name tags at the start of a match.
+ * Full opacity for the first 3 seconds (0..180 frames), then fades out smoothly over the next 1 second (180..240 frames).
+ */
+export function getStartNameAlpha(frameIndex: number | undefined): number {
+  if (
+    frameIndex === undefined ||
+    frameIndex < 0 ||
+    frameIndex >= START_NAME_DISPLAY_FRAMES
+  ) {
+    return 0;
+  }
+  if (frameIndex <= START_NAME_SOLID_FRAMES) {
+    return 1;
+  }
+  return (
+    (START_NAME_DISPLAY_FRAMES - frameIndex) /
+    (START_NAME_DISPLAY_FRAMES - START_NAME_SOLID_FRAMES)
   );
 }
 
@@ -1574,6 +1605,103 @@ export class StageRenderer {
       ctx.fillStyle = "#ff4d4f";
       ctx.fillText(badgeText, x, badgeY);
     }
+
+    // Player name tag at match start (fades out after initial frames)
+    const nameAlpha = getStartNameAlpha(frameIndex);
+    if (nameAlpha > 0) {
+      const rawName = replay?.gameStart.playerNames[port]?.trim();
+      const playerName =
+        rawName && rawName.length > 0 ? rawName : PORT_LABELS[port];
+      const hasPerspective =
+        perspectivePort !== null && perspectivePort !== undefined;
+      const isPerspective = hasPerspective && port === perspectivePort;
+      const tagColor = hasPerspective
+        ? isPerspective
+          ? MAIN_PLAYER_COLOR
+          : OPPONENT_COLOR
+        : getPlayerColor(port, perspectivePort);
+
+      const nameTagBottomY = comboHits >= 2 ? labelY - 30 : labelY - 16;
+      this.drawPlayerNameTag(
+        x,
+        nameTagBottomY,
+        playerName,
+        tagColor,
+        isPerspective,
+        nameAlpha,
+      );
+    }
+  }
+
+  /**
+   * Draws a player name tag above the character's head at the start of the match.
+   * Renders a capsule pill with a downward pointer arrow and distinct blue styling
+   * for the perspective player.
+   */
+  private drawPlayerNameTag(
+    x: number,
+    y: number,
+    name: string,
+    tagColor: string,
+    isPerspective: boolean,
+    alpha: number,
+  ): void {
+    if (alpha <= 0 || !name) return;
+
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    ctx.font = "bold 11px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const textMetrics = ctx.measureText(name);
+    const textWidth = textMetrics.width;
+    const paddingX = 8;
+    const pillWidth = Math.max(textWidth + paddingX * 2, 28);
+    const pillHeight = 18;
+    const pillX = x - pillWidth / 2;
+    const pillY = y - pillHeight - 4; // 4px above the arrow tip at y
+    const borderRadius = 4;
+
+    // 1. Tag capsule background
+    ctx.beginPath();
+    ctx.roundRect(pillX, pillY, pillWidth, pillHeight, borderRadius);
+    ctx.fillStyle = isPerspective
+      ? "rgba(15, 23, 42, 0.92)"
+      : "rgba(24, 27, 34, 0.85)";
+    ctx.fill();
+
+    // 2. Tag capsule border
+    ctx.lineWidth = isPerspective ? 2 : 1.2;
+    ctx.strokeStyle = tagColor;
+    if (isPerspective) {
+      ctx.shadowColor = "rgba(59, 130, 246, 0.6)";
+      ctx.shadowBlur = 6;
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // 3. Small downward pointer arrow below pill pointing down to character
+    const arrowWidth = 6;
+    const arrowHeight = 4;
+    ctx.beginPath();
+    ctx.moveTo(x - arrowWidth / 2, pillY + pillHeight);
+    ctx.lineTo(x + arrowWidth / 2, pillY + pillHeight);
+    ctx.lineTo(x, pillY + pillHeight + arrowHeight);
+    ctx.closePath();
+    ctx.fillStyle = tagColor;
+    ctx.fill();
+
+    // 4. Name text inside capsule
+    ctx.fillStyle = isPerspective ? "#ffffff" : "#d1d5db";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 2;
+    ctx.fillText(name, x, pillY + pillHeight / 2);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
   }
 
   /**

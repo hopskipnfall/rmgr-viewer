@@ -6,6 +6,9 @@ import {
   getFoxFlightAngle,
   getFoxSpecialType,
   getPikachuSpecialType,
+  getStartNameAlpha,
+  START_NAME_DISPLAY_FRAMES,
+  START_NAME_SOLID_FRAMES,
   isCrouchState,
   isDeadState,
   isDonkeyKongCharacter,
@@ -769,5 +772,29 @@ describe("toGrayscale", () => {
 
   it("converts hsl colors to 0% saturation", () => {
     expect(toGrayscale("hsl(120, 85%, 55%)")).toBe("hsl(0, 0%, 55%)");
+  });
+});
+
+describe("getStartNameAlpha", () => {
+  it("returns 1.0 during the solid display window at match start", () => {
+    expect(getStartNameAlpha(0)).toBe(1);
+    expect(getStartNameAlpha(60)).toBe(1);
+    expect(getStartNameAlpha(120)).toBe(1);
+    expect(getStartNameAlpha(START_NAME_SOLID_FRAMES)).toBe(1);
+  });
+
+  it("smoothly fades out between solid frames and total display frames", () => {
+    // Midway through fade: frame 210 = (240 - 210) / 60 = 0.5
+    expect(getStartNameAlpha(210)).toBeCloseTo(0.5);
+    // Right near the end of fade: frame 234 = (240 - 234) / 60 = 0.1
+    expect(getStartNameAlpha(234)).toBeCloseTo(0.1);
+  });
+
+  it("returns 0 after the display window or for undefined/negative frames", () => {
+    expect(getStartNameAlpha(START_NAME_DISPLAY_FRAMES)).toBe(0);
+    expect(getStartNameAlpha(300)).toBe(0);
+    expect(getStartNameAlpha(1000)).toBe(0);
+    expect(getStartNameAlpha(undefined)).toBe(0);
+    expect(getStartNameAlpha(-1)).toBe(0);
   });
 });
