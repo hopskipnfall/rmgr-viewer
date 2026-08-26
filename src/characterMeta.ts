@@ -210,8 +210,132 @@ export function computeJigglypuffFThrowStats(
   };
 }
 
+export interface JigglypuffFThrowSituation {
+  readonly enteredFrameIndex: number;
+  readonly outcomeFrameIndex: number;
+  readonly puffPort: PortIndex;
+  readonly victimPort: PortIndex;
+  readonly followupHits?: number;
+  readonly outcome: "success" | "failure" | "open";
+}
+
+export function getJigglypuffFThrowSituations(
+  events: JigglypuffFThrowEvent[],
+  puffPort: PortIndex,
+): JigglypuffFThrowSituation[] {
+  const situations: JigglypuffFThrowSituation[] = [];
+  const portEvents = events.filter((e) => e.puffPort === puffPort);
+
+  let currentEntered: JigglypuffFThrowEvent | null = null;
+
+  for (const ev of portEvents) {
+    if (ev.kind === "fthrow-entered") {
+      if (currentEntered) {
+        situations.push({
+          enteredFrameIndex: currentEntered.frameIndex,
+          outcomeFrameIndex: ev.frameIndex,
+          puffPort: currentEntered.puffPort,
+          victimPort: currentEntered.victimPort,
+          followupHits: 0,
+          outcome: "open",
+        });
+      }
+      currentEntered = ev;
+    } else if (ev.kind === "fthrow-success" || ev.kind === "fthrow-failure") {
+      if (currentEntered) {
+        situations.push({
+          enteredFrameIndex: currentEntered.frameIndex,
+          outcomeFrameIndex: ev.frameIndex,
+          puffPort: currentEntered.puffPort,
+          victimPort: currentEntered.victimPort,
+          followupHits: ev.followupHits ?? 0,
+          outcome: ev.kind === "fthrow-success" ? "success" : "failure",
+        });
+        currentEntered = null;
+      }
+    }
+  }
+
+  if (currentEntered) {
+    situations.push({
+      enteredFrameIndex: currentEntered.frameIndex,
+      outcomeFrameIndex: currentEntered.frameIndex,
+      puffPort: currentEntered.puffPort,
+      victimPort: currentEntered.victimPort,
+      followupHits: 0,
+      outcome: "open",
+    });
+  }
+
+  return situations;
+}
+
 export type ShieldPressureEventKind =
   "shield-pressure-entered" | "shield-break" | "shield-grab" | "shield-escape";
+
+export interface ShieldPressureSituation {
+  readonly enteredFrameIndex: number;
+  readonly outcomeFrameIndex: number;
+  readonly attackerPort: PortIndex;
+  readonly defenderPort: PortIndex;
+  readonly hitsOnShield: number;
+  readonly outcome: "shield-break" | "shield-grab" | "shield-escape" | "open";
+}
+
+export function getShieldPressureSituations(
+  events: ShieldPressureEvent[],
+  attackerPort: PortIndex,
+): ShieldPressureSituation[] {
+  const situations: ShieldPressureSituation[] = [];
+  const portEvents = events.filter((e) => e.attackerPort === attackerPort);
+
+  let currentEntered: ShieldPressureEvent | null = null;
+
+  for (const ev of portEvents) {
+    if (ev.kind === "shield-pressure-entered") {
+      if (currentEntered) {
+        situations.push({
+          enteredFrameIndex: currentEntered.frameIndex,
+          outcomeFrameIndex: ev.frameIndex,
+          attackerPort: currentEntered.attackerPort,
+          defenderPort: currentEntered.defenderPort,
+          hitsOnShield: currentEntered.hitsOnShield ?? 2,
+          outcome: "open",
+        });
+      }
+      currentEntered = ev;
+    } else if (
+      ev.kind === "shield-break" ||
+      ev.kind === "shield-grab" ||
+      ev.kind === "shield-escape"
+    ) {
+      if (currentEntered) {
+        situations.push({
+          enteredFrameIndex: currentEntered.frameIndex,
+          outcomeFrameIndex: ev.frameIndex,
+          attackerPort: currentEntered.attackerPort,
+          defenderPort: currentEntered.defenderPort,
+          hitsOnShield: ev.hitsOnShield ?? currentEntered.hitsOnShield ?? 2,
+          outcome: ev.kind,
+        });
+        currentEntered = null;
+      }
+    }
+  }
+
+  if (currentEntered) {
+    situations.push({
+      enteredFrameIndex: currentEntered.frameIndex,
+      outcomeFrameIndex: currentEntered.frameIndex,
+      attackerPort: currentEntered.attackerPort,
+      defenderPort: currentEntered.defenderPort,
+      hitsOnShield: currentEntered.hitsOnShield ?? 2,
+      outcome: "open",
+    });
+  }
+
+  return situations;
+}
 
 export interface ShieldPressureEvent {
   readonly frame: number;

@@ -39,6 +39,8 @@ import {
   computeJigglypuffFThrowStats,
   computeShieldPressureEvents,
   computeShieldPressureStats,
+  getJigglypuffFThrowSituations,
+  getShieldPressureSituations,
   isJigglypuffCharacter,
   isNessCharacter,
   isYoshiCharacter,
@@ -1696,6 +1698,55 @@ export class MatchViewController {
       row.appendChild(lbl);
       row.appendChild(val);
       this.characterMetaPanel.appendChild(row);
+
+      const puffSituations = getJigglypuffFThrowSituations(
+        puffEvents,
+        this.perspectivePort,
+      );
+
+      if (puffSituations.length > 0) {
+        const listEl = document.createElement("div");
+        listEl.className = "situation-list";
+
+        puffSituations.forEach((sit, idx) => {
+          const itemRow = document.createElement("div");
+          itemRow.className = "situation-row";
+
+          const indexEl = document.createElement("span");
+          indexEl.className = "situation-index";
+          indexEl.textContent = `#${idx + 1}`;
+
+          const timeEl = document.createElement("span");
+          timeEl.className = "situation-time";
+          timeEl.textContent = `${formatElapsed(sit.enteredFrameIndex)} (${sit.enteredFrameIndex}F)`;
+
+          const badgeEl = document.createElement("span");
+          if (sit.outcome === "success") {
+            badgeEl.className = "situation-badge success";
+            badgeEl.textContent = tr.fthrowSuccessBadge;
+          } else if (sit.outcome === "failure") {
+            badgeEl.className = "situation-badge failure";
+            badgeEl.textContent = tr.fthrowFailureBadge;
+          } else {
+            badgeEl.className = "situation-badge open";
+            badgeEl.textContent = tr.situationOpenBadge;
+          }
+
+          itemRow.appendChild(indexEl);
+          itemRow.appendChild(timeEl);
+          itemRow.appendChild(badgeEl);
+
+          itemRow.addEventListener("click", () => {
+            const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
+            this.playback?.seek(targetFrameIndex);
+            this.playback?.play();
+          });
+
+          listEl.appendChild(itemRow);
+        });
+
+        this.characterMetaPanel.appendChild(listEl);
+      }
       return;
     }
 
@@ -1752,6 +1803,64 @@ export class MatchViewController {
       row.appendChild(lbl);
       row.appendChild(val);
       this.characterMetaPanel.appendChild(row);
+
+      const shieldSituations = getShieldPressureSituations(
+        shieldEvents,
+        this.perspectivePort,
+      );
+
+      if (shieldSituations.length > 0) {
+        const listEl = document.createElement("div");
+        listEl.className = "situation-list";
+
+        shieldSituations.forEach((sit, idx) => {
+          const itemRow = document.createElement("div");
+          itemRow.className = "situation-row";
+
+          const indexEl = document.createElement("span");
+          indexEl.className = "situation-index";
+          indexEl.textContent = `#${idx + 1}`;
+
+          const timeEl = document.createElement("span");
+          timeEl.className = "situation-time";
+          timeEl.textContent = `${formatElapsed(sit.enteredFrameIndex)} (${sit.enteredFrameIndex}F)`;
+
+          const hitsEl = document.createElement("span");
+          hitsEl.className = "situation-bracket bracket-under100";
+          hitsEl.textContent = tr.hitsUnit(sit.hitsOnShield);
+
+          const badgeEl = document.createElement("span");
+          if (sit.outcome === "shield-break") {
+            badgeEl.className = "situation-badge success";
+            badgeEl.textContent = tr.shieldBreakBadge;
+          } else if (sit.outcome === "shield-grab") {
+            badgeEl.className = "situation-badge success";
+            badgeEl.textContent = tr.shieldGrabBadge;
+          } else if (sit.outcome === "shield-escape") {
+            badgeEl.className = "situation-badge failure";
+            badgeEl.textContent = tr.shieldEscapeBadge;
+          } else {
+            badgeEl.className = "situation-badge open";
+            badgeEl.textContent = tr.situationOpenBadge;
+          }
+
+          itemRow.appendChild(indexEl);
+          itemRow.appendChild(timeEl);
+          itemRow.appendChild(hitsEl);
+          itemRow.appendChild(badgeEl);
+
+          itemRow.addEventListener("click", () => {
+            // Seek 1.5 seconds (90 frames at 60fps) before the shield pressure began and play automatically
+            const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
+            this.playback?.seek(targetFrameIndex);
+            this.playback?.play();
+          });
+
+          listEl.appendChild(itemRow);
+        });
+
+        this.characterMetaPanel.appendChild(listEl);
+      }
       return;
     }
 

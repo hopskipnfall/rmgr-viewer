@@ -55,6 +55,12 @@ export interface Translations {
     total: number,
   ) => string;
   noShieldPressures: string;
+  shieldBreakBadge: string;
+  shieldGrabBadge: string;
+  shieldEscapeBadge: string;
+  fthrowSuccessBadge: string;
+  fthrowFailureBadge: string;
+  hitsUnit: (hits: number) => string;
 
   // Event log
   eventLog: string;
@@ -257,6 +263,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     shieldPressureBreakdown: (b, g, n, t) =>
       `${t} attempt${t !== 1 ? "s" : ""}: ${b} break${b !== 1 ? "s" : ""}, ${g} grab${g !== 1 ? "s" : ""}, ${n} neither`,
     noShieldPressures: "no multi-hit shield pressures",
+    shieldBreakBadge: "Break",
+    shieldGrabBadge: "Grab",
+    shieldEscapeBadge: "Escaped",
+    fthrowSuccessBadge: "Followup",
+    fthrowFailureBadge: "Dropped",
+    hitsUnit: (hits) => `${hits} hit${hits !== 1 ? "s" : ""}`,
 
     eventLog: "Event Log",
     eventLogEmpty: "No events yet.",
@@ -469,6 +481,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     shieldPressureBreakdown: (b, g, n, t) =>
       `${t}回中: ガード割れ ${b}回, つかみ ${g}回, 回避 ${n}回`,
     noShieldPressures: "2+ヒット固めなし",
+    shieldBreakBadge: "割れ",
+    shieldGrabBadge: "つかみ",
+    shieldEscapeBadge: "回避",
+    fthrowSuccessBadge: "追撃成功",
+    fthrowFailureBadge: "追撃なし",
+    hitsUnit: (hits) => `${hits}ヒット`,
 
     eventLog: "イベントログ",
     eventLogEmpty: "イベントはまだありません。",
