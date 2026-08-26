@@ -1564,26 +1564,47 @@
         flex-shrink: 0;
         font-family: monospace, system-ui, sans-serif;
       }
-      .di-live-monitor {
-        padding: 10px 12px;
-        background: rgba(15, 23, 42, 0.45);
+      .di-item-wrapper {
         border-bottom: 1px solid var(--panel-border);
+      }
+      .di-item-wrapper:last-child {
+        border-bottom: none;
+      }
+      .di-item-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.15s ease;
+      }
+      .di-item-row:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .di-item-wrapper.selected .di-item-row,
+      .di-item-wrapper.active-playing .di-item-row {
+        background: rgba(56, 189, 248, 0.12);
+      }
+      .di-inline-detail {
+        padding: 10px 14px;
+        background: rgba(15, 23, 42, 0.65);
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 8px;
         font-size: 12px;
+        animation: diDetailFadeIn 0.18s ease-out;
       }
-      .di-live-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .di-live-title {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--text-dim);
+      @keyframes diDetailFadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
       .di-badge-strong {
         font-size: 11px;
@@ -1637,6 +1658,15 @@
         font-weight: 600;
         color: var(--text);
         font-variant-numeric: tabular-nums;
+      }
+      .di-cancel-warning {
+        font-size: 10px;
+        color: #f59e0b;
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        padding: 3px 6px;
+        border-radius: 4px;
+        margin-top: 2px;
       }
       .di-stick-strip {
         display: flex;
@@ -2438,7 +2468,6 @@
                 </h2>
               </button>
             </div>
-            <div id="diLiveMonitor" class="di-live-monitor"></div>
             <div id="diList" class="situation-list"></div>
           </section>
           <section id="characterMetaWidget" hidden>

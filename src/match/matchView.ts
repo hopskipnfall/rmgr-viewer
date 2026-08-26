@@ -145,8 +145,8 @@ export class MatchViewController {
   private diWidget: HTMLElement;
   private diCollapseBtn: HTMLButtonElement;
   private diWidgetTitleEl: HTMLHeadingElement;
-  private diLiveMonitor: HTMLDivElement;
   private diList: HTMLDivElement;
+  private selectedDIHitId: string | null = null;
   private recoveryCollapsed = false;
   private edgeGuardCollapsed = false;
   private ledgeGetupCollapsed = false;
@@ -326,9 +326,6 @@ export class MatchViewController {
     this.diWidgetTitleEl = document.getElementById(
       "diWidgetTitle",
     ) as HTMLHeadingElement;
-    this.diLiveMonitor = document.getElementById(
-      "diLiveMonitor",
-    ) as HTMLDivElement;
     this.diList = document.getElementById("diList") as HTMLDivElement;
 
     this.replayInfoWidget = document.getElementById(
@@ -448,7 +445,6 @@ export class MatchViewController {
 
     this.diCollapseBtn.addEventListener("click", () => {
       this.diCollapsed = !this.diCollapsed;
-      this.diLiveMonitor.hidden = this.diCollapsed;
       this.diList.hidden = this.diCollapsed;
       this.diCollapseBtn.classList.toggle("collapsed", this.diCollapsed);
     });
@@ -1889,8 +1885,14 @@ export class MatchViewController {
     }
 
     filteredHits.forEach((h, index) => {
+      const itemWrap = document.createElement("div");
+      itemWrap.className =
+        "di-item-wrapper" + (this.selectedDIHitId === h.id ? " selected" : "");
+      itemWrap.id = `di-item-${h.id}`;
+      itemWrap.dataset.hitId = h.id;
+
       const row = document.createElement("div");
-      row.className = "situation-row";
+      row.className = "di-item-row";
 
       const indexEl = document.createElement("span");
       indexEl.className = "situation-index";
@@ -1924,144 +1926,160 @@ export class MatchViewController {
       row.appendChild(dmgEl);
       row.appendChild(badgeEl);
 
+      const detail = document.createElement("div");
+      detail.className = "di-inline-detail";
+      detail.hidden = this.selectedDIHitId !== h.id;
+
+      const victimCharId =
+        this.currentReplay?.frames[0]?.ports[h.victimPort]?.post.characterId ??
+        0;
+      const victimChar = characterName(victimCharId);
+      const victimName = `${PORT_LABELS[h.victimPort]} (${victimChar})`;
+
+      let attackerName = "Opponent";
+      if (h.attackerPort !== null) {
+        const attackerCharId =
+          this.currentReplay?.frames[0]?.ports[h.attackerPort]?.post
+            .characterId ?? 0;
+        const attackerChar = characterName(attackerCharId);
+        attackerName = `${PORT_LABELS[h.attackerPort]} (${attackerChar})`;
+      }
+
+      let cancellationHtml = "";
+      if (h.inputs.length >= 2) {
+        const activeInps = h.inputs.filter((i) => i.isActivation);
+        if (activeInps.length >= 2) {
+          const grossDist = activeInps.reduce(
+            (sum, i) => sum + Math.hypot(i.stickX * 2.1, i.stickY * 2.1),
+            0,
+          );
+          const netDist = Math.hypot(
+            activeInps.reduce((sum, i) => sum + i.stickX * 2.1, 0),
+            activeInps.reduce((sum, i) => sum + i.stickY * 2.1, 0),
+          );
+          if (grossDist > 0 && netDist < grossDist * 0.85) {
+            const cancelPct = Math.round((1 - netDist / grossDist) * 100);
+            cancellationHtml = `<div class="di-cancel-warning">${tr.diCancellationNotice(Math.round(grossDist), Math.round(netDist), cancelPct)}</div>`;
+          }
+        }
+      }
+
+      const pipsHtml = h.inputs
+        .map((inp) => {
+          const activeClass = inp.isActivation
+            ? h.inputCount >= 2
+              ? "active-strong"
+              : "active"
+            : "";
+          const pipGlyph = inp.isActivation ? glyph : "·";
+          return `<span class="di-stick-pip ${activeClass}" data-frame="${inp.frameIndex}" title="Hitlag F+${inp.hitlagFrame}: Stick (${inp.stickX}, ${inp.stickY})">${pipGlyph}</span>`;
+        })
+        .join("");
+
+      detail.innerHTML = `
+        <div class="di-live-details">
+          <div class="di-live-detail-item">
+            <span class="di-live-label">Victim / Attacker</span>
+            <span class="di-live-val">${victimName} ← ${attackerName}</span>
+          </div>
+          <div class="di-live-detail-item">
+            <span class="di-live-label">Damage & Hitlag</span>
+            <span class="di-live-val">+${Math.round(h.damageDealt)}% (${h.diWindowFrames}F window)</span>
+          </div>
+          <div class="di-live-detail-item">
+            <span class="di-live-label">Displacement</span>
+            <span class="di-live-val">${Math.round(h.displacement.distance)}u shift (${h.cardinal})</span>
+          </div>
+          <div class="di-live-detail-item">
+            <span class="di-live-label">Efficiency</span>
+            <span class="di-live-val">${h.efficiency}%</span>
+          </div>
+        </div>
+        ${cancellationHtml}
+        ${
+          h.inputs.length > 0
+            ? `
+          <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
+            <span class="di-live-label">Hitlag Stick Timeline (${h.inputs.length}F):</span>
+            <div class="di-stick-strip">${pipsHtml}</div>
+          </div>
+        `
+            : ""
+        }
+      `;
+
       row.addEventListener("click", () => {
         this.dismissQuickAttackOverlay();
-        this.playback?.seek(h.hitFrameIndex);
-        this.playback?.play();
+        if (this.selectedDIHitId === h.id && !detail.hidden) {
+          this.selectedDIHitId = null;
+          itemWrap.classList.remove("selected");
+          detail.hidden = true;
+        } else {
+          this.selectedDIHitId = h.id;
+          const allWrappers =
+            this.diList.querySelectorAll<HTMLElement>(".di-item-wrapper");
+          allWrappers.forEach((w) => {
+            const isMatch = w.dataset.hitId === h.id;
+            w.classList.toggle("selected", isMatch);
+            const d = w.querySelector<HTMLElement>(".di-inline-detail");
+            if (d) d.hidden = !isMatch;
+          });
+          this.playback?.seek(h.hitFrameIndex);
+          this.playback?.play();
+        }
       });
 
-      this.diList.appendChild(row);
+      itemWrap.appendChild(row);
+      itemWrap.appendChild(detail);
+      this.diList.appendChild(itemWrap);
     });
 
     this.updateDILiveMonitor(this.playback?.currentIndex ?? 0);
   }
 
   private updateDILiveMonitor(frameIndex: number): void {
-    if (
-      !this.diLiveMonitor ||
-      !this.currentReplay ||
-      this.diEvents.length === 0
-    )
-      return;
-    const tr = t();
+    if (!this.currentReplay || this.diEvents.length === 0) return;
+
+    const filteredHits =
+      this.perspectivePort !== null
+        ? this.diEvents.filter((h) => h.victimPort === this.perspectivePort)
+        : this.diEvents;
 
     // Find if a hit is currently active in hitlag or initial knockback (within 22 frames of hitlag end)
-    let activeHit = this.diEvents.find(
+    const activeHit = filteredHits.find(
       (h) =>
         frameIndex >= h.hitFrameIndex &&
-        frameIndex <= h.endHitlagFrameIndex + 22 &&
-        (this.perspectivePort === null ||
-          h.victimPort === this.perspectivePort),
+        frameIndex <= h.endHitlagFrameIndex + 22,
     );
 
-    let isLive = true;
-    if (!activeHit) {
-      isLive = false;
-      const pastHits = this.diEvents.filter(
-        (h) =>
-          h.hitFrameIndex <= frameIndex &&
-          (this.perspectivePort === null ||
-            h.victimPort === this.perspectivePort),
-      );
-      if (pastHits.length > 0) {
-        activeHit = pastHits[pastHits.length - 1];
+    const allWrappers =
+      this.diList.querySelectorAll<HTMLElement>(".di-item-wrapper");
+
+    allWrappers.forEach((wrap) => {
+      const hitId = wrap.dataset.hitId;
+      const isSelected = this.selectedDIHitId === hitId;
+      const isActiveHit = Boolean(activeHit && activeHit.id === hitId);
+      const detail = wrap.querySelector<HTMLElement>(".di-inline-detail");
+
+      wrap.classList.toggle("active-playing", isActiveHit);
+      if (detail) {
+        detail.hidden = !isSelected && !isActiveHit;
       }
-    }
 
-    if (!activeHit) {
-      this.diLiveMonitor.innerHTML = `
-        <div class="di-live-header">
-          <span class="di-live-title">${tr.diWidgetTitle}</span>
-        </div>
-        <div class="situation-empty" style="padding: 4px 0;">${tr.diScrubPrompt}</div>
-      `;
-      return;
-    }
-
-    const victimCharId =
-      this.currentReplay.frames[0]?.ports[activeHit.victimPort]?.post
-        .characterId ?? 0;
-    const victimChar = characterName(victimCharId);
-    const victimName = `${PORT_LABELS[activeHit.victimPort]} (${victimChar})`;
-
-    let attackerName = "Opponent";
-    if (activeHit.attackerPort !== null) {
-      const attackerCharId =
-        this.currentReplay.frames[0]?.ports[activeHit.attackerPort]?.post
-          .characterId ?? 0;
-      const attackerChar = characterName(attackerCharId);
-      attackerName = `${PORT_LABELS[activeHit.attackerPort]} (${attackerChar})`;
-    }
-
-    const glyph = DI_ARROW_GLYPHS[activeHit.cardinal] ?? "•";
-    const dir =
-      activeHit.relative !== "neutral"
-        ? activeHit.relative
-        : activeHit.cardinal;
-
-    const badgeClass =
-      activeHit.inputCount >= 2
-        ? "di-badge-strong"
-        : activeHit.inputCount === 1
-          ? "di-badge-standard"
-          : "di-badge-none";
-
-    const badgeText =
-      activeHit.inputCount > 0
-        ? `${glyph} ${activeHit.inputCount}x DI (${dir})`
-        : `No DI`;
-
-    // Stick sequence strip during hitlag
-    const pipsHtml = activeHit.inputs
-      .map((inp) => {
-        const isCurrent = inp.frameIndex === frameIndex;
-        const activeClass = inp.isActivation
-          ? activeHit.inputCount >= 2
-            ? "active-strong"
-            : "active"
-          : "";
-        const style = isCurrent
-          ? "border-color: #ffffff; outline: 1px solid #ffffff;"
-          : "";
-        const pipGlyph = inp.isActivation ? glyph : "·";
-        return `<span class="di-stick-pip ${activeClass}" style="${style}" title="Hitlag F+${inp.hitlagFrame}: Stick (${inp.stickX}, ${inp.stickY})">${pipGlyph}</span>`;
-      })
-      .join("");
-
-    this.diLiveMonitor.innerHTML = `
-      <div class="di-live-header">
-        <span class="di-live-title">${isLive ? tr.diActiveHit : tr.diLastHit} (${activeHit.hitFrameNumber}F)</span>
-        <span class="${badgeClass}">${badgeText}</span>
-      </div>
-      <div class="di-live-details">
-        <div class="di-live-detail-item">
-          <span class="di-live-label">Victim / Attacker</span>
-          <span class="di-live-val">${victimName} ← ${attackerName}</span>
-        </div>
-        <div class="di-live-detail-item">
-          <span class="di-live-label">Damage & Hitlag</span>
-          <span class="di-live-val">+${Math.round(activeHit.damageDealt)}% (${activeHit.diWindowFrames}F window)</span>
-        </div>
-        <div class="di-live-detail-item">
-          <span class="di-live-label">Displacement</span>
-          <span class="di-live-val">${Math.round(activeHit.displacement.distance)}u shift (${activeHit.cardinal})</span>
-        </div>
-        <div class="di-live-detail-item">
-          <span class="di-live-label">Efficiency</span>
-          <span class="di-live-val">${activeHit.efficiency}%</span>
-        </div>
-      </div>
-      ${
-        activeHit.inputs.length > 0
-          ? `
-        <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
-          <span class="di-live-label">Hitlag Stick Timeline (${activeHit.inputs.length}F):</span>
-          <div class="di-stick-strip">${pipsHtml}</div>
-        </div>
-      `
-          : ""
+      if (isActiveHit && detail) {
+        const pips = detail.querySelectorAll<HTMLElement>(".di-stick-pip");
+        pips.forEach((pip) => {
+          const pipFrame = Number(pip.dataset.frame);
+          if (pipFrame === frameIndex) {
+            pip.style.borderColor = "#ffffff";
+            pip.style.outline = "1px solid #ffffff";
+          } else {
+            pip.style.borderColor = "";
+            pip.style.outline = "";
+          }
+        });
       }
-    `;
+    });
   }
 
   private renderCharacterMetaPanel(replay: Replay): void {

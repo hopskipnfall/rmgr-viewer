@@ -231,6 +231,7 @@ export interface Translations {
   diActiveHit: string;
   diLastHit: string;
   diScrubPrompt: string;
+  diCancellationNotice: (gross: number, net: number, pct: number) => string;
 
   // Pikachu Up-B Quick Attack Overlay
   overlayQuickAttackBtn: string;
@@ -481,6 +482,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     diActiveHit: "Live Hit",
     diLastHit: "Last Hit",
     diScrubPrompt: "Scrub to a hit to view live DI metrics.",
+    diCancellationNotice: (gross, net, pct) =>
+      `⚠️ Opposing inputs partially canceled DI: ${gross}u gross → ${net}u net (${pct}% canceled)`,
 
     overlayQuickAttackBtn: "Overlay Quick Attack Paths",
     hideQuickAttackOverlayBtn: "Exit Overlay",
@@ -713,6 +716,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     diActiveHit: "リアルタイム ヒット",
     diLastHit: "前回のヒット",
     diScrubPrompt: "シークしてDIメトリクスを確認してください。",
+    diCancellationNotice: (gross, net, pct) =>
+      `⚠️ 逆方向の入力により一部DIが相殺: 合計 ${gross}u → 実質 ${net}u (${pct}% 相殺)`,
 
     overlayQuickAttackBtn: "電光石火の軌跡を重ねて表示",
     hideQuickAttackOverlayBtn: "重ねて表示を終了",
