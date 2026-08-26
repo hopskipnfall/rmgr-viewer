@@ -1814,26 +1814,12 @@ export class MatchViewController {
       return;
     }
 
-    const filteredEvents =
-      this.perspectivePort !== null
-        ? this.neutralHitEvents.filter(
-            (e) => e.attackerPort === this.perspectivePort,
-          )
-        : this.neutralHitEvents;
-
     this.neutralHitsWidget.hidden = false;
 
-    if (filteredEvents.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "situation-empty";
-      empty.textContent = tr.noNeutralHits;
-      this.neutralHitsList.appendChild(empty);
-      return;
-    }
-
-    filteredEvents.forEach((e, index) => {
+    const createRow = (e: NeutralHitEvent, index: number): HTMLElement => {
       const row = document.createElement("div");
       row.className = "situation-row";
+      row.dataset.frameIndex = String(e.frameIndex);
 
       const indexEl = document.createElement("span");
       indexEl.className = "situation-index";
@@ -1883,11 +1869,115 @@ export class MatchViewController {
 
       row.addEventListener("click", () => {
         this.dismissQuickAttackOverlay();
-        this.playback?.seek(e.frameIndex);
+        // Seek 1.5 seconds (90 frames) before the neutral opening happened
+        const seekTarget = Math.max(0, e.frameIndex - 90);
+        this.playback?.seek(seekTarget);
         this.playback?.play();
       });
 
-      this.neutralHitsList.appendChild(row);
+      return row;
+    };
+
+    if (this.perspectivePort !== null) {
+      const openings = this.neutralHitEvents.filter(
+        (e) => e.attackerPort === this.perspectivePort,
+      );
+      const punishes = this.neutralHitEvents.filter(
+        (e) => e.victimPort === this.perspectivePort,
+      );
+
+      // Group 1: Neutral Openings (Landed)
+      const openingsHeader = document.createElement("div");
+      openingsHeader.className = "situation-group-header";
+      openingsHeader.innerHTML = `<span>${tr.neutralOpeningsGroupTitle(openings.length)}</span>`;
+      this.neutralHitsList.appendChild(openingsHeader);
+
+      if (openings.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "situation-empty";
+        empty.textContent = tr.noNeutralOpeningsLanded;
+        this.neutralHitsList.appendChild(empty);
+      } else {
+        openings.forEach((e, idx) => {
+          this.neutralHitsList.appendChild(createRow(e, idx));
+        });
+      }
+
+      // Group 2: Neutral Punishes (Taken)
+      const punishesHeader = document.createElement("div");
+      punishesHeader.className = "situation-group-header";
+      punishesHeader.innerHTML = `<span>${tr.neutralPunishesGroupTitle(punishes.length)}</span>`;
+      this.neutralHitsList.appendChild(punishesHeader);
+
+      if (punishes.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "situation-empty";
+        empty.textContent = tr.noNeutralPunishesTaken;
+        this.neutralHitsList.appendChild(empty);
+      } else {
+        punishes.forEach((e, idx) => {
+          this.neutralHitsList.appendChild(createRow(e, idx));
+        });
+      }
+    } else {
+      const seated = getSeatedPorts(replay);
+      if (seated.length === 2) {
+        const [portA, portB] = seated as [PortIndex, PortIndex];
+        const hitsA = this.neutralHitEvents.filter(
+          (e) => e.attackerPort === portA,
+        );
+        const hitsB = this.neutralHitEvents.filter(
+          (e) => e.attackerPort === portB,
+        );
+
+        const headerA = document.createElement("div");
+        headerA.className = "situation-group-header";
+        headerA.innerHTML = `<span>${PORT_LABELS[portA]} Neutral Openings (${hitsA.length})</span>`;
+        this.neutralHitsList.appendChild(headerA);
+
+        if (hitsA.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "situation-empty";
+          empty.textContent = tr.noNeutralOpeningsLanded;
+          this.neutralHitsList.appendChild(empty);
+        } else {
+          hitsA.forEach((e, idx) => {
+            this.neutralHitsList.appendChild(createRow(e, idx));
+          });
+        }
+
+        const headerB = document.createElement("div");
+        headerB.className = "situation-group-header";
+        headerB.innerHTML = `<span>${PORT_LABELS[portB]} Neutral Openings (${hitsB.length})</span>`;
+        this.neutralHitsList.appendChild(headerB);
+
+        if (hitsB.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "situation-empty";
+          empty.textContent = tr.noNeutralOpeningsLanded;
+          this.neutralHitsList.appendChild(empty);
+        } else {
+          hitsB.forEach((e, idx) => {
+            this.neutralHitsList.appendChild(createRow(e, idx));
+          });
+        }
+      } else {
+        this.neutralHitEvents.forEach((e, idx) => {
+          this.neutralHitsList.appendChild(createRow(e, idx));
+        });
+      }
+    }
+  }
+
+  private updateNeutralHitsHighlight(currentFrameIndex: number): void {
+    const rows = this.neutralHitsList.querySelectorAll<HTMLElement>(
+      ".situation-row[data-frame-index]",
+    );
+    rows.forEach((row) => {
+      const frameIndex = Number(row.dataset.frameIndex);
+      const isActive =
+        currentFrameIndex >= frameIndex && currentFrameIndex <= frameIndex + 60;
+      row.classList.toggle("active", isActive);
     });
   }
 
@@ -2569,6 +2659,7 @@ export class MatchViewController {
     this.frameLabel.textContent = `Frame ${index} / ${Math.max(0, totalFrames - 1)} (${elapsed})`;
     this.updateEventLogHighlight(index);
     this.updateDILiveMonitor(index);
+    this.updateNeutralHitsHighlight(index);
   }
 
   public resizeStageCanvas(): void {

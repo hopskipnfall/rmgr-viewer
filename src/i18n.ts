@@ -220,7 +220,11 @@ export interface Translations {
 
   // Neutral Openings widget
   neutralHitsWidgetTitle: string;
+  neutralOpeningsGroupTitle: (count: number) => string;
+  neutralPunishesGroupTitle: (count: number) => string;
   noNeutralHits: string;
+  noNeutralOpeningsLanded: string;
+  noNeutralPunishesTaken: string;
   neutralReasonLandingLag: string;
   neutralReasonWhiffPunish: string;
   neutralReasonJumpPunish: string;
@@ -479,8 +483,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noSituations: "None in this replay.",
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
 
-    neutralHitsWidgetTitle: "Neutral Openings",
+    neutralHitsWidgetTitle: "Neutral Game",
+    neutralOpeningsGroupTitle: (count) => `Neutral Openings (${count})`,
+    neutralPunishesGroupTitle: (count) => `Neutral Punishes Taken (${count})`,
     noNeutralHits: "No neutral hits in this match.",
+    noNeutralOpeningsLanded: "No neutral openings landed.",
+    noNeutralPunishesTaken: "No neutral punishes taken.",
     neutralReasonLandingLag: "Landing Lag",
     neutralReasonWhiffPunish: "Whiff Punish",
     neutralReasonJumpPunish: "Jump Punish",
@@ -722,8 +730,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noSituations: "このリプレイには該当なし。",
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
 
-    neutralHitsWidgetTitle: "ニュートラルからの差し込み",
+    neutralHitsWidgetTitle: "ニュートラルの攻防",
+    neutralOpeningsGroupTitle: (count) => `差し込み成功 (${count})`,
+    neutralPunishesGroupTitle: (count) => `被弾・被差し返し (${count})`,
     noNeutralHits: "この試合で差し込みヒットはありません。",
+    noNeutralOpeningsLanded: "差し込みヒットはありません。",
+    noNeutralPunishesTaken: "ニュートラルでの被弾はありません。",
     neutralReasonLandingLag: "着地隙狩り",
     neutralReasonWhiffPunish: "後隙狩り (空振り)",
     neutralReasonJumpPunish: "ジャンプ狩り",

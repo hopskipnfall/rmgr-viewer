@@ -1469,8 +1469,30 @@
       .situation-row:hover {
         background: rgba(255, 255, 255, 0.04);
       }
+      .situation-row.active {
+        background: rgba(56, 189, 248, 0.15);
+        border-left: 3px solid #38bdf8;
+        padding-left: 9px;
+      }
       .situation-row:last-child {
         border-bottom: none;
+      }
+      .situation-group-header {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-dim);
+        background: rgba(255, 255, 255, 0.03);
+        padding: 6px 12px;
+        border-top: 1px solid var(--panel-border);
+        border-bottom: 1px solid var(--panel-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .situation-group-header:first-child {
+        border-top: none;
       }
       .situation-index {
         font-size: 11px;
