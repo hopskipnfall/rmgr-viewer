@@ -19,10 +19,11 @@ read entirely in your browser).
 
 ## Features
 
-- Scrub, play/pause, and step frame-by-frame through a recorded match
-- Per-player triangle markers on the stage, facing the recorded direction, with
-  damage%/state/coordinates alongside a live view of each player's controller inputs
-- Loads a bundled sample replay on open, or any local `.rmgr` file via the file picker
+- **Match Playback**: Scrub, play/pause, step frame-by-frame, and variable speed modifier (`1x`, `0.5x`, `0.25x`).
+- **Interactive Visualizers**: Directional Influence (DI) vectors and controller overlays, Pikachu Quick Attack recovery paths, and real-time controller stick input pads.
+- **Situational Analysis**: Offstage Edge Guarding & Recovery, Ledge Trapping & Getups (<100% vs ≥100%), Neutral Openings & Whiff Punish classification, Kill Combos, and Angel Invincibility.
+- **Multi-Replay Library**: Cross-game aggregate statistics, historical matchup baselines ($\Delta\%$), and session identity resolution.
+- **Documentation**: See [Analysis Engine Specifications](docs/ANALYSIS_SPECIFICATIONS.md) for full mathematical definitions, state taxonomies, and coordinate systems.
 
 ## Local development
 
