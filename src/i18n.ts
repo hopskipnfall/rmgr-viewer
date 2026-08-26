@@ -133,6 +133,8 @@ export interface Translations {
   playPauseTooltip: string;
   nextFrameTooltip: string;
   hudOverlay: string;
+  hudOverlayShow: string;
+  hudOverlayHide: string;
   hudOverlayTitle: string;
 
   // Library View
@@ -323,7 +325,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFilterAngel: "Angel",
     logFilterNeutral: "Neutral",
     logFilterCharacter: "Character",
-    hudOverlay: "LOG",
+    hudOverlay: "Log",
+    hudOverlayShow: "Log",
+    hudOverlayHide: "Hide Log",
     hudOverlayTitle: "Toggle on-screen event log",
 
     recovering: "Recovering",
@@ -582,6 +586,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFilterNeutral: "立ち回り",
     logFilterCharacter: "固有",
     hudOverlay: "ログ",
+    hudOverlayShow: "ログ",
+    hudOverlayHide: "ログ非表示",
     hudOverlayTitle: "画面上のイベントログの表示切替",
 
     recovering: "復帰中",
