@@ -4,6 +4,7 @@ import {
   computeLedgeTrapEvents,
   computeLedgeTrapStats,
   LEDGE_ACTION_STATES,
+  buildRecoveryMap,
 } from "./ledgeTrap.js";
 import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 import { computeNeutralHitEvents } from "./neutralHits.js";
@@ -428,5 +429,40 @@ describe("Ledge Trap & Getup analysis", () => {
     expect(events[0]?.kind).toBe("ledge-getup-entered");
     expect(events[1]?.kind).toBe("ledge-getup-success");
     expect(events[1]?.frame).toBe(11);
+  });
+
+  it("does not start a recovery situation in buildRecoveryMap while the launched player is in continuous hitstun", () => {
+    const frames: Frame[] = [];
+
+    // F0-F20: Port 0 launched offstage in hitstun (x = 3500, hitstun = 30), Port 1 chases offstage (x = 3200, hitstun = 0)
+    for (let f = 0; f <= 20; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x33, x: 3500, y: -200, hitstun: 30 - f, dmg: 80 },
+          { state: 0xd2, x: 3200, y: 100, hitstun: 0, dmg: 20 },
+        ),
+      );
+    }
+    // F21: Port 0 dies (DeadD 0x000)
+    frames.push(
+      makeFrame(
+        21,
+        { state: 0x00, x: 3500, y: -3000, hitstun: 0, stocks: 3 },
+        { state: 0x1a, x: 3000, y: -500, hitstun: 0, stocks: 4 },
+      ),
+    );
+
+    const replay = makeMockReplay(frames);
+    const recoveryMap = buildRecoveryMap(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+    );
+
+    // Should NEVER have been marked as in recovery since hitstun never ended
+    for (let f = 0; f <= 21; f++) {
+      expect(recoveryMap[f]).toBeNull();
+    }
   });
 });

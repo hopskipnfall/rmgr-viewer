@@ -111,6 +111,11 @@ export function buildRecoveryMap(
     egStocks: number;
   } | null = null;
 
+  const lastHitstunFrame: Partial<Record<PortIndex, number>> = {
+    [portA]: -1,
+    [portB]: -1,
+  };
+
   for (let i = 0; i < replay.frames.length; i++) {
     const frame = replay.frames[i];
     if (!frame) continue;
@@ -126,6 +131,9 @@ export function buildRecoveryMap(
       postB.actionStateId,
       postB.hitstunCounter,
     );
+
+    if (aInHitstun) lastHitstunFrame[portA] = i;
+    if (bInHitstun) lastHitstunFrame[portB] = i;
 
     if (situation !== null) {
       map[i] = situation.recoveringPort;
@@ -174,17 +182,18 @@ export function buildRecoveryMap(
     if (!aOutside && !bOutside) continue;
 
     let recoveringPort: PortIndex | null = null;
-    if (aOutside && !bOutside && !aInHitstun) {
-      recoveringPort = portA;
-    } else if (bOutside && !aOutside && !bInHitstun) {
-      recoveringPort = portB;
-    } else if (aOutside && bOutside) {
-      if (aInHitstun && !bInHitstun) {
+    if (aOutside && !aInHitstun && (!bOutside || !bInHitstun)) {
+      if (!bOutside) {
         recoveringPort = portA;
-      } else if (bInHitstun && !aInHitstun) {
+      } else if (!bInHitstun) {
+        recoveringPort =
+          (lastHitstunFrame[portA] ?? -1) >= (lastHitstunFrame[portB] ?? -1)
+            ? portA
+            : portB;
+      }
+    } else if (bOutside && !bInHitstun && (!aOutside || !aInHitstun)) {
+      if (!aOutside) {
         recoveringPort = portB;
-      } else if (!aInHitstun && !bInHitstun) {
-        recoveringPort = portA;
       }
     }
 
