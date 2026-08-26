@@ -94,6 +94,33 @@ export function isTauntState(actionStateId: number): boolean {
   return TAUNT_ACTION_STATES.has(actionStateId);
 }
 
+const DIZZY_ACTION_STATES = new Set([
+  0x0a1, // ShieldBreakStand (standing up dizzy)
+  0x0a2, // FuraFura (shield broken dizzy stuck state)
+  0x0a4, // Stun (stunned dizzy)
+]);
+
+export function isDizzyState(actionStateId: number): boolean {
+  return DIZZY_ACTION_STATES.has(actionStateId);
+}
+
+const SHIELD_BREAK_ACTION_STATES = new Set([
+  0x09e, // ShieldBreakFly
+  0x09f, // ShieldBreakFall
+  0x0a0, // ShieldBreakDownBound
+  0x0a1, // ShieldBreakStand
+  0x0a2, // FuraFura
+  0x0a4, // Stun
+]);
+
+export function isShieldBreakActionState(actionStateId: number): boolean {
+  return SHIELD_BREAK_ACTION_STATES.has(actionStateId);
+}
+
+export function isSleepState(actionStateId: number): boolean {
+  return actionStateId === 0x0a5;
+}
+
 const TURN_ACTION_STATES = new Set([
   0x012, // Turn (standing turnaround)
   0x013, // TurnRun (pivot turnaround during dash/run)
@@ -623,6 +650,8 @@ export interface CharacterAnimState {
   isInvulnerable: boolean;
   isSpecial: boolean;
   isLanding: boolean;
+  isDizzy: boolean;
+  isSleep: boolean;
   isOpponent: boolean;
   actionFrameCounter: number;
 }
@@ -1329,10 +1358,16 @@ export class StageRenderer {
     const comboHits = inHitstun ? (post.comboHitCount ?? 0) : 0;
     const isSpecial = isSpecialState(post.actionStateId);
     const isLanding = isLandingState(post.actionStateId);
+    const isDizzy = isDizzyState(post.actionStateId);
+    const isSleep = isSleepState(post.actionStateId);
     const isOpponent =
       perspectivePort !== null &&
       perspectivePort !== undefined &&
       port !== perspectivePort;
+
+    if (isDizzy) {
+      labelY = Math.min(labelY, topY - 26);
+    }
 
     const animState: CharacterAnimState = {
       taunting,
@@ -1341,9 +1376,28 @@ export class StageRenderer {
       isInvulnerable,
       isSpecial,
       isLanding,
+      isDizzy,
+      isSleep,
       isOpponent,
       actionFrameCounter: post.actionFrameCounter,
     };
+
+    ctx.save();
+    if (isDizzy) {
+      // Exaggerated dizzy swaying / reeling from side to side around the feet pivot (x, y)
+      // Classic Smash 64 FuraFura staggering motion
+      const swayPeriod = 0.16;
+      const swayAngle = Math.sin(post.actionFrameCounter * swayPeriod) * 0.18; // ~10.3 deg sway
+      const swayX =
+        Math.sin(post.actionFrameCounter * swayPeriod) * (halfWidth * 0.25);
+      ctx.translate(x + swayX, y);
+      ctx.rotate(swayAngle);
+      ctx.translate(-x, -y);
+    } else if (isSleep) {
+      // Gentle breathing rhythmic bobbing while asleep
+      const sleepBobY = Math.sin(post.actionFrameCounter * 0.08) * 2;
+      ctx.translate(0, sleepBobY);
+    }
 
     if (isPikachuCharacter(post.characterId)) {
       this.drawPikachuPolygons(
@@ -1582,6 +1636,20 @@ export class StageRenderer {
 
       ctx.restore();
     }
+    ctx.restore(); // Closes the character sway/bob transform
+
+    if (isDizzy) {
+      // 3 glowing golden stars orbiting in 3D ellipse above character's head
+      this.drawDizzyStars(x, topY - 6, post.actionFrameCounter, isOpponent);
+    } else if (isSleep) {
+      // Floating "Z z z" sleep bubbles
+      this.drawSleepZzz(
+        x + halfWidth * 0.5,
+        topY - 4,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    }
 
     // Damage% label above the triangle, in the player's color (or cycling if taunting).
     ctx.font = "bold 13px system-ui, sans-serif";
@@ -1701,6 +1769,111 @@ export class StageRenderer {
     ctx.fillText(name, x, pillY + pillHeight / 2);
     ctx.shadowBlur = 0;
 
+    ctx.restore();
+  }
+
+  /**
+   * Draws 3 glowing golden stars orbiting in an inclined 3D ellipse above the character's head
+   * when their shield is broken and they are stuck in the dizzy state (FuraFura / Stun).
+   */
+  private drawDizzyStars(
+    x: number,
+    headY: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const starCount = 3;
+    const orbitRadiusX = 18;
+    const orbitRadiusY = 7;
+    const speed = 0.12;
+
+    ctx.save();
+    for (let i = 0; i < starCount; i++) {
+      const phase = (i * Math.PI * 2) / starCount;
+      const angle = frameCounter * speed + phase;
+      const starX = x + Math.cos(angle) * orbitRadiusX;
+      // Slanted elliptical orbit for a 3D perspective effect
+      const starY =
+        headY + Math.sin(angle) * orbitRadiusY + Math.cos(angle) * 2;
+
+      // 3D depth scaling: stars in front (sin > 0) are larger and brighter than stars in back (sin < 0)
+      const depth = Math.sin(angle); // -1 (back) to +1 (front)
+      const depthScale = 0.7 + 0.35 * ((depth + 1) / 2);
+      const starRadius = 5 * depthScale;
+      const alpha = 0.55 + 0.45 * ((depth + 1) / 2);
+
+      ctx.save();
+      ctx.translate(starX, starY);
+      ctx.rotate(frameCounter * 0.18 + phase);
+
+      const starColor = resolveColor("#facc15", isOpponent, alpha); // Bright gold / yellow
+      const starGlow = resolveColor("#ca8a04", isOpponent, alpha * 0.8);
+
+      ctx.fillStyle = starColor;
+      ctx.shadowColor = starGlow;
+      ctx.shadowBlur = 6 * depthScale;
+
+      // 4-pointed sparkle star geometry
+      ctx.beginPath();
+      for (let p = 0; p < 8; p++) {
+        const r = p % 2 === 0 ? starRadius : starRadius * 0.4;
+        const pAngle = (p * Math.PI) / 4;
+        const px = Math.cos(pAngle) * r;
+        const py = Math.sin(pAngle) * r;
+        if (p === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // White hot-spot core on front-facing stars
+      if (depth > 0) {
+        ctx.beginPath();
+        ctx.arc(0, 0, starRadius * 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = resolveColor("#ffffff", isOpponent, alpha);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Draws rising "Z z z" text bubbles when a character is asleep (e.g. from Sing).
+   */
+  private drawSleepZzz(
+    x: number,
+    topY: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const zCount = 3;
+    ctx.save();
+    ctx.font = "bold 12px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    for (let i = 0; i < zCount; i++) {
+      const cycle = (frameCounter + i * 25) % 75;
+      const progress = cycle / 75; // 0 to 1
+      const zY = topY - progress * 24;
+      const zX = x + Math.sin(progress * Math.PI * 2) * 6 + i * 4;
+      const zScale = 0.7 + progress * 0.5;
+      const alpha =
+        progress < 0.2 ? progress / 0.2 : 1 - (progress - 0.2) / 0.8;
+
+      ctx.save();
+      ctx.translate(zX, zY);
+      ctx.scale(zScale, zScale);
+      ctx.fillStyle = resolveColor("#93c5fd", isOpponent, alpha * 0.9);
+      ctx.shadowColor = resolveColor("#3b82f6", isOpponent, alpha * 0.6);
+      ctx.shadowBlur = 4;
+      ctx.fillText(i === 0 ? "Z" : "z", 0, 0);
+      ctx.restore();
+    }
     ctx.restore();
   }
 

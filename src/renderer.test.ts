@@ -11,6 +11,7 @@ import {
   START_NAME_SOLID_FRAMES,
   isCrouchState,
   isDeadState,
+  isDizzyState,
   isDonkeyKongCharacter,
   isFalconCharacter,
   isFireFoxFlightState,
@@ -28,8 +29,10 @@ import {
   isRollForward,
   isRollState,
   isSamusCharacter,
+  isShieldBreakActionState,
   isShieldState,
   isShieldStunState,
+  isSleepState,
   isSpecialState,
   isTauntState,
   isTurnState,
@@ -796,5 +799,43 @@ describe("getStartNameAlpha", () => {
     expect(getStartNameAlpha(1000)).toBe(0);
     expect(getStartNameAlpha(undefined)).toBe(0);
     expect(getStartNameAlpha(-1)).toBe(0);
+  });
+});
+
+describe("isDizzyState", () => {
+  it("identifies shield-broken dizzy and stun states correctly", () => {
+    expect(isDizzyState(0x0a1)).toBe(true); // ShieldBreakStand
+    expect(isDizzyState(0x0a2)).toBe(true); // FuraFura
+    expect(isDizzyState(0x0a4)).toBe(true); // Stun
+  });
+
+  it("returns false for non-dizzy states", () => {
+    expect(isDizzyState(0x00a)).toBe(false); // Idle
+    expect(isDizzyState(0x099)).toBe(false); // Shield
+    expect(isDizzyState(0x09e)).toBe(false); // ShieldBreakFly
+  });
+});
+
+describe("isShieldBreakActionState", () => {
+  it("identifies full shield break lifecycle states correctly", () => {
+    expect(isShieldBreakActionState(0x09e)).toBe(true); // ShieldBreakFly
+    expect(isShieldBreakActionState(0x09f)).toBe(true); // ShieldBreakFall
+    expect(isShieldBreakActionState(0x0a0)).toBe(true); // ShieldBreakDownBound
+    expect(isShieldBreakActionState(0x0a1)).toBe(true); // ShieldBreakStand
+    expect(isShieldBreakActionState(0x0a2)).toBe(true); // FuraFura
+    expect(isShieldBreakActionState(0x0a4)).toBe(true); // Stun
+  });
+
+  it("returns false for normal shield or attack states", () => {
+    expect(isShieldBreakActionState(0x098)).toBe(false); // ShieldOn
+    expect(isShieldBreakActionState(0x099)).toBe(false); // Shield
+    expect(isShieldBreakActionState(0x0be)).toBe(false); // Jab1
+  });
+});
+
+describe("isSleepState", () => {
+  it("identifies sleeping state correctly", () => {
+    expect(isSleepState(0x0a5)).toBe(true); // Sleep
+    expect(isSleepState(0x00a)).toBe(false); // Idle
   });
 });
