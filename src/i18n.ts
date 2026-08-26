@@ -229,6 +229,7 @@ export interface Translations {
   neutralReasonWhiffPunish: string;
   neutralReasonJumpPunish: string;
   neutralReasonStandingHit: string;
+  neutralReasonStandingGrab: string;
   neutralReasonUnknown: string;
 
   // Combos widget
@@ -493,6 +494,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralReasonWhiffPunish: "Whiff Punish",
     neutralReasonJumpPunish: "Jump Punish",
     neutralReasonStandingHit: "Standing Hit",
+    neutralReasonStandingGrab: "Standing Grab",
     neutralReasonUnknown: "Neutral Hit",
 
     combosWidgetTitle: "Kill Combos",
@@ -740,6 +742,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralReasonWhiffPunish: "後隙狩り (空振り)",
     neutralReasonJumpPunish: "ジャンプ狩り",
     neutralReasonStandingHit: "地上ヒット",
+    neutralReasonStandingGrab: "地上掴み",
     neutralReasonUnknown: "ニュートラルヒット",
 
     combosWidgetTitle: "撃墜コンボ",

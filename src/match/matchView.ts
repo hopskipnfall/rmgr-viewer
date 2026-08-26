@@ -873,7 +873,10 @@ export class MatchViewController {
           reasonLabel = tr.neutralReasonJumpPunish;
           break;
         case "standing-hit":
-          reasonLabel = tr.neutralReasonStandingHit;
+          reasonLabel =
+            ev.hitType === "grab"
+              ? tr.neutralReasonStandingGrab
+              : tr.neutralReasonStandingHit;
           break;
         default:
           reasonLabel =
@@ -1869,7 +1872,10 @@ export class MatchViewController {
           break;
         case "standing-hit":
           badgeEl.className = "neutral-badge-standing";
-          badgeEl.textContent = tr.neutralReasonStandingHit;
+          badgeEl.textContent =
+            e.hitType === "grab"
+              ? tr.neutralReasonStandingGrab
+              : tr.neutralReasonStandingHit;
           break;
         default:
           badgeEl.className = "neutral-badge-unknown";

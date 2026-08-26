@@ -14,7 +14,11 @@ function makeMockReplayWithAction(options: {
   const frames: Frame[] = [];
   const port0 = 0 as PortIndex;
   const port1 = 1 as PortIndex;
-  const { victimActionsBeforeHit, victimAirborne = false } = options;
+  const {
+    victimActionsBeforeHit,
+    victimAirborne = false,
+    hitType = "attack",
+  } = options;
 
   const totalFramesBefore = victimActionsBeforeHit.length;
   // Build frames
@@ -25,7 +29,9 @@ function makeMockReplayWithAction(options: {
       f < totalFramesBefore
         ? victimActionsBeforeHit[f]!
         : isHit || isAfterHit
-          ? 0x028 // DamageMid1
+          ? hitType === "grab"
+            ? 0x0ac // CaptureWait
+            : 0x028 // DamageMid1
           : 0x00a;
 
     frames.push({
@@ -48,7 +54,7 @@ function makeMockReplayWithAction(options: {
           },
           post: {
             characterId: 0,
-            actionStateId: isHit ? 0x0c0 : 0x00a, // DashAttack on hit
+            actionStateId: isHit ? (hitType === "grab" ? 0x0a6 : 0x0c0) : 0x00a,
             actionFrameCounter: f,
             positionX: 1000,
             positionY: 0,
@@ -223,5 +229,35 @@ describe("classifyNeutralOpening", () => {
     expect(events[0]?.attackerPort).toBe(0);
     expect(events[0]?.victimPort).toBe(1);
     expect(events[0]?.reason).toBe("standing-hit");
+  });
+
+  it("classifies grabs as neutral openings with reasons", () => {
+    // 10 frames of Idle (0x00a), then grabbed on frame 10
+    const actions = new Array(10).fill(0x00a);
+    const replay = makeMockReplayWithAction({
+      victimActionsBeforeHit: actions,
+      hitType: "grab",
+    });
+    const events: NeutralHitEvent[] = computeNeutralHitEvents(replay);
+
+    expect(events.length).toBe(1);
+    expect(events[0]?.attackerPort).toBe(0);
+    expect(events[0]?.victimPort).toBe(1);
+    expect(events[0]?.hitType).toBe("grab");
+    expect(events[0]?.reason).toBe("standing-hit");
+  });
+
+  it("classifies landing lag grab punish", () => {
+    // 5 frames Idle, then 2 frames LandingAirX (0x0db), then grabbed on frame 7
+    const actions = [0x00a, 0x00a, 0x00a, 0x00a, 0x00a, 0x0db, 0x0db];
+    const replay = makeMockReplayWithAction({
+      victimActionsBeforeHit: actions,
+      hitType: "grab",
+    });
+    const events: NeutralHitEvent[] = computeNeutralHitEvents(replay);
+
+    expect(events.length).toBe(1);
+    expect(events[0]?.hitType).toBe("grab");
+    expect(events[0]?.reason).toBe("landing-lag");
   });
 });

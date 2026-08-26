@@ -5,14 +5,24 @@ const PORTS: readonly PortIndex[] = [0, 1, 2, 3];
 
 /** Action states where the player is captured/held/thrown by a grab. */
 const CAPTURE_STATES = new Set([
-  0x0ab, // CapturePull
+  0x0ab, // CapturePulled
   0x0ac, // CaptureWait
   0x0ad, // CaptureDamage
+  0x0ae,
+  0x0af,
+  0x0b0, // Yoshi egg lay capture
+  0x0b1,
+  0x0b2,
   0x0b3, // CaptureFalconDive (Captain Falcon & J Falcon Up-B grab)
+  0x0b4,
+  0x0b5,
   0x0b6, // CaptureCargo / CommandGrabHold
+  0x0b7,
+  0x0b8,
   0x0b9, // CapturePulled / ThrowTransition
   0x0ba, // DamageThrown / Thrown
   0x0bb,
+  0x0bc,
 ]);
 
 /**
