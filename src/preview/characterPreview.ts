@@ -277,6 +277,7 @@ export class CharacterPreviewController {
   private comboHitCount = 0;
   private isInvulnerable = false;
   private flightAngleDeg = 45; // For Fox Fire Fox flight
+  private stickY = 0; // For angled attack joystick Y
   private zoomLevel = 2.0;
   private selectedCategory = "all";
 
@@ -296,6 +297,8 @@ export class CharacterPreviewController {
   private angleControlWrap!: HTMLDivElement;
   private angleSliderEl!: HTMLInputElement;
   private angleValEl!: HTMLSpanElement;
+  private stickSliderEl!: HTMLInputElement;
+  private stickValEl!: HTMLSpanElement;
   private stateChipsContainer!: HTMLDivElement;
 
   constructor(container: HTMLDivElement) {
@@ -400,6 +403,15 @@ export class CharacterPreviewController {
           </div>
         </div>
 
+        <!-- Joystick Y / Angled Attack Control -->
+        <div class="preview-control-group" id="previewStickYWrap">
+          <label class="preview-control-label">Joystick Y (Angled Attack: Up/Down)</label>
+          <div class="preview-slider-row">
+            <input type="range" id="previewStickYSlider" min="-80" max="80" value="0" />
+            <span id="previewStickYVal" class="preview-slider-val">0</span>
+          </div>
+        </div>
+
         <!-- Zoom Control -->
         <div class="preview-control-group">
           <label class="preview-control-label">Camera Zoom</label>
@@ -480,6 +492,12 @@ export class CharacterPreviewController {
     ) as HTMLInputElement;
     this.angleValEl = this.container.querySelector(
       "#previewAngleVal",
+    ) as HTMLSpanElement;
+    this.stickSliderEl = this.container.querySelector(
+      "#previewStickYSlider",
+    ) as HTMLInputElement;
+    this.stickValEl = this.container.querySelector(
+      "#previewStickYVal",
     ) as HTMLSpanElement;
     this.stateChipsContainer = this.container.querySelector(
       "#previewStateChips",
@@ -605,6 +623,13 @@ export class CharacterPreviewController {
     this.angleSliderEl.addEventListener("input", () => {
       this.flightAngleDeg = parseInt(this.angleSliderEl.value, 10);
       this.angleValEl.textContent = `${this.flightAngleDeg}°`;
+      this.render();
+    });
+
+    // Joystick Y (Angled Attack) Slider
+    this.stickSliderEl.addEventListener("input", () => {
+      this.stickY = parseInt(this.stickSliderEl.value, 10);
+      this.stickValEl.textContent = String(this.stickY);
       this.render();
     });
 
@@ -798,6 +823,11 @@ export class CharacterPreviewController {
       frameIndex: 1,
       ports: {
         0: {
+          pre: {
+            stickX: this.facingDirection * 45,
+            stickY: this.stickY,
+            buttons: 0,
+          },
           post: {
             positionX: 0,
             positionY: 0,

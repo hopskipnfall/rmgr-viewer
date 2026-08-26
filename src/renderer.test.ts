@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  canAngleAttack,
   getAttackInfo,
   getDeathDirection,
   getDKSpecialType,
@@ -948,5 +949,29 @@ describe("getNessSpecialType", () => {
     expect(getNessSpecialType(0x0b, 0x0ec)).toBe("psi_magnet");
     expect(getNessSpecialType(0x0b, 0x0ed)).toBe("psi_magnet");
     expect(getNessSpecialType(0x0b, 0x00a)).toBeNull(); // Idle
+  });
+});
+
+describe("canAngleAttack", () => {
+  it("allows Fox, Falcon, and Samus to angle tilt attacks", () => {
+    expect(canAngleAttack(0x01, "tilt")).toBe(true); // Fox
+    expect(canAngleAttack(0x07, "tilt")).toBe(true); // Falcon
+    expect(canAngleAttack(0x03, "tilt")).toBe(true); // Samus
+    expect(canAngleAttack(0x00, "tilt")).toBe(false); // Mario
+    expect(canAngleAttack(0x09, "tilt")).toBe(false); // Pikachu
+    expect(canAngleAttack(0x0b, "tilt")).toBe(false); // Ness
+  });
+
+  it("allows Falcon and Samus to angle smash attacks", () => {
+    expect(canAngleAttack(0x07, "smash")).toBe(true); // Falcon
+    expect(canAngleAttack(0x03, "smash")).toBe(true); // Samus
+    expect(canAngleAttack(0x01, "smash")).toBe(false); // Fox
+    expect(canAngleAttack(0x00, "smash")).toBe(false); // Mario
+    expect(canAngleAttack(0x02, "smash")).toBe(false); // DK
+  });
+
+  it("disallows jabs and aerials from angling", () => {
+    expect(canAngleAttack(0x07, "jab")).toBe(false);
+    expect(canAngleAttack(0x03, "aerial")).toBe(false);
   });
 });

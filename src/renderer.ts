@@ -719,6 +719,28 @@ export function getAttackInfo(actionStateId: number): AttackInfo | null {
   return null;
 }
 
+/**
+ * Returns whether a character can angle their attack (e.g. forward tilt or forward smash).
+ * - Fox, Captain Falcon, Samus can angle forward tilt attacks.
+ * - Captain Falcon, Samus can angle forward smash attacks.
+ */
+export function canAngleAttack(
+  characterId: number,
+  attackType: AttackType,
+): boolean {
+  if (attackType === "tilt") {
+    return (
+      isFoxCharacter(characterId) ||
+      isFalconCharacter(characterId) ||
+      isSamusCharacter(characterId)
+    );
+  }
+  if (attackType === "smash") {
+    return isFalconCharacter(characterId) || isSamusCharacter(characterId);
+  }
+  return false;
+}
+
 export function isMarioCharacter(characterId: number): boolean {
   return (
     characterId === 0x00 || // Mario
@@ -1480,6 +1502,12 @@ export class StageRenderer {
     // Draw attack arc if character is executing an attack or grab
     const attack = getAttackInfo(post.actionStateId);
     if (attack) {
+      const joystick =
+        replay && frameIndex !== undefined
+          ? replay.frames[frameIndex]?.ports[port]?.pre
+          : null;
+      const angleable = canAngleAttack(post.characterId, attack.type);
+
       this.drawAttackArc(
         x,
         centerY,
@@ -1488,6 +1516,8 @@ export class StageRenderer {
         facingRight,
         color,
         attack,
+        joystick ? { x: joystick.stickX, y: joystick.stickY } : null,
+        angleable,
       );
       if (attack.direction === "up" || attack.direction === "neutral") {
         const baseRadius = Math.max(halfWidth, heightPx * 0.5);
@@ -5454,6 +5484,8 @@ export class StageRenderer {
     facingRight: boolean,
     color: string,
     attack: AttackInfo,
+    joystick?: { x: number; y: number } | null,
+    canAngle?: boolean,
   ): void {
     const { ctx } = this;
     const baseRadius = Math.max(halfWidth, heightPx * 0.5);
@@ -5629,12 +5661,25 @@ export class StageRenderer {
       return;
     }
 
+    // Determine stick tilt if this attack is angleable (e.g. Fox/Falcon/Samus tilt, Falcon/Samus smash)
+    const rawStickY = joystick?.y ?? 0;
+    const hasStickAngle = Boolean(
+      canAngle && attack.direction === "forward" && Math.abs(rawStickY) > 8,
+    );
+    const tiltFactor = hasStickAngle
+      ? Math.max(-1, Math.min(1, rawStickY / 45))
+      : 0;
+    // In screen coords, +Y is DOWN so stick UP (+Y) rotates counter-clockwise (-angle when facing right)
+    const angleShift =
+      (facingRight ? -1 : 1) * tiltFactor * ((18 * Math.PI) / 180);
+    const effectiveCenter = centerAngle + angleShift;
+
     if (attack.type === "tilt" || attack.type === "aerial") {
       // Tilts and directional aerials: sleek, sharp aerodynamic single slash arc
       const radius = baseRadius * 1.55;
       const span = (75 * Math.PI) / 180;
-      const startAngle = centerAngle - span / 2;
-      const endAngle = centerAngle + span / 2;
+      const startAngle = effectiveCenter - span / 2;
+      const endAngle = effectiveCenter + span / 2;
 
       // Outer slash arc in player's color
       ctx.beginPath();
@@ -5644,20 +5689,58 @@ export class StageRenderer {
       ctx.lineCap = "round";
       ctx.stroke();
 
-      // Inner white highlight core
-      ctx.beginPath();
-      ctx.arc(x, centerY, radius, startAngle + 0.08, endAngle - 0.08);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
-      ctx.lineWidth = 1.5;
-      ctx.lineCap = "round";
-      ctx.stroke();
+      if (hasStickAngle) {
+        // Angled direction is significantly brighter in the direction of the joystick
+        const highlightAngle =
+          effectiveCenter +
+          (facingRight ? -1 : 1) * (tiltFactor * (span * 0.28));
+        const hx = x + Math.cos(highlightAngle) * radius;
+        const hy = centerY + Math.sin(highlightAngle) * radius;
+
+        ctx.save();
+        // 1. Radiant luminous glow flare centered on stick direction
+        const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 20);
+        flareGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+        flareGrad.addColorStop(0.35, hexToRgba(color, 0.9));
+        flareGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = flareGrad;
+        ctx.beginPath();
+        ctx.arc(hx, hy, 20, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Overlaid bright white-hot arc segment along the angled section
+        const hSpan = span * 0.5;
+        ctx.beginPath();
+        ctx.arc(
+          x,
+          centerY,
+          radius,
+          highlightAngle - hSpan / 2,
+          highlightAngle + hSpan / 2,
+        );
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 4.2;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        // Inner white highlight core
+        ctx.beginPath();
+        ctx.arc(x, centerY, radius, startAngle + 0.08, endAngle - 0.08);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
     } else {
       // Smash attack: significantly larger, glowing, heavier dual-layer energy crescent
       const radiusOuter = baseRadius * 2.2;
       const radiusInner = baseRadius * 1.45;
       const span = (105 * Math.PI) / 180;
-      const startAngle = centerAngle - span / 2;
-      const endAngle = centerAngle + span / 2;
+      const startAngle = effectiveCenter - span / 2;
+      const endAngle = effectiveCenter + span / 2;
 
       // 1. Translucent energy wedge fill
       ctx.beginPath();
@@ -5679,13 +5762,50 @@ export class StageRenderer {
       ctx.stroke();
       ctx.restore();
 
-      // 3. Bright intense white energy core
-      ctx.beginPath();
-      ctx.arc(x, centerY, radiusOuter, startAngle + 0.1, endAngle - 0.1);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-      ctx.lineWidth = 2.2;
-      ctx.lineCap = "round";
-      ctx.stroke();
+      if (hasStickAngle) {
+        // Angled direction is significantly brighter on the outer blade
+        const highlightAngle =
+          effectiveCenter +
+          (facingRight ? -1 : 1) * (tiltFactor * (span * 0.28));
+        const hx = x + Math.cos(highlightAngle) * radiusOuter;
+        const hy = centerY + Math.sin(highlightAngle) * radiusOuter;
+
+        ctx.save();
+        const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 24);
+        flareGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+        flareGrad.addColorStop(0.35, hexToRgba(color, 0.95));
+        flareGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = flareGrad;
+        ctx.beginPath();
+        ctx.arc(hx, hy, 24, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Intense white-hot blade overlay on that side
+        const hSpan = span * 0.5;
+        ctx.beginPath();
+        ctx.arc(
+          x,
+          centerY,
+          radiusOuter,
+          highlightAngle - hSpan / 2,
+          highlightAngle + hSpan / 2,
+        );
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 6.5;
+        ctx.shadowColor = "#ffffff";
+        ctx.shadowBlur = 16;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        // 3. Bright intense white energy core
+        ctx.beginPath();
+        ctx.arc(x, centerY, radiusOuter, startAngle + 0.1, endAngle - 0.1);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
 
       // 4. Trailing inner speed line
       ctx.beginPath();
