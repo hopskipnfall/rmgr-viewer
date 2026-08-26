@@ -104,7 +104,10 @@ export class MatchViewController {
   private stepForwardBtn: HTMLButtonElement;
   private scrubber: HTMLInputElement;
   private frameLabel: HTMLSpanElement;
-  private speedButtons: HTMLButtonElement[] = [];
+  private speedMenuContainer: HTMLElement;
+  private speedToggleBtn: HTMLButtonElement;
+  private speedDropdown: HTMLElement;
+  private speedOptionButtons: HTMLButtonElement[] = [];
   private currentPlaybackSpeed = 1;
   private matchStatsHeaderTitle: HTMLHeadingElement;
   private perspectiveToggleEl: HTMLDivElement;
@@ -210,6 +213,20 @@ export class MatchViewController {
     ) as HTMLButtonElement;
     this.scrubber = document.getElementById("scrubber") as HTMLInputElement;
     this.frameLabel = document.getElementById("frameLabel") as HTMLSpanElement;
+    this.speedMenuContainer = document.getElementById(
+      "speedMenuContainer",
+    ) as HTMLElement;
+    this.speedToggleBtn = document.getElementById(
+      "speedToggleBtn",
+    ) as HTMLButtonElement;
+    this.speedDropdown = document.getElementById(
+      "speedDropdown",
+    ) as HTMLElement;
+    this.speedOptionButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        "#speedDropdown .speed-option-btn",
+      ),
+    );
     this.matchStatsHeaderTitle = document.querySelector(
       "#matchStatsHeader h2",
     ) as HTMLHeadingElement;
@@ -532,14 +549,30 @@ export class MatchViewController {
       this.playback?.stepForward();
     });
 
-    const speedBtns = Array.from(
-      document.querySelectorAll<HTMLButtonElement>("#speedControls .speed-btn"),
-    );
-    this.speedButtons = speedBtns;
-    speedBtns.forEach((btn) => {
-      btn.addEventListener("click", () => {
+    this.speedToggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.toggleSpeedMenu();
+    });
+
+    this.speedMenuContainer.addEventListener("mouseenter", () => {
+      this.openSpeedMenu();
+    });
+    this.speedMenuContainer.addEventListener("mouseleave", () => {
+      this.closeSpeedMenu();
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!this.speedMenuContainer.contains(e.target as Node)) {
+        this.closeSpeedMenu();
+      }
+    });
+
+    this.speedOptionButtons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const speed = parseFloat(btn.dataset.speed || "1");
         this.setPlaybackSpeed(speed);
+        this.closeSpeedMenu();
       });
     });
 
@@ -2792,10 +2825,30 @@ export class MatchViewController {
     this.onFrameChange(0, false, "jump");
   }
 
+  public openSpeedMenu(): void {
+    this.speedDropdown.hidden = false;
+    this.speedToggleBtn.setAttribute("aria-expanded", "true");
+  }
+
+  public closeSpeedMenu(): void {
+    this.speedDropdown.hidden = true;
+    this.speedToggleBtn.setAttribute("aria-expanded", "false");
+  }
+
+  public toggleSpeedMenu(): void {
+    if (this.speedDropdown.hidden) {
+      this.openSpeedMenu();
+    } else {
+      this.closeSpeedMenu();
+    }
+  }
+
   public setPlaybackSpeed(speed: number): void {
     this.currentPlaybackSpeed = speed;
     this.playback?.setPlaybackSpeed(speed);
-    this.speedButtons.forEach((btn) => {
+    this.speedToggleBtn.textContent = `${speed}x`;
+    this.speedToggleBtn.classList.toggle("has-modified-speed", speed !== 1);
+    this.speedOptionButtons.forEach((btn) => {
       const btnSpeed = parseFloat(btn.dataset.speed || "1");
       btn.classList.toggle("active", btnSpeed === speed);
     });
