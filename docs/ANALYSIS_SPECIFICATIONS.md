@@ -130,7 +130,9 @@ An **End-to-End Neutral Interaction** begins on the first hit or grab landed in 
 
 1. **Level 4 (KO)**: Defender loses a stock.
 2. **Neutral Reset**: Exactly 60 consecutive frames ($1.0\text{ s}$ at 60 fps) elapse where both players are fully actionable, undamaged, and on stage.
-3. **Reversal**: Defender turns advantage around via counter-attack or crouch-cancel punish.
+3. **Reversal**: Defender turns advantage around via counter-attack or counter-grab, putting the attacker into disadvantage (offstage recovery or ledge trap), concluding the initial opening sequence as a `reversal` without attributing subsequent kills on the attacker to the initial opening.
+
+Total hits landed across the entire interaction sequence accumulate all individual hits across combo chains ($0 \rightarrow 1 \rightarrow 2 \rightarrow \dots$).
 
 ### 4.2 The 1-Second (60-Frame) Neutral Reset Rule
 
