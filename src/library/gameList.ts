@@ -231,13 +231,11 @@ export class GameList {
           <span class="game-duration">${duration}</span>
         </div>
         <div class="game-row-players">
-          <button class="inline-perspective-btn you-btn" data-port="${yourP.port}" title="You (Click to deselect)">
-            👤 ${escapeHtml(yourName)} <span class="char-label">(${escapeHtml(characterName(yourP.characterId))})</span>
-          </button>
+          <strong class="you-player">${escapeHtml(yourName)}</strong>
+          <span class="char-label">(${escapeHtml(characterName(yourP.characterId))})</span>
           <span class="vs-label">vs</span>
-          <button class="inline-perspective-btn opp-btn" data-port="${oppP.port}" title="Switch: I'm ${escapeHtml(oppName)}">
-            ${escapeHtml(oppName)} <span class="char-label">(${escapeHtml(characterName(oppP.characterId))})</span>
-          </button>
+          <span class="opp-player">${escapeHtml(oppName)}</span>
+          <span class="char-label">(${escapeHtml(characterName(oppP.characterId))})</span>
         </div>
         <div class="game-row-actions">
           ${resultBadge}
