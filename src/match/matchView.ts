@@ -240,16 +240,7 @@ export class MatchViewController {
       "qaOverlayExitBtn",
     ) as HTMLButtonElement;
     this.qaOverlayExitBtn.addEventListener("click", () => {
-      this.stageRenderer.setQuickAttackOverlay(null);
-      this.stageRenderer.setHoveredQuickAttackIndex(null);
-      this.qaOverlayExitBtn.hidden = true;
-      if (this.currentReplay) {
-        this.renderCharacterMetaPanel(this.currentReplay);
-      }
-      if (this.lastFrame !== undefined) {
-        const currIdx = this.playback?.currentIndex ?? 0;
-        this.renderFrame(this.lastFrame, currIdx, true);
-      }
+      this.dismissQuickAttackOverlay();
     });
     this.hudToggleBtn = document.getElementById(
       "hudToggleBtn",
@@ -471,14 +462,20 @@ export class MatchViewController {
 
     this.hudToggleBtn.classList.toggle("active", this.hudOverlayEnabled);
 
-    this.playPauseBtn.addEventListener("click", () => this.playback?.toggle());
-    this.stepBackBtn.addEventListener("click", () =>
-      this.playback?.stepBackward(),
-    );
-    this.stepForwardBtn.addEventListener("click", () =>
-      this.playback?.stepForward(),
-    );
+    this.playPauseBtn.addEventListener("click", () => {
+      this.dismissQuickAttackOverlay();
+      this.playback?.toggle();
+    });
+    this.stepBackBtn.addEventListener("click", () => {
+      this.dismissQuickAttackOverlay();
+      this.playback?.stepBackward();
+    });
+    this.stepForwardBtn.addEventListener("click", () => {
+      this.dismissQuickAttackOverlay();
+      this.playback?.stepForward();
+    });
     this.scrubber.addEventListener("input", () => {
+      this.dismissQuickAttackOverlay();
       this.playback?.pause();
       this.playback?.seek(Number(this.scrubber.value));
     });
@@ -619,6 +616,23 @@ export class MatchViewController {
     }
   }
 
+  private dismissQuickAttackOverlay(): void {
+    if (this.stageRenderer.isQuickAttackOverlayActive()) {
+      this.stageRenderer.setQuickAttackOverlay(null);
+      this.stageRenderer.setHoveredQuickAttackIndex(null);
+      if (this.qaOverlayExitBtn) {
+        this.qaOverlayExitBtn.hidden = true;
+      }
+      if (this.currentReplay) {
+        this.renderCharacterMetaPanel(this.currentReplay);
+      }
+      if (this.lastFrame !== undefined) {
+        const currIdx = this.playback?.currentIndex ?? 0;
+        this.renderFrame(this.lastFrame, currIdx, true);
+      }
+    }
+  }
+
   private updatePlayerPanelColors(): void {
     for (const panel of this.panels) {
       const panelEl = panel.damageEl.closest(
@@ -727,6 +741,11 @@ export class MatchViewController {
       _frameIndex,
       this.perspectivePort,
     );
+
+    if (this.qaOverlayExitBtn) {
+      this.qaOverlayExitBtn.hidden =
+        !this.stageRenderer.isQuickAttackOverlayActive();
+    }
 
     const tr = t();
     for (const panel of this.panels) {
@@ -1684,6 +1703,7 @@ export class MatchViewController {
         row.appendChild(badgeEl);
 
         row.addEventListener("click", () => {
+          this.dismissQuickAttackOverlay();
           // Seek 1.5 seconds (90 frames at 60fps) before the situation began and play automatically
           const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
           this.playback?.seek(targetFrameIndex);
@@ -1772,6 +1792,7 @@ export class MatchViewController {
       row.appendChild(koBadgeEl);
 
       row.addEventListener("click", () => {
+        this.dismissQuickAttackOverlay();
         this.playback?.seek(c.jumpFrameIndex);
         this.playback?.play();
       });
@@ -1885,6 +1906,7 @@ export class MatchViewController {
           itemRow.appendChild(badgeEl);
 
           itemRow.addEventListener("click", () => {
+            this.dismissQuickAttackOverlay();
             const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
             this.playback?.seek(targetFrameIndex);
             this.playback?.play();
@@ -1998,7 +2020,7 @@ export class MatchViewController {
           itemRow.appendChild(badgeEl);
 
           itemRow.addEventListener("click", () => {
-            // Seek 1.5 seconds (90 frames at 60fps) before the shield pressure began and play automatically
+            this.dismissQuickAttackOverlay();
             const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
             this.playback?.seek(targetFrameIndex);
             this.playback?.play();
@@ -2022,9 +2044,13 @@ export class MatchViewController {
       const pikaPaths = extractAllQuickAttackPaths(
         replay,
         this.perspectivePort,
+        true,
       );
 
       const isOverlayActive = this.stageRenderer.isQuickAttackOverlayActive();
+      if (this.qaOverlayExitBtn) {
+        this.qaOverlayExitBtn.hidden = !isOverlayActive;
+      }
 
       const toggleBtn = document.createElement("button");
       toggleBtn.className = `qa-overlay-btn ${isOverlayActive ? "active" : ""}`;
@@ -2034,16 +2060,19 @@ export class MatchViewController {
 
       toggleBtn.addEventListener("click", () => {
         if (this.stageRenderer.isQuickAttackOverlayActive()) {
-          this.stageRenderer.setQuickAttackOverlay(null);
-          this.stageRenderer.setHoveredQuickAttackIndex(null);
+          this.dismissQuickAttackOverlay();
         } else {
+          this.playback?.pause();
           this.stageRenderer.setQuickAttackOverlay(pikaPaths);
           this.stageRenderer.setHoveredQuickAttackIndex(null);
-        }
-        this.renderCharacterMetaPanel(replay);
-        if (this.lastFrame !== undefined) {
-          const currIdx = this.playback?.currentIndex ?? 0;
-          this.renderFrame(this.lastFrame, currIdx, true);
+          if (this.qaOverlayExitBtn) {
+            this.qaOverlayExitBtn.hidden = false;
+          }
+          this.renderCharacterMetaPanel(replay);
+          if (this.lastFrame !== undefined) {
+            const currIdx = this.playback?.currentIndex ?? 0;
+            this.renderFrame(this.lastFrame, currIdx, true);
+          }
         }
       });
 
@@ -2090,9 +2119,7 @@ export class MatchViewController {
           });
 
           itemRow.addEventListener("click", () => {
-            this.stageRenderer.setQuickAttackOverlay(null);
-            this.stageRenderer.setHoveredQuickAttackIndex(null);
-            this.renderCharacterMetaPanel(replay);
+            this.dismissQuickAttackOverlay();
             const targetFrameIndex = Math.max(0, path.startFrameIndex - 30);
             this.playback?.seek(targetFrameIndex);
             this.playback?.play();
@@ -2190,6 +2217,9 @@ export class MatchViewController {
     this.stageRenderer.resize(width, height);
     this.stageRenderer.setQuickAttackOverlay(null);
     this.stageRenderer.setHoveredQuickAttackIndex(null);
+    if (this.qaOverlayExitBtn) {
+      this.qaOverlayExitBtn.hidden = true;
+    }
     this.camera = new Camera(width, height);
 
     this.buildPlayerPanels(replay);

@@ -304,4 +304,60 @@ describe("computeKillCombos", () => {
     const combos = computeKillCombos(makeMockReplay(frames));
     expect(combos.length).toBe(0);
   });
+
+  it("does not count 3-hit combo if it dropped and a separate 2-hit combo finished the kill", () => {
+    const frames: Frame[] = [];
+    // Hit 1: 0% -> 10%
+    frames.push(
+      makeFrame(
+        10,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x36, x: 50, y: 0, dmg: 10, comboHit: 1, hitstun: 20 },
+      ),
+    );
+    // Hit 2: 10% -> 20%
+    frames.push(
+      makeFrame(
+        15,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x36, x: 100, y: 0, dmg: 20, comboHit: 2, hitstun: 20 },
+      ),
+    );
+    // Hit 3: 20% -> 30%
+    frames.push(
+      makeFrame(
+        20,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x36, x: 150, y: 0, dmg: 30, comboHit: 3, hitstun: 20 },
+      ),
+    );
+    // Combo dropped: hits resets to 1 with a new hit dealing extra damage!
+    frames.push(
+      makeFrame(
+        45,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x36, x: 200, y: 0, dmg: 45, comboHit: 1, hitstun: 20 },
+      ),
+    );
+    // Hit 2 of second combo: 45% -> 60% (launch into blastzone)
+    frames.push(
+      makeFrame(
+        50,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x34, x: 300, y: 0, dmg: 60, comboHit: 2, hitstun: 60 },
+      ),
+    );
+    // Victim dies at frame 70
+    frames.push(
+      makeFrame(
+        70,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x00, x: 5000, y: 0, dmg: 60, stocks: 3 },
+      ),
+    );
+
+    const combos = computeKillCombos(makeMockReplay(frames));
+    // Neither sequence was a valid >=3 hit kill combo!
+    expect(combos.length).toBe(0);
+  });
 });

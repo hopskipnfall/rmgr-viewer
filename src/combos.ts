@@ -49,6 +49,7 @@ interface ActiveComboTracker {
   startFrameIndex: number;
   damageAtStart: number;
   maxComboHits: number;
+  lastComboHitCount: number;
   stocksAtStart: number;
 }
 
@@ -67,7 +68,7 @@ interface PendingLethalTracker {
  * Extracts all "Kill Combos" from a match replay.
  *
  * A Kill Combo is defined as:
- * - A continuous combo sequence with at least 3 hits (\`hitCount >= 3\`) that EITHER:
+ * - A continuous combo sequence with at least 3 hits (`hitCount >= 3`) that EITHER:
  *   (a) Outright takes the opponent's stock during the combo / hitstun, OR
  *   (b) Ends offstage / in air and the opponent dies without ever landing on stage/platform,
  *       grabbing ledge, or taking further damage from any other exchange.
@@ -198,7 +199,17 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
       const isCombod = inHitstun || inCapture || comboHits > 0;
 
       if (isCombod) {
-        if (!active) {
+        // If combo hit counter dropped/reset while an active combo existed, the previous combo ended
+        const comboDroppedAndRestarted =
+          active !== undefined &&
+          comboHits > 0 &&
+          active.lastComboHitCount > 0 &&
+          comboHits < active.lastComboHitCount;
+
+        if (!active || comboDroppedAndRestarted) {
+          // If previous combo dropped and new damage landed, any pending lethal tracking is cancelled
+          pendingLethal[victimPort] = undefined;
+
           // Look at previous frame's damage if possible to capture pre-hit damage
           const prevPost =
             i > 0 ? replay.frames[i - 1]?.ports[victimPort]?.post : null;
@@ -213,10 +224,14 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
             startFrameIndex: i,
             damageAtStart: initialDamage,
             maxComboHits: Math.max(1, comboHits),
+            lastComboHitCount: comboHits,
             stocksAtStart: victimPost.stocksRemaining,
           };
         } else {
           active.maxComboHits = Math.max(active.maxComboHits, comboHits);
+          if (comboHits > 0) {
+            active.lastComboHitCount = comboHits;
+          }
 
           // Check if stock was lost while directly in combo hitstun
           if (victimPost.stocksRemaining < active.stocksAtStart) {
