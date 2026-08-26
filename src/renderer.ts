@@ -1652,26 +1652,36 @@ export class StageRenderer {
     }
 
     // Damage% label above the triangle, in the player's color (or cycling if taunting).
-    ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.font = "bold 15px system-ui, -apple-system, sans-serif";
     ctx.fillStyle = taunting ? triangleColor : color;
     ctx.textAlign = "center";
-    ctx.shadowColor = "rgba(0,0,0,0.8)";
-    ctx.shadowBlur = 3;
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 4;
     ctx.fillText(`${post.damagePercent}%`, x, labelY);
     ctx.shadowBlur = 0;
 
-    // Active combo hits badge if 2 or more hits in combo
+    // Active combo hits count (large punchy number) if 2 or more hits in combo
     if (comboHits >= 2) {
-      const badgeText = `${comboHits} COMBO`;
-      ctx.font = "bold 10px system-ui, sans-serif";
-      const textWidth = ctx.measureText(badgeText).width;
-      const badgeY = labelY - 14;
+      const comboText = `${comboHits}`;
+      const comboY = labelY - 18;
 
-      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-      ctx.fillRect(x - textWidth / 2 - 4, badgeY - 9, textWidth + 8, 13);
+      ctx.save();
+      ctx.font = "900 20px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
 
-      ctx.fillStyle = "#ff4d4f";
-      ctx.fillText(badgeText, x, badgeY);
+      // Dark outline for contrast
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.9)";
+      ctx.lineWidth = 3.5;
+      ctx.lineJoin = "round";
+      ctx.strokeText(comboText, x, comboY);
+
+      // Energetic red-orange fill with glowing aura
+      ctx.fillStyle = "#ff453a";
+      ctx.shadowColor = "rgba(255, 69, 58, 0.85)";
+      ctx.shadowBlur = 6;
+      ctx.fillText(comboText, x, comboY);
+      ctx.restore();
     }
 
     // Player name tag at match start (fades out after initial frames)
@@ -1689,7 +1699,7 @@ export class StageRenderer {
           : OPPONENT_COLOR
         : getPlayerColor(port, perspectivePort);
 
-      const nameTagBottomY = comboHits >= 2 ? labelY - 30 : labelY - 16;
+      const nameTagBottomY = comboHits >= 2 ? labelY - 34 : labelY - 18;
       this.drawPlayerNameTag(
         x,
         nameTagBottomY,
@@ -1720,40 +1730,40 @@ export class StageRenderer {
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    ctx.font = "bold 11px system-ui, -apple-system, sans-serif";
+    ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     const textMetrics = ctx.measureText(name);
     const textWidth = textMetrics.width;
-    const paddingX = 8;
-    const pillWidth = Math.max(textWidth + paddingX * 2, 28);
-    const pillHeight = 18;
+    const paddingX = 10;
+    const pillWidth = Math.max(textWidth + paddingX * 2, 32);
+    const pillHeight = 22;
     const pillX = x - pillWidth / 2;
-    const pillY = y - pillHeight - 4; // 4px above the arrow tip at y
-    const borderRadius = 4;
+    const pillY = y - pillHeight - 5; // 5px above the arrow tip at y
+    const borderRadius = 5;
 
     // 1. Tag capsule background
     ctx.beginPath();
     ctx.roundRect(pillX, pillY, pillWidth, pillHeight, borderRadius);
     ctx.fillStyle = isPerspective
-      ? "rgba(15, 23, 42, 0.92)"
-      : "rgba(24, 27, 34, 0.85)";
+      ? "rgba(15, 23, 42, 0.94)"
+      : "rgba(24, 27, 34, 0.88)";
     ctx.fill();
 
     // 2. Tag capsule border
-    ctx.lineWidth = isPerspective ? 2 : 1.2;
+    ctx.lineWidth = isPerspective ? 2.2 : 1.4;
     ctx.strokeStyle = tagColor;
     if (isPerspective) {
-      ctx.shadowColor = "rgba(59, 130, 246, 0.6)";
+      ctx.shadowColor = "rgba(59, 130, 246, 0.65)";
       ctx.shadowBlur = 6;
     }
     ctx.stroke();
     ctx.shadowBlur = 0;
 
     // 3. Small downward pointer arrow below pill pointing down to character
-    const arrowWidth = 6;
-    const arrowHeight = 4;
+    const arrowWidth = 8;
+    const arrowHeight = 5;
     ctx.beginPath();
     ctx.moveTo(x - arrowWidth / 2, pillY + pillHeight);
     ctx.lineTo(x + arrowWidth / 2, pillY + pillHeight);
