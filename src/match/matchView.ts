@@ -662,26 +662,42 @@ export class MatchViewController {
   ): void {
     this.lastFrame = frame;
     const targets: Array<{ x: number; y: number }> = [];
-    for (const panel of this.panels) {
-      const post = frame?.ports[panel.port]?.post;
-      if (
-        !post ||
-        isDeadState(post.actionStateId) ||
-        post.stocksRemaining < 0
-      ) {
-        continue;
+    if (this.stageRenderer.isQuickAttackOverlayActive()) {
+      const overlayPaths = this.stageRenderer.getQuickAttackOverlayPaths();
+      if (overlayPaths && overlayPaths.length > 0) {
+        for (const path of overlayPaths) {
+          for (const pt of path.points) {
+            targets.push(pt);
+          }
+        }
       }
-      const size = characterSize(post.characterId);
-      const crouching = isCrouchState(post.actionStateId);
-      const height = size.height * (crouching ? 0.5 : 1.0);
-      const halfWidth = size.width / 2;
+      // Include stage boundaries and upper platform area so stage is well framed
+      targets.push({ x: -400, y: 0 }, { x: 400, y: 0 }, { x: 0, y: 250 });
+    } else {
+      for (const panel of this.panels) {
+        const post = frame?.ports[panel.port]?.post;
+        if (
+          !post ||
+          isDeadState(post.actionStateId) ||
+          post.stocksRemaining < 0
+        ) {
+          continue;
+        }
+        const size = characterSize(post.characterId);
+        const crouching = isCrouchState(post.actionStateId);
+        const height = size.height * (crouching ? 0.5 : 1.0);
+        const halfWidth = size.width / 2;
 
-      targets.push(
-        { x: post.positionX - halfWidth, y: post.positionY },
-        { x: post.positionX + halfWidth, y: post.positionY + height },
-      );
+        targets.push(
+          { x: post.positionX - halfWidth, y: post.positionY },
+          { x: post.positionX + halfWidth, y: post.positionY + height },
+        );
+      }
     }
-    this.camera.update(targets, snap);
+    this.camera.update(
+      targets,
+      snap || this.stageRenderer.isQuickAttackOverlayActive(),
+    );
 
     this.stageRenderer.render(
       this.camera,
@@ -1999,7 +2015,7 @@ export class MatchViewController {
         this.renderCharacterMetaPanel(replay);
         if (this.lastFrame !== undefined) {
           const currIdx = this.playback?.currentIndex ?? 0;
-          this.renderFrame(this.lastFrame, currIdx, false);
+          this.renderFrame(this.lastFrame, currIdx, true);
         }
       });
 
@@ -2046,6 +2062,9 @@ export class MatchViewController {
           });
 
           itemRow.addEventListener("click", () => {
+            this.stageRenderer.setQuickAttackOverlay(null);
+            this.stageRenderer.setHoveredQuickAttackIndex(null);
+            this.renderCharacterMetaPanel(replay);
             const targetFrameIndex = Math.max(0, path.startFrameIndex - 30);
             this.playback?.seek(targetFrameIndex);
             this.playback?.play();

@@ -1207,6 +1207,10 @@ export class StageRenderer {
     this.quickAttackOverlayPaths = paths;
   }
 
+  public getQuickAttackOverlayPaths(): QuickAttackPath[] | null {
+    return this.quickAttackOverlayPaths;
+  }
+
   public setHoveredQuickAttackIndex(index: number | null): void {
     this.hoveredQuickAttackIndex = index;
   }
