@@ -149,20 +149,22 @@ export class GameList {
     if (!is2Player) {
       return `
         <div class="game-row unsupported ${pulseClass}" data-id="${summary.id}">
-          <div class="game-row-meta">
-            <span class="game-date">${escapeHtml(dateStr)}</span>
-            <span class="meta-dot">·</span>
-            <span class="game-stage">${escapeHtml(stage)}</span>
-            <span class="meta-dot">·</span>
-            <span class="game-duration">${duration}</span>
-            <span class="unsupported-badge">${escapeHtml(tr.notSupportedPlayers)}</span>
-          </div>
-          <div class="game-row-players">
-            ${summary.ports.map((p) => `${escapeHtml(p.playerName || `P${p.port + 1}`)} (${escapeHtml(characterName(p.characterId))})`).join(" vs ")}
-          </div>
-          <div class="game-row-actions">
-            <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
-            <span class="drill-in-arrow">›</span>
+          <div class="game-row-header">
+            <div class="game-row-meta">
+              <span class="game-date">${escapeHtml(dateStr)}</span>
+              <span class="meta-dot">·</span>
+              <span class="game-stage">${escapeHtml(stage)}</span>
+              <span class="meta-dot">·</span>
+              <span class="game-duration">${duration}</span>
+              <span class="unsupported-badge">${escapeHtml(tr.notSupportedPlayers)}</span>
+            </div>
+            <div class="game-row-players">
+              ${summary.ports.map((p) => `${escapeHtml(p.playerName || `P${p.port + 1}`)} (${escapeHtml(characterName(p.characterId))})`).join(" vs ")}
+            </div>
+            <div class="game-row-actions">
+              <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
+              <span class="drill-in-arrow">›</span>
+            </div>
           </div>
         </div>
       `;
@@ -180,26 +182,28 @@ export class GameList {
 
       return `
         <div class="game-row ambiguous ${pulseClass}" data-id="${summary.id}">
-          <div class="game-row-meta">
-            <span class="ambiguous-badge">⚠</span>
-            <span class="game-date">${escapeHtml(dateStr)}</span>
-            <span class="meta-dot">·</span>
-            <span class="game-stage">${escapeHtml(stage)}</span>
-            <span class="meta-dot">·</span>
-            <span class="game-duration">${duration}</span>
-          </div>
-          <div class="game-row-players">
-            <button class="inline-perspective-btn choose-btn" data-port="${port0.port}">
-              ${escapeHtml(tr.imPlayer(label0))} <span class="char-label">(${escapeHtml(characterName(port0.characterId))})</span>
-            </button>
-            <span class="vs-label">vs</span>
-            <button class="inline-perspective-btn choose-btn" data-port="${port1.port}">
-              ${escapeHtml(tr.imPlayer(label1))} <span class="char-label">(${escapeHtml(characterName(port1.characterId))})</span>
-            </button>
-          </div>
-          <div class="game-row-actions">
-            <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
-            <span class="drill-in-arrow">›</span>
+          <div class="game-row-header">
+            <div class="game-row-meta">
+              <span class="ambiguous-badge">⚠</span>
+              <span class="game-date">${escapeHtml(dateStr)}</span>
+              <span class="meta-dot">·</span>
+              <span class="game-stage">${escapeHtml(stage)}</span>
+              <span class="meta-dot">·</span>
+              <span class="game-duration">${duration}</span>
+            </div>
+            <div class="game-row-players">
+              <button class="inline-perspective-btn choose-btn" data-port="${port0.port}">
+                ${escapeHtml(tr.imPlayer(label0))} <span class="char-label">(${escapeHtml(characterName(port0.characterId))})</span>
+              </button>
+              <span class="vs-label">vs</span>
+              <button class="inline-perspective-btn choose-btn" data-port="${port1.port}">
+                ${escapeHtml(tr.imPlayer(label1))} <span class="char-label">(${escapeHtml(characterName(port1.characterId))})</span>
+              </button>
+            </div>
+            <div class="game-row-actions">
+              <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
+              <span class="drill-in-arrow">›</span>
+            </div>
           </div>
         </div>
       `;
@@ -223,6 +227,8 @@ export class GameList {
 
     const stats = summary.statsByPort[yourPort];
     const statChips: string[] = [];
+    const comboChips: string[] = [];
+
     if (stats) {
       if (stats.recoverySituations > 0) {
         const pct = Math.round(
@@ -256,9 +262,15 @@ export class GameList {
           `<span class="game-stat-chip"><span class="chip-label">Neutral</span> ${hitsPerStock}/st.</span>`,
         );
       }
-      if (stats.killCombos && stats.killCombos > 0) {
-        statChips.push(
-          `<span class="game-stat-chip"><span class="chip-label">Combos</span> ${stats.killCombos}</span>`,
+      if (stats.combosList && stats.combosList.length > 0) {
+        stats.combosList.forEach((c) => {
+          comboChips.push(
+            `<span class="game-stat-chip combo-chip"><span class="chip-label">${c.hitCount} hits</span> ${c.startDamage}% → ${c.endDamage}% <span class="chip-ko">KO</span></span>`,
+          );
+        });
+      } else if (stats.killCombos && stats.killCombos > 0) {
+        comboChips.push(
+          `<span class="game-stat-chip combo-chip"><span class="chip-label">Combos</span> ${stats.killCombos}</span>`,
         );
       }
     }
@@ -268,38 +280,70 @@ export class GameList {
         ? `<span class="detail-stocks">${escapeHtml(tr.finalStocksDetail(yourP.finalStocks, oppP.finalStocks))}</span>`
         : "";
 
+    const hasSupplementary =
+      Boolean(stocksDetail) || statChips.length > 0 || comboChips.length > 0;
+
     return `
       <div class="game-row ${pulseClass} ${yourP.finalStocks > oppP.finalStocks ? "row-won" : yourP.finalStocks < oppP.finalStocks ? "row-lost" : ""}" data-id="${summary.id}">
-        <div class="game-row-meta">
-          <span class="game-date">${escapeHtml(dateStr)}</span>
-          <span class="meta-dot">·</span>
-          <span class="game-stage">${escapeHtml(stage)}</span>
-          <span class="meta-dot">·</span>
-          <span class="game-duration">${duration}</span>
+        <div class="game-row-header">
+          <div class="game-row-meta">
+            <span class="game-date">${escapeHtml(dateStr)}</span>
+            <span class="meta-dot">·</span>
+            <span class="game-stage">${escapeHtml(stage)}</span>
+            <span class="meta-dot">·</span>
+            <span class="game-duration">${duration}</span>
+          </div>
+          <div class="game-row-players">
+            <strong class="you-player">${escapeHtml(yourName)}</strong>
+            <span class="char-label">(${escapeHtml(characterName(yourP.characterId))})</span>
+            <span class="vs-label">vs</span>
+            <span class="opp-player">${escapeHtml(oppName)}</span>
+            <span class="char-label">(${escapeHtml(characterName(oppP.characterId))})</span>
+          </div>
+          <div class="game-row-actions">
+            ${resultBadge}
+            <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
+            <span class="drill-in-arrow">›</span>
+          </div>
         </div>
-        <div class="game-row-players">
-          <strong class="you-player">${escapeHtml(yourName)}</strong>
-          <span class="char-label">(${escapeHtml(characterName(yourP.characterId))})</span>
-          <span class="vs-label">vs</span>
-          <span class="opp-player">${escapeHtml(oppName)}</span>
-          <span class="char-label">(${escapeHtml(characterName(oppP.characterId))})</span>
-        </div>
-        <div class="game-row-details">
-          ${stocksDetail}
-          ${statChips.length > 0 ? `<span class="detail-divider">·</span><div class="game-stat-chips">${statChips.join("")}</div>` : ""}
-        </div>
-        <div class="game-row-actions">
-          ${resultBadge}
-          <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
-          <span class="drill-in-arrow">›</span>
-        </div>
+        ${
+          hasSupplementary
+            ? `
+          <div class="game-row-body">
+            <div class="game-row-stats">
+              ${stocksDetail}
+              ${stocksDetail && statChips.length > 0 ? `<span class="detail-divider">·</span>` : ""}
+              ${statChips.length > 0 ? `<div class="game-stat-chips">${statChips.join("")}</div>` : ""}
+            </div>
+            ${
+              comboChips.length > 0
+                ? `
+              <div class="game-row-combos">
+                <span class="combos-lead-label">Kill Combos:</span>
+                <div class="game-stat-chips">${comboChips.join("")}</div>
+              </div>
+            `
+                : ""
+            }
+          </div>
+        `
+            : ""
+        }
       </div>
     `;
   }
 }
 
 function escapeHtml(s: string): string {
-  const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
+  if (typeof document !== "undefined") {
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

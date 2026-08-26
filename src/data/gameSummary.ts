@@ -9,6 +9,12 @@ import { computeNeutralHitsStats } from "../neutralHits.js";
 import { computeKillCombos } from "../combos.js";
 import type { LoadedReplay } from "../replaySource.js";
 
+export interface KillComboSummary {
+  readonly hitCount: number;
+  readonly startDamage: number;
+  readonly endDamage: number;
+}
+
 export interface RawCounters {
   recoverySituations: number;
   recoverySuccesses: number;
@@ -23,6 +29,7 @@ export interface RawCounters {
   neutralHitsLanded: number;
   stocksTaken: number;
   killCombos?: number;
+  combosList?: KillComboSummary[];
 }
 
 export interface GamePortSummary {
@@ -62,6 +69,7 @@ export function createEmptyCounters(): RawCounters {
     neutralHitsLanded: 0,
     stocksTaken: 0,
     killCombos: 0,
+    combosList: [],
   };
 }
 
@@ -86,7 +94,12 @@ export function computeRawCountersForPort(
   const angelStats = computeAngelInvincibilityStats(angelEvents, port);
   const neutralStats = computeNeutralHitsStats(replay, port);
   const allCombos = computeKillCombos(replay);
-  const killCombos = allCombos.filter((c) => c.attackerPort === port).length;
+  const playerCombos = allCombos.filter((c) => c.attackerPort === port);
+  const combosList: KillComboSummary[] = playerCombos.map((c) => ({
+    hitCount: c.hitCount,
+    startDamage: Math.round(c.startDamage),
+    endDamage: Math.round(c.endDamage),
+  }));
 
   return {
     recoverySituations: edgeStats.recoverySituations,
@@ -101,7 +114,8 @@ export function computeRawCountersForPort(
     angelAvoidSuccesses: angelStats.avoidSuccesses,
     neutralHitsLanded: neutralStats.totalHitsLanded,
     stocksTaken: neutralStats.stocksTaken,
-    killCombos,
+    killCombos: playerCombos.length,
+    combosList,
   };
 }
 
