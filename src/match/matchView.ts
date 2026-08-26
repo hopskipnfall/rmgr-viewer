@@ -20,7 +20,11 @@ import { actionStateName, characterName } from "../lookups.js";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { t } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
-import { extractAllHitsWithDI } from "../di.js";
+import {
+  DI_ARROW_GLYPHS,
+  extractAllHitsWithDI,
+  type HitDIResult,
+} from "../di.js";
 import {
   computeNeutralHitEvents,
   computeNeutralHitsStats,
@@ -138,11 +142,18 @@ export class MatchViewController {
   private combosCollapseBtn: HTMLButtonElement;
   private combosWidgetTitleEl: HTMLHeadingElement;
   private combosList: HTMLDivElement;
+  private diWidget: HTMLElement;
+  private diCollapseBtn: HTMLButtonElement;
+  private diWidgetTitleEl: HTMLHeadingElement;
+  private diLiveMonitor: HTMLDivElement;
+  private diList: HTMLDivElement;
   private recoveryCollapsed = false;
   private edgeGuardCollapsed = false;
   private ledgeGetupCollapsed = false;
   private ledgeTrapCollapsed = false;
   private combosCollapsed = false;
+  private diCollapsed = false;
+  private diEvents: HitDIResult[] = [];
   private replayInfoWidget: HTMLElement;
   private replayInfoCollapseBtn: HTMLButtonElement;
   private replayInfoHeaderTitle: HTMLHeadingElement;
@@ -308,6 +319,18 @@ export class MatchViewController {
     ) as HTMLHeadingElement;
     this.combosList = document.getElementById("combosList") as HTMLDivElement;
 
+    this.diWidget = document.getElementById("diWidget") as HTMLElement;
+    this.diCollapseBtn = document.getElementById(
+      "diCollapseBtn",
+    ) as HTMLButtonElement;
+    this.diWidgetTitleEl = document.getElementById(
+      "diWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.diLiveMonitor = document.getElementById(
+      "diLiveMonitor",
+    ) as HTMLDivElement;
+    this.diList = document.getElementById("diList") as HTMLDivElement;
+
     this.replayInfoWidget = document.getElementById(
       "replayInfoWidget",
     ) as HTMLElement;
@@ -421,6 +444,13 @@ export class MatchViewController {
         "collapsed",
         this.combosCollapsed,
       );
+    });
+
+    this.diCollapseBtn.addEventListener("click", () => {
+      this.diCollapsed = !this.diCollapsed;
+      this.diLiveMonitor.hidden = this.diCollapsed;
+      this.diList.hidden = this.diCollapsed;
+      this.diCollapseBtn.classList.toggle("collapsed", this.diCollapsed);
     });
 
     this.characterMetaCollapseBtn.addEventListener("click", () => {
@@ -583,6 +613,10 @@ export class MatchViewController {
       this.combosCollapseBtn.title = tr.situationCollapseTitle(
         tr.combosWidgetTitle,
       );
+    if (this.diWidgetTitleEl)
+      this.diWidgetTitleEl.textContent = tr.diWidgetTitle;
+    if (this.diCollapseBtn)
+      this.diCollapseBtn.title = tr.situationCollapseTitle(tr.diWidgetTitle);
     if (this.hudToggleBtn) {
       this.hudToggleBtn.textContent = tr.hudOverlay;
       this.hudToggleBtn.title = tr.hudOverlayTitle;
@@ -1280,6 +1314,7 @@ export class MatchViewController {
       this.ledgeGetupWidget.hidden = true;
       this.ledgeTrapWidget.hidden = true;
       this.renderCombosPanel(replay);
+      this.renderDIPanel(replay);
       this.renderCharacterMetaPanel(replay);
       return;
     }
@@ -1506,6 +1541,7 @@ export class MatchViewController {
 
     this.buildSituationWidgets(replay);
     this.renderCombosPanel(replay);
+    this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
   }
 
@@ -1826,6 +1862,206 @@ export class MatchViewController {
 
       this.combosList.appendChild(row);
     });
+  }
+
+  private renderDIPanel(replay: Replay): void {
+    const tr = t();
+    this.diList.innerHTML = "";
+
+    if (replay.frames.length === 0 || this.diEvents.length === 0) {
+      this.diWidget.hidden = true;
+      return;
+    }
+
+    const filteredHits =
+      this.perspectivePort !== null
+        ? this.diEvents.filter((h) => h.victimPort === this.perspectivePort)
+        : this.diEvents;
+
+    this.diWidget.hidden = false;
+
+    if (filteredHits.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "situation-empty";
+      empty.textContent = tr.noDIFound;
+      this.diList.appendChild(empty);
+      return;
+    }
+
+    filteredHits.forEach((h, index) => {
+      const row = document.createElement("div");
+      row.className = "situation-row";
+
+      const indexEl = document.createElement("span");
+      indexEl.className = "situation-index";
+      indexEl.textContent = `#${index + 1}`;
+
+      const timeEl = document.createElement("span");
+      timeEl.className = "situation-time";
+      timeEl.textContent = `${formatElapsed(h.hitFrameIndex)} (${h.hitFrameNumber}F)`;
+
+      const dmgEl = document.createElement("span");
+      dmgEl.className = "combo-damage";
+      dmgEl.textContent = `+${Math.round(h.damageDealt)}%`;
+
+      const badgeEl = document.createElement("span");
+      const glyph = DI_ARROW_GLYPHS[h.cardinal] ?? "•";
+      const dir = h.relative !== "neutral" ? h.relative : h.cardinal;
+
+      if (h.inputCount >= 2) {
+        badgeEl.className = "di-badge-strong";
+        badgeEl.textContent = `${glyph} ${h.inputCount}x (${dir})`;
+      } else if (h.inputCount === 1) {
+        badgeEl.className = "di-badge-standard";
+        badgeEl.textContent = `${glyph} 1x (${dir})`;
+      } else {
+        badgeEl.className = "di-badge-none";
+        badgeEl.textContent = `No DI`;
+      }
+
+      row.appendChild(indexEl);
+      row.appendChild(timeEl);
+      row.appendChild(dmgEl);
+      row.appendChild(badgeEl);
+
+      row.addEventListener("click", () => {
+        this.dismissQuickAttackOverlay();
+        this.playback?.seek(h.hitFrameIndex);
+        this.playback?.play();
+      });
+
+      this.diList.appendChild(row);
+    });
+
+    this.updateDILiveMonitor(this.playback?.currentIndex ?? 0);
+  }
+
+  private updateDILiveMonitor(frameIndex: number): void {
+    if (
+      !this.diLiveMonitor ||
+      !this.currentReplay ||
+      this.diEvents.length === 0
+    )
+      return;
+    const tr = t();
+
+    // Find if a hit is currently active in hitlag or initial knockback (within 22 frames of hitlag end)
+    let activeHit = this.diEvents.find(
+      (h) =>
+        frameIndex >= h.hitFrameIndex &&
+        frameIndex <= h.endHitlagFrameIndex + 22 &&
+        (this.perspectivePort === null ||
+          h.victimPort === this.perspectivePort),
+    );
+
+    let isLive = true;
+    if (!activeHit) {
+      isLive = false;
+      const pastHits = this.diEvents.filter(
+        (h) =>
+          h.hitFrameIndex <= frameIndex &&
+          (this.perspectivePort === null ||
+            h.victimPort === this.perspectivePort),
+      );
+      if (pastHits.length > 0) {
+        activeHit = pastHits[pastHits.length - 1];
+      }
+    }
+
+    if (!activeHit) {
+      this.diLiveMonitor.innerHTML = `
+        <div class="di-live-header">
+          <span class="di-live-title">${tr.diWidgetTitle}</span>
+        </div>
+        <div class="situation-empty" style="padding: 4px 0;">${tr.diScrubPrompt}</div>
+      `;
+      return;
+    }
+
+    const victimCharId =
+      this.currentReplay.frames[0]?.ports[activeHit.victimPort]?.post
+        .characterId ?? 0;
+    const victimChar = characterName(victimCharId);
+    const victimName = `${PORT_LABELS[activeHit.victimPort]} (${victimChar})`;
+
+    let attackerName = "Opponent";
+    if (activeHit.attackerPort !== null) {
+      const attackerCharId =
+        this.currentReplay.frames[0]?.ports[activeHit.attackerPort]?.post
+          .characterId ?? 0;
+      const attackerChar = characterName(attackerCharId);
+      attackerName = `${PORT_LABELS[activeHit.attackerPort]} (${attackerChar})`;
+    }
+
+    const glyph = DI_ARROW_GLYPHS[activeHit.cardinal] ?? "•";
+    const dir =
+      activeHit.relative !== "neutral"
+        ? activeHit.relative
+        : activeHit.cardinal;
+
+    const badgeClass =
+      activeHit.inputCount >= 2
+        ? "di-badge-strong"
+        : activeHit.inputCount === 1
+          ? "di-badge-standard"
+          : "di-badge-none";
+
+    const badgeText =
+      activeHit.inputCount > 0
+        ? `${glyph} ${activeHit.inputCount}x DI (${dir})`
+        : `No DI`;
+
+    // Stick sequence strip during hitlag
+    const pipsHtml = activeHit.inputs
+      .map((inp) => {
+        const isCurrent = inp.frameIndex === frameIndex;
+        const activeClass = inp.isActivation
+          ? activeHit.inputCount >= 2
+            ? "active-strong"
+            : "active"
+          : "";
+        const style = isCurrent
+          ? "border-color: #ffffff; outline: 1px solid #ffffff;"
+          : "";
+        const pipGlyph = inp.isActivation ? glyph : "·";
+        return `<span class="di-stick-pip ${activeClass}" style="${style}" title="Hitlag F+${inp.hitlagFrame}: Stick (${inp.stickX}, ${inp.stickY})">${pipGlyph}</span>`;
+      })
+      .join("");
+
+    this.diLiveMonitor.innerHTML = `
+      <div class="di-live-header">
+        <span class="di-live-title">${isLive ? tr.diActiveHit : tr.diLastHit} (${activeHit.hitFrameNumber}F)</span>
+        <span class="${badgeClass}">${badgeText}</span>
+      </div>
+      <div class="di-live-details">
+        <div class="di-live-detail-item">
+          <span class="di-live-label">Victim / Attacker</span>
+          <span class="di-live-val">${victimName} ← ${attackerName}</span>
+        </div>
+        <div class="di-live-detail-item">
+          <span class="di-live-label">Damage & Hitlag</span>
+          <span class="di-live-val">+${Math.round(activeHit.damageDealt)}% (${activeHit.diWindowFrames}F window)</span>
+        </div>
+        <div class="di-live-detail-item">
+          <span class="di-live-label">Displacement</span>
+          <span class="di-live-val">${Math.round(activeHit.displacement.distance)}u shift (${activeHit.cardinal})</span>
+        </div>
+        <div class="di-live-detail-item">
+          <span class="di-live-label">Efficiency</span>
+          <span class="di-live-val">${activeHit.efficiency}%</span>
+        </div>
+      </div>
+      ${
+        activeHit.inputs.length > 0
+          ? `
+        <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
+          <span class="di-live-label">Hitlag Stick Timeline (${activeHit.inputs.length}F):</span>
+          <div class="di-stick-strip">${pipsHtml}</div>
+        </div>
+      `
+          : ""
+      }
+    `;
   }
 
   private renderCharacterMetaPanel(replay: Replay): void {
@@ -2177,6 +2413,7 @@ export class MatchViewController {
     const elapsed = formatElapsed(index);
     this.frameLabel.textContent = `Frame ${index} / ${Math.max(0, totalFrames - 1)} (${elapsed})`;
     this.updateEventLogHighlight(index);
+    this.updateDILiveMonitor(index);
   }
 
   public resizeStageCanvas(): void {
@@ -2204,6 +2441,7 @@ export class MatchViewController {
     this.matchupBaseline = matchupBaseline;
     const { replay } = loaded;
     this.currentReplay = replay;
+    this.diEvents = extractAllHitsWithDI(replay);
     const edgeEvents = computeEdgeGuardEvents(replay);
     const ledgeEvents = computeLedgeTrapEvents(replay);
     const angelEvents = computeAngelInvincibilityEvents(replay);
@@ -2252,6 +2490,7 @@ export class MatchViewController {
     this.buildPlayerPanels(replay);
     this.buildPerspectiveToggle(replay);
     this.renderStatsPanel(replay);
+    this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
     this.renderLogFilterWidget();
     this.renderReplayInfo(loaded);

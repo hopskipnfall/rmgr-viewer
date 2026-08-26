@@ -21,11 +21,7 @@ import {
   isHitstunState,
   computeEdgeGuardEvents,
 } from "./edgeGuard.js";
-import {
-  extractAllHitsWithDI,
-  type HitDIResult,
-  type DICardinalDirection,
-} from "./di.js";
+import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
 
 const SHIELD_ACTION_STATES = new Set([
   0x098, // ShieldOn
@@ -1302,18 +1298,6 @@ export interface CharacterAnimState {
   actionFrameCounter: number;
 }
 
-const DI_ARROW_GLYPHS: Record<DICardinalDirection, string> = {
-  up: "↑",
-  down: "↓",
-  left: "←",
-  right: "→",
-  "up-left": "↖",
-  "up-right": "↗",
-  "down-left": "↙",
-  "down-right": "↘",
-  neutral: "•",
-};
-
 export class StageRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private quickAttackOverlayPaths: QuickAttackPath[] | null = null;
@@ -1433,7 +1417,7 @@ export class StageRenderer {
             frameIndex >= hitDI.hitFrameIndex &&
             frameIndex <= hitDI.endHitlagFrameIndex + 22
           ) {
-            this.drawDIIndicator(camera, hitDI, frameIndex, replay);
+            this.drawDIIndicator(camera, hitDI, frameIndex);
           }
         }
       }
@@ -1635,16 +1619,15 @@ export class StageRenderer {
 
   /**
    * Visualizes Smash 64 Directional Influence (DI) during hitlag and the initial knockback frames.
-   * Draws a bold glowing displacement vector arrow and a compact overhead chip next to/above combo info.
+   * Draws a glowing displacement vector arrow and activation step pips on the stage canvas.
    */
   private drawDIIndicator(
     camera: Camera,
     hitDI: HitDIResult,
     currentFrameIndex: number,
-    replay?: Replay,
   ): void {
-    // Only render visual indicator if the player actually performed DI inputs
-    if (hitDI.inputCount === 0) return;
+    // Only render vector if the player performed DI inputs and had noticeable displacement
+    if (hitDI.inputCount === 0 || hitDI.displacement.distance < 6) return;
 
     const { ctx } = this;
     const startScreen = camera.worldToScreen(
@@ -1675,105 +1658,63 @@ export class StageRenderer {
       ? `rgba(245, 158, 11, ${alpha * 0.85})`
       : `rgba(14, 165, 233, ${alpha * 0.85})`;
 
-    // 1. Draw physical displacement vector arrow (when displacement >= 6)
-    if (hitDI.displacement.distance >= 6) {
-      ctx.strokeStyle = strokeColor;
-      ctx.fillStyle = strokeColor;
-      ctx.lineWidth = isStrongDI ? 4 : 2.5;
-      ctx.shadowColor = glowColor;
-      ctx.shadowBlur = isStrongDI ? 10 : 6;
-
-      // Vector line
-      ctx.beginPath();
-      ctx.moveTo(startScreen.x, startScreen.y);
-      ctx.lineTo(endScreen.x, endScreen.y);
-      ctx.stroke();
-
-      // Bold Arrowhead at endScreen
-      const angle = Math.atan2(
-        endScreen.y - startScreen.y,
-        endScreen.x - startScreen.x,
-      );
-      const headLen = isStrongDI ? 11 : 9;
-      ctx.beginPath();
-      ctx.moveTo(endScreen.x, endScreen.y);
-      ctx.lineTo(
-        endScreen.x - headLen * Math.cos(angle - Math.PI / 5.5),
-        endScreen.y - headLen * Math.sin(angle - Math.PI / 5.5),
-      );
-      ctx.lineTo(
-        endScreen.x - headLen * Math.cos(angle + Math.PI / 5.5),
-        endScreen.y - headLen * Math.sin(angle + Math.PI / 5.5),
-      );
-      ctx.closePath();
-      ctx.fill();
-
-      // Start impact circle with white core
-      ctx.beginPath();
-      ctx.arc(startScreen.x, startScreen.y, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(startScreen.x, startScreen.y, 1.5, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
-      ctx.fill();
-
-      // Intermediate activation step pips for multi-input DI
-      if (hitDI.inputCount > 1) {
-        for (let i = 1; i < hitDI.inputCount; i++) {
-          const t = i / hitDI.inputCount;
-          const px = startScreen.x + (endScreen.x - startScreen.x) * t;
-          const py = startScreen.y + (endScreen.y - startScreen.y) * t;
-          ctx.beginPath();
-          ctx.arc(px, py, 2.8, 0, Math.PI * 2);
-          ctx.fillStyle = strokeColor;
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(px, py, 1.4, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
-          ctx.fill();
-        }
-      }
-    }
-
-    // 2. Compact overhead DI badge next to / above character damage & combo counter
-    const arrowGlyph = DI_ARROW_GLYPHS[hitDI.cardinal] ?? "•";
-    const dirLabel =
-      hitDI.relative !== "neutral" ? hitDI.relative : hitDI.cardinal;
-    const badgeText = `${arrowGlyph} ${hitDI.inputCount}x DI (${dirLabel})`;
-
-    // Check if the victim is currently in a combo (comboHitCount >= 2) on this frame
-    const currPortPost =
-      replay?.frames[currentFrameIndex]?.ports[hitDI.victimPort]?.post;
-    const inMultiHitCombo = (currPortPost?.comboHitCount ?? 0) >= 2;
-
-    const badgeX = endScreen.x;
-    // Stack above combo counter if in combo, or compactly above damage percentage
-    const badgeY = inMultiHitCombo ? endScreen.y - 48 : endScreen.y - 32;
-
-    ctx.font = "bold 10px monospace, system-ui, sans-serif";
-    const textMetrics = ctx.measureText(badgeText);
-    const padX = 6;
-    const bgWidth = textMetrics.width + padX * 2;
-    const bgHeight = 16;
-    const rx = badgeX - bgWidth / 2;
-    const ry = badgeY - bgHeight / 2;
-
-    // Sleek compact capsule card
-    ctx.fillStyle = `rgba(15, 23, 42, ${alpha * 0.92})`;
+    // Draw physical displacement vector arrow
     ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = 1.2;
+    ctx.fillStyle = strokeColor;
+    ctx.lineWidth = isStrongDI ? 4 : 2.5;
     ctx.shadowColor = glowColor;
-    ctx.shadowBlur = 5;
+    ctx.shadowBlur = isStrongDI ? 10 : 6;
+
+    // Vector line
     ctx.beginPath();
-    ctx.roundRect(rx, ry, bgWidth, bgHeight, 4);
-    ctx.fill();
+    ctx.moveTo(startScreen.x, startScreen.y);
+    ctx.lineTo(endScreen.x, endScreen.y);
     ctx.stroke();
 
-    // Text render
-    ctx.fillStyle = strokeColor;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(badgeText, badgeX, badgeY);
+    // Bold Arrowhead at endScreen
+    const angle = Math.atan2(
+      endScreen.y - startScreen.y,
+      endScreen.x - startScreen.x,
+    );
+    const headLen = isStrongDI ? 11 : 9;
+    ctx.beginPath();
+    ctx.moveTo(endScreen.x, endScreen.y);
+    ctx.lineTo(
+      endScreen.x - headLen * Math.cos(angle - Math.PI / 5.5),
+      endScreen.y - headLen * Math.sin(angle - Math.PI / 5.5),
+    );
+    ctx.lineTo(
+      endScreen.x - headLen * Math.cos(angle + Math.PI / 5.5),
+      endScreen.y - headLen * Math.sin(angle + Math.PI / 5.5),
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // Start impact circle with white core
+    ctx.beginPath();
+    ctx.arc(startScreen.x, startScreen.y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(startScreen.x, startScreen.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
+    ctx.fill();
+
+    // Intermediate activation step pips for multi-input DI
+    if (hitDI.inputCount > 1) {
+      for (let i = 1; i < hitDI.inputCount; i++) {
+        const t = i / hitDI.inputCount;
+        const px = startScreen.x + (endScreen.x - startScreen.x) * t;
+        const py = startScreen.y + (endScreen.y - startScreen.y) * t;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.8, 0, Math.PI * 2);
+        ctx.fillStyle = strokeColor;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, 1.4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
+        ctx.fill();
+      }
+    }
 
     ctx.restore();
   }

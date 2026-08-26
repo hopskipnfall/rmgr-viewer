@@ -25,6 +25,18 @@ export type DICardinalDirection =
   | "down-left"
   | "down-right";
 
+export const DI_ARROW_GLYPHS: Record<DICardinalDirection, string> = {
+  neutral: "•",
+  up: "↑",
+  down: "↓",
+  left: "←",
+  right: "→",
+  "up-left": "↖",
+  "up-right": "↗",
+  "down-left": "↙",
+  "down-right": "↘",
+};
+
 export type DIRelativeDirection =
   | "neutral"
   | "away"

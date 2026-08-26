@@ -1564,6 +1564,110 @@
         flex-shrink: 0;
         font-family: monospace, system-ui, sans-serif;
       }
+      .di-live-monitor {
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.45);
+        border-bottom: 1px solid var(--panel-border);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 12px;
+      }
+      .di-live-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .di-live-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-dim);
+      }
+      .di-badge-strong {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(245, 158, 11, 0.2);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.4);
+        font-family: monospace, system-ui, sans-serif;
+        flex-shrink: 0;
+      }
+      .di-badge-standard {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(56, 189, 248, 0.18);
+        color: #38bdf8;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        font-family: monospace, system-ui, sans-serif;
+        flex-shrink: 0;
+      }
+      .di-badge-none {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(148, 163, 184, 0.15);
+        color: #94a3b8;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        font-family: monospace, system-ui, sans-serif;
+        flex-shrink: 0;
+      }
+      .di-live-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 10px;
+        font-size: 11px;
+      }
+      .di-live-detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .di-live-label {
+        font-size: 10px;
+        color: var(--text-dim);
+      }
+      .di-live-val {
+        font-weight: 600;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      .di-stick-strip {
+        display: flex;
+        gap: 3px;
+        margin-top: 4px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+      .di-stick-pip {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        background: #1e2230;
+        border: 1px solid var(--panel-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .di-stick-pip.active {
+        background: rgba(56, 189, 248, 0.25);
+        border-color: #38bdf8;
+        color: #38bdf8;
+      }
+      .di-stick-pip.active-strong {
+        background: rgba(245, 158, 11, 0.3);
+        border-color: #fbbf24;
+        color: #fbbf24;
+      }
       .qa-overlay-btn {
         width: 100%;
         background: #22252f;
@@ -2320,6 +2424,22 @@
               </button>
             </div>
             <div id="combosList" class="situation-list"></div>
+          </section>
+          <section id="diWidget" class="situation-widget" hidden>
+            <div class="situation-widget-header">
+              <button
+                id="diCollapseBtn"
+                class="situation-collapse-btn"
+                title="Collapse / expand Directional Influence"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="diWidgetTitle" class="situation-widget-title">
+                  Directional Influence (DI)
+                </h2>
+              </button>
+            </div>
+            <div id="diLiveMonitor" class="di-live-monitor"></div>
+            <div id="diList" class="situation-list"></div>
           </section>
           <section id="characterMetaWidget" hidden>
             <div id="characterMetaHeader">

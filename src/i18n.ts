@@ -225,6 +225,13 @@ export interface Translations {
   combosCountChip: (count: number) => string;
   noCombos: string;
 
+  // Directional Influence (DI) widget
+  diWidgetTitle: string;
+  noDIFound: string;
+  diActiveHit: string;
+  diLastHit: string;
+  diScrubPrompt: string;
+
   // Pikachu Up-B Quick Attack Overlay
   overlayQuickAttackBtn: string;
   hideQuickAttackOverlayBtn: string;
@@ -469,6 +476,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       `${count} ${count === 1 ? "kill combo" : "kill combos"}`,
     noCombos: "No kill combos (≥3 hits) in this match.",
 
+    diWidgetTitle: "Directional Influence (DI)",
+    noDIFound: "No hit events detected in this match.",
+    diActiveHit: "Live Hit",
+    diLastHit: "Last Hit",
+    diScrubPrompt: "Scrub to a hit to view live DI metrics.",
+
     overlayQuickAttackBtn: "Overlay Quick Attack Paths",
     hideQuickAttackOverlayBtn: "Exit Overlay",
     quickAttackPathItem: (idx, time, frame, zips) =>
@@ -694,6 +707,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     comboKillBadge: "撃墜",
     combosCountChip: (count) => `${count} 撃墜コンボ`,
     noCombos: "この試合で撃墜コンボ（3ヒット以上）はありません。",
+
+    diWidgetTitle: "ベクトル変更 (DI)",
+    noDIFound: "この試合でヒットは検出されませんでした。",
+    diActiveHit: "リアルタイム ヒット",
+    diLastHit: "前回のヒット",
+    diScrubPrompt: "シークしてDIメトリクスを確認してください。",
 
     overlayQuickAttackBtn: "電光石火の軌跡を重ねて表示",
     hideQuickAttackOverlayBtn: "重ねて表示を終了",
