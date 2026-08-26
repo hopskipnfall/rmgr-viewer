@@ -7621,7 +7621,7 @@ export class StageRenderer {
 
   /**
    * Visualizes Jigglypuff's signature special moves:
-   * - Pound (Neutral-B): Forward-lunging punch with vibrant pink star impact burst.
+   * - Pound (Neutral-B): Sideways lunging punch attack with outstretched arm, clenched fist, and horizontal strike arc.
    * - Sing (Up-B): Concentric musical soundwave rings radiating outward with floating notes.
    * - Rest (Down-B): Explosive critical hit star bloom with flower petals and Zzz sparkles.
    */
@@ -7641,37 +7641,114 @@ export class StageRenderer {
 
     if (specialType === "pound") {
       ctx.save();
-      // Forward thrusting punch impact with large pink burst star
-      const punchX = noseX + dir * (halfWidth * 0.85);
-      const starR = Math.max(10, halfWidth * 0.75);
+      // Sideways Punch (Pound): Dynamic horizontal lunging fist with punch strike arc & impact sparks
+      const punchProgress = Math.min(1, frameCounter / 15);
+      const extendDist =
+        halfWidth * (0.35 + 0.85 * Math.sin(punchProgress * Math.PI * 0.75));
+      const fistX = noseX + dir * extendDist;
+      const fistY = centerY - heightPx * 0.05;
+      const armHeight = Math.max(4, heightPx * 0.18);
 
-      // Thrust speed lines
+      // 1. Horizontal thrust speed lines
       ctx.beginPath();
-      ctx.moveTo(x, centerY - heightPx * 0.2);
-      ctx.lineTo(punchX - dir * 4, centerY - heightPx * 0.2);
-      ctx.moveTo(x, centerY + heightPx * 0.2);
-      ctx.lineTo(punchX - dir * 4, centerY + heightPx * 0.2);
-      ctx.strokeStyle = "rgba(244, 114, 182, 0.75)";
+      ctx.moveTo(x + dir * (halfWidth * 0.2), fistY - armHeight * 0.85);
+      ctx.lineTo(fistX + dir * 6, fistY - armHeight * 0.85);
+      ctx.moveTo(x + dir * (halfWidth * 0.2), fistY + armHeight * 0.85);
+      ctx.lineTo(fistX + dir * 6, fistY + armHeight * 0.85);
+      ctx.moveTo(x + dir * (halfWidth * 0.1), fistY);
+      ctx.lineTo(fistX + dir * 10, fistY);
+      ctx.strokeStyle = "rgba(244, 114, 182, 0.65)";
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // 4-point impact star
+      // 2. Punching Arm (extended from body)
       ctx.beginPath();
-      ctx.moveTo(punchX - starR, centerY);
-      ctx.quadraticCurveTo(punchX, centerY, punchX, centerY - starR);
-      ctx.quadraticCurveTo(punchX, centerY, punchX + starR, centerY);
-      ctx.quadraticCurveTo(punchX, centerY, punchX, centerY + starR);
-      ctx.quadraticCurveTo(punchX, centerY, punchX - starR, centerY);
+      ctx.moveTo(x + dir * (halfWidth * 0.4), fistY - armHeight * 0.5);
+      ctx.lineTo(fistX, fistY - armHeight * 0.6);
+      ctx.lineTo(fistX, fistY + armHeight * 0.6);
+      ctx.lineTo(x + dir * (halfWidth * 0.4), fistY + armHeight * 0.5);
+      ctx.closePath();
       ctx.fillStyle = "#f472b6";
-      ctx.shadowColor = "#ec4899";
-      ctx.shadowBlur = 12;
       ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
 
-      // White inner core
+      // 3. Clenched Fist at punch tip
+      const fistR = Math.max(6, halfWidth * 0.4);
       ctx.beginPath();
-      ctx.arc(punchX, centerY, starR * 0.4, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff";
+      ctx.ellipse(
+        fistX,
+        fistY,
+        fistR * 1.1,
+        fistR * 0.9,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#f9a8d4";
       ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.7)";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      // Knuckle details on the punching fist
+      ctx.beginPath();
+      ctx.arc(
+        fistX + dir * (fistR * 0.5),
+        fistY - fistR * 0.35,
+        fistR * 0.35,
+        0,
+        Math.PI * 2,
+      );
+      ctx.arc(
+        fistX + dir * (fistR * 0.5),
+        fistY + fistR * 0.35,
+        fistR * 0.35,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#f472b6";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // 4. Curved Punch Strike Swipe Arc (crescent impact slash)
+      const arcDist = fistX + dir * (fistR * 0.7);
+      const arcR = fistR * 1.7;
+      ctx.beginPath();
+      ctx.ellipse(
+        arcDist,
+        fistY,
+        Math.max(3, arcR * 0.45),
+        arcR,
+        0,
+        facingRight ? -Math.PI * 0.45 : Math.PI * 0.55,
+        facingRight ? Math.PI * 0.45 : Math.PI * 1.45,
+      );
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = "#f472b6";
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // 5. Kinetic punch impact flash / shockwave sparks
+      const impactProg = (frameCounter % 8) / 8;
+      const sparkRadius = fistR * 1.2 + impactProg * (halfWidth * 0.75);
+      ctx.beginPath();
+      ctx.ellipse(
+        fistX + dir * (fistR * 0.6),
+        fistY,
+        sparkRadius * 0.6,
+        sparkRadius,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = resolveColor("#ec4899", false, (1 - impactProg) * 0.8);
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
       ctx.restore();
       return;
