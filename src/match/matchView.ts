@@ -2177,13 +2177,9 @@ export class MatchViewController {
 
     const allHits = extractAllHitsWithDI(replay);
 
-    combos.forEach((c, index) => {
+    combos.forEach((c) => {
       const row = document.createElement("div");
       row.className = "situation-row";
-
-      const indexEl = document.createElement("span");
-      indexEl.className = "situation-index";
-      indexEl.textContent = `#${index + 1}`;
 
       const timeEl = document.createElement("span");
       timeEl.className = "situation-time";
@@ -2201,7 +2197,6 @@ export class MatchViewController {
       koBadgeEl.className = "combo-kill-badge";
       koBadgeEl.textContent = tr.comboKillBadge;
 
-      row.appendChild(indexEl);
       row.appendChild(timeEl);
       row.appendChild(hitsEl);
       row.appendChild(dmgEl);
