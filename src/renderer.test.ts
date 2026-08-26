@@ -343,7 +343,7 @@ describe("extractAllQuickAttackPaths", () => {
       ],
     } as unknown as Replay;
 
-    const paths = extractAllQuickAttackPaths(replay, 0);
+    const paths = extractAllQuickAttackPaths(replay, 0, false);
     expect(paths.length).toBe(2);
 
     expect(paths[0]?.index).toBe(1);
@@ -357,6 +357,52 @@ describe("extractAllQuickAttackPaths", () => {
     expect(paths[1]?.endFrame).toBe(8);
     expect(paths[1]?.zipCount).toBe(2);
     expect(paths[1]?.points.length).toBe(4);
+  });
+
+  it("filters Quick Attacks to only those during recovery situations by default", () => {
+    // Replay with port 0 (Pikachu) in a recovery situation (offstage outside danger zone)
+    const replay = {
+      gameStart: {
+        stageId: DREAM_LAND_STAGE_ID,
+        ports: [{ characterId: 0x09 }, { characterId: 0x01 }],
+      },
+      frames: [
+        // Frame 0: Offstage outside danger zone (starts recovery situation)
+        {
+          frame: 0,
+          ports: [
+            { post: { actionStateId: 0x18, positionX: -3500, positionY: 500 } },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        // Frame 1-3: Quick Attack during recovery
+        {
+          frame: 1,
+          ports: [
+            { post: { actionStateId: 0x0e8, positionX: -3500, positionY: 500 } },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        {
+          frame: 2,
+          ports: [
+            { post: { actionStateId: 0x0ec, positionX: -2000, positionY: 500 } },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        {
+          frame: 3,
+          ports: [
+            { post: { actionStateId: 0x0e9, positionX: -500, positionY: 500 } },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+      ],
+    } as unknown as Replay;
+
+    const paths = extractAllQuickAttackPaths(replay, 0);
+    expect(paths.length).toBe(1);
+    expect(paths[0]?.startFrame).toBe(1);
   });
 
   it("returns empty array for non-Pikachu characters", () => {

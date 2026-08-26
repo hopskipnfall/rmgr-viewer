@@ -19,6 +19,7 @@ import {
   ZONE_X_AT_Y_LO,
   ZONE_X_AT_Y_HI,
   isHitstunState,
+  computeEdgeGuardEvents,
 } from "./edgeGuard.js";
 
 const SHIELD_ACTION_STATES = new Set([
@@ -724,16 +725,56 @@ export interface QuickAttackPath {
   readonly zipCount: number;
 }
 
+function getRecoveryWindowsForPort(
+  replay: Replay,
+  port: PortIndex,
+): Array<{ start: number; end: number }> {
+  const events = computeEdgeGuardEvents(replay);
+  const windows: Array<{ start: number; end: number }> = [];
+  let currentStart: number | null = null;
+
+  for (const ev of events) {
+    if (ev.recoveringPort !== port) continue;
+    if (ev.kind === "situation-entered") {
+      if (currentStart !== null) {
+        windows.push({ start: currentStart, end: ev.frameIndex });
+      }
+      currentStart = ev.frameIndex;
+    } else if (
+      ev.kind === "recovery-success" ||
+      ev.kind === "recovery-failure"
+    ) {
+      if (currentStart !== null) {
+        windows.push({ start: currentStart, end: ev.frameIndex });
+        currentStart = null;
+      }
+    }
+  }
+  if (currentStart !== null) {
+    windows.push({
+      start: currentStart,
+      end: Math.max(0, replay.frames.length - 1),
+    });
+  }
+  return windows;
+}
+
 /**
- * Extracts all Quick Attack (Up-B) trajectories for a Pikachu player across an entire replay.
+ * Extracts Quick Attack (Up-B) trajectories for a Pikachu player across a replay.
+ * By default (`recoveryOnly: true`), filters to only those executed during classified recovery situations.
  */
 export function extractAllQuickAttackPaths(
   replay: Replay,
   port: PortIndex,
+  recoveryOnly = true,
 ): QuickAttackPath[] {
   const paths: QuickAttackPath[] = [];
   const charId = replay.gameStart.ports[port]?.characterId ?? 0x09;
   if (!isPikachuCharacter(charId)) return paths;
+
+  const recoveryWindows = recoveryOnly
+    ? getRecoveryWindowsForPort(replay, port)
+    : null;
 
   const size = characterSize(charId);
   const halfHeight = size.height * 0.5;
@@ -743,6 +784,26 @@ export function extractAllQuickAttackPaths(
   let startFrameIndex = 0;
   let inQuickAttack = false;
   let zipCount = 0;
+
+  const addPathIfEligible = (endFrame: number, endFrameIndex: number) => {
+    if (currentPoints.length < 2) return;
+    if (recoveryWindows !== null) {
+      const inRecovery = recoveryWindows.some(
+        (w) => startFrameIndex >= w.start - 10 && startFrameIndex <= w.end + 10,
+      );
+      if (!inRecovery) return;
+    }
+    paths.push({
+      index: paths.length + 1,
+      port,
+      startFrame,
+      startFrameIndex,
+      endFrame,
+      endFrameIndex,
+      points: currentPoints,
+      zipCount: Math.max(1, zipCount),
+    });
+  };
 
   for (let i = 0; i < replay.frames.length; i++) {
     const f = replay.frames[i];
@@ -773,18 +834,7 @@ export function extractAllQuickAttackPaths(
       }
     } else {
       if (inQuickAttack) {
-        if (currentPoints.length >= 2) {
-          paths.push({
-            index: paths.length + 1,
-            port,
-            startFrame,
-            startFrameIndex,
-            endFrame: replay.frames[i - 1]?.frame ?? startFrame,
-            endFrameIndex: i - 1,
-            points: currentPoints,
-            zipCount: Math.max(1, zipCount),
-          });
-        }
+        addPathIfEligible(replay.frames[i - 1]?.frame ?? startFrame, i - 1);
         inQuickAttack = false;
         currentPoints = [];
         zipCount = 0;
@@ -794,16 +844,7 @@ export function extractAllQuickAttackPaths(
 
   if (inQuickAttack && currentPoints.length >= 2) {
     const lastIdx = replay.frames.length - 1;
-    paths.push({
-      index: paths.length + 1,
-      port,
-      startFrame,
-      startFrameIndex,
-      endFrame: replay.frames[lastIdx]?.frame ?? startFrame,
-      endFrameIndex: lastIdx,
-      points: currentPoints,
-      zipCount: Math.max(1, zipCount),
-    });
+    addPathIfEligible(replay.frames[lastIdx]?.frame ?? startFrame, lastIdx);
   }
 
   return paths;

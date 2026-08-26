@@ -1042,9 +1042,18 @@ export class MatchViewController {
       btn.textContent = name;
 
       btn.addEventListener("click", () => {
+        const wasOverlayActive =
+          this.stageRenderer.isQuickAttackOverlayActive();
         this.perspectivePort = port;
-        this.stageRenderer.setQuickAttackOverlay(null);
-        this.stageRenderer.setHoveredQuickAttackIndex(null);
+        const newCharId = replay.gameStart.ports[port]?.characterId;
+        if (wasOverlayActive && isPikachuCharacter(newCharId)) {
+          const newPaths = extractAllQuickAttackPaths(replay, port, true);
+          this.stageRenderer.setQuickAttackOverlay(newPaths);
+          this.stageRenderer.setHoveredQuickAttackIndex(null);
+        } else {
+          this.stageRenderer.setQuickAttackOverlay(null);
+          this.stageRenderer.setHoveredQuickAttackIndex(null);
+        }
         this.onPerspectiveChangedCb?.(port);
         this.updatePlayerPanelColors();
         this.renderStatsPanel(replay);
