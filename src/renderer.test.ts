@@ -395,14 +395,18 @@ describe("extractAllQuickAttackPaths", () => {
         {
           frame: 1,
           ports: [
-            { post: { actionStateId: 0x0e8, positionX: -3500, positionY: 500 } },
+            {
+              post: { actionStateId: 0x0e8, positionX: -3500, positionY: 500 },
+            },
             { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         {
           frame: 2,
           ports: [
-            { post: { actionStateId: 0x0ec, positionX: -2000, positionY: 500 } },
+            {
+              post: { actionStateId: 0x0ec, positionX: -2000, positionY: 500 },
+            },
             { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },

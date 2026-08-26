@@ -83,7 +83,11 @@ describe("GameList rendering", () => {
 
     // Check itemized kill combo chips
     expect(html).toContain("Kill Combos:");
-    expect(html).toContain('<span class="chip-label">3 hits</span> 33% → 87% <span class="chip-ko">KO</span>');
-    expect(html).toContain('<span class="chip-label">6 hits</span> 21% → 75% <span class="chip-ko">KO</span>');
+    expect(html).toContain(
+      '<span class="chip-label">3 hits</span> 33% → 87% <span class="chip-ko">KO</span>',
+    );
+    expect(html).toContain(
+      '<span class="chip-label">6 hits</span> 21% → 75% <span class="chip-ko">KO</span>',
+    );
   });
 });

@@ -1205,9 +1205,15 @@ export function toBlandPalette(
     const b = parseInt(hex.slice(4, 6), 16);
     const a = hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1;
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    const nr = Math.round(lum * (1 - SATURATION_FACTOR) + r * SATURATION_FACTOR);
-    const ng = Math.round(lum * (1 - SATURATION_FACTOR) + g * SATURATION_FACTOR);
-    const nb = Math.round(lum * (1 - SATURATION_FACTOR) + b * SATURATION_FACTOR);
+    const nr = Math.round(
+      lum * (1 - SATURATION_FACTOR) + r * SATURATION_FACTOR,
+    );
+    const ng = Math.round(
+      lum * (1 - SATURATION_FACTOR) + g * SATURATION_FACTOR,
+    );
+    const nb = Math.round(
+      lum * (1 - SATURATION_FACTOR) + b * SATURATION_FACTOR,
+    );
     const finalAlpha = overrideAlpha ?? a;
     return finalAlpha < 1
       ? `rgba(${nr}, ${ng}, ${nb}, ${finalAlpha})`
@@ -2520,7 +2526,9 @@ export class StageRenderer {
       if (isLanding) {
         // Ground impact compression line along floor (y)
         ctx.save();
-        const impactSpread = isHeavyLanding ? halfWidth * 1.35 : halfWidth * 0.9;
+        const impactSpread = isHeavyLanding
+          ? halfWidth * 1.35
+          : halfWidth * 0.9;
         ctx.beginPath();
         ctx.moveTo(x - impactSpread, y);
         ctx.lineTo(x + impactSpread, y);
@@ -3010,13 +3018,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -3261,13 +3263,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -3536,13 +3532,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -3810,13 +3800,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -4083,13 +4067,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -4295,13 +4273,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -4504,13 +4476,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -4750,13 +4716,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -4965,13 +4925,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -5133,13 +5087,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -5316,13 +5264,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -5540,13 +5482,7 @@ export class StageRenderer {
     state: CharacterAnimState,
   ): void {
     const { ctx } = this;
-    const {
-      taunting,
-      inCombo,
-      isRoll,
-      isOpponent,
-      actionFrameCounter,
-    } = state;
+    const { taunting, inCombo, isRoll, isOpponent, actionFrameCounter } = state;
     ctx.save();
     const posX =
       inCombo && !taunting
@@ -7468,8 +7404,7 @@ export class StageRenderer {
         actionStateId === 0x0e0 ||
         actionStateId === 0x0e1 ||
         actionStateId === 0x0e7;
-      const isAngledDown =
-        actionStateId === 0x0de || actionStateId === 0x0e8;
+      const isAngledDown = actionStateId === 0x0de || actionStateId === 0x0e8;
 
       const angleOffsetY = isAngledUp
         ? -heightPx * 0.18
@@ -7512,9 +7447,13 @@ export class StageRenderer {
       // 3. Clenched Fist at punch tip
       const fistR = Math.max(6, halfWidth * 0.4);
       const rotationAngle = isAngledUp
-        ? (facingRight ? -0.28 : 0.28)
+        ? facingRight
+          ? -0.28
+          : 0.28
         : isAngledDown
-          ? (facingRight ? 0.28 : -0.28)
+          ? facingRight
+            ? 0.28
+            : -0.28
           : 0;
 
       ctx.beginPath();
