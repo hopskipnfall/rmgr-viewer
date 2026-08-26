@@ -1556,8 +1556,8 @@ export class StageRenderer {
     const topY = y - heightPx;
     const noseY = centerY;
 
-    // Default label vertical position is above the character model
-    let labelY = topY - 8;
+    // Default label vertical position is generously above the character model
+    let labelY = topY - 18;
 
     // Draw shield bubble/oval if character is in a shield state
     const shielding = isShieldState(post.actionStateId);
@@ -1566,7 +1566,7 @@ export class StageRenderer {
       const shieldStun = isShieldStunState(post.actionStateId);
       const radiusX = halfWidth * 1.35;
       const radiusY = heightPx * 0.65;
-      labelY = Math.min(labelY, centerY - radiusY - 6);
+      labelY = Math.min(labelY, centerY - radiusY - 14);
 
       if (shieldStun) {
         // High-energy vibrating shield stun impact effect
@@ -1707,7 +1707,7 @@ export class StageRenderer {
         const baseRadius = Math.max(halfWidth, heightPx * 0.5);
         const topRadius =
           attack.type === "smash" ? baseRadius * 2.2 : baseRadius * 1.55;
-        labelY = Math.min(labelY, centerY - topRadius - 8);
+        labelY = Math.min(labelY, centerY - topRadius - 16);
       }
     }
 
@@ -1731,7 +1731,7 @@ export class StageRenderer {
         falconSpecial === "dive_reach" ||
         falconSpecial === "dive_explosion"
       ) {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
       }
     }
 
@@ -1779,7 +1779,7 @@ export class StageRenderer {
         foxSpecial === "shine_end" ||
         foxSpecial === "firefox_charge"
       ) {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
       }
     }
 
@@ -1835,7 +1835,7 @@ export class StageRenderer {
         post.actionFrameCounter,
       );
       if (nessSpecial === "pk_thunder_charge" || nessSpecial === "psi_magnet") {
-        labelY = Math.min(labelY, centerY - heightPx * 0.9 - 8);
+        labelY = Math.min(labelY, centerY - heightPx * 0.9 - 16);
       }
     }
 
@@ -1875,7 +1875,7 @@ export class StageRenderer {
         post.actionFrameCounter,
       );
       if (samusSpecial === "screw_attack") {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
       }
     }
 
@@ -1896,7 +1896,7 @@ export class StageRenderer {
         post.actionFrameCounter,
       );
       if (linkSpecial === "spin_attack") {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
       }
     }
 
@@ -1936,7 +1936,7 @@ export class StageRenderer {
         post.actionFrameCounter,
       );
       if (puffSpecial === "sing" || puffSpecial === "rest") {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
       }
     }
 
@@ -1980,9 +1980,9 @@ export class StageRenderer {
       port !== perspectivePort;
 
     if (isProne) {
-      labelY = y - 18;
+      labelY = y - 28;
     } else if (isDizzy) {
-      labelY = Math.min(labelY, topY - 26);
+      labelY = Math.min(labelY, topY - 36);
     }
 
     const animState: CharacterAnimState = {
@@ -2399,7 +2399,7 @@ export class StageRenderer {
     // Active combo hits count (large punchy number) if 2 or more hits in combo
     if (comboHits >= 2) {
       const comboText = `${comboHits}`;
-      const comboY = labelY - 18;
+      const comboY = labelY - 20;
 
       ctx.save();
       ctx.font = "900 20px system-ui, -apple-system, sans-serif";
@@ -2435,7 +2435,7 @@ export class StageRenderer {
           : OPPONENT_COLOR
         : getPlayerColor(port, perspectivePort);
 
-      const nameTagBottomY = comboHits >= 2 ? labelY - 34 : labelY - 18;
+      const nameTagBottomY = comboHits >= 2 ? labelY - 38 : labelY - 20;
       this.drawPlayerNameTag(
         x,
         nameTagBottomY,
