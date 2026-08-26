@@ -325,8 +325,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFilterAngel: "Angel",
     logFilterNeutral: "Neutral",
     logFilterCharacter: "Character",
-    hudOverlay: "Log",
-    hudOverlayShow: "Log",
+    hudOverlay: "LOG",
+    hudOverlayShow: "LOG",
     hudOverlayHide: "Hide Log",
     hudOverlayTitle: "Toggle on-screen event log",
 

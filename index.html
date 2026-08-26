@@ -1184,7 +1184,6 @@
         pointer-events: none;
         display: flex;
         flex-direction: column;
-        align-items: flex-start;
         gap: 6px;
         z-index: 10;
         max-width: 440px;
@@ -1196,7 +1195,6 @@
         display: flex;
         flex-direction: column;
         gap: 4px;
-        pointer-events: none;
       }
       .overlay-entry {
         display: flex;
@@ -1236,36 +1234,32 @@
         border-left-color: var(--accent);
       }
       .hud-toggle-btn {
-        pointer-events: auto;
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.04em;
-        padding: 5px 9px;
+        padding: 6px 10px;
         border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
+        border: 1px solid var(--panel-border);
         cursor: pointer;
-        background: rgba(18, 20, 26, 0.85);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: #181a20;
         color: #717684;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
         transition:
           background 0.1s,
           color 0.1s,
           border-color 0.1s;
       }
       .hud-toggle-btn:hover {
-        background: rgba(34, 37, 47, 0.95);
+        background: #22252f;
         color: #9da3b4;
-        border-color: rgba(255, 255, 255, 0.25);
+        border-color: #3b4050;
       }
       .hud-toggle-btn.active {
-        background: rgba(26, 30, 42, 0.92);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: #22252f;
+        border: 1px solid var(--panel-border);
         color: var(--text);
       }
       .hud-toggle-btn.active:hover {
-        background: rgba(44, 48, 64, 0.95);
+        background: #2c3040;
       }
       .speed-menu-container {
         position: relative;
@@ -2524,13 +2518,6 @@
             ✕ Exit Overlay
           </button>
           <div id="stageOverlay">
-            <button
-              id="hudToggleBtn"
-              class="hud-toggle-btn active"
-              title="Toggle on-screen event log"
-            >
-              Hide Log
-            </button>
             <div id="stageOverlayList"></div>
           </div>
         </div>
@@ -2811,6 +2798,13 @@
           </button>
         </div>
       </div>
+      <button
+        id="hudToggleBtn"
+        class="hud-toggle-btn active"
+        title="Toggle on-screen event log"
+      >
+        LOG
+      </button>
       <input type="range" id="scrubber" min="0" max="0" value="0" />
       <span id="frameLabel"></span>
     </footer>

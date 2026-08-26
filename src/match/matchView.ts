@@ -525,7 +525,7 @@ export class MatchViewController {
 
     this.hudToggleBtn.addEventListener("click", () => {
       this.hudOverlayEnabled = !this.hudOverlayEnabled;
-      this.updateHudToggleBtnLabel();
+      this.hudToggleBtn.classList.toggle("active", this.hudOverlayEnabled);
       try {
         localStorage.setItem("rmgr-viewer-hud", String(this.hudOverlayEnabled));
       } catch {
@@ -534,7 +534,7 @@ export class MatchViewController {
       this.updateEventLogHighlight(this.playback?.currentIndex ?? 0);
     });
 
-    this.updateHudToggleBtnLabel();
+    this.hudToggleBtn.classList.toggle("active", this.hudOverlayEnabled);
 
     this.playPauseBtn.addEventListener("click", () => {
       this.dismissQuickAttackOverlay();
@@ -694,7 +694,10 @@ export class MatchViewController {
       this.diWidgetTitleEl.textContent = tr.diWidgetTitle;
     if (this.diCollapseBtn)
       this.diCollapseBtn.title = tr.situationCollapseTitle(tr.diWidgetTitle);
-    this.updateHudToggleBtnLabel();
+    if (this.hudToggleBtn) {
+      this.hudToggleBtn.textContent = tr.hudOverlay;
+      this.hudToggleBtn.title = tr.hudOverlayTitle;
+    }
     if (this.qaOverlayExitBtn) {
       this.qaOverlayExitBtn.textContent = "✕ " + tr.hideQuickAttackOverlayBtn;
     }
@@ -1357,13 +1360,16 @@ export class MatchViewController {
       }
     }
 
-    this.stageOverlayList.innerHTML = "";
     if (
-      this.hudOverlayEnabled &&
-      activeIdx !== -1 &&
-      this.currentLogEvents.length > 0 &&
-      this.currentReplay
+      !this.hudOverlayEnabled ||
+      activeIdx === -1 ||
+      this.currentLogEvents.length === 0 ||
+      !this.currentReplay
     ) {
+      this.stageOverlay.hidden = true;
+    } else {
+      this.stageOverlay.hidden = false;
+      this.stageOverlayList.innerHTML = "";
       const startIdx = Math.max(0, activeIdx - 2);
       for (let i = startIdx; i <= activeIdx; i++) {
         const ev = this.currentLogEvents[i];
@@ -1380,16 +1386,6 @@ export class MatchViewController {
         this.stageOverlayList.appendChild(entry);
       }
     }
-  }
-
-  private updateHudToggleBtnLabel(): void {
-    if (!this.hudToggleBtn) return;
-    const tr = t();
-    this.hudToggleBtn.textContent = this.hudOverlayEnabled
-      ? tr.hudOverlayHide
-      : tr.hudOverlayShow;
-    this.hudToggleBtn.title = tr.hudOverlayTitle;
-    this.hudToggleBtn.classList.toggle("active", this.hudOverlayEnabled);
   }
 
   private renderStatsPanel(replay: Replay): void {
