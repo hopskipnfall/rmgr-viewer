@@ -1912,21 +1912,43 @@ export class MatchViewController {
 
     this.neutralHitsWidget.hidden = false;
 
-    const createRow = (e: NeutralHitEvent, index: number): HTMLElement => {
+    const createRow = (e: NeutralHitEvent): HTMLElement => {
       const row = document.createElement("div");
-      row.className = "situation-row";
+      row.className = "situation-row neutral-interaction-row";
       row.dataset.frameIndex = String(e.frameIndex);
+      row.dataset.endFrameIndex = String(e.endFrameIndex ?? e.frameIndex + 60);
 
-      const indexEl = document.createElement("span");
-      indexEl.className = "situation-index";
-      indexEl.textContent = `#${index + 1}`;
+      // Left column: Elapsed Time (top) and Frame Number (bottom)
+      const timeCol = document.createElement("div");
+      timeCol.className = "neutral-time-col";
 
       const timeEl = document.createElement("span");
       timeEl.className = "situation-time";
-      timeEl.textContent = `${formatElapsed(e.frameIndex)} (${e.frame}F)`;
+      timeEl.textContent = formatElapsed(e.frameIndex);
+
+      const frameEl = document.createElement("span");
+      frameEl.className = "situation-frame";
+      frameEl.textContent = `${e.frame}F`;
+
+      timeCol.appendChild(timeEl);
+      timeCol.appendChild(frameEl);
+      row.appendChild(timeCol);
+
+      // Right area: chips flow in order, left-aligned, wrapping if needed
+      const chipsWrap = document.createElement("div");
+      chipsWrap.className = "neutral-chips-wrap";
 
       const badgeEl = document.createElement("span");
+      badgeEl.dataset.chip = "reason";
+      badgeEl.dataset.startFrame = String(e.frameIndex);
+      badgeEl.dataset.endFrame = String(
+        e.openingEndFrameIndex ?? e.frameIndex + 30,
+      );
       switch (e.reason) {
+        case "shield-pressure":
+          badgeEl.className = "neutral-badge-shield";
+          badgeEl.textContent = tr.neutralReasonShieldPressure;
+          break;
         case "landing-lag":
           badgeEl.className = "neutral-badge-landing";
           badgeEl.textContent = tr.neutralReasonLandingLag;
@@ -1954,10 +1976,63 @@ export class MatchViewController {
       if (e.reasonDetail) {
         badgeEl.title = e.reasonDetail;
       }
+      chipsWrap.appendChild(badgeEl);
 
-      row.appendChild(indexEl);
-      row.appendChild(timeEl);
-      row.appendChild(badgeEl);
+      if (e.totalHitsLanded !== undefined && e.totalHitsLanded > 1) {
+        const hitsBadge = document.createElement("span");
+        hitsBadge.className = "neutral-badge-hits";
+        hitsBadge.dataset.chip = "hits";
+        hitsBadge.dataset.startFrame = String(e.frameIndex);
+        hitsBadge.dataset.endFrame = String(
+          e.lastHitFrameIndex ?? e.frameIndex + 45,
+        );
+        hitsBadge.textContent = tr.neutralHitsBadge(e.totalHitsLanded);
+        chipsWrap.appendChild(hitsBadge);
+      }
+
+      if (e.convertedToEdgeGuard) {
+        const egBadge = document.createElement("span");
+        egBadge.className = "neutral-badge-conversion";
+        egBadge.dataset.chip = "edge-guard";
+        egBadge.dataset.startFrame = String(
+          e.edgeGuardStartFrameIndex ?? e.frameIndex,
+        );
+        egBadge.dataset.endFrame = String(
+          e.edgeGuardEndFrameIndex ?? e.endFrameIndex ?? e.frameIndex + 60,
+        );
+        egBadge.textContent = tr.neutralConversionEdgeGuard;
+        chipsWrap.appendChild(egBadge);
+      }
+
+      if (e.convertedToLedgeTrap) {
+        const ltBadge = document.createElement("span");
+        ltBadge.className = "neutral-badge-conversion";
+        ltBadge.dataset.chip = "ledge-trap";
+        ltBadge.dataset.startFrame = String(
+          e.ledgeTrapStartFrameIndex ?? e.frameIndex,
+        );
+        ltBadge.dataset.endFrame = String(
+          e.ledgeTrapEndFrameIndex ?? e.endFrameIndex ?? e.frameIndex + 60,
+        );
+        ltBadge.textContent = tr.neutralConversionLedgeTrap;
+        chipsWrap.appendChild(ltBadge);
+      }
+
+      if (e.convertedToKill) {
+        const koBadge = document.createElement("span");
+        koBadge.className = "neutral-badge-ko";
+        koBadge.dataset.chip = "ko";
+        koBadge.dataset.startFrame = String(
+          e.killFrameIndex ?? e.endFrameIndex ?? e.frameIndex,
+        );
+        koBadge.dataset.endFrame = String(
+          (e.killFrameIndex ?? e.endFrameIndex ?? e.frameIndex) + 60,
+        );
+        koBadge.textContent = tr.neutralConversionKO;
+        chipsWrap.appendChild(koBadge);
+      }
+
+      row.appendChild(chipsWrap);
 
       row.addEventListener("click", () => {
         this.dismissQuickAttackOverlay();
@@ -1982,33 +2057,33 @@ export class MatchViewController {
       const filterContainer = document.createElement("div");
       filterContainer.className = "neutral-filters";
 
-      const allBtn = document.createElement("button");
-      allBtn.className = `neutral-filter-btn filter-all${this.neutralHitFilter === "all" ? " active" : ""}`;
-      allBtn.textContent = tr.neutralFilterAll(this.neutralHitEvents.length);
-      allBtn.addEventListener("click", () => {
+      const btnAll = document.createElement("button");
+      btnAll.className = `neutral-filter-btn${this.neutralHitFilter === "all" ? " active" : ""}`;
+      btnAll.textContent = tr.neutralFilterAll(this.neutralHitEvents.length);
+      btnAll.addEventListener("click", () => {
         this.neutralHitFilter = "all";
         this.renderNeutralHitsPanel(replay);
       });
 
-      const openingsBtn = document.createElement("button");
-      openingsBtn.className = `neutral-filter-btn filter-openings${this.neutralHitFilter === "openings" ? " active" : ""}`;
-      openingsBtn.textContent = tr.neutralFilterOpenings(openingsCount);
-      openingsBtn.addEventListener("click", () => {
+      const btnOpenings = document.createElement("button");
+      btnOpenings.className = `neutral-filter-btn${this.neutralHitFilter === "openings" ? " active" : ""}`;
+      btnOpenings.textContent = tr.neutralFilterOpenings(openingsCount);
+      btnOpenings.addEventListener("click", () => {
         this.neutralHitFilter = "openings";
         this.renderNeutralHitsPanel(replay);
       });
 
-      const punishesBtn = document.createElement("button");
-      punishesBtn.className = `neutral-filter-btn filter-punishes${this.neutralHitFilter === "punishes" ? " active" : ""}`;
-      punishesBtn.textContent = tr.neutralFilterPunishes(punishesCount);
-      punishesBtn.addEventListener("click", () => {
+      const btnPunishes = document.createElement("button");
+      btnPunishes.className = `neutral-filter-btn${this.neutralHitFilter === "punishes" ? " active" : ""}`;
+      btnPunishes.textContent = tr.neutralFilterPunishes(punishesCount);
+      btnPunishes.addEventListener("click", () => {
         this.neutralHitFilter = "punishes";
         this.renderNeutralHitsPanel(replay);
       });
 
-      filterContainer.appendChild(allBtn);
-      filterContainer.appendChild(openingsBtn);
-      filterContainer.appendChild(punishesBtn);
+      filterContainer.appendChild(btnAll);
+      filterContainer.appendChild(btnOpenings);
+      filterContainer.appendChild(btnPunishes);
       this.neutralHitsList.appendChild(filterContainer);
     }
 
@@ -2036,8 +2111,8 @@ export class MatchViewController {
             : tr.noNeutralHits;
       this.neutralHitsList.appendChild(empty);
     } else {
-      eventsToRender.forEach((e, idx) => {
-        const row = createRow(e, idx);
+      eventsToRender.forEach((e) => {
+        const row = createRow(e);
         if (this.perspectivePort !== null) {
           if (e.attackerPort === this.perspectivePort) {
             row.classList.add("neutral-row-opening");
@@ -2055,10 +2130,23 @@ export class MatchViewController {
       ".situation-row[data-frame-index]",
     );
     rows.forEach((row) => {
-      const frameIndex = Number(row.dataset.frameIndex);
+      const startFrame = Number(row.dataset.frameIndex);
+      const endFrame = Number(
+        row.dataset.endFrameIndex ?? String(startFrame + 60),
+      );
       const isActive =
-        currentFrameIndex >= frameIndex && currentFrameIndex <= frameIndex + 60;
+        currentFrameIndex >= startFrame && currentFrameIndex <= endFrame;
       row.classList.toggle("active", isActive);
+
+      // Highlight individual chips when their exact phase occurs
+      const chips = row.querySelectorAll<HTMLElement>("[data-start-frame]");
+      chips.forEach((chip) => {
+        const chipStart = Number(chip.dataset.startFrame);
+        const chipEnd = Number(chip.dataset.endFrame);
+        const isChipActive =
+          currentFrameIndex >= chipStart && currentFrameIndex <= chipEnd;
+        chip.classList.toggle("active-chip", isChipActive);
+      });
     });
   }
 
@@ -2089,13 +2177,9 @@ export class MatchViewController {
 
     const allHits = extractAllHitsWithDI(replay);
 
-    combos.forEach((c, index) => {
+    combos.forEach((c) => {
       const row = document.createElement("div");
       row.className = "situation-row";
-
-      const indexEl = document.createElement("span");
-      indexEl.className = "situation-index";
-      indexEl.textContent = `#${index + 1}`;
 
       const timeEl = document.createElement("span");
       timeEl.className = "situation-time";
@@ -2113,7 +2197,6 @@ export class MatchViewController {
       koBadgeEl.className = "combo-kill-badge";
       koBadgeEl.textContent = tr.comboKillBadge;
 
-      row.appendChild(indexEl);
       row.appendChild(timeEl);
       row.appendChild(hitsEl);
       row.appendChild(dmgEl);

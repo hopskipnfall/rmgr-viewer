@@ -1,10 +1,16 @@
-import { getSeatedPorts, type PortIndex, type Replay } from "@rmg-k/rmgr";
+import {
+  getSeatedPorts,
+  isShieldStunState,
+  type PortIndex,
+  type Replay,
+} from "@rmg-k/rmgr";
 import { buildRecoveryMap, buildLedgeMap } from "./ledgeTrap.js";
+import { isHitstunState } from "./edgeGuard.js";
 
 const PORTS: readonly PortIndex[] = [0, 1, 2, 3];
 
 /** Action states where the player is captured/held/thrown by a grab. */
-const CAPTURE_STATES = new Set([
+export const CAPTURE_STATES = new Set([
   0x0ab, // CapturePulled
   0x0ac, // CaptureWait
   0x0ad, // CaptureDamage
@@ -25,87 +31,74 @@ const CAPTURE_STATES = new Set([
   0x0bc,
 ]);
 
-/**
- * For each seated port, how many neutral hits (fresh combos or grabs) that
- * port has taken in its *current* stock, indexed the same way as `replay.frames`
- * (so `result[port][frameIndex]` matches `replay.frames[frameIndex]`). Resets
- * to 0 starting the frame after `stocksRemaining` drops.
- *
- * Excludes hits landed while the victim is in an active recovery situation or
- * ledge getup situation.
- */
-export function computeNeutralHitsPerStock(
-  replay: Replay,
-): Partial<Record<PortIndex, readonly number[]>> {
-  const result: Partial<Record<PortIndex, number[]>> = {};
-  const seated = getSeatedPorts(replay);
-  const recoveryMap =
-    seated.length === 2
-      ? buildRecoveryMap(replay, seated[0]!, seated[1]!)
-      : null;
-  const ledgeMap = seated.length === 2 ? buildLedgeMap(replay) : null;
+/** Action states corresponding to dead or respawning sequences. */
+export const DEAD_OR_RESPAWNING_STATES = new Set([
+  0x000, // DeadD
+  0x001, // DeadS
+  0x002, // DeadU
+  0x003, // ScreenKO
+  0x004, // ScreenKOWait
+  0x005, // Entry
+  0x007, // Revive1
+  0x008, // Revive2
+  0x009, // ReviveWait
+]);
 
-  for (const port of PORTS) {
-    const values: number[] = new Array(replay.frames.length).fill(0);
-    let neutralHits = 0;
-    let lastComboHitCount: number | undefined;
-    let lastStocksRemaining: number | undefined;
-    let lastInCapture = false;
+/** Action states corresponding strictly to death / KO animations (blast zones). */
+export const DEAD_STATES = new Set([
+  0x000, // DeadD
+  0x001, // DeadS
+  0x002, // DeadU
+  0x003, // ScreenKO
+  0x004, // ScreenKOWait
+]);
 
-    for (let i = 0; i < replay.frames.length; i++) {
-      const post = replay.frames[i]?.ports[port]?.post;
-      if (!post) {
-        values[i] = neutralHits;
-        continue;
-      }
+/** Action states for spawn/respawn platforms. */
+const RESPAWN_STATES = new Set([0x005, 0x007, 0x008, 0x009]);
 
-      const inCapture = CAPTURE_STATES.has(post.actionStateId);
-      const isFreshAttackHit =
-        lastComboHitCount !== undefined
-          ? lastComboHitCount === 0 && post.comboHitCount > 0 && !lastInCapture
-          : post.comboHitCount > 0;
-      const isFreshGrab = inCapture && !lastInCapture;
+/** Duration of spawn invulnerability after dropping off the revival platform (120f = 2.0s). */
+const POST_DROP_INVULNERABILITY_FRAMES = 120;
 
-      const isDisadvantage =
-        (recoveryMap !== null && recoveryMap[i] === port) ||
-        (ledgeMap !== null && ledgeMap[i] === port);
-
-      if ((isFreshAttackHit || isFreshGrab) && !isDisadvantage) {
-        neutralHits++;
-      }
-
-      values[i] = neutralHits;
-
-      const stockLost =
-        lastStocksRemaining !== undefined &&
-        post.stocksRemaining < lastStocksRemaining;
-      if (stockLost) {
-        neutralHits = 0; // takes effect starting the next frame
-      }
-
-      lastComboHitCount = post.comboHitCount;
-      lastStocksRemaining = post.stocksRemaining;
-      lastInCapture = inCapture;
-    }
-
-    result[port] = values;
-  }
-
-  return result;
-}
+/** Frames of continuous mutual actionable state required to officially reset to neutral. */
+export const NEUTRAL_RESET_FRAMES = 60; // 1.0 s at 60 fps
 
 export type NeutralOpeningReason =
-  "landing-lag" | "whiff-punish" | "jump-punish" | "standing-hit" | "unknown";
+  | "shield-pressure"
+  | "landing-lag"
+  | "whiff-punish"
+  | "jump-punish"
+  | "standing-hit"
+  | "unknown";
+
+export type NeutralInteractionOutcome =
+  "reset" | "ko" | "reversal" | "incomplete";
 
 export interface NeutralHitEvent {
   readonly frame: number;
   readonly frameIndex: number;
+  readonly endFrame?: number;
+  readonly endFrameIndex?: number;
   readonly kind: "neutral-hit";
   readonly attackerPort: PortIndex;
   readonly victimPort: PortIndex;
   readonly hitType: "attack" | "grab";
   readonly reason: NeutralOpeningReason;
   readonly reasonDetail?: string;
+  readonly winnerPort?: PortIndex | null;
+  readonly totalHitsLanded?: number;
+  readonly totalDamageDealt?: number;
+  readonly damageTakenDuringAdvantage?: number;
+  readonly convertedToEdgeGuard?: boolean;
+  readonly convertedToLedgeTrap?: boolean;
+  readonly convertedToKill?: boolean;
+  readonly outcome?: NeutralInteractionOutcome;
+  readonly openingEndFrameIndex?: number;
+  readonly lastHitFrameIndex?: number;
+  readonly edgeGuardStartFrameIndex?: number;
+  readonly edgeGuardEndFrameIndex?: number;
+  readonly ledgeTrapStartFrameIndex?: number;
+  readonly ledgeTrapEndFrameIndex?: number;
+  readonly killFrameIndex?: number;
 }
 
 /** Action states corresponding to landing lag. */
@@ -176,13 +169,67 @@ export function isAirborneActionState(actionStateId: number): boolean {
 }
 
 /**
+ * Returns true if the player is in a fully actionable state (can move/shield/attack/jump).
+ * Excludes hitstun, grab capture, tumble with hitstun, knockdown/prone, shield stun, and dead/respawn states.
+ */
+export function isActionableState(
+  actionStateId: number,
+  hitstunCounter: number,
+): boolean {
+  if (isHitstunState(actionStateId, hitstunCounter)) return false;
+  if (CAPTURE_STATES.has(actionStateId)) return false;
+  if (DEAD_OR_RESPAWNING_STATES.has(actionStateId)) return false;
+  if (actionStateId >= 0x032 && actionStateId <= 0x037) return false; // DownBound, DownWait, DownDamage, DownStand, DownForward, DownBack
+  if (actionStateId === 0x023) return false; // ShieldStun
+  if (actionStateId === 0x039 && hitstunCounter > 0) return false; // Tumble with hitstun
+  return true;
+}
+
+/**
+ * Builds a boolean lookup map indicating if angel (spawn/respawn) invincibility is active on each frame.
+ */
+export function buildAngelMap(
+  replay: Replay,
+  portA: PortIndex,
+  portB: PortIndex,
+): boolean[] {
+  const map: boolean[] = new Array(replay.frames.length).fill(false);
+  for (const p of [portA, portB]) {
+    let inPlatform = false;
+    for (let i = 0; i < replay.frames.length; i++) {
+      const f = replay.frames[i];
+      if (!f) continue;
+      const post = f.ports[p]?.post;
+      if (!post) continue;
+
+      const isPlat = RESPAWN_STATES.has(post.actionStateId);
+      if (isPlat) {
+        inPlatform = true;
+        map[i] = true;
+      } else if (inPlatform) {
+        inPlatform = false;
+        const end = Math.min(
+          replay.frames.length,
+          i + POST_DROP_INVULNERABILITY_FRAMES,
+        );
+        for (let j = i; j < end; j++) {
+          map[j] = true;
+        }
+      }
+    }
+  }
+  return map;
+}
+
+/**
  * Classifies why a neutral opening occurred on `victimPort` at `hitFrameIndex`.
  * Evaluated strictly in order:
- * 1. Landing lag (attacked/grabbed while in landing lag state)
- * 2. Whiff punish (attacked within 0.5s = 30F of an attack ending without hitting)
- * 3. Jump interception (jumped without attacking and attacked within 0.5s = 30F)
- * 4. Standing hit (attacked while grounded in neutral)
- * 5. Unknown (fallback)
+ * 1. Unsafe Shield Pressure (victim attacked into attacker's shield, punished out of shield)
+ * 2. Land Punish (attacked within 0.5s = 30F of landing on the ground)
+ * 3. Whiff Punish (attacked within 0.5s = 30F of an attack ending without hitting)
+ * 4. Jump Punish (jumped without attacking and attacked within 0.5s = 30F)
+ * 5. Standing Hit / Grab (attacked while grounded in neutral)
+ * 6. Unknown (fallback)
  */
 export function classifyNeutralOpening(
   replay: Replay,
@@ -193,22 +240,67 @@ export function classifyNeutralOpening(
   const victimPrevPost =
     replay.frames[hitFrameIndex - 1]?.ports[victimPort]?.post;
   if (!victimPrevPost) return { reason: "unknown" };
+  const isVictimAirborneAtHit =
+    isAirborneActionState(victimPrevPost.actionStateId) ||
+    Math.abs(victimPrevPost.positionY) > 5;
 
-  // Rule 1: Attacked/grabbed immediately after landing (while in a landing lag state)
-  // Check the victim's state immediately prior to hit impact (up to 3 frames back)
-  for (let k = 1; k <= 3; k++) {
+  // Rule 1: Unsafe Shield Pressure
+  // Check if victim attacked into attacker's shield within preceding 45 frames (0.75s)
+  let victimAttackedIntoShield = false;
+  for (let k = 1; k <= 45; k++) {
     const f = hitFrameIndex - k;
     if (f < 0) break;
-    const post = replay.frames[f]?.ports[victimPort]?.post;
-    if (post && isLandingLagActionState(post.actionStateId)) {
+    const vPost = replay.frames[f]?.ports[victimPort]?.post;
+    const aPost = replay.frames[f]?.ports[attackerPort]?.post;
+    if (!vPost || !aPost) continue;
+
+    if (isAttackActionState(vPost.actionStateId)) {
+      if (
+        isShieldStunState(aPost.actionStateId) ||
+        aPost.actionStateId === 0x09b ||
+        aPost.actionStateId === 0x023
+      ) {
+        victimAttackedIntoShield = true;
+        break;
+      }
+    }
+  }
+
+  if (victimAttackedIntoShield) {
+    return {
+      reason: "shield-pressure",
+      reasonDetail: "Attacked into shield (punished out of shield)",
+    };
+  }
+
+  // Rule 2: Land Punish — Attacked on ground within 0.5s (30 frames) of landing from the air
+  if (!isVictimAirborneAtHit) {
+    let framesSinceLanding = -1;
+    for (let k = 1; k <= 30; k++) {
+      const f = hitFrameIndex - k;
+      if (f < 0) break;
+      const post = replay.frames[f]?.ports[victimPort]?.post;
+      if (!post) continue;
+
+      if (
+        isLandingLagActionState(post.actionStateId) ||
+        isAirborneActionState(post.actionStateId) ||
+        Math.abs(post.positionY) > 5
+      ) {
+        framesSinceLanding = k;
+        break;
+      }
+    }
+
+    if (framesSinceLanding !== -1) {
       return {
         reason: "landing-lag",
-        reasonDetail: "Attacked/grabbed in landing lag",
+        reasonDetail: `Attacked within ${(framesSinceLanding / 60).toFixed(2)}s of landing`,
       };
     }
   }
 
-  // Rule 2: Attacked immediately after attacking and missing (within 0.5s = 30 frames of attack ending)
+  // Rule 3: Whiff Punish — Attacked immediately after attacking and missing (within 0.5s = 30 frames of attack ending)
   let foundAttackEnd = -1;
   let attackHadHit = false;
 
@@ -219,12 +311,11 @@ export function classifyNeutralOpening(
     if (!post) continue;
 
     if (isAttackActionState(post.actionStateId)) {
-      if (foundAttackEnd === -1) {
-        foundAttackEnd = f + 1;
-      }
-      const attackerPost = replay.frames[f]?.ports[attackerPort]?.post;
-      if (attackerPost && attackerPost.comboHitCount > 0) {
+      if (post.comboHitCount > 0) {
         attackHadHit = true;
+      }
+      if (foundAttackEnd === -1) {
+        foundAttackEnd = f;
       }
     } else if (foundAttackEnd !== -1) {
       break;
@@ -241,7 +332,7 @@ export function classifyNeutralOpening(
     }
   }
 
-  // Rule 3: Jumped from ground or platform (without using an attack) and attacked within 0.5s (30 frames)
+  // Rule 4: Jump Punish — Jumped from ground or platform (without using an attack) and attacked within 0.5s (30 frames)
   let foundJumpStart = -1;
   let usedAttackDuringJump = false;
 
@@ -272,8 +363,8 @@ export function classifyNeutralOpening(
     }
   }
 
-  // Rule 4: Got hit with an attack while standing / grounded neutral
-  if (!isAirborneActionState(victimPrevPost.actionStateId)) {
+  // Rule 5: Got hit with an attack while standing / grounded neutral
+  if (!isVictimAirborneAtHit) {
     return {
       reason: "standing-hit",
       reasonDetail: "Hit while grounded in neutral",
@@ -286,8 +377,9 @@ export function classifyNeutralOpening(
 }
 
 /**
- * Computes all neutral hit and grab events in chronological order,
- * excluding hits that occur during recovery or ledge getup situations.
+ * Computes all neutral interactions and opening events in chronological order.
+ * Tracks end-to-end advantage chains from first contact through follow-up hits,
+ * situation conversions (offstage edge guard, ledge trap), and neutral reset (60F mutual actionable).
  */
 export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
   const events: NeutralHitEvent[] = [];
@@ -297,7 +389,38 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
   const [portA, portB] = seated as [PortIndex, PortIndex];
   const recoveryMap = buildRecoveryMap(replay, portA, portB);
   const ledgeMap = buildLedgeMap(replay);
+  const angelMap = buildAngelMap(replay, portA, portB);
 
+  interface ActiveInteraction {
+    frame: number;
+    frameIndex: number;
+    attackerPort: PortIndex;
+    victimPort: PortIndex;
+    hitType: "attack" | "grab";
+    reason: NeutralOpeningReason;
+    reasonDetail?: string;
+    firstContactPort: PortIndex;
+    winnerPort: PortIndex | null;
+    totalHitsA: number;
+    totalHitsB: number;
+    damageAtEntryA: number;
+    damageAtEntryB: number;
+    stocksAtEntryA: number;
+    stocksAtEntryB: number;
+    convertedToEdgeGuard: boolean;
+    convertedToLedgeTrap: boolean;
+    convertedToKill: boolean;
+    consecutiveActionableFrames: number;
+    openingEndFrameIndex?: number;
+    lastHitFrameIndex?: number;
+    edgeGuardStartFrameIndex?: number;
+    edgeGuardEndFrameIndex?: number;
+    ledgeTrapStartFrameIndex?: number;
+    ledgeTrapEndFrameIndex?: number;
+    killFrameIndex?: number;
+  }
+
+  let active: ActiveInteraction | null = null;
   let lastACombo: number | undefined;
   let lastBCombo: number | undefined;
   let lastAInCapture = false;
@@ -314,59 +437,340 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
     const aInCapture = CAPTURE_STATES.has(postA.actionStateId);
     const bInCapture = CAPTURE_STATES.has(postB.actionStateId);
 
-    const bInDisadvantage = recoveryMap[i] === portB || ledgeMap[i] === portB;
-    const aInDisadvantage = recoveryMap[i] === portA || ledgeMap[i] === portA;
-
-    // Check if A hit/grabbed B
-    const aHitB =
-      (lastBCombo === 0 || lastBCombo === undefined) &&
-      postB.comboHitCount > 0 &&
-      !lastBInCapture;
+    const aHitB = postB.comboHitCount > (lastBCombo ?? 0) && !lastBInCapture;
     const aGrabbedB = bInCapture && !lastBInCapture;
 
-    if ((aHitB || aGrabbedB) && !bInDisadvantage) {
-      const { reason, reasonDetail } = classifyNeutralOpening(
-        replay,
-        i,
-        portB,
-        portA,
-      );
-      events.push({
-        frame: frameNumber,
-        frameIndex: i,
-        kind: "neutral-hit",
-        attackerPort: portA,
-        victimPort: portB,
-        hitType: aGrabbedB ? "grab" : "attack",
-        reason,
-        reasonDetail,
-      });
-    }
-
-    // Check if B hit/grabbed A
-    const bHitA =
-      (lastACombo === 0 || lastACombo === undefined) &&
-      postA.comboHitCount > 0 &&
-      !lastAInCapture;
+    const bHitA = postA.comboHitCount > (lastACombo ?? 0) && !lastAInCapture;
     const bGrabbedA = aInCapture && !lastAInCapture;
 
-    if ((bHitA || bGrabbedA) && !aInDisadvantage) {
-      const { reason, reasonDetail } = classifyNeutralOpening(
-        replay,
-        i,
-        portA,
-        portB,
-      );
-      events.push({
-        frame: frameNumber,
-        frameIndex: i,
-        kind: "neutral-hit",
-        attackerPort: portB,
-        victimPort: portA,
-        hitType: bGrabbedA ? "grab" : "attack",
-        reason,
-        reasonDetail,
-      });
+    const inDisadvantage =
+      recoveryMap[i] !== null ||
+      ledgeMap[i] !== null ||
+      angelMap[i] ||
+      DEAD_OR_RESPAWNING_STATES.has(postA.actionStateId) ||
+      DEAD_OR_RESPAWNING_STATES.has(postB.actionStateId);
+
+    if (active === null) {
+      // We are in True Neutral — check for fresh opening hit/grab
+      if (!inDisadvantage) {
+        const prevPostA = replay.frames[i - 1]?.ports[portA]?.post;
+        const prevPostB = replay.frames[i - 1]?.ports[portB]?.post;
+        const damageBeforeHitA = prevPostA
+          ? prevPostA.damagePercent
+          : postA.damagePercent;
+        const damageBeforeHitB = prevPostB
+          ? prevPostB.damagePercent
+          : postB.damagePercent;
+
+        if (aHitB || aGrabbedB) {
+          const { reason, reasonDetail } = classifyNeutralOpening(
+            replay,
+            i,
+            portB,
+            portA,
+          );
+          active = {
+            frame: frameNumber,
+            frameIndex: i,
+            attackerPort: portA,
+            victimPort: portB,
+            hitType: aGrabbedB ? "grab" : "attack",
+            reason,
+            reasonDetail,
+            firstContactPort: portA,
+            winnerPort: null,
+            totalHitsA: 1,
+            totalHitsB: 0,
+            damageAtEntryA: damageBeforeHitA,
+            damageAtEntryB: damageBeforeHitB,
+            stocksAtEntryA: postA.stocksRemaining,
+            stocksAtEntryB: postB.stocksRemaining,
+            convertedToEdgeGuard: false,
+            convertedToLedgeTrap: false,
+            convertedToKill: false,
+            consecutiveActionableFrames: 0,
+            openingEndFrameIndex: i + 30,
+            lastHitFrameIndex: i,
+          };
+        } else if (bHitA || bGrabbedA) {
+          const { reason, reasonDetail } = classifyNeutralOpening(
+            replay,
+            i,
+            portA,
+            portB,
+          );
+          active = {
+            frame: frameNumber,
+            frameIndex: i,
+            attackerPort: portB,
+            victimPort: portA,
+            hitType: bGrabbedA ? "grab" : "attack",
+            reason,
+            reasonDetail,
+            firstContactPort: portB,
+            winnerPort: null,
+            totalHitsA: 0,
+            totalHitsB: 1,
+            damageAtEntryA: damageBeforeHitA,
+            damageAtEntryB: damageBeforeHitB,
+            stocksAtEntryA: postA.stocksRemaining,
+            stocksAtEntryB: postB.stocksRemaining,
+            convertedToEdgeGuard: false,
+            convertedToLedgeTrap: false,
+            convertedToKill: false,
+            consecutiveActionableFrames: 0,
+            openingEndFrameIndex: i + 30,
+            lastHitFrameIndex: i,
+          };
+        }
+      }
+    } else {
+      // Active interaction ongoing
+      const att = active.attackerPort;
+      const vic = active.victimPort;
+      const attPost = att === portA ? postA : postB;
+      const vicPost = vic === portA ? postA : postB;
+      const attEntryStocks =
+        att === portA ? active.stocksAtEntryA : active.stocksAtEntryB;
+      const vicEntryStocks =
+        vic === portA ? active.stocksAtEntryA : active.stocksAtEntryB;
+
+      // 1. Check if a stock was lost
+      if (vicPost.stocksRemaining < vicEntryStocks) {
+        active.convertedToKill = true;
+        active.killFrameIndex = i;
+        active.winnerPort = att;
+        const totalDamageA = Math.max(
+          0,
+          postB.damagePercent - active.damageAtEntryB,
+        );
+        const totalDamageB = Math.max(
+          0,
+          postA.damagePercent - active.damageAtEntryA,
+        );
+        events.push({
+          frame: active.frame,
+          frameIndex: active.frameIndex,
+          endFrame: frameNumber,
+          endFrameIndex: i,
+          kind: "neutral-hit",
+          attackerPort: active.attackerPort,
+          victimPort: active.victimPort,
+          hitType: active.hitType,
+          reason: active.reason,
+          reasonDetail: active.reasonDetail,
+          winnerPort: active.winnerPort,
+          totalHitsLanded:
+            att === portA ? active.totalHitsA : active.totalHitsB,
+          totalDamageDealt: att === portA ? totalDamageA : totalDamageB,
+          damageTakenDuringAdvantage:
+            att === portA ? totalDamageB : totalDamageA,
+          convertedToEdgeGuard: active.convertedToEdgeGuard,
+          convertedToLedgeTrap: active.convertedToLedgeTrap,
+          convertedToKill: true,
+          outcome: "ko",
+          openingEndFrameIndex: active.openingEndFrameIndex,
+          lastHitFrameIndex: active.lastHitFrameIndex,
+          edgeGuardStartFrameIndex: active.edgeGuardStartFrameIndex,
+          edgeGuardEndFrameIndex: active.edgeGuardEndFrameIndex,
+          ledgeTrapStartFrameIndex: active.ledgeTrapStartFrameIndex,
+          ledgeTrapEndFrameIndex: active.ledgeTrapEndFrameIndex,
+          killFrameIndex: active.killFrameIndex,
+        });
+        active = null;
+      } else if (attPost.stocksRemaining < attEntryStocks) {
+        // Attacker lost stock (self-destruct or reversal KO)
+        active.winnerPort = vic;
+        active.killFrameIndex = i;
+        const totalDamageA = Math.max(
+          0,
+          postB.damagePercent - active.damageAtEntryB,
+        );
+        const totalDamageB = Math.max(
+          0,
+          postA.damagePercent - active.damageAtEntryA,
+        );
+        events.push({
+          frame: active.frame,
+          frameIndex: active.frameIndex,
+          endFrame: frameNumber,
+          endFrameIndex: i,
+          kind: "neutral-hit",
+          attackerPort: active.attackerPort,
+          victimPort: active.victimPort,
+          hitType: active.hitType,
+          reason: active.reason,
+          reasonDetail: active.reasonDetail,
+          winnerPort: vic,
+          totalHitsLanded:
+            att === portA ? active.totalHitsA : active.totalHitsB,
+          totalDamageDealt: att === portA ? totalDamageA : totalDamageB,
+          damageTakenDuringAdvantage:
+            att === portA ? totalDamageB : totalDamageA,
+          convertedToEdgeGuard: active.convertedToEdgeGuard,
+          convertedToLedgeTrap: active.convertedToLedgeTrap,
+          convertedToKill: false,
+          outcome: "reversal",
+          openingEndFrameIndex: active.openingEndFrameIndex,
+          lastHitFrameIndex: active.lastHitFrameIndex,
+          edgeGuardStartFrameIndex: active.edgeGuardStartFrameIndex,
+          edgeGuardEndFrameIndex: active.edgeGuardEndFrameIndex,
+          ledgeTrapStartFrameIndex: active.ledgeTrapStartFrameIndex,
+          ledgeTrapEndFrameIndex: active.ledgeTrapEndFrameIndex,
+          killFrameIndex: active.killFrameIndex,
+        });
+        active = null;
+      } else {
+        // 2. Check situation conversions
+        if (recoveryMap[i] === vic) {
+          active.convertedToEdgeGuard = true;
+          if (active.edgeGuardStartFrameIndex === undefined) {
+            active.edgeGuardStartFrameIndex = i;
+          }
+          active.edgeGuardEndFrameIndex = i;
+          if (active.winnerPort === null) active.winnerPort = att;
+        } else if (recoveryMap[i] === att || ledgeMap[i] === att) {
+          // Attacker got reversed and is now offstage / in disadvantage!
+          // Conclude the attacker's interaction as a reversal
+          const totalDamageA = Math.max(
+            0,
+            postB.damagePercent - active.damageAtEntryB,
+          );
+          const totalDamageB = Math.max(
+            0,
+            postA.damagePercent - active.damageAtEntryA,
+          );
+          const damageAttDealt = att === portA ? totalDamageA : totalDamageB;
+          const damageVicDealt = att === portA ? totalDamageB : totalDamageA;
+          events.push({
+            frame: active.frame,
+            frameIndex: active.frameIndex,
+            endFrame: frameNumber,
+            endFrameIndex: i,
+            kind: "neutral-hit",
+            attackerPort: active.attackerPort,
+            victimPort: active.victimPort,
+            hitType: active.hitType,
+            reason: active.reason,
+            reasonDetail: active.reasonDetail,
+            winnerPort: vic,
+            totalHitsLanded:
+              att === portA ? active.totalHitsA : active.totalHitsB,
+            totalDamageDealt: damageAttDealt,
+            damageTakenDuringAdvantage: damageVicDealt,
+            convertedToEdgeGuard: active.convertedToEdgeGuard,
+            convertedToLedgeTrap: active.convertedToLedgeTrap,
+            convertedToKill: false,
+            outcome: "reversal",
+            openingEndFrameIndex: active.openingEndFrameIndex,
+            lastHitFrameIndex: active.lastHitFrameIndex,
+            edgeGuardStartFrameIndex: active.edgeGuardStartFrameIndex,
+            edgeGuardEndFrameIndex: active.edgeGuardEndFrameIndex,
+            ledgeTrapStartFrameIndex: active.ledgeTrapStartFrameIndex,
+            ledgeTrapEndFrameIndex: active.ledgeTrapEndFrameIndex,
+            killFrameIndex: active.killFrameIndex,
+          });
+          active = null;
+          continue;
+        }
+
+        if (ledgeMap[i] === vic) {
+          active.convertedToLedgeTrap = true;
+          if (active.ledgeTrapStartFrameIndex === undefined) {
+            active.ledgeTrapStartFrameIndex = i;
+          }
+          active.ledgeTrapEndFrameIndex = i;
+          if (active.winnerPort === null) active.winnerPort = att;
+        }
+
+        // 3. Check follow-up hits or trades
+        if (aHitB || aGrabbedB) {
+          active.totalHitsA++;
+          active.lastHitFrameIndex = i;
+          active.consecutiveActionableFrames = 0;
+        }
+        if (bHitA || bGrabbedA) {
+          active.totalHitsB++;
+          active.lastHitFrameIndex = i;
+          active.consecutiveActionableFrames = 0;
+        }
+
+        // 4. Check neutral reset (60 consecutive mutual actionable frames)
+        if (inDisadvantage) {
+          active.consecutiveActionableFrames = 0;
+        } else {
+          const aActionable =
+            isActionableState(postA.actionStateId, postA.hitstunCounter) &&
+            postA.comboHitCount === 0 &&
+            !aInCapture;
+          const bActionable =
+            isActionableState(postB.actionStateId, postB.hitstunCounter) &&
+            postB.comboHitCount === 0 &&
+            !bInCapture;
+
+          if (aActionable && bActionable) {
+            active.consecutiveActionableFrames++;
+            if (active.consecutiveActionableFrames >= NEUTRAL_RESET_FRAMES) {
+              // Neutral reset reached!
+              const totalDamageA = Math.max(
+                0,
+                postB.damagePercent - active.damageAtEntryB,
+              );
+              const totalDamageB = Math.max(
+                0,
+                postA.damagePercent - active.damageAtEntryA,
+              );
+              const damageAttDealt =
+                att === portA ? totalDamageA : totalDamageB;
+              const damageVicDealt =
+                att === portA ? totalDamageB : totalDamageA;
+
+              if (active.winnerPort === null) {
+                if (damageAttDealt > damageVicDealt + 5) {
+                  active.winnerPort = att;
+                } else if (damageVicDealt > damageAttDealt + 5) {
+                  active.winnerPort = vic;
+                } else {
+                  active.winnerPort = att;
+                }
+              }
+
+              const outcome = active.winnerPort === att ? "reset" : "reversal";
+              events.push({
+                frame: active.frame,
+                frameIndex: active.frameIndex,
+                endFrame: frameNumber,
+                endFrameIndex: i,
+                kind: "neutral-hit",
+                attackerPort: active.attackerPort,
+                victimPort: active.victimPort,
+                hitType: active.hitType,
+                reason: active.reason,
+                reasonDetail: active.reasonDetail,
+                winnerPort: active.winnerPort,
+                totalHitsLanded:
+                  att === portA ? active.totalHitsA : active.totalHitsB,
+                totalDamageDealt: damageAttDealt,
+                damageTakenDuringAdvantage: damageVicDealt,
+                convertedToEdgeGuard: active.convertedToEdgeGuard,
+                convertedToLedgeTrap: active.convertedToLedgeTrap,
+                convertedToKill: false,
+                outcome,
+                openingEndFrameIndex: active.openingEndFrameIndex,
+                lastHitFrameIndex: active.lastHitFrameIndex,
+                edgeGuardStartFrameIndex: active.edgeGuardStartFrameIndex,
+                edgeGuardEndFrameIndex: active.edgeGuardEndFrameIndex,
+                ledgeTrapStartFrameIndex: active.ledgeTrapStartFrameIndex,
+                ledgeTrapEndFrameIndex: active.ledgeTrapEndFrameIndex,
+                killFrameIndex: active.killFrameIndex,
+              });
+              active = null;
+            }
+          } else {
+            active.consecutiveActionableFrames = 0;
+          }
+        }
+      }
     }
 
     lastACombo = postA.comboHitCount;
@@ -375,93 +779,165 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
     lastBInCapture = bInCapture;
   }
 
+  // If match ended with active interaction
+  if (active !== null) {
+    const att = active.attackerPort;
+    const vic = active.victimPort;
+    const endFrameIndex = replay.frames.length - 1;
+    const lastFrame = replay.frames[endFrameIndex];
+    const totalDamageA = Math.max(
+      0,
+      (lastFrame?.ports[portB]?.post?.damagePercent ?? 0) -
+        active.damageAtEntryB,
+    );
+    const totalDamageB = Math.max(
+      0,
+      (lastFrame?.ports[portA]?.post?.damagePercent ?? 0) -
+        active.damageAtEntryA,
+    );
+    const damageAttDealt = att === portA ? totalDamageA : totalDamageB;
+    const damageVicDealt = att === portA ? totalDamageB : totalDamageA;
+    const isKO: boolean = Boolean(
+      replay.isComplete &&
+      replay.gameEnd &&
+      replay.gameEnd.placements?.[vic] === -1,
+    );
+
+    events.push({
+      frame: active.frame,
+      frameIndex: active.frameIndex,
+      endFrame: lastFrame?.frame ?? active.frame,
+      endFrameIndex,
+      kind: "neutral-hit",
+      attackerPort: active.attackerPort,
+      victimPort: active.victimPort,
+      hitType: active.hitType,
+      reason: active.reason,
+      reasonDetail: active.reasonDetail,
+      winnerPort: isKO ? att : (active.winnerPort ?? att),
+      totalHitsLanded: att === portA ? active.totalHitsA : active.totalHitsB,
+      totalDamageDealt: damageAttDealt,
+      damageTakenDuringAdvantage: damageVicDealt,
+      convertedToEdgeGuard: active.convertedToEdgeGuard,
+      convertedToLedgeTrap: active.convertedToLedgeTrap,
+      convertedToKill: isKO,
+      outcome: isKO ? "ko" : "incomplete",
+      openingEndFrameIndex: active.openingEndFrameIndex,
+      lastHitFrameIndex: active.lastHitFrameIndex,
+      edgeGuardStartFrameIndex: active.edgeGuardStartFrameIndex,
+      edgeGuardEndFrameIndex: active.edgeGuardEndFrameIndex,
+      ledgeTrapStartFrameIndex: active.ledgeTrapStartFrameIndex,
+      ledgeTrapEndFrameIndex: active.ledgeTrapEndFrameIndex,
+      killFrameIndex: active.killFrameIndex,
+    });
+  }
+
   return events;
+}
+
+/**
+ * For each seated port, how many neutral openings that port has taken in its *current* stock,
+ * indexed the same way as `replay.frames` (so `result[port][frameIndex]` matches `replay.frames[frameIndex]`).
+ * Resets to 0 starting the frame after `stocksRemaining` drops.
+ */
+export function computeNeutralHitsPerStock(
+  replay: Replay,
+): Partial<Record<PortIndex, readonly number[]>> {
+  const result: Partial<Record<PortIndex, number[]>> = {};
+  const seated = getSeatedPorts(replay);
+  if (seated.length !== 2) return result;
+
+  const events = computeNeutralHitEvents(replay);
+
+  for (const port of PORTS) {
+    const values: number[] = new Array(replay.frames.length).fill(0);
+    if (!seated.includes(port)) {
+      result[port] = values;
+      continue;
+    }
+
+    let openingsTaken = 0;
+    let eventIdx = 0;
+    let lastStocks: number | undefined;
+
+    // Filter events where `port` was the victim
+    const victimEvents = events.filter((e) => e.victimPort === port);
+
+    for (let i = 0; i < replay.frames.length; i++) {
+      const post = replay.frames[i]?.ports[port]?.post;
+      if (!post) {
+        values[i] = openingsTaken;
+        continue;
+      }
+
+      while (
+        eventIdx < victimEvents.length &&
+        victimEvents[eventIdx]!.frameIndex === i
+      ) {
+        openingsTaken++;
+        eventIdx++;
+      }
+
+      values[i] = openingsTaken;
+
+      const stockLost =
+        lastStocks !== undefined && post.stocksRemaining < lastStocks;
+      if (stockLost) {
+        openingsTaken = 0;
+      }
+
+      lastStocks = post.stocksRemaining;
+    }
+
+    result[port] = values;
+  }
+
+  return result;
 }
 
 export interface NeutralHitsStats {
   /** Total completed stocks taken from opponent(s). */
   stocksTaken: number;
-  /** Total neutral hits landed across all taken stocks. */
+  /** Total neutral openings landed across all taken stocks. */
   totalHitsLanded: number;
-  /** Average number of neutral hits per stock taken, or null if no stocks taken. */
+  /** Average number of neutral openings per stock taken, or null if no stocks taken. */
   averageHitsPerStock: number | null;
 }
 
 /**
- * Computes the average number of neutral hits landed by `attackerPort`
+ * Computes the average number of neutral openings landed by `attackerPort`
  * before taking each stock from opponent(s). Grabs are counted as hits.
- * Excludes hits landed during recovery or ledge getups.
+ * Multi-hit extensions within an interaction are consolidated into a single opening.
  */
 export function computeNeutralHitsStats(
   replay: Replay,
   attackerPort: PortIndex,
 ): NeutralHitsStats {
   const seated = getSeatedPorts(replay);
-  const opponents = seated.filter((p) => p !== attackerPort);
+  const opponents: PortIndex[] = (seated as PortIndex[]).filter(
+    (p: PortIndex) => p !== attackerPort,
+  );
   if (opponents.length === 0) {
     return { stocksTaken: 0, totalHitsLanded: 0, averageHitsPerStock: null };
   }
 
-  const recoveryMap =
-    seated.length === 2
-      ? buildRecoveryMap(replay, seated[0]!, seated[1]!)
-      : null;
-  const ledgeMap = seated.length === 2 ? buildLedgeMap(replay) : null;
+  const events = computeNeutralHitEvents(replay);
+  const openingsLanded = events.filter((e) => e.attackerPort === attackerPort);
 
-  const hitsPerStockTaken: number[] = [];
-
-  for (const victimPort of opponents) {
-    let currentStockHits = 0;
-    let lastComboHitCount: number | undefined;
-    let lastStocksRemaining: number | undefined;
-    let lastInCapture = false;
-
+  let stocksTaken = 0;
+  for (const opp of opponents) {
+    let lastStocks: number | undefined;
     for (let i = 0; i < replay.frames.length; i++) {
-      const post = replay.frames[i]?.ports[victimPort]?.post;
+      const post = replay.frames[i]?.ports[opp]?.post;
       if (!post) continue;
-
-      const inCapture = CAPTURE_STATES.has(post.actionStateId);
-      const isFreshAttackHit =
-        lastComboHitCount !== undefined
-          ? lastComboHitCount === 0 && post.comboHitCount > 0 && !lastInCapture
-          : post.comboHitCount > 0;
-      const isFreshGrab = inCapture && !lastInCapture;
-
-      const isDisadvantage =
-        (recoveryMap !== null && recoveryMap[i] === victimPort) ||
-        (ledgeMap !== null && ledgeMap[i] === victimPort);
-
-      if ((isFreshAttackHit || isFreshGrab) && !isDisadvantage) {
-        currentStockHits++;
+      if (lastStocks !== undefined && post.stocksRemaining < lastStocks) {
+        stocksTaken++;
       }
-
-      const stockLost =
-        lastStocksRemaining !== undefined &&
-        post.stocksRemaining < lastStocksRemaining;
-      if (stockLost) {
-        hitsPerStockTaken.push(currentStockHits);
-        currentStockHits = 0;
-      }
-
-      lastComboHitCount = post.comboHitCount;
-      lastStocksRemaining = post.stocksRemaining;
-      lastInCapture = inCapture;
-    }
-
-    // If recording is complete and the opponent lost the match at the end,
-    // count that final stock taken as well.
-    if (
-      replay.isComplete &&
-      replay.gameEnd &&
-      replay.gameEnd.placements[victimPort] === -1 &&
-      currentStockHits > 0
-    ) {
-      hitsPerStockTaken.push(currentStockHits);
+      lastStocks = post.stocksRemaining;
     }
   }
 
-  const stocksTaken = hitsPerStockTaken.length;
-  const totalHitsLanded = hitsPerStockTaken.reduce((sum, h) => sum + h, 0);
+  const totalHitsLanded = openingsLanded.length;
   const averageHitsPerStock =
     stocksTaken > 0 ? totalHitsLanded / stocksTaken : null;
 

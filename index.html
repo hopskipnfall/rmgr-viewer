@@ -1809,6 +1809,17 @@
         border-color: #fbbf24;
         color: #fbbf24;
       }
+      .neutral-badge-shield {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(14, 165, 233, 0.18);
+        color: #38bdf8;
+        border: 1px solid rgba(14, 165, 233, 0.35);
+        font-family: monospace, system-ui, sans-serif;
+        flex-shrink: 0;
+      }
       .neutral-badge-landing {
         font-size: 11px;
         font-weight: 700;
@@ -1863,6 +1874,87 @@
         border: 1px solid rgba(148, 163, 184, 0.25);
         font-family: monospace, system-ui, sans-serif;
         flex-shrink: 0;
+      }
+      .neutral-badge-hits {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+        flex-shrink: 0;
+      }
+      .neutral-badge-ko {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: rgba(239, 68, 68, 0.22);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        flex-shrink: 0;
+      }
+      .neutral-badge-conversion {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.05);
+        color: #94a3b8;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        flex-shrink: 0;
+      }
+      .situation-row [data-start-frame] {
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease,
+          filter 0.15s ease,
+          border-color 0.15s ease,
+          background-color 0.15s ease;
+      }
+      .situation-row [data-start-frame].active-chip {
+        filter: brightness(1.4);
+        transform: scale(1.1);
+        box-shadow:
+          0 0 8px currentColor,
+          0 0 2px #ffffff;
+        border-color: #ffffff;
+        z-index: 2;
+      }
+      .situation-row.neutral-interaction-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+      }
+      .neutral-time-col {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        min-width: 50px;
+        flex-shrink: 0;
+        line-height: 1.25;
+      }
+      .neutral-time-col .situation-time {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text);
+        font-family: monospace, system-ui, sans-serif;
+      }
+      .neutral-time-col .situation-frame {
+        font-size: 10px;
+        color: var(--text-dim);
+        font-family: monospace, system-ui, sans-serif;
+      }
+      .neutral-chips-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 6px;
+        flex: 1;
+        min-width: 0;
       }
       .neutral-filters {
         display: flex;
@@ -2610,6 +2702,48 @@
               </p>
             </div>
           </section>
+          <section id="neutralHitsWidget" class="situation-widget" hidden>
+            <div class="situation-widget-header">
+              <button
+                id="neutralHitsCollapseBtn"
+                class="situation-collapse-btn"
+                title="Collapse / expand Neutral Openings"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="neutralHitsWidgetTitle" class="situation-widget-title">
+                  Neutral Openings
+                </h2>
+              </button>
+            </div>
+            <div id="neutralHitsList" class="situation-list"></div>
+          </section>
+          <section id="characterMetaWidget" hidden>
+            <div id="characterMetaHeader">
+              <button
+                id="characterMetaCollapseBtn"
+                title="Collapse / expand Character Stats"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="characterMetaHeaderTitle"></h2>
+              </button>
+            </div>
+            <div id="characterMetaPanel"></div>
+          </section>
+          <section id="combosWidget" class="situation-widget" hidden>
+            <div class="situation-widget-header">
+              <button
+                id="combosCollapseBtn"
+                class="situation-collapse-btn"
+                title="Collapse / expand Kill Combos"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="combosWidgetTitle" class="situation-widget-title">
+                  Kill Combos
+                </h2>
+              </button>
+            </div>
+            <div id="combosList" class="situation-list"></div>
+          </section>
           <section id="recoveryWidget" class="situation-widget" hidden>
             <div class="situation-widget-header">
               <button
@@ -2669,48 +2803,6 @@
               </button>
             </div>
             <div id="ledgeTrapList" class="situation-list"></div>
-          </section>
-          <section id="neutralHitsWidget" class="situation-widget" hidden>
-            <div class="situation-widget-header">
-              <button
-                id="neutralHitsCollapseBtn"
-                class="situation-collapse-btn"
-                title="Collapse / expand Neutral Openings"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="neutralHitsWidgetTitle" class="situation-widget-title">
-                  Neutral Openings
-                </h2>
-              </button>
-            </div>
-            <div id="neutralHitsList" class="situation-list"></div>
-          </section>
-          <section id="combosWidget" class="situation-widget" hidden>
-            <div class="situation-widget-header">
-              <button
-                id="combosCollapseBtn"
-                class="situation-collapse-btn"
-                title="Collapse / expand Kill Combos"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="combosWidgetTitle" class="situation-widget-title">
-                  Kill Combos
-                </h2>
-              </button>
-            </div>
-            <div id="combosList" class="situation-list"></div>
-          </section>
-          <section id="characterMetaWidget" hidden>
-            <div id="characterMetaHeader">
-              <button
-                id="characterMetaCollapseBtn"
-                title="Collapse / expand Character Stats"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="characterMetaHeaderTitle"></h2>
-              </button>
-            </div>
-            <div id="characterMetaPanel"></div>
           </section>
           <div id="players"></div>
           <section id="diWidget" class="situation-widget" hidden>
