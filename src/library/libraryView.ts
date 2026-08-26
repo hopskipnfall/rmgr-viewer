@@ -6,15 +6,11 @@ import {
   createDefaultIdentity,
 } from "../data/identity.js";
 import {
-  type FilterCriteria,
   filterGameSummaries,
   aggregateFilteredGames,
-  computeRateDeltas,
   computeOpponentCharacterBreakdown,
-  hasActiveFilters,
 } from "../data/aggregate.js";
 import { IdentityPanel } from "./identityPanel.js";
-import { FilterPanel } from "./filterPanel.js";
 import { StatCards } from "./statCards.js";
 import { BreakdownTable } from "./breakdownTable.js";
 import { GameList } from "./gameList.js";
@@ -23,16 +19,9 @@ export class LibraryViewController {
   private container: HTMLElement;
   private summaries: GameSummary[] = [];
   private identity: Identity;
-  private criteria: FilterCriteria = {
-    yourCharacterId: "all",
-    oppCharacterId: "all",
-    opponentName: "all",
-    stageId: "all",
-  };
   private sortOrder: "newest" | "oldest" = "newest";
 
   private identityPanel: IdentityPanel;
-  private filterPanel: FilterPanel;
   private statCards: StatCards;
   private breakdownTable: BreakdownTable;
   private gameList: GameList;
@@ -58,13 +47,11 @@ export class LibraryViewController {
             <span id="mobileIdentitySummary" class="mobile-toggle-name"></span>
           </div>
           <div class="mobile-toggle-right">
-            <span id="mobileFilterSummary" class="mobile-toggle-filters"></span>
             <span class="mobile-toggle-arrow">▾</span>
           </div>
         </button>
         <div id="librarySidebarContent" class="library-sidebar-content">
           <div id="identityCard" class="identity-card"></div>
-          <div id="filterPanelWrap" class="filter-panel-wrap"></div>
         </div>
       </div>
       <div id="libraryMain" class="library-main">
@@ -101,9 +88,6 @@ export class LibraryViewController {
     const identityCard = this.container.querySelector(
       "#identityCard",
     ) as HTMLElement;
-    const filterPanelWrap = this.container.querySelector(
-      "#filterPanelWrap",
-    ) as HTMLElement;
     const statCardsWrap = this.container.querySelector(
       "#statCardsWrap",
     ) as HTMLElement;
@@ -125,15 +109,6 @@ export class LibraryViewController {
       },
     );
 
-    this.filterPanel = new FilterPanel(
-      filterPanelWrap,
-      this.criteria,
-      (newCriteria) => {
-        this.criteria = newCriteria;
-        this.render();
-      },
-    );
-
     this.statCards = new StatCards(statCardsWrap);
     this.breakdownTable = new BreakdownTable(breakdownWrap);
 
@@ -147,8 +122,7 @@ export class LibraryViewController {
         this.onSelectGameCallback(selected);
       },
       (summary, port) => {
-        summary.manualPerspectivePort = port;
-        this.render();
+        this.selectPlayerPerspective(summary, port);
       },
       (idToRemove) => {
         this.removeSummary(idToRemove);
@@ -217,6 +191,50 @@ export class LibraryViewController {
     this.identityPanel.openModal(this.summaries);
   }
 
+  public selectPlayerPerspective(
+    summary: GameSummary,
+    port: 0 | 1 | 2 | 3,
+  ): void {
+    const selectedPort = summary.ports.find((p) => p.port === port);
+    const otherPort = summary.ports.find((p) => p.port !== port);
+    const selectedName = selectedPort?.playerName?.trim() ?? "";
+    const otherName = otherPort?.playerName?.trim() ?? "";
+
+    if (selectedName.length > 0) {
+      // Check if clicking on an already active perspective to toggle/deselect
+      if (this.identity.aliases.has(selectedName)) {
+        this.identity.aliases.delete(selectedName);
+        if (this.identity.displayName === selectedName) {
+          this.identity.displayName =
+            Array.from(this.identity.aliases)[0] || "";
+        }
+      } else {
+        // Add selected name as an alias
+        this.identity.aliases.add(selectedName);
+        this.identity.displayName = selectedName;
+        // If the opponent's name was in aliases, remove it to resolve ambiguity in this match
+        if (otherName.length > 0 && this.identity.aliases.has(otherName)) {
+          this.identity.aliases.delete(otherName);
+        }
+      }
+      // Reset any manual overrides that match this name so exact alias match takes over
+      for (const s of this.summaries) {
+        if (s.ports.some((p) => p.playerName.trim() === selectedName)) {
+          delete s.manualPerspectivePort;
+        }
+      }
+      this.identityPanel.setIdentity(this.identity);
+    } else {
+      // Fallback for unnamed ports: toggle manual override
+      if (summary.manualPerspectivePort === port) {
+        delete summary.manualPerspectivePort;
+      } else {
+        summary.manualPerspectivePort = port;
+      }
+    }
+    this.render();
+  }
+
   public updateTranslations(): void {
     this.identityPanel.render();
     this.render();
@@ -228,17 +246,11 @@ export class LibraryViewController {
     // 1. Identity panel
     this.identityPanel.setIdentity(this.identity);
 
-    // 2. Filter panel
-    this.filterPanel.render(this.summaries, this.identity);
-
     // Update mobile sidebar toggle summary
     const mobileIdSummaryEl = this.container.querySelector(
       "#mobileIdentitySummary",
     ) as HTMLElement;
-    const mobileFilterSummaryEl = this.container.querySelector(
-      "#mobileFilterSummary",
-    ) as HTMLElement;
-    if (mobileIdSummaryEl && mobileFilterSummaryEl) {
+    if (mobileIdSummaryEl) {
       const aliases = Array.from(this.identity.aliases);
       if (aliases.length > 0) {
         mobileIdSummaryEl.textContent = aliases.join(", ");
@@ -247,44 +259,18 @@ export class LibraryViewController {
         mobileIdSummaryEl.textContent = tr.noNamesSelected;
         mobileIdSummaryEl.classList.add("not-selected");
       }
-
-      let activeFiltersCount = 0;
-      if (this.criteria.yourCharacterId !== "all") activeFiltersCount++;
-      if (this.criteria.oppCharacterId !== "all") activeFiltersCount++;
-      if (this.criteria.opponentName !== "all") activeFiltersCount++;
-      if (this.criteria.stageId !== "all") activeFiltersCount++;
-
-      if (activeFiltersCount > 0) {
-        mobileFilterSummaryEl.innerHTML = `${escapeHtml(tr.filters)} <span class="mobile-toggle-badge">${activeFiltersCount}</span>`;
-      } else {
-        mobileFilterSummaryEl.textContent = tr.filters;
-      }
     }
 
-    // 3. Baseline aggregation (unfiltered-you)
-    const baselineFiltered = filterGameSummaries(
+    // 2. Aggregation for all resolved games
+    const resolvedGames = filterGameSummaries(
       this.summaries,
       this.identity,
       {},
     );
-    const baselineRates = aggregateFilteredGames(baselineFiltered);
+    const aggregateRates = aggregateFilteredGames(resolvedGames);
 
-    // 4. Current filtered games
-    const resolvedGames = filterGameSummaries(
-      this.summaries,
-      this.identity,
-      this.criteria,
-    );
-    const filteredRates = aggregateFilteredGames(resolvedGames);
-
-    // 5. Deltas
-    const showDeltas = hasActiveFilters(this.criteria);
-    const deltas = showDeltas
-      ? computeRateDeltas(filteredRates, baselineRates)
-      : null;
-
-    // 6. Overall Statistics (collapsed unless at least 2 games have a resolved identity)
-    const hasSufficientGames = baselineFiltered.length >= 2;
+    // 3. Overall Statistics (collapsed unless at least 2 games have a resolved identity)
+    const hasSufficientGames = resolvedGames.length >= 2;
     const overallHeaderEl = this.container.querySelector(
       "#overallHeader",
     ) as HTMLElement;
@@ -303,33 +289,23 @@ export class LibraryViewController {
       if (overallHeaderEl) {
         overallHeaderEl.hidden = false;
         overallHeaderEl.innerHTML = `
-          <h2>${escapeHtml(tr.overallHeader(filteredRates.totalGames, filteredRates.dreamLandGames))}</h2>
+          <h2>${escapeHtml(tr.overallHeader(aggregateRates.totalGames, aggregateRates.dreamLandGames))}</h2>
         `;
       }
       if (statCardsWrapEl) statCardsWrapEl.hidden = false;
       if (breakdownWrapEl) breakdownWrapEl.hidden = false;
 
-      // 7. Stat Cards
-      this.statCards.render(filteredRates, deltas, showDeltas);
+      // 4. Stat Cards
+      this.statCards.render(aggregateRates, null, false);
 
-      // 8. Breakdown Table
+      // 5. Breakdown Table
       const breakdownRows = computeOpponentCharacterBreakdown(resolvedGames);
       this.breakdownTable.render(breakdownRows);
     }
 
-    // 9. Game List
-    // Show games matching current filter criteria, or all games if no filters
-    const matchingGameIds = new Set(resolvedGames.map((g) => g.summary.id));
-    const filteredSummaries = hasActiveFilters(this.criteria)
-      ? this.summaries.filter((s) => matchingGameIds.has(s.id))
-      : this.summaries;
-
+    // 6. Game List - displays all games with interactive player perspective choice
     this.gameList.setSortOrder(this.sortOrder);
-    this.gameList.render(
-      filteredSummaries,
-      this.identity,
-      filteredSummaries.length,
-    );
+    this.gameList.render(this.summaries, this.identity, this.summaries.length);
   }
 }
 

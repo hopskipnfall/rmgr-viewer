@@ -154,12 +154,6 @@ async function handleImport(files: FileList | File[]): Promise<void> {
 
     if (result.summaries.length > 0) {
       libraryController.addSummaries(result.summaries);
-
-      // If user hasn't set custom aliases or imported many games, suggest onboarding
-      const identity = libraryController.getIdentity();
-      if (identity.aliases.size === 0 && result.summaries.length > 1) {
-        libraryController.openOnboardingModal();
-      }
     }
 
     if (result.errors.length > 0) {

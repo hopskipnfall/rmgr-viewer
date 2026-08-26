@@ -7,8 +7,13 @@ import {
   getFalconSpecialType,
   getFoxFlightAngle,
   getFoxSpecialType,
+  getJigglypuffSpecialType,
+  getKirbySpecialType,
+  getLinkSpecialType,
+  getMarioSpecialType,
   getNessSpecialType,
   getPikachuSpecialType,
+  getSamusSpecialType,
   getStartNameAlpha,
   getYoshiSpecialType,
   START_NAME_DISPLAY_FRAMES,
@@ -1012,5 +1017,89 @@ describe("canAngleAttack", () => {
     expect(canAngleAttack(0x03, { type: "aerial", direction: "forward" })).toBe(
       false,
     );
+  });
+});
+
+describe("getMarioSpecialType", () => {
+  it("classifies Mario / Luigi special moves correctly", () => {
+    // Fireball
+    expect(getMarioSpecialType(0x00, 0x0dc)).toBe("fireball");
+    expect(getMarioSpecialType(0x04, 0x0dd)).toBe("fireball");
+    // Super Jump Punch
+    expect(getMarioSpecialType(0x00, 0x0df)).toBe("super_jump_punch");
+    expect(getMarioSpecialType(0x04, 0x0e0)).toBe("super_jump_punch");
+    // Tornado / Cyclone
+    expect(getMarioSpecialType(0x00, 0x0e3)).toBe("tornado");
+    expect(getMarioSpecialType(0x04, 0x0e4)).toBe("tornado");
+  });
+
+  it("returns null for non-Mario/Luigi or non-special states", () => {
+    expect(getMarioSpecialType(0x00, 0x00a)).toBeNull(); // Idle
+    expect(getMarioSpecialType(0x01, 0x0dc)).toBeNull(); // Fox
+  });
+});
+
+describe("getSamusSpecialType", () => {
+  it("classifies Samus special moves correctly", () => {
+    expect(getSamusSpecialType(0x03, 0x0dc)).toBe("charge_shot");
+    expect(getSamusSpecialType(0x03, 0x0e5)).toBe("screw_attack");
+    expect(getSamusSpecialType(0x03, 0x0e8)).toBe("bomb");
+  });
+
+  it("returns null for non-Samus or non-special states", () => {
+    expect(getSamusSpecialType(0x03, 0x00a)).toBeNull(); // Idle
+    expect(getSamusSpecialType(0x00, 0x0dc)).toBeNull(); // Mario
+  });
+});
+
+describe("getLinkSpecialType", () => {
+  it("classifies Link special moves correctly", () => {
+    expect(getLinkSpecialType(0x05, 0x0dc)).toBe("boomerang");
+    expect(getLinkSpecialType(0x05, 0x0e5)).toBe("spin_attack");
+    expect(getLinkSpecialType(0x05, 0x0e9)).toBe("bomb");
+  });
+
+  it("returns null for non-Link or non-special states", () => {
+    expect(getLinkSpecialType(0x05, 0x00a)).toBeNull(); // Idle
+    expect(getLinkSpecialType(0x01, 0x0dc)).toBeNull(); // Fox
+  });
+});
+
+describe("getKirbySpecialType", () => {
+  it("classifies Kirby special moves correctly", () => {
+    expect(getKirbySpecialType(0x08, 0x0dc)).toBe("inhale");
+    expect(getKirbySpecialType(0x08, 0x0e5)).toBe("final_cutter");
+    expect(getKirbySpecialType(0x08, 0x0e9)).toBe("stone");
+  });
+
+  it("returns null for non-Kirby or non-special states", () => {
+    expect(getKirbySpecialType(0x08, 0x00a)).toBeNull(); // Idle
+    expect(getKirbySpecialType(0x07, 0x0dc)).toBeNull(); // Falcon
+  });
+});
+
+describe("getJigglypuffSpecialType", () => {
+  it("classifies Jigglypuff special moves correctly", () => {
+    expect(getJigglypuffSpecialType(0x0a, 0x0dc)).toBe("pound");
+    expect(getJigglypuffSpecialType(0x0a, 0x0df)).toBe("sing");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e2)).toBe("rest");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e7)).toBe("rest");
+  });
+
+  it("returns null for non-Jigglypuff or non-special states", () => {
+    expect(getJigglypuffSpecialType(0x0a, 0x00a)).toBeNull(); // Idle
+    expect(getJigglypuffSpecialType(0x02, 0x0dc)).toBeNull(); // DK
+  });
+});
+
+describe("Fox Blaster and Yoshi Egg Throw", () => {
+  it("classifies Fox Blaster correctly", () => {
+    expect(getFoxSpecialType(0x01, 0x0dc)).toBe("blaster");
+    expect(getFoxSpecialType(0x01, 0x0e1)).toBe("blaster");
+  });
+
+  it("classifies Yoshi Egg Throw correctly", () => {
+    expect(getYoshiSpecialType(0x06, 0x0e2)).toBe("egg_throw");
+    expect(getYoshiSpecialType(0x06, 0x0e3)).toBe("egg_throw");
   });
 });

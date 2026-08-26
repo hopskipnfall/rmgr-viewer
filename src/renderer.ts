@@ -519,6 +519,187 @@ export function getNessSpecialType(
   return null;
 }
 
+export type MarioSpecialType = "fireball" | "super_jump_punch" | "tornado";
+
+export function getMarioSpecialType(
+  characterId: number,
+  actionStateId: number,
+): MarioSpecialType | null {
+  if (!isMarioCharacter(characterId) && !isLuigiCharacter(characterId)) {
+    return null;
+  }
+  // Neutral-B Fireball: 0x0dc, 0x0dd, 0x0de
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "fireball";
+  }
+  // Up-B Super Jump Punch: 0x0df, 0x0e0, 0x0e1, 0x0e2
+  if (
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0 ||
+    actionStateId === 0x0e1 ||
+    actionStateId === 0x0e2
+  ) {
+    return "super_jump_punch";
+  }
+  // Down-B Tornado / Cyclone: 0x0e3, 0x0e4, 0x0e5
+  if (
+    actionStateId === 0x0e3 ||
+    actionStateId === 0x0e4 ||
+    actionStateId === 0x0e5
+  ) {
+    return "tornado";
+  }
+  return null;
+}
+
+export type SamusSpecialType = "charge_shot" | "screw_attack" | "bomb";
+
+export function getSamusSpecialType(
+  characterId: number,
+  actionStateId: number,
+): SamusSpecialType | null {
+  if (!isSamusCharacter(characterId)) return null;
+  // Neutral-B: Charge Shot (0x0dc - 0x0de)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "charge_shot";
+  }
+  // Up-B: Screw Attack (0x0e5 - 0x0e7)
+  if (
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6 ||
+    actionStateId === 0x0e7
+  ) {
+    return "screw_attack";
+  }
+  // Down-B: Bomb (0x0e8 - 0x0ea)
+  if (
+    actionStateId === 0x0e8 ||
+    actionStateId === 0x0e9 ||
+    actionStateId === 0x0ea
+  ) {
+    return "bomb";
+  }
+  return null;
+}
+
+export type LinkSpecialType = "boomerang" | "spin_attack" | "bomb";
+
+export function getLinkSpecialType(
+  characterId: number,
+  actionStateId: number,
+): LinkSpecialType | null {
+  if (!isLinkCharacter(characterId)) return null;
+  // Neutral-B: Boomerang (0x0dc - 0x0de)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "boomerang";
+  }
+  // Up-B: Spin Attack (0x0e5 - 0x0e8)
+  if (
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6 ||
+    actionStateId === 0x0e7 ||
+    actionStateId === 0x0e8
+  ) {
+    return "spin_attack";
+  }
+  // Down-B: Bomb (0x0e9 - 0x0eb)
+  if (
+    actionStateId === 0x0e9 ||
+    actionStateId === 0x0ea ||
+    actionStateId === 0x0eb
+  ) {
+    return "bomb";
+  }
+  return null;
+}
+
+export type KirbySpecialType = "inhale" | "final_cutter" | "stone";
+
+export function getKirbySpecialType(
+  characterId: number,
+  actionStateId: number,
+): KirbySpecialType | null {
+  if (!isKirbyCharacter(characterId)) return null;
+  // Neutral-B: Inhale (0x0dc - 0x0de)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "inhale";
+  }
+  // Up-B: Final Cutter (0x0e5 - 0x0e8)
+  if (
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6 ||
+    actionStateId === 0x0e7 ||
+    actionStateId === 0x0e8
+  ) {
+    return "final_cutter";
+  }
+  // Down-B: Stone (0x0e9 - 0x0eb)
+  if (
+    actionStateId === 0x0e9 ||
+    actionStateId === 0x0ea ||
+    actionStateId === 0x0eb
+  ) {
+    return "stone";
+  }
+  return null;
+}
+
+export type JigglypuffSpecialType = "pound" | "sing" | "rest";
+
+export function getJigglypuffSpecialType(
+  characterId: number,
+  actionStateId: number,
+): JigglypuffSpecialType | null {
+  if (!isJigglypuffCharacter(characterId)) return null;
+  // Neutral-B: Pound (0x0dc - 0x0de)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "pound";
+  }
+  // Up-B: Sing (0x0df - 0x0e1, 0x0e4 - 0x0e6)
+  if (
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0 ||
+    actionStateId === 0x0e1 ||
+    actionStateId === 0x0e4 ||
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6
+  ) {
+    return "sing";
+  }
+  // Down-B: Rest (0x0e2 - 0x0e4, 0x0e7 - 0x0e9)
+  if (
+    actionStateId === 0x0e2 ||
+    actionStateId === 0x0e3 ||
+    actionStateId === 0x0e4 ||
+    actionStateId === 0x0e7 ||
+    actionStateId === 0x0e8 ||
+    actionStateId === 0x0e9
+  ) {
+    return "rest";
+  }
+  return null;
+}
+
 const QUICK_ATTACK_STATES = new Set([
   0x0e8, // Ground QA Startup
   0x0eb, // Air QA Startup
@@ -1655,6 +1836,107 @@ export class StageRenderer {
       );
       if (nessSpecial === "pk_thunder_charge" || nessSpecial === "psi_magnet") {
         labelY = Math.min(labelY, centerY - heightPx * 0.9 - 8);
+      }
+    }
+
+    // Draw Mario / Luigi special move visuals if applicable
+    const marioSpecial = getMarioSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (marioSpecial) {
+      this.drawMarioSpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        isLuigiCharacter(post.characterId),
+        marioSpecial,
+        post.actionFrameCounter,
+      );
+    }
+
+    // Draw Samus special move visuals if applicable
+    const samusSpecial = getSamusSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (samusSpecial) {
+      this.drawSamusSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        samusSpecial,
+        post.actionFrameCounter,
+      );
+      if (samusSpecial === "screw_attack") {
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+      }
+    }
+
+    // Draw Link special move visuals if applicable
+    const linkSpecial = getLinkSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (linkSpecial) {
+      this.drawLinkSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        linkSpecial,
+        post.actionFrameCounter,
+      );
+      if (linkSpecial === "spin_attack") {
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+      }
+    }
+
+    // Draw Kirby special move visuals if applicable
+    const kirbySpecial = getKirbySpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (kirbySpecial) {
+      this.drawKirbySpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        kirbySpecial,
+        post.actionFrameCounter,
+      );
+    }
+
+    // Draw Jigglypuff special move visuals if applicable
+    const puffSpecial = getJigglypuffSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (puffSpecial) {
+      this.drawJigglypuffSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        puffSpecial,
+        post.actionFrameCounter,
+      );
+      if (puffSpecial === "sing" || puffSpecial === "rest") {
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
       }
     }
 
@@ -6467,6 +6749,757 @@ export class StageRenderer {
       }
 
       ctx.restore();
+      return;
+    }
+
+    if (specialType === "egg_throw") {
+      ctx.save();
+      // Egg Throw: Yoshi tossing a green-spotted egg upward in flight
+      const throwProgress = Math.min(frameCounter / 18, 1);
+      const arcX = noseX + dir * (throwProgress * halfWidth * 2.2);
+      const arcY =
+        centerY -
+        heightPx * 0.4 -
+        Math.sin(throwProgress * Math.PI) * (heightPx * 0.85);
+
+      // Trajectory dashed arc
+      ctx.beginPath();
+      ctx.moveTo(noseX, centerY);
+      ctx.quadraticCurveTo(
+        noseX + dir * halfWidth,
+        centerY - heightPx * 1.1,
+        noseX + dir * (halfWidth * 2.2),
+        centerY - heightPx * 0.4,
+      );
+      ctx.strokeStyle = "rgba(74, 222, 128, 0.5)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Egg body (white oval)
+      ctx.beginPath();
+      ctx.ellipse(arcX, arcY, 6, 8, dir * 0.35, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = "#4ade80";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Green spots on egg
+      ctx.fillStyle = "#22c55e";
+      ctx.beginPath();
+      ctx.arc(arcX, arcY - 2, 2.2, 0, Math.PI * 2);
+      ctx.arc(arcX - 2, arcY + 2, 1.8, 0, Math.PI * 2);
+      ctx.arc(arcX + 2, arcY + 3, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Mario / Luigi special moves:
+   * - Fireball (Neutral-B): Flame fireball projectile bouncing forward (Red for Mario, Emerald for Luigi).
+   * - Super Jump Punch (Up-B): Uppercut flight with scattering spinning gold coins and Luigi sweetspot burst.
+   * - Mario Tornado / Luigi Cyclone (Down-B): Whirling multi-tier cyclone discs.
+   */
+  private drawMarioSpecial(
+    x: number,
+    y: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    isLuigi: boolean,
+    specialType: MarioSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * halfWidth;
+
+    if (specialType === "fireball") {
+      ctx.save();
+      const fbProg = (frameCounter % 20) / 20;
+      const fbX = noseX + dir * (10 + fbProg * halfWidth * 2.5);
+      const bounceY =
+        centerY +
+        Math.abs(Math.sin(fbProg * Math.PI * 2)) * (heightPx * 0.35) -
+        4;
+      const fbRadius = Math.max(5, halfWidth * 0.35);
+
+      // Fireball outer flame aura
+      ctx.beginPath();
+      ctx.arc(fbX, bounceY, fbRadius * 1.3, 0, Math.PI * 2);
+      ctx.fillStyle = isLuigi
+        ? "rgba(34, 197, 94, 0.45)"
+        : "rgba(239, 68, 68, 0.45)";
+      ctx.shadowColor = isLuigi ? "#22c55e" : "#ef4444";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      // Fireball bright core
+      ctx.beginPath();
+      ctx.arc(fbX, bounceY, fbRadius, 0, Math.PI * 2);
+      ctx.fillStyle = isLuigi ? "#86efac" : "#fde047";
+      ctx.fill();
+
+      // White-hot center
+      ctx.beginPath();
+      ctx.arc(fbX - dir * 1, bounceY - 1, fbRadius * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      // Trailing sparks
+      ctx.beginPath();
+      ctx.arc(fbX - dir * (fbRadius * 1.5), bounceY + 2, 2, 0, Math.PI * 2);
+      ctx.arc(fbX - dir * (fbRadius * 2.2), bounceY - 2, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = isLuigi ? "#4ade80" : "#f97316";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "super_jump_punch") {
+      ctx.save();
+      const fistX = noseX + dir * (halfWidth * 0.3);
+      const fistY = centerY - heightPx * 0.65;
+
+      // 1. Spinning golden coins scattering upward
+      const coinCount = 5;
+      for (let i = 0; i < coinCount; i++) {
+        const coinAngle = (i * Math.PI * 2) / coinCount + frameCounter * 0.35;
+        const coinDist = (i + 1) * (halfWidth * 0.45);
+        const cx = fistX + Math.cos(coinAngle) * coinDist;
+        const cy = fistY - i * 6 + Math.sin(coinAngle) * 4;
+        const spinW = Math.max(
+          1,
+          Math.abs(Math.cos(frameCounter * 0.4 + i)) * 4.5,
+        );
+
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, spinW, 5.5, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "#facc15";
+        ctx.shadowColor = "#eab308";
+        ctx.shadowBlur = 6;
+        ctx.fill();
+        ctx.strokeStyle = "#ca8a04";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // 2. Punch impact burst / Luigi sweetspot flare
+      if (isLuigi && frameCounter < 8) {
+        // Luigi sweetspot: explosive red-orange fire blast
+        ctx.beginPath();
+        ctx.arc(fistX, fistY, 14, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(239, 68, 68, 0.6)";
+        ctx.shadowColor = "#ef4444";
+        ctx.shadowBlur = 16;
+        ctx.fill();
+      }
+
+      // Rising speed streaks
+      ctx.beginPath();
+      ctx.moveTo(x - halfWidth * 0.4, y);
+      ctx.lineTo(fistX - dir * 4, fistY + 8);
+      ctx.moveTo(x + halfWidth * 0.4, y);
+      ctx.lineTo(fistX + dir * 4, fistY + 8);
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.75)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "tornado") {
+      ctx.save();
+      // Whirling tornado cyclone discs
+      const discCount = 3;
+      const spinRot = frameCounter * 0.45;
+
+      for (let i = 0; i < discCount; i++) {
+        const dy = centerY + (i - 1) * (heightPx * 0.28);
+        const radiusX = halfWidth * (1.35 + i * 0.2);
+        const radiusY = Math.max(4, heightPx * 0.14);
+
+        ctx.beginPath();
+        ctx.ellipse(x, dy, radiusX, radiusY, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = isLuigi
+          ? i % 2 === 0
+            ? "#22c55e"
+            : "#86efac"
+          : i % 2 === 0
+            ? "#ef4444"
+            : "#ffffff";
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = isLuigi ? "#22c55e" : "#ef4444";
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+
+        // Wind swirl streaks
+        const swirlX = x + Math.cos(spinRot + i * 1.5) * (radiusX * 0.85);
+        ctx.beginPath();
+        ctx.arc(swirlX, dy, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+      }
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Samus's signature special moves:
+   * - Charge Shot (Neutral-B): Electric plasma charging sphere at cannon tip.
+   * - Screw Attack (Up-B): Multihit somersaulting electric cyclone shield.
+   * - Bomb (Down-B): Morph Ball with dropped ticking energy bomb.
+   */
+  private drawSamusSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: SamusSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const cannonX = x + dir * (halfWidth * 1.15);
+    const cannonY = centerY - heightPx * 0.05;
+
+    if (specialType === "charge_shot") {
+      ctx.save();
+      // Pulsating electric energy plasma ball
+      const pulse = 1 + 0.2 * Math.sin(frameCounter * 0.4);
+      const radius = Math.max(8, halfWidth * 0.65) * pulse;
+
+      // 1. Outer electric aura
+      ctx.beginPath();
+      ctx.arc(cannonX, cannonY, radius * 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(14, 165, 233, 0.35)";
+      ctx.shadowColor = "#0284c7";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+
+      // 2. Cyan plasma core
+      ctx.beginPath();
+      ctx.arc(cannonX, cannonY, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#38bdf8";
+      ctx.fill();
+
+      // 3. Bright white spark core
+      ctx.beginPath();
+      ctx.arc(cannonX, cannonY, radius * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      // 4. Orbiting energy arcs
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = "#e0f2fe";
+      for (let i = 0; i < 3; i++) {
+        const ang = (i * Math.PI * 2) / 3 + frameCounter * 0.25;
+        ctx.beginPath();
+        ctx.arc(cannonX, cannonY, radius * 1.1, ang, ang + 0.8);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "screw_attack") {
+      ctx.save();
+      const screwRadius = Math.max(16, heightPx * 0.75);
+      const rot = frameCounter * 0.55;
+
+      // 1. Electrified somersault sphere aura
+      ctx.beginPath();
+      ctx.arc(x, centerY, screwRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+
+      // 2. Rotating lightning cutting rings
+      for (let i = 0; i < 3; i++) {
+        const ang = rot + (i * Math.PI * 2) / 3;
+        ctx.beginPath();
+        ctx.ellipse(
+          x,
+          centerY,
+          screwRadius * 0.95,
+          screwRadius * 0.45,
+          ang,
+          0,
+          Math.PI * 2,
+        );
+        ctx.strokeStyle = i % 2 === 0 ? "#facc15" : "#38bdf8";
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+      }
+
+      // 3. Central white energy spark
+      ctx.beginPath();
+      ctx.arc(x, centerY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "bomb") {
+      ctx.save();
+      const bombX = x - dir * (halfWidth * 0.3);
+      const bombY = centerY + heightPx * 0.35;
+      const bombR = Math.max(4, halfWidth * 0.28);
+
+      // Dropped Morph Ball energy bomb
+      ctx.beginPath();
+      ctx.arc(bombX, bombY, bombR, 0, Math.PI * 2);
+      ctx.fillStyle = "#0284c7";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Blinking yellow core
+      ctx.beginPath();
+      ctx.arc(bombX, bombY, bombR * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = frameCounter % 4 < 2 ? "#facc15" : "#ffffff";
+      ctx.fill();
+
+      // Expanding pulse ring
+      const ringProg = (frameCounter % 12) / 12;
+      ctx.beginPath();
+      ctx.arc(bombX, bombY, bombR + ringProg * 14, 0, Math.PI * 2);
+      ctx.strokeStyle = resolveColor("#38bdf8", false, (1 - ringProg) * 0.7);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Link's signature special moves:
+   * - Boomerang (Neutral-B): Spinning wooden four-pointed cross boomerang carving forward in flight arc.
+   * - Spin Attack (Up-B): 360-degree hurricane sword slash ring with glowing cyan edge trails.
+   * - Bomb (Down-B): Blue cartoon bomb with flickering burning fuse.
+   */
+  private drawLinkSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: LinkSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * halfWidth;
+
+    if (specialType === "boomerang") {
+      ctx.save();
+      // Spinning wooden boomerang in flight arc
+      const bProg = (frameCounter % 24) / 24;
+      const bDist = halfWidth * 2.8;
+      const bx = noseX + dir * (10 + Math.sin(bProg * Math.PI) * bDist);
+      const by = centerY - Math.sin(bProg * Math.PI * 2) * 6;
+      const bRot = frameCounter * 0.45;
+
+      ctx.translate(bx, by);
+      ctx.rotate(bRot);
+
+      // Four-pointed cross-boomerang
+      const armLen = 9;
+      const armThick = 2.4;
+      ctx.fillStyle = "#b45309"; // Wood brown
+      ctx.strokeStyle = "#fef08a"; // Gold tip
+      ctx.lineWidth = 1;
+
+      for (let i = 0; i < 4; i++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.fillRect(-armThick / 2, 0, armThick, armLen);
+        ctx.strokeRect(-armThick / 2, 0, armThick, armLen);
+      }
+
+      // Wind trail ring
+      ctx.beginPath();
+      ctx.arc(0, 0, armLen * 1.1, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "spin_attack") {
+      ctx.save();
+      // Full 360 hurricane sword slash disk
+      const spinRadius = Math.max(18, halfWidth * 2.4);
+      const rot = frameCounter * 0.5;
+
+      // 1. Translucent cyan cutting disc
+      ctx.beginPath();
+      ctx.arc(x, centerY, spinRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.22)";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      // 2. Twin glowing blade trails along perimeter
+      for (let i = 0; i < 2; i++) {
+        const startAng = rot + i * Math.PI;
+        ctx.beginPath();
+        ctx.arc(x, centerY, spinRadius, startAng, startAng + 1.6);
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 3.5;
+        ctx.lineCap = "round";
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(x, centerY, spinRadius, startAng + 0.2, startAng + 1.4);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "bomb") {
+      ctx.save();
+      // Round blue cartoon bomb with burning fuse
+      const bombX = noseX + dir * 8;
+      const bombY = centerY - heightPx * 0.35;
+      const bombR = Math.max(6, halfWidth * 0.45);
+
+      // Bomb spherical body
+      ctx.beginPath();
+      ctx.arc(bombX, bombY, bombR, 0, Math.PI * 2);
+      ctx.fillStyle = "#1d4ed8";
+      ctx.shadowColor = "#3b82f6";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Brass fuse cap
+      ctx.fillStyle = "#ca8a04";
+      ctx.fillRect(bombX - 2, bombY - bombR - 3, 4, 3);
+
+      // Sparkling burning fuse
+      const fuseProg = (frameCounter % 6) / 6;
+      ctx.beginPath();
+      ctx.arc(
+        bombX + (fuseProg > 0.5 ? 2 : -2),
+        bombY - bombR - 6,
+        2.5,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#facc15";
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 6;
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Kirby's signature special moves:
+   * - Inhale (Neutral-B): Billowing translucent suction wind cone converging into wide mouth.
+   * - Final Cutter (Up-B): Vertical sword slash trail rising up, somersault, downward dive, and floor shockwave.
+   * - Stone (Down-B): Heavy slate rock transformation with floor fracture puffs.
+   */
+  private drawKirbySpecial(
+    x: number,
+    y: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: KirbySpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const mouthX = x + dir * (halfWidth * 0.7);
+
+    if (specialType === "inhale") {
+      ctx.save();
+      // Suction wind cone expanding forward from mouth
+      const coneLen = halfWidth * 3.2;
+      const coneEndW = heightPx * 1.1;
+
+      // 1. Translucent suction cone fill
+      ctx.beginPath();
+      ctx.moveTo(mouthX, centerY);
+      ctx.lineTo(mouthX + dir * coneLen, centerY - coneEndW * 0.5);
+      ctx.lineTo(mouthX + dir * coneLen, centerY + coneEndW * 0.5);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(186, 230, 253, 0.25)";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+
+      // 2. Swirling air stream curves
+      const streamCount = 4;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = "round";
+
+      for (let i = 0; i < streamCount; i++) {
+        const streamProg = (frameCounter * 0.08 + i / streamCount) % 1;
+        const sx = mouthX + dir * (coneLen * (1 - streamProg));
+        const sy =
+          centerY + (i - 1.5) * (coneEndW * 0.28 * (1 - streamProg * 0.5));
+
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.quadraticCurveTo(
+          mouthX + dir * (coneLen * 0.4),
+          centerY + Math.sin(frameCounter * 0.3 + i) * 6,
+          mouthX,
+          centerY,
+        );
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "final_cutter") {
+      ctx.save();
+      // Upward rising slash / downward dive / floor shockwave wave
+      const swordX = mouthX + dir * (halfWidth * 0.4);
+
+      // Vertical energy blade trail
+      ctx.beginPath();
+      ctx.moveTo(swordX, y);
+      ctx.lineTo(swordX, centerY - heightPx * 1.1);
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = "#0284c7";
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(swordX, y);
+      ctx.lineTo(swordX, centerY - heightPx * 1.1);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+
+      // Floor cutter shockwave wave
+      const waveX = mouthX + dir * (halfWidth * 1.6);
+      ctx.beginPath();
+      ctx.moveTo(waveX, y);
+      ctx.lineTo(waveX + dir * 10, y - heightPx * 0.45);
+      ctx.lineTo(waveX + dir * 16, y);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(56, 189, 248, 0.75)";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "stone") {
+      ctx.save();
+      // Solid stone/brick block
+      const stoneW = halfWidth * 1.8;
+      const stoneH = heightPx * 0.95;
+      const left = x - stoneW * 0.5;
+      const top = y - stoneH;
+
+      // Stone block body
+      ctx.fillStyle = "#64748b"; // Slate rock
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 2;
+      ctx.fillRect(left, top, stoneW, stoneH);
+      ctx.strokeRect(left, top, stoneW, stoneH);
+
+      // Chiseled highlights
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillRect(left + 2, top + 2, stoneW - 4, 3);
+      ctx.fillRect(left + 2, top + 2, 3, stoneH - 4);
+
+      // Floor impact dust puffs
+      ctx.beginPath();
+      ctx.ellipse(x - stoneW * 0.6, y, 6, 2.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + stoneW * 0.6, y, 6, 2.5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(203, 213, 225, 0.65)";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Jigglypuff's signature special moves:
+   * - Pound (Neutral-B): Forward-lunging punch with vibrant pink star impact burst.
+   * - Sing (Up-B): Concentric musical soundwave rings radiating outward with floating notes.
+   * - Rest (Down-B): Explosive critical hit star bloom with flower petals and Zzz sparkles.
+   */
+  private drawJigglypuffSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: JigglypuffSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * halfWidth;
+
+    if (specialType === "pound") {
+      ctx.save();
+      // Forward thrusting punch impact with large pink burst star
+      const punchX = noseX + dir * (halfWidth * 0.85);
+      const starR = Math.max(10, halfWidth * 0.75);
+
+      // Thrust speed lines
+      ctx.beginPath();
+      ctx.moveTo(x, centerY - heightPx * 0.2);
+      ctx.lineTo(punchX - dir * 4, centerY - heightPx * 0.2);
+      ctx.moveTo(x, centerY + heightPx * 0.2);
+      ctx.lineTo(punchX - dir * 4, centerY + heightPx * 0.2);
+      ctx.strokeStyle = "rgba(244, 114, 182, 0.75)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 4-point impact star
+      ctx.beginPath();
+      ctx.moveTo(punchX - starR, centerY);
+      ctx.quadraticCurveTo(punchX, centerY, punchX, centerY - starR);
+      ctx.quadraticCurveTo(punchX, centerY, punchX + starR, centerY);
+      ctx.quadraticCurveTo(punchX, centerY, punchX, centerY + starR);
+      ctx.quadraticCurveTo(punchX, centerY, punchX - starR, centerY);
+      ctx.fillStyle = "#f472b6";
+      ctx.shadowColor = "#ec4899";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      // White inner core
+      ctx.beginPath();
+      ctx.arc(punchX, centerY, starR * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "sing") {
+      ctx.save();
+      // Concentric musical soundwave rings + floating notes
+      const ringCount = 3;
+      for (let i = 0; i < ringCount; i++) {
+        const ringProg = (frameCounter * 0.05 + i / ringCount) % 1;
+        const r = halfWidth * 0.8 + ringProg * (heightPx * 1.2);
+        ctx.beginPath();
+        ctx.arc(x, centerY, r, 0, Math.PI * 2);
+        ctx.strokeStyle = resolveColor("#f472b6", false, (1 - ringProg) * 0.85);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Floating musical notes ♪ ♫
+      ctx.font = "bold 14px system-ui, sans-serif";
+      ctx.fillStyle = "#ec4899";
+      ctx.shadowColor = "#f472b6";
+      ctx.shadowBlur = 8;
+      const note1Y =
+        centerY - heightPx * 0.6 + Math.sin(frameCounter * 0.2) * 4;
+      const note2Y =
+        centerY - heightPx * 0.4 + Math.cos(frameCounter * 0.25) * 4;
+      ctx.fillText("♪", x - halfWidth * 1.1, note1Y);
+      ctx.fillText("♫", x + halfWidth * 0.9, note2Y);
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "rest") {
+      ctx.save();
+      // Explosive critical hit star bloom with flower petals and Zzz sparkles
+      const bloomR = Math.max(14, heightPx * 0.8);
+      const isBurst = frameCounter < 10;
+
+      if (isBurst) {
+        // Massive flash beam burst
+        const beamCount = 8;
+        for (let i = 0; i < beamCount; i++) {
+          const ang = (i * Math.PI * 2) / beamCount;
+          ctx.beginPath();
+          ctx.moveTo(x, centerY);
+          ctx.lineTo(
+            x + Math.cos(ang) * (bloomR * 1.6),
+            centerY + Math.sin(ang) * (bloomR * 1.6),
+          );
+          ctx.strokeStyle = i % 2 === 0 ? "#f43f5e" : "#fde047";
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = "#f43f5e";
+          ctx.shadowBlur = 14;
+          ctx.stroke();
+        }
+      }
+
+      // Flower petal bloom
+      const petalCount = 5;
+      for (let i = 0; i < petalCount; i++) {
+        const ang = (i * Math.PI * 2) / petalCount;
+        const px = x + Math.cos(ang) * (bloomR * 0.6);
+        const py = centerY + Math.sin(ang) * (bloomR * 0.6);
+        ctx.beginPath();
+        ctx.arc(px, py, bloomR * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(244, 63, 94, 0.75)";
+        ctx.fill();
+      }
+
+      // White center flash
+      ctx.beginPath();
+      ctx.arc(x, centerY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      // Sleeping Zzz
+      ctx.font = "bold 11px system-ui, sans-serif";
+      ctx.fillStyle = "#93c5fd";
+      ctx.fillText("z", x + 8, centerY - heightPx * 0.5);
+
+      ctx.restore();
+      return;
     }
   }
 
