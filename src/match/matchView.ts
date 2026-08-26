@@ -1923,7 +1923,6 @@ export class MatchViewController {
 
       row.appendChild(indexEl);
       row.appendChild(timeEl);
-      row.appendChild(dmgEl);
       row.appendChild(badgeEl);
 
       const detail = document.createElement("div");
@@ -1983,8 +1982,8 @@ export class MatchViewController {
             <span class="di-live-val">${victimName} ← ${attackerName}</span>
           </div>
           <div class="di-live-detail-item">
-            <span class="di-live-label">Damage & Hitlag</span>
-            <span class="di-live-val">+${Math.round(h.damageDealt)}% (${h.diWindowFrames}F window)</span>
+            <span class="di-live-label">Hitlag Window</span>
+            <span class="di-live-val">${h.diWindowFrames} frames</span>
           </div>
           <div class="di-live-detail-item">
             <span class="di-live-label">Displacement</span>
@@ -2056,12 +2055,17 @@ export class MatchViewController {
         ? this.diEvents.filter((h) => h.victimPort === this.perspectivePort)
         : this.diEvents;
 
-    // Find if a hit is currently active in hitlag or initial knockback (within 22 frames of hitlag end)
-    const activeHit = filteredHits.find(
+    // Leave the DI box active and expanded for 3 seconds (180 frames at 60 FPS) after the hit occurs
+    const POST_HIT_EXPAND_FRAMES = 180;
+    const activeHitsInRange = filteredHits.filter(
       (h) =>
         frameIndex >= h.hitFrameIndex &&
-        frameIndex <= h.endHitlagFrameIndex + 22,
+        frameIndex <= h.endHitlagFrameIndex + POST_HIT_EXPAND_FRAMES,
     );
+    const activeHit =
+      activeHitsInRange.length > 0
+        ? activeHitsInRange[activeHitsInRange.length - 1]
+        : undefined;
 
     const allWrappers =
       this.diList.querySelectorAll<HTMLElement>(".di-item-wrapper");
