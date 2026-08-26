@@ -18,6 +18,7 @@ import { LibraryViewController } from "./library/libraryView.js";
 import { CharacterPreviewController } from "./preview/characterPreview.js";
 import {
   createDefaultIdentity,
+  matchesAlias,
   resolvePerspectivePort,
 } from "./data/identity.js";
 import { computeOverallBaseline, type DerivedRates } from "./data/aggregate.js";
@@ -175,27 +176,28 @@ function computeMatchupBaselineForPort(
 ): DerivedRates | null {
   if (summary.ports.length !== 2) return null;
   const currentIdentity = libraryController.getIdentity();
-  const yourP = summary.ports.find((p) => p.port === port);
-  if (!yourP) return null;
+  if (currentIdentity.aliases.size === 0) {
+    return null;
+  }
 
-  const name = yourP.playerName?.trim() ?? "";
-  if (name.length > 0 && currentIdentity.aliases.has(name)) {
+  const targetPort = summary.ports.find((p) => p.port === port);
+  if (!targetPort) return null;
+
+  const resolvedYouPort = resolvePerspectivePort(summary, currentIdentity);
+  const name = targetPort.playerName?.trim() ?? "";
+  const isYou =
+    matchesAlias(name, currentIdentity) ||
+    (resolvedYouPort !== null && resolvedYouPort === port);
+
+  if (isYou) {
     return computeOverallBaseline(
       libraryController.getSummaries(),
       currentIdentity,
     );
   }
 
-  if (name.length > 0) {
-    const oppId = createDefaultIdentity(name);
-    oppId.aliases.add(name);
-    return computeOverallBaseline(libraryController.getSummaries(), oppId);
-  }
-
-  return computeOverallBaseline(
-    libraryController.getSummaries(),
-    currentIdentity,
-  );
+  // When looking from the opponent's perspective, do not show diffs from anyone's average stats
+  return null;
 }
 
 async function handleRouteChange(route: Route): Promise<void> {
