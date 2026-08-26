@@ -10,7 +10,6 @@ import {
   computeShieldPressureStats,
   getJigglypuffFThrowSituations,
   getShieldPressureSituations,
-  type JigglypuffFThrowEvent,
 } from "./characterMeta.js";
 import type { Replay } from "@rmg-k/rmgr";
 
@@ -197,16 +196,37 @@ describe("computeJigglypuffFThrowEvents", () => {
     expect(stats.noFollowups).toBe(1);
     expect(stats.followupRate).toBe(0);
   });
-});
+  it("does not count the throw release hit as a follow-up when grab was preceded by a hit", () => {
+    const replay = makeReplay([
+      // Pre-grab hit: opponent damage 3%, combo hit 1
+      { p0State: 0x00a, p1State: 0x026, p1Combo: 1, p1Dmg: 3 },
+      // Grab & ThrowF begins
+      { p0State: 0x0a9, p1State: 0x0ba, p1Combo: 1, p1Dmg: 3 },
+      // Throw release: damage becomes 17%, combo becomes 2 while ThrowF is still active
+      { p0State: 0x0a9, p1State: 0x036, p1Combo: 2, p1Dmg: 17 },
+      // Throw ends (Puff in Wait 0x00a, opponent still in hitstun at 17% damage, combo 2)
+      { p0State: 0x00a, p1State: 0x036, p1Combo: 2, p1Dmg: 17 },
+      // Hitstun ends without Puff landing another hit, combo drops to 0
+      { p0State: 0x00a, p1State: 0x018, p1Combo: 0, p1Dmg: 17 },
+      // 35 frames pass after hitstun reset without any hit
+      ...new Array(35).fill({
+        p0State: 0x00a,
+        p1State: 0x018,
+        p1Combo: 0,
+        p1Dmg: 17,
+      }),
+    ]);
 
-describe("computeJigglypuffFThrowStats", () => {
-  it("returns null followupRate when no throws occurred", () => {
-    const events: JigglypuffFThrowEvent[] = [];
+    const events = computeJigglypuffFThrowEvents(replay);
+    expect(events).toHaveLength(2);
+    expect(events[0]?.kind).toBe("fthrow-entered");
+    expect(events[1]?.kind).toBe("fthrow-failure");
+
     const stats = computeJigglypuffFThrowStats(events, 0);
-    expect(stats.totalThrows).toBe(0);
+    expect(stats.totalThrows).toBe(1);
     expect(stats.followupSuccesses).toBe(0);
-    expect(stats.noFollowups).toBe(0);
-    expect(stats.followupRate).toBeNull();
+    expect(stats.noFollowups).toBe(1);
+    expect(stats.followupRate).toBe(0);
   });
 });
 
