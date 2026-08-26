@@ -1,29 +1,62 @@
 import { describe, it, expect } from "vitest";
 import {
   calculateDIFrames,
+  calculateHitlagFrames,
   checkDIActivation,
   classifyDICardinal,
   classifyDIRelative,
   calculateHitDI,
   extractAllHitsWithDI,
+  DI_STICK_DISPLACEMENT_FACTOR,
 } from "./di.js";
 import type { Replay, Frame, PortIndex } from "@rmg-k/rmgr";
 
-describe("calculateDIFrames", () => {
-  it("calculates standard move DI frames correctly", () => {
-    // formula: floor(damage / 3) + 4
-    expect(calculateDIFrames(0)).toBe(0);
-    expect(calculateDIFrames(3)).toBe(5); // floor(3/3)+4 = 5
-    expect(calculateDIFrames(8)).toBe(6); // floor(8/3)+4 = 6
-    expect(calculateDIFrames(10)).toBe(7); // floor(10/3)+4 = 7
-    expect(calculateDIFrames(16)).toBe(9); // Falcon uair: floor(16/3)+4 = 9
-    expect(calculateDIFrames(24)).toBe(12); // floor(24/3)+4 = 12
+describe("calculateHitlagFrames and calculateDIFrames", () => {
+  it("calculates U version standard hitlag frames correctly (+5 bonus)", () => {
+    // formula: floor(damage / 3) + 5
+    expect(calculateHitlagFrames(0, { version: "U" })).toBe(0);
+    expect(calculateHitlagFrames(3, { version: "U" })).toBe(6); // floor(3/3)+5 = 6
+    expect(calculateHitlagFrames(8, { version: "U" })).toBe(7); // floor(8/3)+5 = 7
+    expect(calculateHitlagFrames(10, { version: "U" })).toBe(8); // floor(10/3)+5 = 8
+    expect(calculateDIFrames(10)).toBe(8);
+    expect(calculateHitlagFrames(16, { version: "U" })).toBe(10); // Falcon uair: floor(16/3)+5 = 10
   });
 
-  it("calculates electric attack DI frames with 1.5x multiplier", () => {
-    // formula: floor(floor(damage / 3 + 4) * 1.5)
-    expect(calculateDIFrames(10, true)).toBe(Math.floor(7 * 1.5)); // 10
-    expect(calculateDIFrames(16, true)).toBe(Math.floor(9 * 1.5)); // 13
+  it("calculates J version standard hitlag frames correctly (+4 bonus)", () => {
+    // formula: floor(damage / 3) + 4
+    expect(calculateHitlagFrames(10, { version: "J" })).toBe(7); // floor(10/3)+4 = 7
+    expect(calculateHitlagFrames(16, { version: "J" })).toBe(9); // floor(16/3)+4 = 9
+  });
+
+  it("calculates crouch-cancel hitlag frames correctly", () => {
+    // formula: floor((floor(dmg/3)*2 + bonus*2) / 3)
+    // 10% on U version: floor((3*2 + 5*2) / 3) = floor(16/3) = 5
+    expect(
+      calculateHitlagFrames(10, { targetState: "crouching", version: "U" }),
+    ).toBe(5);
+  });
+
+  it("calculates laying target hitlag frames correctly", () => {
+    // formula: floor(ceil(dmg/2)/3) + bonus
+    // 10% on U version: ceil(10/2) = 5 -> floor(5/3)+5 = 1+5 = 6
+    expect(
+      calculateHitlagFrames(10, { targetState: "laying", version: "U" }),
+    ).toBe(6);
+  });
+
+  it("calculates electric attack hitlag frames with 1.5x multiplier", () => {
+    // formula: floor(floor(damage / 3 + 5) * 1.5) on U version
+    expect(calculateHitlagFrames(10, { isElectric: true, version: "U" })).toBe(
+      Math.floor(8 * 1.5),
+    ); // 12
+    expect(calculateHitlagFrames(16, { isElectric: true, version: "U" })).toBe(
+      Math.floor(10 * 1.5),
+    ); // 15
+  });
+
+  it("verifies 2.1 units per stick input constant", () => {
+    expect(DI_STICK_DISPLACEMENT_FACTOR).toBe(2.1);
+    expect(80 * DI_STICK_DISPLACEMENT_FACTOR).toBe(168.0);
   });
 });
 
@@ -115,6 +148,7 @@ describe("calculateHitDI and extractAllHitsWithDI", () => {
       const stickX = withDI && f >= 13 && f <= 17 ? customStickX : 0;
       const stickY = withDI && f >= 13 && f <= 17 ? customStickY : 0;
       const posX = withDI && f >= 13 && !opts?.zeroDisplacement ? 832 : 1000;
+      const velX = f >= 18 ? -20 : 0;
 
       frames.push({
         frame: f,
@@ -175,7 +209,7 @@ describe("calculateHitDI and extractAllHitsWithDI", () => {
               positionX: posX,
               positionY: 500,
               positionZ: 0,
-              velocityX: 0,
+              velocityX: velX,
               velocityY: 0,
               velocityZ: 0,
               damagePercent: dmg,
@@ -219,11 +253,12 @@ describe("calculateHitDI and extractAllHitsWithDI", () => {
 
     expect(hitDI).not.toBeNull();
     expect(hitDI?.damageDealt).toBe(10);
-    expect(hitDI?.diWindowFrames).toBe(7);
+    expect(hitDI?.diWindowFrames).toBe(8);
     expect(hitDI?.inputCount).toBe(1);
     expect(hitDI?.startPos.x).toBe(1000);
     expect(hitDI?.endPos.x).toBe(832);
     expect(hitDI?.displacement.dx).toBe(-168);
+    expect(hitDI?.theoreticalDisplacement?.dx).toBe(-168);
     expect(hitDI?.cardinal).toBe("left");
     expect(hitDI?.relative).toBe("away");
   });

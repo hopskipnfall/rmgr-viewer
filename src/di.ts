@@ -9,10 +9,28 @@ export const DI_MIN_MAGNITUDE = 53;
 /** Maximum effective stick value clamped by Smash 64 engine. */
 export const DI_STICK_MAX = 80;
 
+/** Multiplier per stick unit for DI displacement in Smash 64 engine: 2.1 units per clamped stick coordinate. */
+export const DI_STICK_DISPLACEMENT_FACTOR = 2.1;
+
 /** Action states corresponding to electrical attacks that inflict 1.5x hitlag. */
 const ELECTRIC_HIT_STATES = new Set([
   0x037, // DamageElec
 ]);
+
+/** Action states for crouching in Smash 64. */
+const CROUCH_ACTION_STATES = new Set([
+  0x018, // Squat
+  0x019, // SquatWait
+  0x01a, // SquatRv
+]);
+
+export type GameRegionVersion = "U" | "J";
+
+export interface HitlagOptions {
+  version?: GameRegionVersion;
+  isElectric?: boolean;
+  targetState?: "standing" | "airborne" | "crouching" | "laying";
+}
 
 export type DICardinalDirection =
   | "neutral"
@@ -93,6 +111,13 @@ export interface HitDIResult {
     angleDeg: number;
   };
 
+  /** Theoretical displacement calculated as sum of (clamped stick * 2.1) on activation frames. */
+  readonly theoreticalDisplacement?: {
+    dx: number;
+    dy: number;
+    distance: number;
+  };
+
   /** Simplified cardinal direction. */
   readonly cardinal: DICardinalDirection;
 
@@ -104,16 +129,48 @@ export interface HitDIResult {
 }
 
 /**
- * Computes the number of DI / hitlag frames for an attack dealing `damage`.
- *
- * In Smash 64:
- * - Standard move: floor(damage / 3) + 4
- * - Electric move: floor(floor(damage / 3 + 4) * 1.5)
+ * Computes hitlag frames following the exact Smash 64 engine formulas (from calculator.js).
+ * U version bonus is 5; J version bonus is 4.
+ */
+export function calculateHitlagFrames(
+  damage: number,
+  options: HitlagOptions = {},
+): number {
+  const dmg = Math.max(0, Math.trunc(damage));
+  if (dmg <= 0) return 0;
+
+  const version = options.version ?? "U";
+  const bonus = version === "J" ? 4 : 5;
+  const isElectric = Boolean(options.isElectric);
+  const state = options.targetState ?? "standing";
+
+  if (state === "laying") {
+    const extra = Math.ceil(dmg / 2);
+    const base = Math.floor(extra / 3) + bonus;
+    return isElectric ? Math.floor(base * 1.5) : base;
+  }
+
+  if (state === "crouching") {
+    const base = Math.floor(dmg / 3);
+    if (isElectric) {
+      const value = base + bonus;
+      return value & ~1;
+    }
+    return Math.floor((base * 2 + bonus * 2) / 3);
+  }
+
+  let base = Math.floor(dmg / 3) + bonus;
+  if (isElectric) {
+    base = Math.floor(base * 1.5);
+  }
+  return base;
+}
+
+/**
+ * Backwards-compatible DI frames calculation (for standard standing hits).
  */
 export function calculateDIFrames(damage: number, isElectric = false): number {
-  if (damage <= 0) return 0;
-  const base = Math.floor(damage / 3) + 4;
-  return isElectric ? Math.floor(base * 1.5) : base;
+  return calculateHitlagFrames(damage, { isElectric, version: "U" });
 }
 
 /**
@@ -273,13 +330,38 @@ export function calculateHitDI(
   }
 
   const isElectric = ELECTRIC_HIT_STATES.has(startPost.actionStateId);
-  const diWindow = calculateDIFrames(damageDealt, isElectric);
-  if (diWindow <= 0) return null;
+  const isCrouching = CROUCH_ACTION_STATES.has(prevPost.actionStateId);
+  const isLaying =
+    prevPost.actionStateId === 0x0bb || prevPost.actionStateId === 0x0bc;
+  const targetState = isLaying
+    ? "laying"
+    : isCrouching
+      ? "crouching"
+      : "standing";
 
-  const endFrameIndex = Math.min(
-    replay.frames.length - 1,
-    hitFrameIndex + diWindow,
-  );
+  const expectedHitlag = calculateHitlagFrames(damageDealt, {
+    isElectric,
+    targetState,
+    version: "U",
+  });
+  if (expectedHitlag <= 0) return null;
+
+  // Dynamically locate the actual hitlag window in the replay (frames where knockback velocity hasn't started yet)
+  let endHitlagFrameIndex = hitFrameIndex;
+  for (let k = 1; k <= expectedHitlag + 4; k++) {
+    const fIdx = hitFrameIndex + k;
+    const f = replay.frames[fIdx];
+    if (!f) break;
+    const post = f.ports[victimPort]?.post;
+    if (!post) break;
+    if (post.velocityX !== 0 || post.velocityY !== 0) {
+      endHitlagFrameIndex = hitFrameIndex + k - 1;
+      break;
+    }
+    endHitlagFrameIndex = fIdx;
+  }
+  const diWindow = Math.max(1, endHitlagFrameIndex - hitFrameIndex + 1);
+
   const startPos = { x: startPost.positionX, y: startPost.positionY };
 
   let inputCount = 0;
@@ -289,7 +371,10 @@ export function calculateHitDI(
   let lastY = prevFrame.ports[victimPort]?.pre?.stickY ?? 0;
   let lastRecordedPos = { x: startPost.positionX, y: startPost.positionY };
 
-  for (let k = 0; k <= diWindow; k++) {
+  let theoreticalDx = 0;
+  let theoreticalDy = 0;
+
+  for (let k = 0; k < diWindow; k++) {
     const fIdx = hitFrameIndex + k;
     const f = replay.frames[fIdx];
     if (!f) break;
@@ -303,6 +388,10 @@ export function calculateHitDI(
     const isAct = checkDIActivation(lastX, lastY, currX, currY);
     if (isAct) {
       inputCount++;
+      const clampedX = Math.max(-DI_STICK_MAX, Math.min(DI_STICK_MAX, currX));
+      const clampedY = Math.max(-DI_STICK_MAX, Math.min(DI_STICK_MAX, currY));
+      theoreticalDx += clampedX * DI_STICK_DISPLACEMENT_FACTOR;
+      theoreticalDy += clampedY * DI_STICK_DISPLACEMENT_FACTOR;
     }
 
     const currPos = post
@@ -331,19 +420,10 @@ export function calculateHitDI(
   let dy = 0;
 
   if (inputCount > 0) {
-    // Measure spatial displacement strictly while in hitlag before knockback velocity begins
-    for (let k = 0; k <= diWindow; k++) {
-      const fIdx = hitFrameIndex + k;
-      const f = replay.frames[fIdx];
-      if (!f) break;
-      const post = f.ports[victimPort]?.post;
-      if (!post) break;
-      if (post.velocityX === 0 && post.velocityY === 0) {
-        dx = post.positionX - startPos.x;
-        dy = post.positionY - startPos.y;
-      } else {
-        break;
-      }
+    const endPost = replay.frames[endHitlagFrameIndex]?.ports[victimPort]?.post;
+    if (endPost) {
+      dx = endPost.positionX - startPos.x;
+      dy = endPost.positionY - startPos.y;
     }
   }
 
@@ -353,16 +433,13 @@ export function calculateHitDI(
   const endPos = { x: startPos.x + dx, y: startPos.y + dy };
   const attackerX = attackerPost ? attackerPost.positionX : null;
 
-  // If displacement was constrained (e.g. grounded character DIing down into the floor),
-  // derive direction from the actual joystick stick vector on activation frames.
+  // If physical displacement was constrained (e.g. grounded character DIing down into the floor),
+  // derive direction from the theoretical/stick vector on activation frames.
   let effectiveDx = dx;
   let effectiveDy = dy;
   if (Math.hypot(dx, dy) < 8 && inputCount > 0) {
-    const activeInputs = inputs.filter((i) => i.isActivation);
-    if (activeInputs.length > 0) {
-      effectiveDx = activeInputs.reduce((sum, i) => sum + i.stickX, 0);
-      effectiveDy = activeInputs.reduce((sum, i) => sum + i.stickY, 0);
-    }
+    effectiveDx = theoreticalDx !== 0 ? theoreticalDx : 0;
+    effectiveDy = theoreticalDy !== 0 ? theoreticalDy : 0;
   }
 
   const cardinal = classifyDICardinal(effectiveDx, effectiveDy);
@@ -375,11 +452,12 @@ export function calculateHitDI(
 
   // Theoretical max displacement per DI frame in 64: max ~1 activation per 2 frames, ~168 units per activation
   const maxPossibleActivations = Math.max(1, Math.floor(diWindow / 2) + 1);
+  const theoreticalDist = Math.hypot(theoreticalDx, theoreticalDy);
   const efficiency = Math.min(
     100,
     Math.round(
       (inputCount / maxPossibleActivations) * 70 +
-        Math.min(30, (distance / (maxPossibleActivations * 140)) * 30),
+        Math.min(30, (distance / (maxPossibleActivations * 168)) * 30),
     ),
   );
 
@@ -393,7 +471,7 @@ export function calculateHitDI(
     startDamage: prevPost.damagePercent,
     endDamage: startPost.damagePercent,
     diWindowFrames: diWindow,
-    endHitlagFrameIndex: endFrameIndex,
+    endHitlagFrameIndex,
     isElectric,
     inputCount,
     inputs,
@@ -405,6 +483,11 @@ export function calculateHitDI(
       distance,
       angleRad,
       angleDeg,
+    },
+    theoreticalDisplacement: {
+      dx: theoreticalDx,
+      dy: theoreticalDy,
+      distance: theoreticalDist,
     },
     cardinal,
     relative,
