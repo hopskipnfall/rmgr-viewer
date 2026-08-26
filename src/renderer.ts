@@ -21,6 +21,11 @@ import {
   isHitstunState,
   computeEdgeGuardEvents,
 } from "./edgeGuard.js";
+import {
+  extractAllHitsWithDI,
+  type HitDIResult,
+  type DICardinalDirection,
+} from "./di.js";
 
 const SHIELD_ACTION_STATES = new Set([
   0x098, // ShieldOn
@@ -1297,10 +1302,32 @@ export interface CharacterAnimState {
   actionFrameCounter: number;
 }
 
+const DI_ARROW_GLYPHS: Record<DICardinalDirection, string> = {
+  up: "↑",
+  down: "↓",
+  left: "←",
+  right: "→",
+  "up-left": "↖",
+  "up-right": "↗",
+  "down-left": "↙",
+  "down-right": "↘",
+  neutral: "•",
+};
+
 export class StageRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private quickAttackOverlayPaths: QuickAttackPath[] | null = null;
   private hoveredQuickAttackIndex: number | null = null;
+  private diEventsCache = new WeakMap<Replay, HitDIResult[]>();
+
+  private getDIEvents(replay: Replay): HitDIResult[] {
+    let events = this.diEventsCache.get(replay);
+    if (!events) {
+      events = extractAllHitsWithDI(replay);
+      this.diEventsCache.set(replay, events);
+    }
+    return events;
+  }
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
@@ -1397,6 +1424,19 @@ export class StageRenderer {
         );
       }
       this.drawDeathDirectionFlashes(frame);
+
+      // Draw Directional Influence (DI) shift vector and overhead badge during hitlag and early hitstun
+      if (replay && frameIndex !== undefined) {
+        const diEvents = this.getDIEvents(replay);
+        for (const hitDI of diEvents) {
+          if (
+            frameIndex >= hitDI.hitFrameIndex &&
+            frameIndex <= hitDI.endHitlagFrameIndex + 22
+          ) {
+            this.drawDIIndicator(camera, hitDI, frameIndex);
+          }
+        }
+      }
     }
 
     if (hoverScreen) {
@@ -1591,6 +1631,136 @@ export class StageRenderer {
       }
       ctx.restore();
     }
+  }
+
+  /**
+   * Visualizes Smash 64 Directional Influence (DI) during hitlag and the initial knockback frames.
+   * Draws a glowing displacement vector arrow, activation step pips, and an overhead badge.
+   */
+  private drawDIIndicator(
+    camera: Camera,
+    hitDI: HitDIResult,
+    currentFrameIndex: number,
+  ): void {
+    const { ctx } = this;
+    const startScreen = camera.worldToScreen(
+      hitDI.startPos.x,
+      hitDI.startPos.y,
+    );
+    const endScreen = camera.worldToScreen(hitDI.endPos.x, hitDI.endPos.y);
+
+    const isDuringHitlag =
+      currentFrameIndex >= hitDI.hitFrameIndex &&
+      currentFrameIndex <= hitDI.endHitlagFrameIndex;
+    const framesAfterHitlag = currentFrameIndex - hitDI.endHitlagFrameIndex;
+    const maxPostFrames = 22;
+    if (framesAfterHitlag > maxPostFrames) return;
+
+    const alpha = isDuringHitlag
+      ? 1.0
+      : Math.max(0, 1.0 - framesAfterHitlag / maxPostFrames);
+
+    ctx.save();
+
+    const isStrongDI = hitDI.inputCount >= 2;
+    const mainColor = isStrongDI
+      ? `rgba(251, 191, 36, ${alpha * 0.95})` // Golden amber for 2x+ DI
+      : hitDI.inputCount === 1
+        ? `rgba(56, 189, 248, ${alpha * 0.95})` // Cyan for 1x DI
+        : `rgba(148, 163, 184, ${alpha * 0.55})`; // Muted slate for 0x DI
+
+    const glowColor = isStrongDI
+      ? `rgba(245, 158, 11, ${alpha * 0.8})`
+      : `rgba(14, 165, 233, ${alpha * 0.8})`;
+
+    // 1. Draw physical displacement vector arrow
+    if (hitDI.displacement.distance >= 6) {
+      ctx.strokeStyle = mainColor;
+      ctx.fillStyle = mainColor;
+      ctx.lineWidth = isStrongDI ? 3 : 2;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = isStrongDI ? 8 : 5;
+
+      // Vector line
+      ctx.beginPath();
+      ctx.moveTo(startScreen.x, startScreen.y);
+      ctx.lineTo(endScreen.x, endScreen.y);
+      ctx.stroke();
+
+      // Arrowhead at endScreen
+      const angle = Math.atan2(
+        endScreen.y - startScreen.y,
+        endScreen.x - startScreen.x,
+      );
+      const headLen = isStrongDI ? 10 : 8;
+      ctx.beginPath();
+      ctx.moveTo(endScreen.x, endScreen.y);
+      ctx.lineTo(
+        endScreen.x - headLen * Math.cos(angle - Math.PI / 6),
+        endScreen.y - headLen * Math.sin(angle - Math.PI / 6),
+      );
+      ctx.lineTo(
+        endScreen.x - headLen * Math.cos(angle + Math.PI / 6),
+        endScreen.y - headLen * Math.sin(angle + Math.PI / 6),
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // Start impact point
+      ctx.beginPath();
+      ctx.arc(startScreen.x, startScreen.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Activation pips along the line for multi-input DI
+      if (hitDI.inputCount > 1) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
+        for (let i = 1; i < hitDI.inputCount; i++) {
+          const t = i / hitDI.inputCount;
+          const px = startScreen.x + (endScreen.x - startScreen.x) * t;
+          const py = startScreen.y + (endScreen.y - startScreen.y) * t;
+          ctx.beginPath();
+          ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // 2. Overhead floating DI pill badge
+    const arrowGlyph = DI_ARROW_GLYPHS[hitDI.cardinal] ?? "•";
+    const dirLabel =
+      hitDI.relative !== "neutral" ? hitDI.relative : hitDI.cardinal;
+    const badgeText =
+      hitDI.inputCount > 0
+        ? `${arrowGlyph} ${hitDI.inputCount}x DI (${dirLabel})`
+        : `No DI`;
+
+    const badgeX = endScreen.x;
+    const badgeY = endScreen.y - 42;
+
+    ctx.font = "bold 10px monospace, system-ui, sans-serif";
+    const textMetrics = ctx.measureText(badgeText);
+    const padX = 6;
+    const bgWidth = textMetrics.width + padX * 2;
+    const bgHeight = 16;
+    const rx = badgeX - bgWidth / 2;
+    const ry = badgeY - bgHeight / 2;
+
+    ctx.fillStyle = `rgba(15, 23, 42, ${alpha * 0.88})`;
+    ctx.strokeStyle = mainColor;
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.roundRect(rx, ry, bgWidth, bgHeight, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = mainColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(badgeText, badgeX, badgeY);
+
+    ctx.restore();
   }
 
   /**

@@ -20,6 +20,7 @@ import { actionStateName, characterName } from "../lookups.js";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { t } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
+import { extractAllHitsWithDI } from "../di.js";
 import {
   computeNeutralHitEvents,
   computeNeutralHitsStats,
@@ -1761,6 +1762,8 @@ export class MatchViewController {
       return;
     }
 
+    const allHits = extractAllHitsWithDI(replay);
+
     combos.forEach((c, index) => {
       const row = document.createElement("div");
       row.className = "situation-row";
@@ -1790,6 +1793,30 @@ export class MatchViewController {
       row.appendChild(hitsEl);
       row.appendChild(dmgEl);
       row.appendChild(koBadgeEl);
+
+      // Find hits belonging to this combo to extract victim DI
+      const comboHits = allHits.filter(
+        (h) =>
+          h.victimPort === c.victimPort &&
+          h.hitFrameIndex >= c.startFrameIndex &&
+          h.hitFrameIndex <= c.endFrameIndex + 20,
+      );
+
+      if (comboHits.length > 0) {
+        const lastHit = comboHits[comboHits.length - 1];
+        if (lastHit) {
+          const diBadgeEl = document.createElement("span");
+          diBadgeEl.className = "combo-di-badge";
+          const dir =
+            lastHit.relative !== "neutral"
+              ? lastHit.relative
+              : lastHit.cardinal;
+          diBadgeEl.textContent =
+            lastHit.inputCount > 0 ? `${lastHit.inputCount}x DI` : `No DI`;
+          diBadgeEl.title = `Victim DI on final hit: ${lastHit.inputCount}x (${dir}), ${Math.round(lastHit.displacement.distance)}u displacement`;
+          row.appendChild(diBadgeEl);
+        }
+      }
 
       row.addEventListener("click", () => {
         this.dismissQuickAttackOverlay();
