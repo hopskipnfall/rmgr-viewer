@@ -191,7 +191,7 @@ export class MatchViewController {
   private characterMetaCollapsed = false;
   private logFilterCollapsed = false;
   private activeLogCategories: Set<
-    "recovery" | "ledge" | "angel" | "neutral" | "character"
+    "recovery" | "ledge" | "angel" | "neutral" | "character" | "debug"
   >;
   private hudOverlayEnabled = true;
   private matchupBaseline: DerivedRates | null = null;
@@ -932,13 +932,19 @@ export class MatchViewController {
           break;
       }
 
-      const attackerName = name(ev.attackerPort);
-      const isLanded = perspective === null || ev.attackerPort === perspective;
-      const text = `${ev.frame} — ${attackerName}: ${reasonLabel}`;
+      if (perspective !== null) {
+        const isOpening = ev.attackerPort === perspective;
+        const prefix = isOpening ? tr.logOpeningPrefix : tr.logPunishPrefix;
+        return {
+          text: `${ev.frame} — ${prefix}: ${reasonLabel}`,
+          kind: isOpening ? "success" : "failure",
+        };
+      }
 
+      const attackerName = name(ev.attackerPort);
       return {
-        text,
-        kind: isLanded ? "neutral-hit" : "failure",
+        text: `${ev.frame} — ${attackerName} ${tr.logOpeningPrefix}: ${reasonLabel}`,
+        kind: "neutral-hit",
       };
     }
 
@@ -1004,7 +1010,7 @@ export class MatchViewController {
             };
           case "angel-avoid-failure":
             return {
-              text: `${ev.frame} — ${tr.playerAngelAvoidFailure(name(ev.oppPort), ev.damageTaken ?? 0)}`,
+              text: `${ev.frame} — ${tr.playerAngelAvoidFailure(name(ev.oppPort))}`,
               kind: "failure",
             };
         }
@@ -1027,11 +1033,11 @@ export class MatchViewController {
         case "angel-avoid-failure":
           return isRespawner
             ? {
-                text: `${ev.frame} — ${tr.angelHitLanded(ev.damageTaken ?? 0)}`,
+                text: `${ev.frame} — ${tr.angelHitLanded}`,
                 kind: "success",
               }
             : {
-                text: `${ev.frame} — ${tr.angelAvoidFailed(ev.damageTaken ?? 0)}`,
+                text: `${ev.frame} — ${tr.angelAvoidFailed}`,
                 kind: "failure",
               };
       }
@@ -1267,7 +1273,7 @@ export class MatchViewController {
     this.logFilterChips.innerHTML = "";
 
     const categories: Array<{
-      id: "recovery" | "ledge" | "angel" | "neutral" | "character";
+      id: "recovery" | "ledge" | "angel" | "neutral" | "character" | "debug";
       label: string;
     }> = [
       { id: "recovery", label: tr.logFilterRecovery },
@@ -1275,6 +1281,7 @@ export class MatchViewController {
       { id: "angel", label: tr.logFilterAngel },
       { id: "neutral", label: tr.logFilterNeutral },
       { id: "character", label: tr.logFilterCharacter },
+      { id: "debug", label: tr.logFilterDebug },
     ];
 
     for (const cat of categories) {
@@ -1310,9 +1317,23 @@ export class MatchViewController {
     }
 
     this.currentLogEvents = this.matchEvents.filter((ev) => {
+      const isStartEvent =
+        ev.kind === "situation-entered" ||
+        ev.kind === "angel-entered" ||
+        ev.kind === "ledge-getup-entered" ||
+        ev.kind === "fthrow-entered" ||
+        ev.kind === "shield-pressure-entered";
+
+      if (isStartEvent && !this.activeLogCategories.has("debug")) {
+        return false;
+      }
+
       if (ev.kind === "neutral-hit") {
         if (!this.activeLogCategories.has("neutral")) return false;
-        return ev.attackerPort === this.perspectivePort;
+        return (
+          ev.attackerPort === this.perspectivePort ||
+          ev.victimPort === this.perspectivePort
+        );
       }
       if (
         ev.kind === "situation-entered" ||
@@ -2037,11 +2058,7 @@ export class MatchViewController {
       const frameIndex = Number(row.dataset.frameIndex);
       const isActive =
         currentFrameIndex >= frameIndex && currentFrameIndex <= frameIndex + 60;
-      const wasActive = row.classList.contains("active");
       row.classList.toggle("active", isActive);
-      if (isActive && !wasActive) {
-        row.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      }
     });
   }
 

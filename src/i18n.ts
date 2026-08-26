@@ -71,6 +71,9 @@ export interface Translations {
   logFilterAngel: string;
   logFilterNeutral: string;
   logFilterCharacter: string;
+  logFilterDebug: string;
+  logOpeningPrefix: string;
+  logPunishPrefix: string;
 
   // Events (Perspective)
   recovering: string;
@@ -91,8 +94,8 @@ export interface Translations {
   opponentAngelEntered: string;
   angelNoHits: string;
   angelAvoidSuccess: string;
-  angelHitLanded: (dmg: number) => string;
-  angelAvoidFailed: (dmg: number) => string;
+  angelHitLanded: string;
+  angelAvoidFailed: string;
 
   fthrowEntered: string;
   opponentFthrowEntered: string;
@@ -119,7 +122,7 @@ export interface Translations {
   playerLedgeGetupFailure: (player: string) => string;
   playerAngelEntered: (player: string) => string;
   playerAngelAvoidSuccess: (player: string) => string;
-  playerAngelAvoidFailure: (player: string, dmg: number) => string;
+  playerAngelAvoidFailure: (player: string) => string;
   playerFthrowEntered: (player: string) => string;
   playerFthrowFollowup: (player: string, hits?: number) => string;
   playerFthrowNoFollowup: (player: string) => string;
@@ -328,6 +331,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFilterAngel: "Angel",
     logFilterNeutral: "Neutral",
     logFilterCharacter: "Character",
+    logFilterDebug: "Window Starts (Debug)",
+    logOpeningPrefix: "Opening",
+    logPunishPrefix: "Punish",
     hudOverlay: "LOG",
     hudOverlayShow: "LOG",
     hudOverlayHide: "Hide Log",
@@ -350,9 +356,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     angelEntered: "Angel invincibility",
     opponentAngelEntered: "Opponent angel",
     angelNoHits: "Angel: 0 hits landed",
-    angelAvoidSuccess: "Angel avoid: success (0 dmg)",
-    angelHitLanded: (dmg) => `Angel: hit landed (+${dmg}%)`,
-    angelAvoidFailed: (dmg) => `Angel avoid: failed (+${dmg}%)`,
+    angelAvoidSuccess: "Angel avoid: success",
+    angelHitLanded: "Angel: hit landed",
+    angelAvoidFailed: "Angel avoid: failed",
 
     fthrowEntered: "F-throw",
     opponentFthrowEntered: "Opponent F-throw",
@@ -387,8 +393,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     playerLedgeGetupSuccess: (p) => `${p} getup: success`,
     playerLedgeGetupFailure: (p) => `${p} getup: failure`,
     playerAngelEntered: (p) => `${p} angel invincibility`,
-    playerAngelAvoidSuccess: (p) => `${p} avoided angel (0 dmg)`,
-    playerAngelAvoidFailure: (p, dmg) => `${p} hit during angel (+${dmg}%)`,
+    playerAngelAvoidSuccess: (p) => `${p} avoided angel`,
+    playerAngelAvoidFailure: (p) => `${p} hit during angel`,
     playerFthrowEntered: (p) => `${p} F-throw`,
     playerFthrowFollowup: (p, hits) =>
       hits
@@ -591,6 +597,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFilterAngel: "復活無敵",
     logFilterNeutral: "立ち回り",
     logFilterCharacter: "固有",
+    logFilterDebug: "イベント開始 (デバッグ)",
+    logOpeningPrefix: "差し込み",
+    logPunishPrefix: "被弾",
     hudOverlay: "ログ",
     hudOverlayShow: "ログ",
     hudOverlayHide: "ログ非表示",
@@ -613,9 +622,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     angelEntered: "復活無敵",
     opponentAngelEntered: "相手の復活無敵",
     angelNoHits: "無敵: ヒットなし",
-    angelAvoidSuccess: "無敵回避: 成功 (0%被弾)",
-    angelHitLanded: (dmg) => `無敵: ヒット成功 (+${dmg}%)`,
-    angelAvoidFailed: (dmg) => `無敵回避: 失敗 (+${dmg}%)`,
+    angelAvoidSuccess: "無敵回避: 成功",
+    angelHitLanded: "無敵: ヒット成功",
+    angelAvoidFailed: "無敵回避: 失敗",
 
     fthrowEntered: "前投げ",
     opponentFthrowEntered: "相手の前投げ",
@@ -646,8 +655,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     playerLedgeGetupSuccess: (p) => `${p} 崖上がり: 成功`,
     playerLedgeGetupFailure: (p) => `${p} 崖上がり: 失敗`,
     playerAngelEntered: (p) => `${p} 復活無敵`,
-    playerAngelAvoidSuccess: (p) => `${p} 無敵回避: 成功 (0%被弾)`,
-    playerAngelAvoidFailure: (p, dmg) => `${p} 無敵中に被弾 (+${dmg}%)`,
+    playerAngelAvoidSuccess: (p) => `${p} 無敵回避: 成功`,
+    playerAngelAvoidFailure: (p) => `${p} 無敵中に被弾`,
     playerFthrowEntered: (p) => `${p} 前投げ`,
     playerFthrowFollowup: (p, hits) =>
       hits ? `${p} 前投げ: 追撃成功 (${hits}ヒット)` : `${p} 前投げ: 追撃成功`,
