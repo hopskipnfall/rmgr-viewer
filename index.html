@@ -519,6 +519,20 @@
         color: var(--text-dim);
         margin: 0;
       }
+      .breakdown-group-section {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      .breakdown-group-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--accent);
+        padding-left: 2px;
+      }
       .breakdown-table-wrap {
         background: var(--panel);
         border: 1px solid var(--panel-border);
@@ -705,16 +719,53 @@
         background: #22252f;
         border: 1px solid var(--panel-border);
         color: var(--text);
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
-        border-radius: 4px;
-        padding: 4px 8px;
+        border-radius: 6px;
+        padding: 5px 10px;
         cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition:
+          background 0.15s,
+          border-color 0.15s,
+          transform 0.1s;
       }
       .inline-perspective-btn:hover {
+        background: #2d3345;
+        border-color: var(--accent);
+      }
+      .inline-perspective-btn.choose-btn {
+        background: rgba(79, 127, 219, 0.15);
+        border-color: rgba(79, 127, 219, 0.4);
+        color: #93b4f5;
+      }
+      .inline-perspective-btn.choose-btn:hover {
         background: var(--accent);
         color: #fff;
         border-color: var(--accent);
+      }
+      .inline-perspective-btn.you-btn {
+        background: rgba(79, 191, 106, 0.15);
+        border-color: rgba(79, 191, 106, 0.5);
+        color: #6ee787;
+        font-weight: 700;
+      }
+      .inline-perspective-btn.you-btn:hover {
+        background: rgba(224, 71, 63, 0.2);
+        border-color: rgba(224, 71, 63, 0.5);
+        color: #ff857d;
+      }
+      .inline-perspective-btn.opp-btn {
+        background: transparent;
+        border-color: transparent;
+        color: var(--text-dim);
+      }
+      .inline-perspective-btn.opp-btn:hover {
+        background: rgba(79, 127, 219, 0.18);
+        border-color: rgba(79, 127, 219, 0.4);
+        color: var(--text);
       }
       .ambiguous-badge {
         color: #ff9f43;
@@ -1865,17 +1916,27 @@
           flex-direction: row;
           flex-wrap: wrap;
           max-height: 45%;
+          gap: 10px;
         }
-        #matchStats {
-          width: 100%;
+        #perspectiveWidget,
+        #matchStats,
+        .situation-widget,
+        #characterMetaWidget,
+        #logFilterWidget,
+        #replayInfoWidget {
+          flex: 1 1 280px;
+          min-width: 0;
+          width: auto;
         }
         #players {
           width: 100%;
           flex-direction: row;
           flex-wrap: wrap;
+          gap: 10px;
         }
         .player-panel {
           flex: 1 1 260px;
+          min-width: 0;
         }
         #frameLabel {
           display: none;
@@ -1887,6 +1948,15 @@
       }
 
       @media (max-width: 480px) {
+        #perspectiveWidget,
+        #matchStats,
+        .situation-widget,
+        #characterMetaWidget,
+        #logFilterWidget,
+        #replayInfoWidget,
+        .player-panel {
+          flex: 1 1 100%;
+        }
         footer button {
           padding: 6px 8px;
           font-size: 12px;

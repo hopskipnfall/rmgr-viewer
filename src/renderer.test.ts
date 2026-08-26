@@ -1,14 +1,28 @@
 import { describe, it, expect } from "vitest";
 import {
+  canAngleAttack,
   getAttackInfo,
   getDeathDirection,
+  getDKSpecialType,
   getFalconSpecialType,
   getFoxFlightAngle,
   getFoxSpecialType,
+  getJigglypuffSpecialType,
+  getKirbySpecialType,
+  getLinkSpecialType,
+  getMarioSpecialType,
+  getNessSpecialType,
   getPikachuSpecialType,
+  getSamusSpecialType,
+  getStartNameAlpha,
+  getYoshiSpecialType,
+  START_NAME_DISPLAY_FRAMES,
+  START_NAME_SOLID_FRAMES,
   isCrouchState,
   isDeadState,
+  isDizzyState,
   isDonkeyKongCharacter,
+  isDownBoundState,
   isFalconCharacter,
   isFireFoxFlightState,
   isFoxCharacter,
@@ -19,16 +33,24 @@ import {
   isLinkCharacter,
   isLuigiCharacter,
   isMarioCharacter,
+  isMissedTechState,
   isNessCharacter,
+  isNormalRollState,
   isPikachuCharacter,
+  isProneState,
   isQuickAttackState,
   isRollForward,
   isRollState,
   isSamusCharacter,
+  isShieldBreakActionState,
   isShieldState,
   isShieldStunState,
+  isSleepState,
   isSpecialState,
   isTauntState,
+  isTechInPlaceState,
+  isTechRollState,
+  isTumbleState,
   isTurnState,
   isYoshiCharacter,
   toGrayscale,
@@ -769,5 +791,315 @@ describe("toGrayscale", () => {
 
   it("converts hsl colors to 0% saturation", () => {
     expect(toGrayscale("hsl(120, 85%, 55%)")).toBe("hsl(0, 0%, 55%)");
+  });
+});
+
+describe("getStartNameAlpha", () => {
+  it("returns 1.0 during the solid display window at match start", () => {
+    expect(getStartNameAlpha(0)).toBe(1);
+    expect(getStartNameAlpha(60)).toBe(1);
+    expect(getStartNameAlpha(120)).toBe(1);
+    expect(getStartNameAlpha(START_NAME_SOLID_FRAMES)).toBe(1);
+  });
+
+  it("smoothly fades out between solid frames and total display frames", () => {
+    // Midway through fade: frame 210 = (240 - 210) / 60 = 0.5
+    expect(getStartNameAlpha(210)).toBeCloseTo(0.5);
+    // Right near the end of fade: frame 234 = (240 - 234) / 60 = 0.1
+    expect(getStartNameAlpha(234)).toBeCloseTo(0.1);
+  });
+
+  it("returns 0 after the display window or for undefined/negative frames", () => {
+    expect(getStartNameAlpha(START_NAME_DISPLAY_FRAMES)).toBe(0);
+    expect(getStartNameAlpha(300)).toBe(0);
+    expect(getStartNameAlpha(1000)).toBe(0);
+    expect(getStartNameAlpha(undefined)).toBe(0);
+    expect(getStartNameAlpha(-1)).toBe(0);
+  });
+});
+
+describe("isDizzyState", () => {
+  it("identifies shield-broken dizzy, air fly/fall, and stun states correctly", () => {
+    expect(isDizzyState(0x09e)).toBe(true); // ShieldBreakFly
+    expect(isDizzyState(0x09f)).toBe(true); // ShieldBreakFall
+    expect(isDizzyState(0x0a1)).toBe(true); // ShieldBreakStand
+    expect(isDizzyState(0x0a2)).toBe(true); // FuraFura
+    expect(isDizzyState(0x0a4)).toBe(true); // Stun
+  });
+
+  it("returns false for non-dizzy states", () => {
+    expect(isDizzyState(0x00a)).toBe(false); // Idle
+    expect(isDizzyState(0x099)).toBe(false); // Shield
+    expect(isDizzyState(0x01a)).toBe(false); // Fall
+  });
+});
+
+describe("isShieldBreakActionState", () => {
+  it("identifies full shield break lifecycle states correctly", () => {
+    expect(isShieldBreakActionState(0x09e)).toBe(true); // ShieldBreakFly
+    expect(isShieldBreakActionState(0x09f)).toBe(true); // ShieldBreakFall
+    expect(isShieldBreakActionState(0x0a0)).toBe(true); // ShieldBreakDownBound
+    expect(isShieldBreakActionState(0x0a1)).toBe(true); // ShieldBreakStand
+    expect(isShieldBreakActionState(0x0a2)).toBe(true); // FuraFura
+    expect(isShieldBreakActionState(0x0a4)).toBe(true); // Stun
+  });
+
+  it("returns false for normal shield or attack states", () => {
+    expect(isShieldBreakActionState(0x098)).toBe(false); // ShieldOn
+    expect(isShieldBreakActionState(0x099)).toBe(false); // Shield
+    expect(isShieldBreakActionState(0x0be)).toBe(false); // Jab1
+  });
+});
+
+describe("isSleepState", () => {
+  it("identifies sleeping state correctly", () => {
+    expect(isSleepState(0x0a5)).toBe(true); // Sleep
+    expect(isSleepState(0x00a)).toBe(false); // Idle
+  });
+});
+
+describe("Tech and Roll state helpers", () => {
+  it("distinguishes tech rolls from normal shield rolls", () => {
+    // Tech rolls
+    expect(isTechRollState(0x049)).toBe(true); // TechF
+    expect(isTechRollState(0x04a)).toBe(true); // TechB
+    expect(isTechRollState(0x09c)).toBe(false); // Normal RollF
+    expect(isTechRollState(0x09d)).toBe(false); // Normal RollB
+
+    // Normal rolls
+    expect(isNormalRollState(0x09c)).toBe(true); // RollF
+    expect(isNormalRollState(0x09d)).toBe(true); // RollB
+    expect(isNormalRollState(0x049)).toBe(false); // TechF
+    expect(isNormalRollState(0x04a)).toBe(false); // TechB
+
+    // Tech in place
+    expect(isTechInPlaceState(0x051)).toBe(true); // Tech
+    expect(isTechInPlaceState(0x049)).toBe(false); // TechF
+  });
+});
+
+describe("Tumble state helper", () => {
+  it("identifies tumble and reeling damage flight states correctly", () => {
+    expect(isTumbleState(0x039)).toBe(true); // Tumble
+    expect(isTumbleState(0x037)).toBe(true); // DamageFlyRoll
+    expect(isTumbleState(0x033)).toBe(true); // DamageFlyHigh
+    expect(isTumbleState(0x00a)).toBe(false); // Idle
+    expect(isTumbleState(0x01a)).toBe(false); // Normal Fall
+  });
+});
+
+describe("Missed Tech and Prone state helpers", () => {
+  it("identifies ground bounces and missed tech prone states", () => {
+    // Ground bound bounces
+    expect(isDownBoundState(0x043)).toBe(true); // DownBoundD
+    expect(isDownBoundState(0x04a)).toBe(true); // DownBoundU
+    expect(isDownBoundState(0x0a0)).toBe(true); // ShieldBreakDownBound
+
+    // Prone on floor
+    expect(isProneState(0x044)).toBe(true); // DownWaitD
+    expect(isProneState(0x04c)).toBe(true); // DownWaitU
+
+    // Full missed tech lifecycle
+    expect(isMissedTechState(0x044)).toBe(true); // DownWaitD
+    expect(isMissedTechState(0x045)).toBe(true); // DownStandD
+    expect(isMissedTechState(0x047)).toBe(true); // DownForwardD
+    expect(isMissedTechState(0x04f)).toBe(true); // DownAttackD
+    expect(isMissedTechState(0x00a)).toBe(false); // Idle
+  });
+});
+
+describe("ShieldBreak Dizzy in air states", () => {
+  it("treats ShieldBreakFly and ShieldBreakFall as dizzy states for swaying animation", () => {
+    expect(isDizzyState(0x09e)).toBe(true); // ShieldBreakFly
+    expect(isDizzyState(0x09f)).toBe(true); // ShieldBreakFall
+    expect(isDizzyState(0x0a1)).toBe(true); // ShieldBreakStand
+    expect(isDizzyState(0x0a2)).toBe(true); // FuraFura
+  });
+});
+
+describe("getYoshiSpecialType", () => {
+  it("classifies Yoshi special moves correctly", () => {
+    expect(getYoshiSpecialType(0x06, 0x0df)).toBe("egg_lay_tongue");
+    expect(getYoshiSpecialType(0x06, 0x0e0)).toBe("egg_lay_tongue");
+    expect(getYoshiSpecialType(0x06, 0x0e2)).toBe("egg_throw");
+    expect(getYoshiSpecialType(0x06, 0x0e4)).toBe("yoshi_bomb_start");
+    expect(getYoshiSpecialType(0x06, 0x0e5)).toBe("yoshi_bomb_plummet");
+    expect(getYoshiSpecialType(0x06, 0x0e6)).toBe("yoshi_bomb_plummet");
+    expect(getYoshiSpecialType(0x06, 0x0e7)).toBe("yoshi_bomb_land");
+    expect(getYoshiSpecialType(0x06, 0x00a)).toBeNull(); // Idle
+  });
+});
+
+describe("getDKSpecialType", () => {
+  it("classifies Donkey Kong special moves correctly", () => {
+    expect(getDKSpecialType(0x02, 0x0e6)).toBe("spinning_kong");
+    expect(getDKSpecialType(0x02, 0x0e7)).toBe("spinning_kong");
+    expect(getDKSpecialType(0x02, 0x0e8)).toBe("hand_slap");
+    expect(getDKSpecialType(0x02, 0x0e9)).toBe("hand_slap");
+    expect(getDKSpecialType(0x02, 0x0ea)).toBe("hand_slap");
+    expect(getDKSpecialType(0x02, 0x0eb)).toBe("giant_punch_windup");
+    expect(getDKSpecialType(0x02, 0x0ec)).toBe("giant_punch");
+    expect(getDKSpecialType(0x02, 0x00a)).toBeNull(); // Idle
+  });
+});
+
+describe("getNessSpecialType", () => {
+  it("classifies Ness special moves correctly", () => {
+    expect(getNessSpecialType(0x0b, 0x0e6)).toBe("pk_fire");
+    expect(getNessSpecialType(0x0b, 0x0e7)).toBe("pk_fire");
+    expect(getNessSpecialType(0x0b, 0x0e8)).toBe("pk_thunder_charge");
+    expect(getNessSpecialType(0x0b, 0x0e9)).toBe("pk_thunder_charge");
+    expect(getNessSpecialType(0x0b, 0x0ea)).toBe("pk_thunder_rocket");
+    expect(getNessSpecialType(0x0b, 0x0eb)).toBe("psi_magnet");
+    expect(getNessSpecialType(0x0b, 0x0ec)).toBe("psi_magnet");
+    expect(getNessSpecialType(0x0b, 0x0ed)).toBe("psi_magnet");
+    expect(getNessSpecialType(0x0b, 0x00a)).toBeNull(); // Idle
+  });
+});
+
+describe("canAngleAttack", () => {
+  it("allows Fox, Falcon, and Samus to angle forward tilt attacks", () => {
+    expect(canAngleAttack(0x01, { type: "tilt", direction: "forward" })).toBe(
+      true,
+    ); // Fox
+    expect(canAngleAttack(0x07, { type: "tilt", direction: "forward" })).toBe(
+      true,
+    ); // Falcon
+    expect(canAngleAttack(0x03, { type: "tilt", direction: "forward" })).toBe(
+      true,
+    ); // Samus
+    expect(canAngleAttack(0x00, { type: "tilt", direction: "forward" })).toBe(
+      false,
+    ); // Mario
+    expect(canAngleAttack(0x09, { type: "tilt", direction: "forward" })).toBe(
+      false,
+    ); // Pikachu
+    expect(canAngleAttack(0x0b, { type: "tilt", direction: "forward" })).toBe(
+      false,
+    ); // Ness
+  });
+
+  it("allows Falcon and Samus to angle forward smash attacks", () => {
+    expect(canAngleAttack(0x07, { type: "smash", direction: "forward" })).toBe(
+      true,
+    ); // Falcon
+    expect(canAngleAttack(0x03, { type: "smash", direction: "forward" })).toBe(
+      true,
+    ); // Samus
+    expect(canAngleAttack(0x01, { type: "smash", direction: "forward" })).toBe(
+      false,
+    ); // Fox cannot angle FSmash
+    expect(canAngleAttack(0x00, { type: "smash", direction: "forward" })).toBe(
+      false,
+    ); // Mario
+    expect(canAngleAttack(0x02, { type: "smash", direction: "forward" })).toBe(
+      false,
+    ); // DK
+  });
+
+  it("disallows non-forward tilts and non-forward smashes from angling", () => {
+    expect(canAngleAttack(0x07, { type: "tilt", direction: "up" })).toBe(false); // UTilt
+    expect(canAngleAttack(0x07, { type: "tilt", direction: "down" })).toBe(
+      false,
+    ); // DTilt
+    expect(canAngleAttack(0x07, { type: "smash", direction: "up" })).toBe(
+      false,
+    ); // USmash
+    expect(canAngleAttack(0x03, { type: "smash", direction: "down" })).toBe(
+      false,
+    ); // DSmash
+  });
+
+  it("disallows jabs and aerials from angling", () => {
+    expect(canAngleAttack(0x07, { type: "jab", direction: "forward" })).toBe(
+      false,
+    );
+    expect(canAngleAttack(0x03, { type: "aerial", direction: "forward" })).toBe(
+      false,
+    );
+  });
+});
+
+describe("getMarioSpecialType", () => {
+  it("classifies Mario / Luigi special moves correctly", () => {
+    // Fireball
+    expect(getMarioSpecialType(0x00, 0x0dc)).toBe("fireball");
+    expect(getMarioSpecialType(0x04, 0x0dd)).toBe("fireball");
+    // Super Jump Punch
+    expect(getMarioSpecialType(0x00, 0x0df)).toBe("super_jump_punch");
+    expect(getMarioSpecialType(0x04, 0x0e0)).toBe("super_jump_punch");
+    // Tornado / Cyclone
+    expect(getMarioSpecialType(0x00, 0x0e3)).toBe("tornado");
+    expect(getMarioSpecialType(0x04, 0x0e4)).toBe("tornado");
+  });
+
+  it("returns null for non-Mario/Luigi or non-special states", () => {
+    expect(getMarioSpecialType(0x00, 0x00a)).toBeNull(); // Idle
+    expect(getMarioSpecialType(0x01, 0x0dc)).toBeNull(); // Fox
+  });
+});
+
+describe("getSamusSpecialType", () => {
+  it("classifies Samus special moves correctly", () => {
+    expect(getSamusSpecialType(0x03, 0x0dc)).toBe("charge_shot");
+    expect(getSamusSpecialType(0x03, 0x0e5)).toBe("screw_attack");
+    expect(getSamusSpecialType(0x03, 0x0e8)).toBe("bomb");
+  });
+
+  it("returns null for non-Samus or non-special states", () => {
+    expect(getSamusSpecialType(0x03, 0x00a)).toBeNull(); // Idle
+    expect(getSamusSpecialType(0x00, 0x0dc)).toBeNull(); // Mario
+  });
+});
+
+describe("getLinkSpecialType", () => {
+  it("classifies Link special moves correctly", () => {
+    expect(getLinkSpecialType(0x05, 0x0dc)).toBe("boomerang");
+    expect(getLinkSpecialType(0x05, 0x0e5)).toBe("spin_attack");
+    expect(getLinkSpecialType(0x05, 0x0e9)).toBe("bomb");
+  });
+
+  it("returns null for non-Link or non-special states", () => {
+    expect(getLinkSpecialType(0x05, 0x00a)).toBeNull(); // Idle
+    expect(getLinkSpecialType(0x01, 0x0dc)).toBeNull(); // Fox
+  });
+});
+
+describe("getKirbySpecialType", () => {
+  it("classifies Kirby special moves correctly", () => {
+    expect(getKirbySpecialType(0x08, 0x0dc)).toBe("inhale");
+    expect(getKirbySpecialType(0x08, 0x0e5)).toBe("final_cutter");
+    expect(getKirbySpecialType(0x08, 0x0e9)).toBe("stone");
+  });
+
+  it("returns null for non-Kirby or non-special states", () => {
+    expect(getKirbySpecialType(0x08, 0x00a)).toBeNull(); // Idle
+    expect(getKirbySpecialType(0x07, 0x0dc)).toBeNull(); // Falcon
+  });
+});
+
+describe("getJigglypuffSpecialType", () => {
+  it("classifies Jigglypuff special moves correctly", () => {
+    expect(getJigglypuffSpecialType(0x0a, 0x0dc)).toBe("pound");
+    expect(getJigglypuffSpecialType(0x0a, 0x0df)).toBe("sing");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e2)).toBe("rest");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e7)).toBe("rest");
+  });
+
+  it("returns null for non-Jigglypuff or non-special states", () => {
+    expect(getJigglypuffSpecialType(0x0a, 0x00a)).toBeNull(); // Idle
+    expect(getJigglypuffSpecialType(0x02, 0x0dc)).toBeNull(); // DK
+  });
+});
+
+describe("Fox Blaster and Yoshi Egg Throw", () => {
+  it("classifies Fox Blaster correctly", () => {
+    expect(getFoxSpecialType(0x01, 0x0dc)).toBe("blaster");
+    expect(getFoxSpecialType(0x01, 0x0e1)).toBe("blaster");
+  });
+
+  it("classifies Yoshi Egg Throw correctly", () => {
+    expect(getYoshiSpecialType(0x06, 0x0e2)).toBe("egg_throw");
+    expect(getYoshiSpecialType(0x06, 0x0e3)).toBe("egg_throw");
   });
 });

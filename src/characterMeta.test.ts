@@ -8,6 +8,8 @@ import {
   computeJigglypuffFThrowStats,
   computeShieldPressureEvents,
   computeShieldPressureStats,
+  getJigglypuffFThrowSituations,
+  getShieldPressureSituations,
   type JigglypuffFThrowEvent,
 } from "./characterMeta.js";
 import type { Replay } from "@rmg-k/rmgr";
@@ -410,5 +412,51 @@ describe("computeShieldPressureEvents", () => {
     const stats = computeShieldPressureStats(events, 0);
     expect(stats.totalPressures).toBe(0);
     expect(stats.conversionRate).toBeNull();
+  });
+
+  it("extracts structured ShieldPressureSituation list for timeline and widget display", () => {
+    const replay = makeNessReplay([
+      // Situation 1: Shield break
+      { p0State: 0x0c7, p1State: 0x09b, p1ActionFrame: 0 },
+      { p0State: 0x0c7, p1State: 0x09b, p1ActionFrame: 0 },
+      { p0State: 0x0cf, p1State: 0x09e, p1ActionFrame: 0 },
+      // Neutral gap
+      { p0State: 0x00a, p1State: 0x00a },
+      { p0State: 0x00a, p1State: 0x00a },
+      // Situation 2: Grab
+      { p0State: 0x0c7, p1State: 0x09b, p1ActionFrame: 0 },
+      { p0State: 0x0c7, p1State: 0x09b, p1ActionFrame: 0 },
+      { p0State: 0x0a6, p1State: 0x0ab, p1ActionFrame: 0 },
+    ]);
+
+    const events = computeShieldPressureEvents(replay);
+    const situations = getShieldPressureSituations(events, 0);
+
+    expect(situations).toHaveLength(2);
+    expect(situations[0]?.outcome).toBe("shield-break");
+    expect(situations[0]?.hitsOnShield).toBe(2);
+    expect(situations[0]?.enteredFrameIndex).toBe(1);
+
+    expect(situations[1]?.outcome).toBe("shield-grab");
+    expect(situations[1]?.hitsOnShield).toBe(2);
+  });
+});
+
+describe("getJigglypuffFThrowSituations", () => {
+  it("extracts structured JigglypuffFThrowSituation list for timeline and widget display", () => {
+    const replay = makeReplay([
+      { p0State: 0x0a9, p1State: 0x0ba, p1Combo: 0 },
+      { p0State: 0x0a9, p1State: 0x0ba, p1Combo: 0 },
+      { p0State: 0x0d2, p1State: 0x034, p1Combo: 1 },
+      { p0State: 0x0d2, p1State: 0x034, p1Combo: 2 },
+    ]);
+
+    const events = computeJigglypuffFThrowEvents(replay);
+    const situations = getJigglypuffFThrowSituations(events, 0);
+
+    expect(situations).toHaveLength(1);
+    expect(situations[0]?.outcome).toBe("success");
+    expect(situations[0]?.followupHits).toBe(2);
+    expect(situations[0]?.enteredFrameIndex).toBe(0);
   });
 });

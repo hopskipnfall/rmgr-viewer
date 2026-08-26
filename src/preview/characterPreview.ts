@@ -113,11 +113,17 @@ function getCharacterSpecialStates(characterId: number): StateOption[] {
     characterId === 0x32
   ) {
     return [
+      {
+        id: 0x0e6,
+        name: "Thunder Jolt Ground (Neutral-B)",
+        category: "special",
+      },
+      { id: 0x0e7, name: "Thunder Jolt Air (Neutral-B)", category: "special" },
+      { id: 0x0df, name: "Thunder Jolt Startup", category: "special" },
       { id: 0x0e3, name: "Thunder (Down-B Cloud/Bolt)", category: "special" },
       { id: 0x0e8, name: "Quick Attack (Up-B Startup)", category: "special" },
       { id: 0x0ec, name: "Quick Attack Zip (Electric)", category: "special" },
       { id: 0x0ea, name: "Quick Attack Landing", category: "special" },
-      { id: 0x0dc, name: "Thunder Jolt (Neutral-B)", category: "special" },
     ];
   }
 
@@ -173,20 +179,35 @@ function getCharacterSpecialStates(characterId: number): StateOption[] {
   }
 
   // Yoshi
-  if (characterId === 0x06 || characterId === 0x14) {
+  if (characterId === 0x06 || characterId === 0x14 || characterId === 0x31) {
     return [
-      { id: 0x0dc, name: "Egg Lay (Neutral-B)", category: "special" },
-      { id: 0x0e4, name: "Egg Throw (Up-B)", category: "special" },
-      { id: 0x0e5, name: "Yoshi Bomb (Down-B)", category: "special" },
+      { id: 0x0df, name: "Egg Lay Start (Tongue)", category: "special" },
+      { id: 0x0e0, name: "Egg Lay Tongue Reach", category: "special" },
+      { id: 0x0e1, name: "Egg Lay Swallow", category: "special" },
+      { id: 0x0e2, name: "Egg Throw (Ground)", category: "special" },
+      { id: 0x0e3, name: "Egg Throw (Air)", category: "special" },
+      { id: 0x0e4, name: "Yoshi Bomb Start (Flip)", category: "special" },
+      { id: 0x0e5, name: "Yoshi Bomb Ground (Hip Drop)", category: "special" },
+      { id: 0x0e6, name: "Yoshi Bomb Air (Hip Drop)", category: "special" },
+      { id: 0x0e7, name: "Yoshi Bomb Landing Shockwave", category: "special" },
     ];
   }
 
   // Donkey Kong
-  if (characterId === 0x02 || characterId === 0x10) {
+  if (
+    characterId === 0x02 ||
+    characterId === 0x10 ||
+    characterId === 0x1a ||
+    characterId === 0x2c
+  ) {
     return [
-      { id: 0x0dc, name: "Giant Punch (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Spinning Kong (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Hand Slap (Down-B)", category: "special" },
+      { id: 0x0e6, name: "Spinning Kong Ground (Up-B)", category: "special" },
+      { id: 0x0e7, name: "Spinning Kong Air (Up-B)", category: "special" },
+      { id: 0x0e8, name: "Hand Slap Start (Down-B)", category: "special" },
+      { id: 0x0e9, name: "Hand Slap Quake Slam", category: "special" },
+      { id: 0x0ea, name: "Hand Slap End", category: "special" },
+      { id: 0x0eb, name: "Giant Punch Windup", category: "special" },
+      { id: 0x0ec, name: "Giant Punch Strike", category: "special" },
     ];
   }
 
@@ -200,11 +221,29 @@ function getCharacterSpecialStates(characterId: number): StateOption[] {
   }
 
   // Ness
-  if (characterId === 0x0b || characterId === 0x19) {
+  if (
+    characterId === 0x0b ||
+    characterId === 0x19 ||
+    characterId === 0x25 ||
+    characterId === 0x26
+  ) {
     return [
-      { id: 0x0dc, name: "PK Fire (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "PK Thunder (Up-B)", category: "special" },
-      { id: 0x0eb, name: "PSI Magnet (Down-B)", category: "special" },
+      { id: 0x0e6, name: "PK Fire Ground (Neutral-B)", category: "special" },
+      { id: 0x0e7, name: "PK Fire Air (Neutral-B)", category: "special" },
+      { id: 0x0e8, name: "PK Thunder Start (Up-B)", category: "special" },
+      { id: 0x0e9, name: "PK Thunder Guiding Spark", category: "special" },
+      {
+        id: 0x0ea,
+        name: "PK Thunder Blast Rocket Launch",
+        category: "special",
+      },
+      { id: 0x0eb, name: "PSI Magnet Start (Down-B)", category: "special" },
+      {
+        id: 0x0ec,
+        name: "PSI Magnet Absorption Barrier",
+        category: "special",
+      },
+      { id: 0x0ed, name: "PSI Magnet End", category: "special" },
     ];
   }
 
@@ -238,6 +277,7 @@ export class CharacterPreviewController {
   private comboHitCount = 0;
   private isInvulnerable = false;
   private flightAngleDeg = 45; // For Fox Fire Fox flight
+  private stickY = 0; // For angled attack joystick Y
   private zoomLevel = 2.0;
   private selectedCategory = "all";
 
@@ -257,6 +297,8 @@ export class CharacterPreviewController {
   private angleControlWrap!: HTMLDivElement;
   private angleSliderEl!: HTMLInputElement;
   private angleValEl!: HTMLSpanElement;
+  private stickSliderEl!: HTMLInputElement;
+  private stickValEl!: HTMLSpanElement;
   private stateChipsContainer!: HTMLDivElement;
 
   constructor(container: HTMLDivElement) {
@@ -361,6 +403,15 @@ export class CharacterPreviewController {
           </div>
         </div>
 
+        <!-- Joystick Y / Angled Attack Control -->
+        <div class="preview-control-group" id="previewStickYWrap">
+          <label class="preview-control-label">Joystick Y (Angled Attack: Up/Down)</label>
+          <div class="preview-slider-row">
+            <input type="range" id="previewStickYSlider" min="-80" max="80" value="0" />
+            <span id="previewStickYVal" class="preview-slider-val">0</span>
+          </div>
+        </div>
+
         <!-- Zoom Control -->
         <div class="preview-control-group">
           <label class="preview-control-label">Camera Zoom</label>
@@ -441,6 +492,12 @@ export class CharacterPreviewController {
     ) as HTMLInputElement;
     this.angleValEl = this.container.querySelector(
       "#previewAngleVal",
+    ) as HTMLSpanElement;
+    this.stickSliderEl = this.container.querySelector(
+      "#previewStickYSlider",
+    ) as HTMLInputElement;
+    this.stickValEl = this.container.querySelector(
+      "#previewStickYVal",
     ) as HTMLSpanElement;
     this.stateChipsContainer = this.container.querySelector(
       "#previewStateChips",
@@ -537,6 +594,9 @@ export class CharacterPreviewController {
     this.playPauseBtn.addEventListener("click", () => {
       this.isPlaying = !this.isPlaying;
       this.playPauseBtn.textContent = this.isPlaying ? "⏸ Pause" : "▶ Play";
+      if (this.isPlaying && this.animFrameId === null) {
+        this.startAnimationLoop();
+      }
     });
 
     const stepBackBtn = this.container.querySelector(
@@ -563,6 +623,13 @@ export class CharacterPreviewController {
     this.angleSliderEl.addEventListener("input", () => {
       this.flightAngleDeg = parseInt(this.angleSliderEl.value, 10);
       this.angleValEl.textContent = `${this.flightAngleDeg}°`;
+      this.render();
+    });
+
+    // Joystick Y (Angled Attack) Slider
+    this.stickSliderEl.addEventListener("input", () => {
+      this.stickY = parseInt(this.stickSliderEl.value, 10);
+      this.stickValEl.textContent = String(this.stickY);
       this.render();
     });
 
@@ -696,14 +763,20 @@ export class CharacterPreviewController {
   private startAnimationLoop(): void {
     this.stopAnimationLoop();
     let lastTime = performance.now();
+    const frameDuration = 1000 / 60;
+
     const tick = (now: number) => {
-      const delta = now - lastTime;
-      if (this.isPlaying && delta >= 1000 / 60) {
+      if (this.isPlaying) {
+        const delta = now - lastTime;
+        if (delta >= frameDuration) {
+          lastTime = now - (delta % frameDuration);
+          this.actionFrameCounter = (this.actionFrameCounter + 1) % 61;
+          this.frameSliderEl.value = String(this.actionFrameCounter);
+          this.frameValEl.textContent = `#${this.actionFrameCounter}`;
+          this.render();
+        }
+      } else {
         lastTime = now;
-        this.actionFrameCounter = (this.actionFrameCounter + 1) % 61;
-        this.frameSliderEl.value = String(this.actionFrameCounter);
-        this.frameValEl.textContent = `#${this.actionFrameCounter}`;
-        this.render();
       }
       this.animFrameId = requestAnimationFrame(tick);
     };
@@ -750,6 +823,11 @@ export class CharacterPreviewController {
       frameIndex: 1,
       ports: {
         0: {
+          pre: {
+            stickX: this.facingDirection * 45,
+            stickY: this.stickY,
+            buttons: 0,
+          },
           post: {
             positionX: 0,
             positionY: 0,
@@ -777,6 +855,7 @@ export class CharacterPreviewController {
       gameStart: {
         stageId: 0,
         ports: { 0: { characterId: this.characterId } },
+        playerNames: { 0: charName },
       },
       frames: [
         {

@@ -19,9 +19,8 @@ import { CharacterPreviewController } from "./preview/characterPreview.js";
 import {
   createDefaultIdentity,
   resolvePerspectivePort,
-  resolveOpponentPort,
 } from "./data/identity.js";
-import { computeMatchupBaseline, type DerivedRates } from "./data/aggregate.js";
+import { computeOverallBaseline, type DerivedRates } from "./data/aggregate.js";
 
 // DOM Elements
 const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
@@ -154,12 +153,6 @@ async function handleImport(files: FileList | File[]): Promise<void> {
 
     if (result.summaries.length > 0) {
       libraryController.addSummaries(result.summaries);
-
-      // If user hasn't set custom aliases or imported many games, suggest onboarding
-      const identity = libraryController.getIdentity();
-      if (identity.aliases.size === 0 && result.summaries.length > 1) {
-        libraryController.openOnboardingModal();
-      }
     }
 
     if (result.errors.length > 0) {
@@ -181,18 +174,27 @@ function computeMatchupBaselineForPort(
   port: PortIndex,
 ): DerivedRates | null {
   if (summary.ports.length !== 2) return null;
-  const identity = libraryController.getIdentity();
+  const currentIdentity = libraryController.getIdentity();
   const yourP = summary.ports.find((p) => p.port === port);
-  const oppPort = resolveOpponentPort(summary, port);
-  const oppP =
-    oppPort !== null ? summary.ports.find((p) => p.port === oppPort) : null;
-  if (!yourP || !oppP) return null;
+  if (!yourP) return null;
 
-  return computeMatchupBaseline(
+  const name = yourP.playerName?.trim() ?? "";
+  if (name.length > 0 && currentIdentity.aliases.has(name)) {
+    return computeOverallBaseline(
+      libraryController.getSummaries(),
+      currentIdentity,
+    );
+  }
+
+  if (name.length > 0) {
+    const oppId = createDefaultIdentity(name);
+    oppId.aliases.add(name);
+    return computeOverallBaseline(libraryController.getSummaries(), oppId);
+  }
+
+  return computeOverallBaseline(
     libraryController.getSummaries(),
-    identity,
-    yourP.characterId,
-    oppP.characterId,
+    currentIdentity,
   );
 }
 

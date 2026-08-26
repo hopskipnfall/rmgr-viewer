@@ -1,6 +1,11 @@
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
 import { Camera } from "./camera.js";
-import { getPlayerColor } from "./players.js";
+import {
+  getPlayerColor,
+  PORT_LABELS,
+  MAIN_PLAYER_COLOR,
+  OPPONENT_COLOR,
+} from "./players.js";
 import {
   stageGeometry,
   stageBlastZone,
@@ -89,6 +94,71 @@ export function isTauntState(actionStateId: number): boolean {
   return TAUNT_ACTION_STATES.has(actionStateId);
 }
 
+const DIZZY_ACTION_STATES = new Set([
+  0x09e, // ShieldBreakFly (launched into air dizzy)
+  0x09f, // ShieldBreakFall (falling through air dizzy)
+  0x0a1, // ShieldBreakStand (standing up dizzy)
+  0x0a2, // FuraFura (shield broken dizzy stuck state)
+  0x0a4, // Stun (stunned dizzy)
+]);
+
+export function isDizzyState(actionStateId: number): boolean {
+  return DIZZY_ACTION_STATES.has(actionStateId);
+}
+
+const SHIELD_BREAK_ACTION_STATES = new Set([
+  0x09e, // ShieldBreakFly
+  0x09f, // ShieldBreakFall
+  0x0a0, // ShieldBreakDownBound
+  0x0a1, // ShieldBreakStand
+  0x0a2, // FuraFura
+  0x0a4, // Stun
+]);
+
+export function isShieldBreakActionState(actionStateId: number): boolean {
+  return SHIELD_BREAK_ACTION_STATES.has(actionStateId);
+}
+
+export function isSleepState(actionStateId: number): boolean {
+  return actionStateId === 0x0a5;
+}
+
+const IDLE_ACTION_STATES = new Set([
+  0x00a, // Idle
+]);
+
+export function isIdleState(actionStateId: number): boolean {
+  return IDLE_ACTION_STATES.has(actionStateId);
+}
+
+const WALK_ACTION_STATES = new Set([
+  0x00b, // Walk1
+  0x00c, // Walk2
+  0x00d, // Walk3
+]);
+
+export function isWalkState(actionStateId: number): boolean {
+  return WALK_ACTION_STATES.has(actionStateId);
+}
+
+const DASH_RUN_ACTION_STATES = new Set([
+  0x00f, // Dash
+  0x010, // Run
+]);
+
+export function isDashOrRunState(actionStateId: number): boolean {
+  return DASH_RUN_ACTION_STATES.has(actionStateId);
+}
+
+const TEETER_ACTION_STATES = new Set([
+  0x023, // Teeter
+  0x024, // TeeterStart
+]);
+
+export function isTeeterState(actionStateId: number): boolean {
+  return TEETER_ACTION_STATES.has(actionStateId);
+}
+
 const TURN_ACTION_STATES = new Set([
   0x012, // Turn (standing turnaround)
   0x013, // TurnRun (pivot turnaround during dash/run)
@@ -96,6 +166,90 @@ const TURN_ACTION_STATES = new Set([
 
 export function isTurnState(actionStateId: number): boolean {
   return TURN_ACTION_STATES.has(actionStateId);
+}
+
+const TECH_ROLL_ACTION_STATES = new Set([
+  0x049, // TechF (Tech forward roll)
+  0x04a, // TechB (Tech backward roll)
+]);
+
+export function isTechRollState(actionStateId: number): boolean {
+  return TECH_ROLL_ACTION_STATES.has(actionStateId);
+}
+
+const TECH_IN_PLACE_ACTION_STATES = new Set([
+  0x051, // Tech (Passive / Breakfall in place)
+  0x04b, // TechWall
+  0x04c, // TechCeil
+]);
+
+export function isTechInPlaceState(actionStateId: number): boolean {
+  return TECH_IN_PLACE_ACTION_STATES.has(actionStateId);
+}
+
+export function isAnyTechState(actionStateId: number): boolean {
+  return isTechRollState(actionStateId) || isTechInPlaceState(actionStateId);
+}
+
+const NORMAL_ROLL_ACTION_STATES = new Set([
+  0x09c, // RollF (Forward shield roll)
+  0x09d, // RollB (Backward shield roll)
+]);
+
+export function isNormalRollState(actionStateId: number): boolean {
+  return NORMAL_ROLL_ACTION_STATES.has(actionStateId);
+}
+
+const TUMBLE_ACTION_STATES = new Set([
+  0x039, // Tumble (DamageFall)
+  0x037, // DamageFlyRoll
+  0x033, // DamageFlyHigh
+  0x034, // DamageFlyMid
+  0x035, // DamageFlyLow
+  0x036, // DamageFlyTop
+]);
+
+export function isTumbleState(actionStateId: number): boolean {
+  return TUMBLE_ACTION_STATES.has(actionStateId);
+}
+
+const DOWN_BOUND_ACTION_STATES = new Set([
+  0x043, // DownBoundD (Ground bounce face down)
+  0x04a, // DownBoundU (Ground bounce face up)
+  0x0a0, // ShieldBreakDownBound
+  0x038, // WallBounce
+  0x042, // CeilingBonk
+]);
+
+export function isDownBoundState(actionStateId: number): boolean {
+  return DOWN_BOUND_ACTION_STATES.has(actionStateId);
+}
+
+const PRONE_ACTION_STATES = new Set([
+  0x044, // DownWaitD (Lying prone face down on floor)
+  0x04c, // DownWaitU (Lying prone face up on floor)
+  0x043, // DownBoundD
+  0x04a, // DownBoundU
+]);
+
+export function isProneState(actionStateId: number): boolean {
+  return PRONE_ACTION_STATES.has(actionStateId);
+}
+
+const MISSED_TECH_ACTION_STATES = new Set([
+  ...PRONE_ACTION_STATES,
+  0x045, // DownStandD (Getup neutral face down)
+  0x04d, // DownStandU (Getup neutral face up)
+  0x047, // DownForwardD (Getup roll forward face down)
+  0x048, // DownBackD (Getup roll back face down)
+  0x04b, // DownForwardU (Getup roll forward face up)
+  0x04c, // DownBackU (Getup roll back face up)
+  0x04f, // DownAttackD (Getup attack face down)
+  0x050, // DownAttackU (Getup attack face up)
+]);
+
+export function isMissedTechState(actionStateId: number): boolean {
+  return MISSED_TECH_ACTION_STATES.has(actionStateId);
 }
 
 const ROLL_ACTION_STATES = new Set([
@@ -123,6 +277,32 @@ export function isRollForward(actionStateId: number): boolean {
     actionStateId === 0x04b ||
     actionStateId === 0x058 ||
     actionStateId === 0x05b
+  );
+}
+
+/** Total frames at match start where player name tags are displayed (240 frames = 4.0s @ 60fps). */
+export const START_NAME_DISPLAY_FRAMES = 240;
+/** Frames at match start with 100% full opacity before fading out. */
+export const START_NAME_SOLID_FRAMES = 180;
+
+/**
+ * Calculates opacity alpha (0.0 to 1.0) for player name tags at the start of a match.
+ * Full opacity for the first 3 seconds (0..180 frames), then fades out smoothly over the next 1 second (180..240 frames).
+ */
+export function getStartNameAlpha(frameIndex: number | undefined): number {
+  if (
+    frameIndex === undefined ||
+    frameIndex < 0 ||
+    frameIndex >= START_NAME_DISPLAY_FRAMES
+  ) {
+    return 0;
+  }
+  if (frameIndex <= START_NAME_SOLID_FRAMES) {
+    return 1;
+  }
+  return (
+    (START_NAME_DISPLAY_FRAMES - frameIndex) /
+    (START_NAME_DISPLAY_FRAMES - START_NAME_SOLID_FRAMES)
   );
 }
 
@@ -199,13 +379,23 @@ export function isPikachuCharacter(characterId: number): boolean {
 }
 
 export type PikachuSpecialType =
-  "thunder" | "quick_attack" | "quick_attack_zip";
+  "thunder_jolt" | "thunder" | "quick_attack" | "quick_attack_zip";
 
 export function getPikachuSpecialType(
   characterId: number,
   actionStateId: number,
 ): PikachuSpecialType | null {
   if (!isPikachuCharacter(characterId)) return null;
+  // Neutral-B: Thunder Jolt (0x0dc, 0x0dd, 0x0de, 0x0df, 0x0e0)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de ||
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0
+  ) {
+    return "thunder_jolt";
+  }
   // Down-B Thunder states: 0xe3, 0xe4, 0xe5, 0xe6, 0xe7
   if (
     actionStateId === 0x0e3 ||
@@ -228,6 +418,284 @@ export function getPikachuSpecialType(
     actionStateId === 0x0eb
   ) {
     return "quick_attack";
+  }
+  return null;
+}
+
+export type YoshiSpecialType =
+  | "egg_lay_tongue"
+  | "egg_throw"
+  | "yoshi_bomb_start"
+  | "yoshi_bomb_plummet"
+  | "yoshi_bomb_land";
+
+export function getYoshiSpecialType(
+  characterId: number,
+  actionStateId: number,
+): YoshiSpecialType | null {
+  if (!isYoshiCharacter(characterId)) return null;
+  // Neutral-B: Egg Lay (Tongue Catch)
+  if (
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0 ||
+    actionStateId === 0x0e1
+  ) {
+    return "egg_lay_tongue";
+  }
+  // Up-B: Egg Throw
+  if (actionStateId === 0x0e2 || actionStateId === 0x0e3) {
+    return "egg_throw";
+  }
+  // Down-B: Yoshi Bomb (Hip Drop)
+  if (actionStateId === 0x0e4) {
+    return "yoshi_bomb_start";
+  }
+  if (actionStateId === 0x0e5 || actionStateId === 0x0e6) {
+    return "yoshi_bomb_plummet";
+  }
+  if (actionStateId === 0x0e7) {
+    return "yoshi_bomb_land";
+  }
+  return null;
+}
+
+export type DKSpecialType =
+  "spinning_kong" | "hand_slap" | "giant_punch_windup" | "giant_punch";
+
+export function getDKSpecialType(
+  characterId: number,
+  actionStateId: number,
+): DKSpecialType | null {
+  if (!isDonkeyKongCharacter(characterId)) return null;
+  // Up-B: Spinning Kong
+  if (actionStateId === 0x0e6 || actionStateId === 0x0e7) {
+    return "spinning_kong";
+  }
+  // Down-B: Hand Slap
+  if (
+    actionStateId === 0x0e8 ||
+    actionStateId === 0x0e9 ||
+    actionStateId === 0x0ea
+  ) {
+    return "hand_slap";
+  }
+  // Neutral-B: Giant Punch
+  if (actionStateId === 0x0eb) {
+    return "giant_punch_windup";
+  }
+  if (actionStateId === 0x0ec) {
+    return "giant_punch";
+  }
+  return null;
+}
+
+export type NessSpecialType =
+  "pk_fire" | "pk_thunder_charge" | "pk_thunder_rocket" | "psi_magnet";
+
+export function getNessSpecialType(
+  characterId: number,
+  actionStateId: number,
+): NessSpecialType | null {
+  if (!isNessCharacter(characterId)) return null;
+  // Neutral-B: PK Fire
+  if (actionStateId === 0x0e6 || actionStateId === 0x0e7) {
+    return "pk_fire";
+  }
+  // Up-B: PK Thunder
+  if (actionStateId === 0x0e8 || actionStateId === 0x0e9) {
+    return "pk_thunder_charge";
+  }
+  if (actionStateId === 0x0ea) {
+    return "pk_thunder_rocket";
+  }
+  // Down-B: PSI Magnet
+  if (
+    actionStateId === 0x0eb ||
+    actionStateId === 0x0ec ||
+    actionStateId === 0x0ed
+  ) {
+    return "psi_magnet";
+  }
+  return null;
+}
+
+export type MarioSpecialType = "fireball" | "super_jump_punch" | "tornado";
+
+export function getMarioSpecialType(
+  characterId: number,
+  actionStateId: number,
+): MarioSpecialType | null {
+  if (!isMarioCharacter(characterId) && !isLuigiCharacter(characterId)) {
+    return null;
+  }
+  // Neutral-B Fireball: 0x0dc, 0x0dd, 0x0de
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "fireball";
+  }
+  // Up-B Super Jump Punch: 0x0df, 0x0e0, 0x0e1, 0x0e2
+  if (
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0 ||
+    actionStateId === 0x0e1 ||
+    actionStateId === 0x0e2
+  ) {
+    return "super_jump_punch";
+  }
+  // Down-B Tornado / Cyclone: 0x0e3, 0x0e4, 0x0e5
+  if (
+    actionStateId === 0x0e3 ||
+    actionStateId === 0x0e4 ||
+    actionStateId === 0x0e5
+  ) {
+    return "tornado";
+  }
+  return null;
+}
+
+export type SamusSpecialType = "charge_shot" | "screw_attack" | "bomb";
+
+export function getSamusSpecialType(
+  characterId: number,
+  actionStateId: number,
+): SamusSpecialType | null {
+  if (!isSamusCharacter(characterId)) return null;
+  // Neutral-B: Charge Shot (0x0dc - 0x0de)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "charge_shot";
+  }
+  // Up-B: Screw Attack (0x0e5 - 0x0e7)
+  if (
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6 ||
+    actionStateId === 0x0e7
+  ) {
+    return "screw_attack";
+  }
+  // Down-B: Bomb (0x0e8 - 0x0ea)
+  if (
+    actionStateId === 0x0e8 ||
+    actionStateId === 0x0e9 ||
+    actionStateId === 0x0ea
+  ) {
+    return "bomb";
+  }
+  return null;
+}
+
+export type LinkSpecialType = "boomerang" | "spin_attack" | "bomb";
+
+export function getLinkSpecialType(
+  characterId: number,
+  actionStateId: number,
+): LinkSpecialType | null {
+  if (!isLinkCharacter(characterId)) return null;
+  // Neutral-B: Boomerang (0x0dc - 0x0de)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "boomerang";
+  }
+  // Up-B: Spin Attack (0x0e5 - 0x0e8)
+  if (
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6 ||
+    actionStateId === 0x0e7 ||
+    actionStateId === 0x0e8
+  ) {
+    return "spin_attack";
+  }
+  // Down-B: Bomb (0x0e9 - 0x0eb)
+  if (
+    actionStateId === 0x0e9 ||
+    actionStateId === 0x0ea ||
+    actionStateId === 0x0eb
+  ) {
+    return "bomb";
+  }
+  return null;
+}
+
+export type KirbySpecialType = "inhale" | "final_cutter" | "stone";
+
+export function getKirbySpecialType(
+  characterId: number,
+  actionStateId: number,
+): KirbySpecialType | null {
+  if (!isKirbyCharacter(characterId)) return null;
+  // Neutral-B: Inhale (0x0dc - 0x0de)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "inhale";
+  }
+  // Up-B: Final Cutter (0x0e5 - 0x0e8)
+  if (
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6 ||
+    actionStateId === 0x0e7 ||
+    actionStateId === 0x0e8
+  ) {
+    return "final_cutter";
+  }
+  // Down-B: Stone (0x0e9 - 0x0eb)
+  if (
+    actionStateId === 0x0e9 ||
+    actionStateId === 0x0ea ||
+    actionStateId === 0x0eb
+  ) {
+    return "stone";
+  }
+  return null;
+}
+
+export type JigglypuffSpecialType = "pound" | "sing" | "rest";
+
+export function getJigglypuffSpecialType(
+  characterId: number,
+  actionStateId: number,
+): JigglypuffSpecialType | null {
+  if (!isJigglypuffCharacter(characterId)) return null;
+  // Neutral-B: Pound (0x0dc - 0x0de)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de
+  ) {
+    return "pound";
+  }
+  // Up-B: Sing (0x0df - 0x0e1, 0x0e4 - 0x0e6)
+  if (
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0 ||
+    actionStateId === 0x0e1 ||
+    actionStateId === 0x0e4 ||
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6
+  ) {
+    return "sing";
+  }
+  // Down-B: Rest (0x0e2 - 0x0e4, 0x0e7 - 0x0e9)
+  if (
+    actionStateId === 0x0e2 ||
+    actionStateId === 0x0e3 ||
+    actionStateId === 0x0e4 ||
+    actionStateId === 0x0e7 ||
+    actionStateId === 0x0e8 ||
+    actionStateId === 0x0e9
+  ) {
+    return "rest";
   }
   return null;
 }
@@ -432,6 +900,31 @@ export function getAttackInfo(actionStateId: number): AttackInfo | null {
   return null;
 }
 
+/**
+ * Returns whether a character can angle their attack (specifically forward tilt or forward smash).
+ * - Fox, Captain Falcon, Samus can angle forward tilt (FTilt) attacks.
+ * - Captain Falcon, Samus can angle forward smash (FSmash) attacks.
+ */
+export function canAngleAttack(
+  characterId: number,
+  attack: AttackInfo,
+): boolean {
+  if (attack.direction !== "forward") {
+    return false;
+  }
+  if (attack.type === "tilt") {
+    return (
+      isFoxCharacter(characterId) ||
+      isFalconCharacter(characterId) ||
+      isSamusCharacter(characterId)
+    );
+  }
+  if (attack.type === "smash") {
+    return isFalconCharacter(characterId) || isSamusCharacter(characterId);
+  }
+  return false;
+}
+
 export function isMarioCharacter(characterId: number): boolean {
   return (
     characterId === 0x00 || // Mario
@@ -589,9 +1082,16 @@ export interface CharacterAnimState {
   taunting: boolean;
   inCombo: boolean;
   isRoll: boolean;
+  isTechRoll: boolean;
+  isTechInPlace: boolean;
+  isTumble: boolean;
+  isProne: boolean;
+  isDownBound: boolean;
   isInvulnerable: boolean;
   isSpecial: boolean;
   isLanding: boolean;
+  isDizzy: boolean;
+  isSleep: boolean;
   isOpponent: boolean;
   actionFrameCounter: number;
 }
@@ -1056,8 +1556,8 @@ export class StageRenderer {
     const topY = y - heightPx;
     const noseY = centerY;
 
-    // Default label vertical position is above the character model
-    let labelY = topY - 8;
+    // Default label vertical position is generously above the character model
+    let labelY = topY - 18;
 
     // Draw shield bubble/oval if character is in a shield state
     const shielding = isShieldState(post.actionStateId);
@@ -1066,7 +1566,7 @@ export class StageRenderer {
       const shieldStun = isShieldStunState(post.actionStateId);
       const radiusX = halfWidth * 1.35;
       const radiusY = heightPx * 0.65;
-      labelY = Math.min(labelY, centerY - radiusY - 6);
+      labelY = Math.min(labelY, centerY - radiusY - 14);
 
       if (shieldStun) {
         // High-energy vibrating shield stun impact effect
@@ -1186,6 +1686,12 @@ export class StageRenderer {
     // Draw attack arc if character is executing an attack or grab
     const attack = getAttackInfo(post.actionStateId);
     if (attack) {
+      const joystick =
+        replay && frameIndex !== undefined
+          ? replay.frames[frameIndex]?.ports[port]?.pre
+          : null;
+      const angleable = canAngleAttack(post.characterId, attack);
+
       this.drawAttackArc(
         x,
         centerY,
@@ -1194,12 +1700,14 @@ export class StageRenderer {
         facingRight,
         color,
         attack,
+        joystick ? { x: joystick.stickX, y: joystick.stickY } : null,
+        angleable,
       );
       if (attack.direction === "up" || attack.direction === "neutral") {
         const baseRadius = Math.max(halfWidth, heightPx * 0.5);
         const topRadius =
           attack.type === "smash" ? baseRadius * 2.2 : baseRadius * 1.55;
-        labelY = Math.min(labelY, centerY - topRadius - 8);
+        labelY = Math.min(labelY, centerY - topRadius - 16);
       }
     }
 
@@ -1223,7 +1731,7 @@ export class StageRenderer {
         falconSpecial === "dive_reach" ||
         falconSpecial === "dive_explosion"
       ) {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
       }
     }
 
@@ -1271,12 +1779,175 @@ export class StageRenderer {
         foxSpecial === "shine_end" ||
         foxSpecial === "firefox_charge"
       ) {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
       }
     }
 
+    // Draw Yoshi special move visuals if applicable
+    const yoshiSpecial = getYoshiSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (yoshiSpecial) {
+      this.drawYoshiSpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        yoshiSpecial,
+        post.actionFrameCounter,
+      );
+    }
+
+    // Draw Donkey Kong special move visuals if applicable
+    const dkSpecial = getDKSpecialType(post.characterId, post.actionStateId);
+    if (dkSpecial) {
+      this.drawDKSpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        dkSpecial,
+        post.actionFrameCounter,
+      );
+    }
+
+    // Draw Ness special move visuals if applicable
+    const nessSpecial = getNessSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (nessSpecial) {
+      this.drawNessSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        nessSpecial,
+        post.actionFrameCounter,
+      );
+      if (nessSpecial === "pk_thunder_charge" || nessSpecial === "psi_magnet") {
+        labelY = Math.min(labelY, centerY - heightPx * 0.9 - 16);
+      }
+    }
+
+    // Draw Mario / Luigi special move visuals if applicable
+    const marioSpecial = getMarioSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (marioSpecial) {
+      this.drawMarioSpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        isLuigiCharacter(post.characterId),
+        marioSpecial,
+        post.actionFrameCounter,
+      );
+    }
+
+    // Draw Samus special move visuals if applicable
+    const samusSpecial = getSamusSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (samusSpecial) {
+      this.drawSamusSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        samusSpecial,
+        post.actionFrameCounter,
+      );
+      if (samusSpecial === "screw_attack") {
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
+      }
+    }
+
+    // Draw Link special move visuals if applicable
+    const linkSpecial = getLinkSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (linkSpecial) {
+      this.drawLinkSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        linkSpecial,
+        post.actionFrameCounter,
+      );
+      if (linkSpecial === "spin_attack") {
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
+      }
+    }
+
+    // Draw Kirby special move visuals if applicable
+    const kirbySpecial = getKirbySpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (kirbySpecial) {
+      this.drawKirbySpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        kirbySpecial,
+        post.actionFrameCounter,
+      );
+    }
+
+    // Draw Jigglypuff special move visuals if applicable
+    const puffSpecial = getJigglypuffSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (puffSpecial) {
+      this.drawJigglypuffSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        puffSpecial,
+        post.actionFrameCounter,
+      );
+      if (puffSpecial === "sing" || puffSpecial === "rest") {
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
+      }
+    }
+
+    const isTechRoll = isTechRollState(post.actionStateId);
+    const isTechInPlace = isTechInPlaceState(post.actionStateId);
     const isRoll = isRollState(post.actionStateId);
-    const isInvulnerable = isRoll && post.hurtboxState === 0x03;
+    const isTumble = isTumbleState(post.actionStateId);
+    const isDownBound = isDownBoundState(post.actionStateId);
+    const isProne = isProneState(post.actionStateId);
+    const isInvulnerable =
+      (isRoll || isTechInPlace || isProne) && post.hurtboxState === 0x03;
 
     const taunting = isTauntState(post.actionStateId);
     let triangleColor = color;
@@ -1285,6 +1956,9 @@ export class StageRenderer {
       // Smoothly cycle through colors across the rainbow spectrum
       const hue = (post.actionFrameCounter * 10) % 360;
       triangleColor = `hsl(${hue}, 85%, 55%)`;
+    } else if (isTechRoll) {
+      // High-speed cyan/teal ghost appearance for tech roll
+      triangleColor = hexToRgba("#06b6d4", 0.5);
     } else if (isRoll) {
       // Ethereal / semi-translucent ghost appearance for the entire roll state
       triangleColor = hexToRgba(color, 0.45);
@@ -1294,25 +1968,106 @@ export class StageRenderer {
       post.actionStateId,
       post.hitstunCounter ?? 0,
     );
-    const inCombo = inHitstun && (post.comboHitCount ?? 0) > 0;
+    const inCombo = inHitstun || (post.comboHitCount ?? 0) > 0;
     const comboHits = inHitstun ? (post.comboHitCount ?? 0) : 0;
     const isSpecial = isSpecialState(post.actionStateId);
     const isLanding = isLandingState(post.actionStateId);
+    const isDizzy = isDizzyState(post.actionStateId);
+    const isSleep = isSleepState(post.actionStateId);
     const isOpponent =
       perspectivePort !== null &&
       perspectivePort !== undefined &&
       port !== perspectivePort;
 
+    if (isProne) {
+      labelY = y - 28;
+    } else if (isDizzy) {
+      labelY = Math.min(labelY, topY - 36);
+    }
+
     const animState: CharacterAnimState = {
       taunting,
       inCombo,
       isRoll,
+      isTechRoll,
+      isTechInPlace,
+      isTumble,
+      isProne,
+      isDownBound,
       isInvulnerable,
       isSpecial,
       isLanding,
+      isDizzy,
+      isSleep,
       isOpponent,
       actionFrameCounter: post.actionFrameCounter,
     };
+
+    ctx.save();
+    if (isDizzy) {
+      // Exaggerated dizzy swaying / reeling from side to side around the feet pivot (x, y)
+      // Classic Smash 64 FuraFura staggering motion
+      const swayPeriod = 0.16;
+      const swayAngle = Math.sin(post.actionFrameCounter * swayPeriod) * 0.18; // ~10.3 deg sway
+      const swayX =
+        Math.sin(post.actionFrameCounter * swayPeriod) * (halfWidth * 0.25);
+      ctx.translate(x + swayX, y);
+      ctx.rotate(swayAngle);
+      ctx.translate(-x, -y);
+    } else if (isSleep) {
+      // Gentle breathing rhythmic bobbing while asleep
+      const sleepBobY = Math.sin(post.actionFrameCounter * 0.08) * 2;
+      ctx.translate(0, sleepBobY);
+    } else if (isTumble) {
+      // Dynamic cartwheel spin during tumble reeling
+      const spinSpeed = 0.22;
+      const spinAngle =
+        post.actionFrameCounter * spinSpeed * (facingRight ? 1 : -1);
+      ctx.translate(x, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-x, -centerY);
+    } else if (isProne) {
+      // Flattened prone against stage floor at feet pivot (x, y)
+      ctx.translate(x, y);
+      ctx.scale(1.35, 0.35);
+      ctx.translate(-x, -y);
+    } else if (isIdleState(post.actionStateId)) {
+      // Subtle organic breathing stance rhythm
+      const breath = Math.sin(post.actionFrameCounter * 0.12);
+      const bobY = breath * 1.5;
+      const scaleX = 1 + breath * 0.025;
+      const scaleY = 1 - breath * 0.025;
+      ctx.translate(x, y);
+      ctx.scale(scaleX, scaleY);
+      ctx.translate(-x, -y + bobY);
+    } else if (isWalkState(post.actionStateId)) {
+      // Walking stride bob & tilt
+      const walkPhase = post.actionFrameCounter * 0.25;
+      const walkBob = Math.abs(Math.sin(walkPhase)) * 2;
+      const walkTilt = Math.sin(walkPhase) * 0.06 * (facingRight ? 1 : -1);
+      ctx.translate(x, y);
+      ctx.rotate(walkTilt);
+      ctx.translate(-x, -y + walkBob);
+    } else if (isDashOrRunState(post.actionStateId)) {
+      // Dynamic running forward lean & stride bounce
+      const runPhase = post.actionFrameCounter * 0.35;
+      const runBounce = Math.abs(Math.sin(runPhase)) * 2.5;
+      const runLean = 0.14 * (facingRight ? 1 : -1);
+      ctx.translate(x, y);
+      ctx.rotate(runLean);
+      ctx.translate(-x, -y + runBounce);
+    } else if (isCrouchState(post.actionStateId)) {
+      // Compressed crouch stance
+      ctx.translate(x, y);
+      ctx.scale(1.15, 0.72);
+      ctx.translate(-x, -y);
+    } else if (isTeeterState(post.actionStateId)) {
+      // Teetering ledge balance sway
+      const teeterAngle = Math.sin(post.actionFrameCounter * 0.28) * 0.14;
+      ctx.translate(x, y);
+      ctx.rotate(teeterAngle);
+      ctx.translate(-x, -y);
+    }
 
     if (isPikachuCharacter(post.characterId)) {
       this.drawPikachuPolygons(
@@ -1486,12 +2241,12 @@ export class StageRenderer {
       ctx.fill();
 
       if (inCombo) {
-        // Active combo hit stun electric outline & outer glow (taking damage)
+        // Active hitstun / combo electric outline & outer glow (taking damage)
         ctx.save();
         ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 5.0; // 2x thicker for legibility
         ctx.shadowColor = "rgba(255, 120, 0, 0.85)";
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 10;
         ctx.stroke();
         ctx.restore();
 
@@ -1500,8 +2255,28 @@ export class StageRenderer {
         ctx.lineTo(backX, topY);
         ctx.lineTo(backX, y);
         ctx.closePath();
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(255, 220, 180, 0.9)";
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+      } else if (isTechRoll) {
+        // High-speed vibrant cyan/teal tech roll aura
+        ctx.save();
+        ctx.strokeStyle = isInvulnerable
+          ? "rgba(34, 211, 238, 0.95)"
+          : "rgba(6, 182, 212, 0.9)";
+        ctx.lineWidth = 2.8;
+        ctx.shadowColor = "rgba(6, 182, 212, 0.85)";
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.moveTo(noseX, noseY);
+        ctx.lineTo(backX, topY);
+        ctx.lineTo(backX, y);
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 1.4;
         ctx.stroke();
       } else if (isRoll) {
         // Ethereal silver glow during roll (with brighter cyan aura when actively intangible)
@@ -1551,29 +2326,461 @@ export class StageRenderer {
 
       ctx.restore();
     }
+    ctx.restore(); // Closes the character sway/bob/tumble/prone transform
+
+    if (isDizzy) {
+      // 3 glowing golden stars orbiting in 3D ellipse above character's head
+      this.drawDizzyStars(x, topY - 6, post.actionFrameCounter, isOpponent);
+    } else if (isSleep) {
+      // Floating "Z z z" sleep bubbles
+      this.drawSleepZzz(
+        x + halfWidth * 0.5,
+        topY - 4,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    } else if (isTumble) {
+      // Swirling wind/motion streaks indicating unstable free-fall reeling
+      this.drawTumbleAura(
+        x,
+        centerY,
+        halfWidth,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    } else if (isDownBound) {
+      // Ground impact dust shockwave and sparks on missed tech floor bounce
+      this.drawMissedTechBounce(
+        x,
+        y,
+        halfWidth,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    } else if (isTechInPlace) {
+      // Breakfall ground flash and upward recovery burst on tech in place
+      this.drawTechBreakfall(
+        x,
+        y,
+        halfWidth,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    } else if (isTechRoll) {
+      if (post.actionFrameCounter < 10) {
+        this.drawTechBreakfall(
+          x,
+          y,
+          halfWidth,
+          post.actionFrameCounter,
+          isOpponent,
+        );
+      }
+      this.drawTechRollSpeedLines(
+        x,
+        y,
+        topY,
+        effectiveDir,
+        halfWidth,
+        post.actionFrameCounter,
+        isOpponent,
+      );
+    }
 
     // Damage% label above the triangle, in the player's color (or cycling if taunting).
-    ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.font = "bold 15px system-ui, -apple-system, sans-serif";
     ctx.fillStyle = taunting ? triangleColor : color;
     ctx.textAlign = "center";
-    ctx.shadowColor = "rgba(0,0,0,0.8)";
-    ctx.shadowBlur = 3;
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 4;
     ctx.fillText(`${post.damagePercent}%`, x, labelY);
     ctx.shadowBlur = 0;
 
-    // Active combo hits badge if 2 or more hits in combo
+    // Active combo hits count (large punchy number) if 2 or more hits in combo
     if (comboHits >= 2) {
-      const badgeText = `${comboHits} COMBO`;
-      ctx.font = "bold 10px system-ui, sans-serif";
-      const textWidth = ctx.measureText(badgeText).width;
-      const badgeY = labelY - 14;
+      const comboText = `${comboHits}`;
+      const comboY = labelY - 20;
 
-      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-      ctx.fillRect(x - textWidth / 2 - 4, badgeY - 9, textWidth + 8, 13);
+      ctx.save();
+      ctx.font = "900 20px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
 
-      ctx.fillStyle = "#ff4d4f";
-      ctx.fillText(badgeText, x, badgeY);
+      // Dark outline for contrast
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.9)";
+      ctx.lineWidth = 3.5;
+      ctx.lineJoin = "round";
+      ctx.strokeText(comboText, x, comboY);
+
+      // Energetic red-orange fill with glowing aura
+      ctx.fillStyle = "#ff453a";
+      ctx.shadowColor = "rgba(255, 69, 58, 0.85)";
+      ctx.shadowBlur = 6;
+      ctx.fillText(comboText, x, comboY);
+      ctx.restore();
     }
+
+    // Player name tag at match start (fades out after initial frames)
+    const nameAlpha = getStartNameAlpha(frameIndex);
+    if (nameAlpha > 0) {
+      const rawName = replay?.gameStart?.playerNames?.[port]?.trim();
+      const playerName =
+        rawName && rawName.length > 0 ? rawName : PORT_LABELS[port];
+      const hasPerspective =
+        perspectivePort !== null && perspectivePort !== undefined;
+      const isPerspective = hasPerspective && port === perspectivePort;
+      const tagColor = hasPerspective
+        ? isPerspective
+          ? MAIN_PLAYER_COLOR
+          : OPPONENT_COLOR
+        : getPlayerColor(port, perspectivePort);
+
+      const nameTagBottomY = comboHits >= 2 ? labelY - 38 : labelY - 20;
+      this.drawPlayerNameTag(
+        x,
+        nameTagBottomY,
+        playerName,
+        tagColor,
+        isPerspective,
+        nameAlpha,
+      );
+    }
+  }
+
+  /**
+   * Draws a player name tag above the character's head at the start of the match.
+   * Renders a capsule pill with a downward pointer arrow and distinct blue styling
+   * for the perspective player.
+   */
+  private drawPlayerNameTag(
+    x: number,
+    y: number,
+    name: string,
+    tagColor: string,
+    isPerspective: boolean,
+    alpha: number,
+  ): void {
+    if (alpha <= 0 || !name) return;
+
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const textMetrics = ctx.measureText(name);
+    const textWidth = textMetrics.width;
+    const paddingX = 10;
+    const pillWidth = Math.max(textWidth + paddingX * 2, 32);
+    const pillHeight = 22;
+    const pillX = x - pillWidth / 2;
+    const pillY = y - pillHeight - 5; // 5px above the arrow tip at y
+    const borderRadius = 5;
+
+    // 1. Tag capsule background
+    ctx.beginPath();
+    ctx.roundRect(pillX, pillY, pillWidth, pillHeight, borderRadius);
+    ctx.fillStyle = isPerspective
+      ? "rgba(15, 23, 42, 0.94)"
+      : "rgba(24, 27, 34, 0.88)";
+    ctx.fill();
+
+    // 2. Tag capsule border
+    ctx.lineWidth = isPerspective ? 2.2 : 1.4;
+    ctx.strokeStyle = tagColor;
+    if (isPerspective) {
+      ctx.shadowColor = "rgba(59, 130, 246, 0.65)";
+      ctx.shadowBlur = 6;
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // 3. Small downward pointer arrow below pill pointing down to character
+    const arrowWidth = 8;
+    const arrowHeight = 5;
+    ctx.beginPath();
+    ctx.moveTo(x - arrowWidth / 2, pillY + pillHeight);
+    ctx.lineTo(x + arrowWidth / 2, pillY + pillHeight);
+    ctx.lineTo(x, pillY + pillHeight + arrowHeight);
+    ctx.closePath();
+    ctx.fillStyle = tagColor;
+    ctx.fill();
+
+    // 4. Name text inside capsule
+    ctx.fillStyle = isPerspective ? "#ffffff" : "#d1d5db";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 2;
+    ctx.fillText(name, x, pillY + pillHeight / 2);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws 3 glowing golden stars orbiting in an inclined 3D ellipse above the character's head
+   * when their shield is broken and they are stuck in the dizzy state (FuraFura / Stun).
+   */
+  private drawDizzyStars(
+    x: number,
+    headY: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const starCount = 3;
+    const orbitRadiusX = 18;
+    const orbitRadiusY = 7;
+    const speed = 0.12;
+
+    ctx.save();
+    for (let i = 0; i < starCount; i++) {
+      const phase = (i * Math.PI * 2) / starCount;
+      const angle = frameCounter * speed + phase;
+      const starX = x + Math.cos(angle) * orbitRadiusX;
+      // Slanted elliptical orbit for a 3D perspective effect
+      const starY =
+        headY + Math.sin(angle) * orbitRadiusY + Math.cos(angle) * 2;
+
+      // 3D depth scaling: stars in front (sin > 0) are larger and brighter than stars in back (sin < 0)
+      const depth = Math.sin(angle); // -1 (back) to +1 (front)
+      const depthScale = 0.7 + 0.35 * ((depth + 1) / 2);
+      const starRadius = 5 * depthScale;
+      const alpha = 0.55 + 0.45 * ((depth + 1) / 2);
+
+      ctx.save();
+      ctx.translate(starX, starY);
+      ctx.rotate(frameCounter * 0.18 + phase);
+
+      const starColor = resolveColor("#facc15", isOpponent, alpha); // Bright gold / yellow
+      const starGlow = resolveColor("#ca8a04", isOpponent, alpha * 0.8);
+
+      ctx.fillStyle = starColor;
+      ctx.shadowColor = starGlow;
+      ctx.shadowBlur = 6 * depthScale;
+
+      // 4-pointed sparkle star geometry
+      ctx.beginPath();
+      for (let p = 0; p < 8; p++) {
+        const r = p % 2 === 0 ? starRadius : starRadius * 0.4;
+        const pAngle = (p * Math.PI) / 4;
+        const px = Math.cos(pAngle) * r;
+        const py = Math.sin(pAngle) * r;
+        if (p === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // White hot-spot core on front-facing stars
+      if (depth > 0) {
+        ctx.beginPath();
+        ctx.arc(0, 0, starRadius * 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = resolveColor("#ffffff", isOpponent, alpha);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Draws rising "Z z z" text bubbles when a character is asleep (e.g. from Sing).
+   */
+  private drawSleepZzz(
+    x: number,
+    topY: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const zCount = 3;
+    ctx.save();
+    ctx.font = "bold 12px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    for (let i = 0; i < zCount; i++) {
+      const cycle = (frameCounter + i * 25) % 75;
+      const progress = cycle / 75; // 0 to 1
+      const zY = topY - progress * 24;
+      const zX = x + Math.sin(progress * Math.PI * 2) * 6 + i * 4;
+      const zScale = 0.7 + progress * 0.5;
+      const alpha =
+        progress < 0.2 ? progress / 0.2 : 1 - (progress - 0.2) / 0.8;
+
+      ctx.save();
+      ctx.translate(zX, zY);
+      ctx.scale(zScale, zScale);
+      ctx.fillStyle = resolveColor("#93c5fd", isOpponent, alpha * 0.9);
+      ctx.shadowColor = resolveColor("#3b82f6", isOpponent, alpha * 0.6);
+      ctx.shadowBlur = 4;
+      ctx.fillText(i === 0 ? "Z" : "z", 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Draws a dynamic swirling wind/motion aura around a character reeling in tumble.
+   */
+  private drawTumbleAura(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const radius = halfWidth * 1.35;
+    const speed = 0.2;
+    ctx.save();
+    ctx.lineWidth = 1.8;
+
+    for (let i = 0; i < 3; i++) {
+      const angle = frameCounter * speed + (i * Math.PI * 2) / 3;
+      const alpha = 0.4 + 0.3 * Math.sin(angle);
+      ctx.strokeStyle = resolveColor("#f59e0b", isOpponent, alpha); // Amber/orange wind streak
+      ctx.shadowColor = resolveColor("#d97706", isOpponent, alpha * 0.6);
+      ctx.shadowBlur = 4;
+
+      ctx.beginPath();
+      ctx.arc(x, centerY, radius + i * 2, angle, angle + Math.PI * 0.55);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Draws ground impact dust shockwaves and sparks when a player misses a tech
+   * and bounces hard on the floor (DownBound).
+   */
+  private drawMissedTechBounce(
+    x: number,
+    y: number,
+    halfWidth: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const progress = Math.min(frameCounter / 14, 1);
+    const alpha = 1 - progress;
+    if (alpha <= 0) return;
+
+    ctx.save();
+
+    // 1. Horizontal expanding floor dust ellipse
+    const dustRadiusX = halfWidth * 1.5 + progress * 24;
+    const dustRadiusY = 4 + progress * 3;
+    ctx.beginPath();
+    ctx.ellipse(x, y, dustRadiusX, dustRadiusY, 0, 0, Math.PI * 2);
+    ctx.fillStyle = resolveColor(
+      "rgba(148, 163, 184, 0.45)",
+      isOpponent,
+      alpha * 0.5,
+    );
+    ctx.fill();
+    ctx.strokeStyle = resolveColor("#f97316", isOpponent, alpha * 0.8); // Orange impact ring
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 2. Upward impact spark lines
+    const sparkCount = 5;
+    for (let i = 0; i < sparkCount; i++) {
+      const sparkAngle =
+        -Math.PI * 0.85 + (i * Math.PI * 0.7) / (sparkCount - 1);
+      const sparkDist = 8 + progress * 16;
+      const sx = x + Math.cos(sparkAngle) * (dustRadiusX * 0.6);
+      const sy = y + Math.sin(sparkAngle) * sparkDist;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(sparkAngle) * 4, y);
+      ctx.lineTo(sx, sy);
+      ctx.strokeStyle = resolveColor("#fde047", isOpponent, alpha);
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws a crisp breakfall ground flash and upward recovery burst on a successful Tech.
+   */
+  private drawTechBreakfall(
+    x: number,
+    y: number,
+    halfWidth: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    const progress = Math.min(frameCounter / 16, 1);
+    const alpha = 1 - progress;
+    if (alpha <= 0) return;
+
+    ctx.save();
+
+    // 1. Cyan tech impact ring on floor
+    const ringRadiusX = halfWidth * 1.2 + progress * 20;
+    const ringRadiusY = 3 + progress * 3;
+    ctx.beginPath();
+    ctx.ellipse(x, y, ringRadiusX, ringRadiusY, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = resolveColor("#22d3ee", isOpponent, alpha * 0.9);
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = resolveColor("#06b6d4", isOpponent, alpha * 0.8);
+    ctx.shadowBlur = 8;
+    ctx.stroke();
+
+    // 2. Rising green/cyan tech recovery sparks
+    for (let i = 0; i < 4; i++) {
+      const sparkX = x + (i - 1.5) * (halfWidth * 0.8);
+      const sparkY = y - progress * 22 - (i % 2) * 4;
+      const sparkSize = Math.max(1, (1 - progress) * 3);
+      ctx.beginPath();
+      ctx.arc(sparkX, sparkY, sparkSize, 0, Math.PI * 2);
+      ctx.fillStyle = resolveColor("#34d399", isOpponent, alpha);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws electric speed lines and cyan trail for Tech Rolls.
+   */
+  private drawTechRollSpeedLines(
+    x: number,
+    y: number,
+    topY: number,
+    effectiveDir: number,
+    halfWidth: number,
+    frameCounter: number,
+    isOpponent: boolean,
+  ): void {
+    const { ctx } = this;
+    ctx.save();
+    const trailDir = -effectiveDir; // Speed lines trail behind movement
+    const lineCount = 4;
+    const height = y - topY;
+
+    for (let i = 0; i < lineCount; i++) {
+      const lineY = topY + (height * (i + 1)) / (lineCount + 1);
+      const startX = x + trailDir * (halfWidth * 0.4);
+      const lineLen = 14 + ((frameCounter * 7 + i * 11) % 16);
+      const endX = startX + trailDir * lineLen;
+
+      ctx.beginPath();
+      ctx.moveTo(startX, lineY);
+      ctx.lineTo(endX, lineY);
+      ctx.strokeStyle = resolveColor("#22d3ee", isOpponent, 0.75);
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = resolveColor("#06b6d4", isOpponent, 0.7);
+      ctx.shadowBlur = 4;
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /**
@@ -4496,9 +5703,9 @@ export class StageRenderer {
     if (inCombo) {
       ctx.save();
       ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 5.0; // 2x thicker for high legibility during spins & tumble
       ctx.shadowColor = "rgba(255, 120, 0, 0.85)";
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 10;
       ctx.beginPath();
       ctx.ellipse(
         posX,
@@ -4509,6 +5716,21 @@ export class StageRenderer {
         0,
         Math.PI * 2,
       );
+      ctx.stroke();
+
+      // Bright inner core highlight for extra legibility
+      ctx.beginPath();
+      ctx.ellipse(
+        posX,
+        y - 0.5 * h,
+        Math.max(0.1, 0.8 * w),
+        Math.max(0.1, 0.5 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = "rgba(255, 220, 180, 0.9)";
+      ctx.lineWidth = 1.8;
       ctx.stroke();
       ctx.restore();
     } else if (isRoll) {
@@ -4562,6 +5784,8 @@ export class StageRenderer {
     facingRight: boolean,
     color: string,
     attack: AttackInfo,
+    joystick?: { x: number; y: number } | null,
+    canAngle?: boolean,
   ): void {
     const { ctx } = this;
     const baseRadius = Math.max(halfWidth, heightPx * 0.5);
@@ -4737,12 +5961,25 @@ export class StageRenderer {
       return;
     }
 
+    // Determine stick tilt if this attack is angleable (e.g. Fox/Falcon/Samus tilt, Falcon/Samus smash)
+    const rawStickY = joystick?.y ?? 0;
+    const hasStickAngle = Boolean(
+      canAngle && attack.direction === "forward" && Math.abs(rawStickY) > 8,
+    );
+    const tiltFactor = hasStickAngle
+      ? Math.max(-1, Math.min(1, rawStickY / 45))
+      : 0;
+    // In screen coords, +Y is DOWN so stick UP (+Y) rotates counter-clockwise (-angle when facing right)
+    const angleShift =
+      (facingRight ? -1 : 1) * tiltFactor * ((18 * Math.PI) / 180);
+    const effectiveCenter = centerAngle + angleShift;
+
     if (attack.type === "tilt" || attack.type === "aerial") {
       // Tilts and directional aerials: sleek, sharp aerodynamic single slash arc
       const radius = baseRadius * 1.55;
       const span = (75 * Math.PI) / 180;
-      const startAngle = centerAngle - span / 2;
-      const endAngle = centerAngle + span / 2;
+      const startAngle = effectiveCenter - span / 2;
+      const endAngle = effectiveCenter + span / 2;
 
       // Outer slash arc in player's color
       ctx.beginPath();
@@ -4752,20 +5989,58 @@ export class StageRenderer {
       ctx.lineCap = "round";
       ctx.stroke();
 
-      // Inner white highlight core
-      ctx.beginPath();
-      ctx.arc(x, centerY, radius, startAngle + 0.08, endAngle - 0.08);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
-      ctx.lineWidth = 1.5;
-      ctx.lineCap = "round";
-      ctx.stroke();
+      if (hasStickAngle) {
+        // Angled direction is significantly brighter in the direction of the joystick
+        const highlightAngle =
+          effectiveCenter +
+          (facingRight ? -1 : 1) * (tiltFactor * (span * 0.28));
+        const hx = x + Math.cos(highlightAngle) * radius;
+        const hy = centerY + Math.sin(highlightAngle) * radius;
+
+        ctx.save();
+        // 1. Radiant luminous glow flare centered on stick direction
+        const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 20);
+        flareGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+        flareGrad.addColorStop(0.35, hexToRgba(color, 0.9));
+        flareGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = flareGrad;
+        ctx.beginPath();
+        ctx.arc(hx, hy, 20, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Overlaid bright white-hot arc segment along the angled section
+        const hSpan = span * 0.5;
+        ctx.beginPath();
+        ctx.arc(
+          x,
+          centerY,
+          radius,
+          highlightAngle - hSpan / 2,
+          highlightAngle + hSpan / 2,
+        );
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 4.2;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        // Inner white highlight core
+        ctx.beginPath();
+        ctx.arc(x, centerY, radius, startAngle + 0.08, endAngle - 0.08);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
     } else {
       // Smash attack: significantly larger, glowing, heavier dual-layer energy crescent
       const radiusOuter = baseRadius * 2.2;
       const radiusInner = baseRadius * 1.45;
       const span = (105 * Math.PI) / 180;
-      const startAngle = centerAngle - span / 2;
-      const endAngle = centerAngle + span / 2;
+      const startAngle = effectiveCenter - span / 2;
+      const endAngle = effectiveCenter + span / 2;
 
       // 1. Translucent energy wedge fill
       ctx.beginPath();
@@ -4787,13 +6062,50 @@ export class StageRenderer {
       ctx.stroke();
       ctx.restore();
 
-      // 3. Bright intense white energy core
-      ctx.beginPath();
-      ctx.arc(x, centerY, radiusOuter, startAngle + 0.1, endAngle - 0.1);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-      ctx.lineWidth = 2.2;
-      ctx.lineCap = "round";
-      ctx.stroke();
+      if (hasStickAngle) {
+        // Angled direction is significantly brighter on the outer blade
+        const highlightAngle =
+          effectiveCenter +
+          (facingRight ? -1 : 1) * (tiltFactor * (span * 0.28));
+        const hx = x + Math.cos(highlightAngle) * radiusOuter;
+        const hy = centerY + Math.sin(highlightAngle) * radiusOuter;
+
+        ctx.save();
+        const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 24);
+        flareGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+        flareGrad.addColorStop(0.35, hexToRgba(color, 0.95));
+        flareGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = flareGrad;
+        ctx.beginPath();
+        ctx.arc(hx, hy, 24, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Intense white-hot blade overlay on that side
+        const hSpan = span * 0.5;
+        ctx.beginPath();
+        ctx.arc(
+          x,
+          centerY,
+          radiusOuter,
+          highlightAngle - hSpan / 2,
+          highlightAngle + hSpan / 2,
+        );
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 6.5;
+        ctx.shadowColor = "#ffffff";
+        ctx.shadowBlur = 16;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        // 3. Bright intense white energy core
+        ctx.beginPath();
+        ctx.arc(x, centerY, radiusOuter, startAngle + 0.1, endAngle - 0.1);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
 
       // 4. Trailing inner speed line
       ctx.beginPath();
@@ -5114,6 +6426,63 @@ export class StageRenderer {
     const dir = facingRight ? 1 : -1;
     const noseX = x + dir * halfWidth;
 
+    if (specialType === "thunder_jolt") {
+      ctx.save();
+      // Neutral-B: Thunder Jolt electric spark sphere condensing and discharging forward
+      const pulse = 1 + 0.3 * Math.sin(frameCounter * 0.5);
+      const sparkRadius = Math.max(6, halfWidth * 0.45) * pulse;
+      const sparkX = noseX + dir * 6;
+
+      // 1. Expanding electric shock ring
+      const ringProg = (frameCounter % 15) / 15;
+      ctx.beginPath();
+      ctx.arc(
+        sparkX + dir * (ringProg * 14),
+        centerY,
+        4 + ringProg * 10,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = resolveColor("#38bdf8", false, (1 - ringProg) * 0.85);
+      ctx.lineWidth = 1.8;
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // 2. Electric blue-yellow core spark
+      ctx.beginPath();
+      ctx.arc(sparkX, centerY, sparkRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.4)";
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+
+      // 3. 4 Branching zig-zag lightning sparks
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = "#fef08a";
+      for (let i = 0; i < 4; i++) {
+        const sAngle = (i * Math.PI) / 2 + frameCounter * 0.4;
+        const midX =
+          sparkX +
+          Math.cos(sAngle) * (sparkRadius * 0.8) +
+          (i % 2 === 0 ? 2 : -2);
+        const midY =
+          centerY +
+          Math.sin(sAngle) * (sparkRadius * 0.8) +
+          (i % 2 === 0 ? -2 : 2);
+        const endX = sparkX + Math.cos(sAngle) * (sparkRadius * 1.6);
+        const endY = centerY + Math.sin(sAngle) * (sparkRadius * 1.6);
+        ctx.beginPath();
+        ctx.moveTo(sparkX, centerY);
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
     if (specialType === "thunder") {
       ctx.save();
       // 1. Full-height lightning bolt coming down from sky (Y=0) straight to Pikachu (centerY)
@@ -5223,6 +6592,1198 @@ export class StageRenderer {
       ctx.shadowColor = "#ffd700";
       ctx.shadowBlur = 8;
       ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Visualizes Yoshi's signature special moves:
+   * - Egg Lay (Neutral-B): Long pink/red elastic tongue extending from snout with sticky bulb tip.
+   * - Yoshi Bomb / Hip Drop (Down-B): Downward star-butt plummet and ground impact shockwave stars.
+   * - Egg Throw (Up-B): Egg aiming trajectory arc.
+   */
+  private drawYoshiSpecial(
+    x: number,
+    y: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: YoshiSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * (halfWidth * 0.7);
+    const noseY = centerY - heightPx * 0.05;
+
+    if (specialType === "egg_lay_tongue") {
+      ctx.save();
+      // Elastic tongue shoot / reach curve
+      const reachProgress = Math.sin(Math.min(frameCounter / 16, 1) * Math.PI);
+      const maxReach = halfWidth * 3.4;
+      const tongueLen = Math.max(4, reachProgress * maxReach);
+      const tipX = noseX + dir * tongueLen;
+      const tipY = noseY + Math.sin(frameCounter * 0.2) * 3;
+
+      // 1. Elastic tongue path
+      ctx.beginPath();
+      ctx.moveTo(noseX, noseY);
+      ctx.quadraticCurveTo(
+        noseX + dir * (tongueLen * 0.5),
+        noseY - 4,
+        tipX,
+        tipY,
+      );
+      ctx.strokeStyle = "#f43f5e"; // Vivid rose-red tongue
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#e11d48";
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+
+      // Inner lighter pink stripe
+      ctx.beginPath();
+      ctx.moveTo(noseX, noseY);
+      ctx.quadraticCurveTo(
+        noseX + dir * (tongueLen * 0.5),
+        noseY - 4,
+        tipX,
+        tipY,
+      );
+      ctx.strokeStyle = "#fda4af";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      // 2. Rounded sticky bulb tip at tongue end
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#f43f5e";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(tipX - dir * 1, tipY - 1, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (
+      specialType === "yoshi_bomb_start" ||
+      specialType === "yoshi_bomb_plummet"
+    ) {
+      ctx.save();
+      // Downward plummet trail and star aura
+      const trailH = heightPx * 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x - halfWidth * 0.6, centerY - trailH);
+      ctx.lineTo(x - halfWidth * 0.3, centerY);
+      ctx.moveTo(x + halfWidth * 0.6, centerY - trailH);
+      ctx.lineTo(x + halfWidth * 0.3, centerY);
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.8)";
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "#f59e0b";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // Plummet star icon
+      const starR = 7;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const r = i % 2 === 0 ? starR : starR * 0.45;
+        const angle = (i * Math.PI) / 4 + frameCounter * 0.15;
+        const sx = x + Math.cos(angle) * r;
+        const sy = y + 4 + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "#facc15";
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "yoshi_bomb_land") {
+      ctx.save();
+      const progress = Math.min(frameCounter / 18, 1);
+      const alpha = 1 - progress;
+      if (alpha <= 0) {
+        ctx.restore();
+        return;
+      }
+
+      // Ground impact dust shockwave
+      const shockR = halfWidth * 1.6 + progress * 32;
+      ctx.beginPath();
+      ctx.ellipse(x, y, shockR, 5 + progress * 4, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = resolveColor("#f59e0b", false, alpha * 0.9);
+      ctx.lineWidth = 2.2;
+      ctx.shadowColor = "#d97706";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // 2 Giant Yoshi Bomb stars shooting outward left and right across the floor
+      const starDist = progress * 38;
+      for (const sDir of [-1, 1]) {
+        const starX = x + sDir * (halfWidth * 0.8 + starDist);
+        const starY = y - 4;
+        const starR = Math.max(2, (1 - progress * 0.5) * 8);
+
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const r = i % 2 === 0 ? starR : starR * 0.4;
+          const angle = (i * Math.PI) / 4 + sDir * progress * 4;
+          const px = starX + Math.cos(angle) * r;
+          const py = starY + Math.sin(angle) * r;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = resolveColor("#facc15", false, alpha);
+        ctx.shadowColor = "#f59e0b";
+        ctx.shadowBlur = 6;
+        ctx.fill();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "egg_throw") {
+      ctx.save();
+      // Egg Throw: Yoshi tossing a green-spotted egg upward in flight
+      const throwProgress = Math.min(frameCounter / 18, 1);
+      const arcX = noseX + dir * (throwProgress * halfWidth * 2.2);
+      const arcY =
+        centerY -
+        heightPx * 0.4 -
+        Math.sin(throwProgress * Math.PI) * (heightPx * 0.85);
+
+      // Trajectory dashed arc
+      ctx.beginPath();
+      ctx.moveTo(noseX, centerY);
+      ctx.quadraticCurveTo(
+        noseX + dir * halfWidth,
+        centerY - heightPx * 1.1,
+        noseX + dir * (halfWidth * 2.2),
+        centerY - heightPx * 0.4,
+      );
+      ctx.strokeStyle = "rgba(74, 222, 128, 0.5)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Egg body (white oval)
+      ctx.beginPath();
+      ctx.ellipse(arcX, arcY, 6, 8, dir * 0.35, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = "#4ade80";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Green spots on egg
+      ctx.fillStyle = "#22c55e";
+      ctx.beginPath();
+      ctx.arc(arcX, arcY - 2, 2.2, 0, Math.PI * 2);
+      ctx.arc(arcX - 2, arcY + 2, 1.8, 0, Math.PI * 2);
+      ctx.arc(arcX + 2, arcY + 3, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Mario / Luigi special moves:
+   * - Fireball (Neutral-B): Flame fireball projectile bouncing forward (Red for Mario, Emerald for Luigi).
+   * - Super Jump Punch (Up-B): Uppercut flight with scattering spinning gold coins and Luigi sweetspot burst.
+   * - Mario Tornado / Luigi Cyclone (Down-B): Whirling multi-tier cyclone discs.
+   */
+  private drawMarioSpecial(
+    x: number,
+    y: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    isLuigi: boolean,
+    specialType: MarioSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * halfWidth;
+
+    if (specialType === "fireball") {
+      ctx.save();
+      const fbProg = (frameCounter % 20) / 20;
+      const fbX = noseX + dir * (10 + fbProg * halfWidth * 2.5);
+      const bounceY =
+        centerY +
+        Math.abs(Math.sin(fbProg * Math.PI * 2)) * (heightPx * 0.35) -
+        4;
+      const fbRadius = Math.max(5, halfWidth * 0.35);
+
+      // Fireball outer flame aura
+      ctx.beginPath();
+      ctx.arc(fbX, bounceY, fbRadius * 1.3, 0, Math.PI * 2);
+      ctx.fillStyle = isLuigi
+        ? "rgba(34, 197, 94, 0.45)"
+        : "rgba(239, 68, 68, 0.45)";
+      ctx.shadowColor = isLuigi ? "#22c55e" : "#ef4444";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      // Fireball bright core
+      ctx.beginPath();
+      ctx.arc(fbX, bounceY, fbRadius, 0, Math.PI * 2);
+      ctx.fillStyle = isLuigi ? "#86efac" : "#fde047";
+      ctx.fill();
+
+      // White-hot center
+      ctx.beginPath();
+      ctx.arc(fbX - dir * 1, bounceY - 1, fbRadius * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      // Trailing sparks
+      ctx.beginPath();
+      ctx.arc(fbX - dir * (fbRadius * 1.5), bounceY + 2, 2, 0, Math.PI * 2);
+      ctx.arc(fbX - dir * (fbRadius * 2.2), bounceY - 2, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = isLuigi ? "#4ade80" : "#f97316";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "super_jump_punch") {
+      ctx.save();
+      const fistX = noseX + dir * (halfWidth * 0.3);
+      const fistY = centerY - heightPx * 0.65;
+
+      // 1. Spinning golden coins scattering upward
+      const coinCount = 5;
+      for (let i = 0; i < coinCount; i++) {
+        const coinAngle = (i * Math.PI * 2) / coinCount + frameCounter * 0.35;
+        const coinDist = (i + 1) * (halfWidth * 0.45);
+        const cx = fistX + Math.cos(coinAngle) * coinDist;
+        const cy = fistY - i * 6 + Math.sin(coinAngle) * 4;
+        const spinW = Math.max(
+          1,
+          Math.abs(Math.cos(frameCounter * 0.4 + i)) * 4.5,
+        );
+
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, spinW, 5.5, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "#facc15";
+        ctx.shadowColor = "#eab308";
+        ctx.shadowBlur = 6;
+        ctx.fill();
+        ctx.strokeStyle = "#ca8a04";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // 2. Punch impact burst / Luigi sweetspot flare
+      if (isLuigi && frameCounter < 8) {
+        // Luigi sweetspot: explosive red-orange fire blast
+        ctx.beginPath();
+        ctx.arc(fistX, fistY, 14, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(239, 68, 68, 0.6)";
+        ctx.shadowColor = "#ef4444";
+        ctx.shadowBlur = 16;
+        ctx.fill();
+      }
+
+      // Rising speed streaks
+      ctx.beginPath();
+      ctx.moveTo(x - halfWidth * 0.4, y);
+      ctx.lineTo(fistX - dir * 4, fistY + 8);
+      ctx.moveTo(x + halfWidth * 0.4, y);
+      ctx.lineTo(fistX + dir * 4, fistY + 8);
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.75)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "tornado") {
+      ctx.save();
+      // Whirling tornado cyclone discs
+      const discCount = 3;
+      const spinRot = frameCounter * 0.45;
+
+      for (let i = 0; i < discCount; i++) {
+        const dy = centerY + (i - 1) * (heightPx * 0.28);
+        const radiusX = halfWidth * (1.35 + i * 0.2);
+        const radiusY = Math.max(4, heightPx * 0.14);
+
+        ctx.beginPath();
+        ctx.ellipse(x, dy, radiusX, radiusY, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = isLuigi
+          ? i % 2 === 0
+            ? "#22c55e"
+            : "#86efac"
+          : i % 2 === 0
+            ? "#ef4444"
+            : "#ffffff";
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = isLuigi ? "#22c55e" : "#ef4444";
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+
+        // Wind swirl streaks
+        const swirlX = x + Math.cos(spinRot + i * 1.5) * (radiusX * 0.85);
+        ctx.beginPath();
+        ctx.arc(swirlX, dy, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+      }
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Samus's signature special moves:
+   * - Charge Shot (Neutral-B): Electric plasma charging sphere at cannon tip.
+   * - Screw Attack (Up-B): Multihit somersaulting electric cyclone shield.
+   * - Bomb (Down-B): Morph Ball with dropped ticking energy bomb.
+   */
+  private drawSamusSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: SamusSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const cannonX = x + dir * (halfWidth * 1.15);
+    const cannonY = centerY - heightPx * 0.05;
+
+    if (specialType === "charge_shot") {
+      ctx.save();
+      // Pulsating electric energy plasma ball
+      const pulse = 1 + 0.2 * Math.sin(frameCounter * 0.4);
+      const radius = Math.max(8, halfWidth * 0.65) * pulse;
+
+      // 1. Outer electric aura
+      ctx.beginPath();
+      ctx.arc(cannonX, cannonY, radius * 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(14, 165, 233, 0.35)";
+      ctx.shadowColor = "#0284c7";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+
+      // 2. Cyan plasma core
+      ctx.beginPath();
+      ctx.arc(cannonX, cannonY, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#38bdf8";
+      ctx.fill();
+
+      // 3. Bright white spark core
+      ctx.beginPath();
+      ctx.arc(cannonX, cannonY, radius * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      // 4. Orbiting energy arcs
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = "#e0f2fe";
+      for (let i = 0; i < 3; i++) {
+        const ang = (i * Math.PI * 2) / 3 + frameCounter * 0.25;
+        ctx.beginPath();
+        ctx.arc(cannonX, cannonY, radius * 1.1, ang, ang + 0.8);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "screw_attack") {
+      ctx.save();
+      const screwRadius = Math.max(16, heightPx * 0.75);
+      const rot = frameCounter * 0.55;
+
+      // 1. Electrified somersault sphere aura
+      ctx.beginPath();
+      ctx.arc(x, centerY, screwRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+
+      // 2. Rotating lightning cutting rings
+      for (let i = 0; i < 3; i++) {
+        const ang = rot + (i * Math.PI * 2) / 3;
+        ctx.beginPath();
+        ctx.ellipse(
+          x,
+          centerY,
+          screwRadius * 0.95,
+          screwRadius * 0.45,
+          ang,
+          0,
+          Math.PI * 2,
+        );
+        ctx.strokeStyle = i % 2 === 0 ? "#facc15" : "#38bdf8";
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+      }
+
+      // 3. Central white energy spark
+      ctx.beginPath();
+      ctx.arc(x, centerY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "bomb") {
+      ctx.save();
+      const bombX = x - dir * (halfWidth * 0.3);
+      const bombY = centerY + heightPx * 0.35;
+      const bombR = Math.max(4, halfWidth * 0.28);
+
+      // Dropped Morph Ball energy bomb
+      ctx.beginPath();
+      ctx.arc(bombX, bombY, bombR, 0, Math.PI * 2);
+      ctx.fillStyle = "#0284c7";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Blinking yellow core
+      ctx.beginPath();
+      ctx.arc(bombX, bombY, bombR * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = frameCounter % 4 < 2 ? "#facc15" : "#ffffff";
+      ctx.fill();
+
+      // Expanding pulse ring
+      const ringProg = (frameCounter % 12) / 12;
+      ctx.beginPath();
+      ctx.arc(bombX, bombY, bombR + ringProg * 14, 0, Math.PI * 2);
+      ctx.strokeStyle = resolveColor("#38bdf8", false, (1 - ringProg) * 0.7);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Link's signature special moves:
+   * - Boomerang (Neutral-B): Spinning wooden four-pointed cross boomerang carving forward in flight arc.
+   * - Spin Attack (Up-B): 360-degree hurricane sword slash ring with glowing cyan edge trails.
+   * - Bomb (Down-B): Blue cartoon bomb with flickering burning fuse.
+   */
+  private drawLinkSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: LinkSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * halfWidth;
+
+    if (specialType === "boomerang") {
+      ctx.save();
+      // Spinning wooden boomerang in flight arc
+      const bProg = (frameCounter % 24) / 24;
+      const bDist = halfWidth * 2.8;
+      const bx = noseX + dir * (10 + Math.sin(bProg * Math.PI) * bDist);
+      const by = centerY - Math.sin(bProg * Math.PI * 2) * 6;
+      const bRot = frameCounter * 0.45;
+
+      ctx.translate(bx, by);
+      ctx.rotate(bRot);
+
+      // Four-pointed cross-boomerang
+      const armLen = 9;
+      const armThick = 2.4;
+      ctx.fillStyle = "#b45309"; // Wood brown
+      ctx.strokeStyle = "#fef08a"; // Gold tip
+      ctx.lineWidth = 1;
+
+      for (let i = 0; i < 4; i++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.fillRect(-armThick / 2, 0, armThick, armLen);
+        ctx.strokeRect(-armThick / 2, 0, armThick, armLen);
+      }
+
+      // Wind trail ring
+      ctx.beginPath();
+      ctx.arc(0, 0, armLen * 1.1, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "spin_attack") {
+      ctx.save();
+      // Full 360 hurricane sword slash disk
+      const spinRadius = Math.max(18, halfWidth * 2.4);
+      const rot = frameCounter * 0.5;
+
+      // 1. Translucent cyan cutting disc
+      ctx.beginPath();
+      ctx.arc(x, centerY, spinRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.22)";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      // 2. Twin glowing blade trails along perimeter
+      for (let i = 0; i < 2; i++) {
+        const startAng = rot + i * Math.PI;
+        ctx.beginPath();
+        ctx.arc(x, centerY, spinRadius, startAng, startAng + 1.6);
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 3.5;
+        ctx.lineCap = "round";
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(x, centerY, spinRadius, startAng + 0.2, startAng + 1.4);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "bomb") {
+      ctx.save();
+      // Round blue cartoon bomb with burning fuse
+      const bombX = noseX + dir * 8;
+      const bombY = centerY - heightPx * 0.35;
+      const bombR = Math.max(6, halfWidth * 0.45);
+
+      // Bomb spherical body
+      ctx.beginPath();
+      ctx.arc(bombX, bombY, bombR, 0, Math.PI * 2);
+      ctx.fillStyle = "#1d4ed8";
+      ctx.shadowColor = "#3b82f6";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Brass fuse cap
+      ctx.fillStyle = "#ca8a04";
+      ctx.fillRect(bombX - 2, bombY - bombR - 3, 4, 3);
+
+      // Sparkling burning fuse
+      const fuseProg = (frameCounter % 6) / 6;
+      ctx.beginPath();
+      ctx.arc(
+        bombX + (fuseProg > 0.5 ? 2 : -2),
+        bombY - bombR - 6,
+        2.5,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#facc15";
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 6;
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Kirby's signature special moves:
+   * - Inhale (Neutral-B): Billowing translucent suction wind cone converging into wide mouth.
+   * - Final Cutter (Up-B): Vertical sword slash trail rising up, somersault, downward dive, and floor shockwave.
+   * - Stone (Down-B): Heavy slate rock transformation with floor fracture puffs.
+   */
+  private drawKirbySpecial(
+    x: number,
+    y: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: KirbySpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const mouthX = x + dir * (halfWidth * 0.7);
+
+    if (specialType === "inhale") {
+      ctx.save();
+      // Suction wind cone expanding forward from mouth
+      const coneLen = halfWidth * 3.2;
+      const coneEndW = heightPx * 1.1;
+
+      // 1. Translucent suction cone fill
+      ctx.beginPath();
+      ctx.moveTo(mouthX, centerY);
+      ctx.lineTo(mouthX + dir * coneLen, centerY - coneEndW * 0.5);
+      ctx.lineTo(mouthX + dir * coneLen, centerY + coneEndW * 0.5);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(186, 230, 253, 0.25)";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+
+      // 2. Swirling air stream curves
+      const streamCount = 4;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = "round";
+
+      for (let i = 0; i < streamCount; i++) {
+        const streamProg = (frameCounter * 0.08 + i / streamCount) % 1;
+        const sx = mouthX + dir * (coneLen * (1 - streamProg));
+        const sy =
+          centerY + (i - 1.5) * (coneEndW * 0.28 * (1 - streamProg * 0.5));
+
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.quadraticCurveTo(
+          mouthX + dir * (coneLen * 0.4),
+          centerY + Math.sin(frameCounter * 0.3 + i) * 6,
+          mouthX,
+          centerY,
+        );
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "final_cutter") {
+      ctx.save();
+      // Upward rising slash / downward dive / floor shockwave wave
+      const swordX = mouthX + dir * (halfWidth * 0.4);
+
+      // Vertical energy blade trail
+      ctx.beginPath();
+      ctx.moveTo(swordX, y);
+      ctx.lineTo(swordX, centerY - heightPx * 1.1);
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = "#0284c7";
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(swordX, y);
+      ctx.lineTo(swordX, centerY - heightPx * 1.1);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+
+      // Floor cutter shockwave wave
+      const waveX = mouthX + dir * (halfWidth * 1.6);
+      ctx.beginPath();
+      ctx.moveTo(waveX, y);
+      ctx.lineTo(waveX + dir * 10, y - heightPx * 0.45);
+      ctx.lineTo(waveX + dir * 16, y);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(56, 189, 248, 0.75)";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "stone") {
+      ctx.save();
+      // Solid stone/brick block
+      const stoneW = halfWidth * 1.8;
+      const stoneH = heightPx * 0.95;
+      const left = x - stoneW * 0.5;
+      const top = y - stoneH;
+
+      // Stone block body
+      ctx.fillStyle = "#64748b"; // Slate rock
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 2;
+      ctx.fillRect(left, top, stoneW, stoneH);
+      ctx.strokeRect(left, top, stoneW, stoneH);
+
+      // Chiseled highlights
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillRect(left + 2, top + 2, stoneW - 4, 3);
+      ctx.fillRect(left + 2, top + 2, 3, stoneH - 4);
+
+      // Floor impact dust puffs
+      ctx.beginPath();
+      ctx.ellipse(x - stoneW * 0.6, y, 6, 2.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + stoneW * 0.6, y, 6, 2.5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(203, 213, 225, 0.65)";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Jigglypuff's signature special moves:
+   * - Pound (Neutral-B): Forward-lunging punch with vibrant pink star impact burst.
+   * - Sing (Up-B): Concentric musical soundwave rings radiating outward with floating notes.
+   * - Rest (Down-B): Explosive critical hit star bloom with flower petals and Zzz sparkles.
+   */
+  private drawJigglypuffSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: JigglypuffSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * halfWidth;
+
+    if (specialType === "pound") {
+      ctx.save();
+      // Forward thrusting punch impact with large pink burst star
+      const punchX = noseX + dir * (halfWidth * 0.85);
+      const starR = Math.max(10, halfWidth * 0.75);
+
+      // Thrust speed lines
+      ctx.beginPath();
+      ctx.moveTo(x, centerY - heightPx * 0.2);
+      ctx.lineTo(punchX - dir * 4, centerY - heightPx * 0.2);
+      ctx.moveTo(x, centerY + heightPx * 0.2);
+      ctx.lineTo(punchX - dir * 4, centerY + heightPx * 0.2);
+      ctx.strokeStyle = "rgba(244, 114, 182, 0.75)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 4-point impact star
+      ctx.beginPath();
+      ctx.moveTo(punchX - starR, centerY);
+      ctx.quadraticCurveTo(punchX, centerY, punchX, centerY - starR);
+      ctx.quadraticCurveTo(punchX, centerY, punchX + starR, centerY);
+      ctx.quadraticCurveTo(punchX, centerY, punchX, centerY + starR);
+      ctx.quadraticCurveTo(punchX, centerY, punchX - starR, centerY);
+      ctx.fillStyle = "#f472b6";
+      ctx.shadowColor = "#ec4899";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      // White inner core
+      ctx.beginPath();
+      ctx.arc(punchX, centerY, starR * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "sing") {
+      ctx.save();
+      // Concentric musical soundwave rings + floating notes
+      const ringCount = 3;
+      for (let i = 0; i < ringCount; i++) {
+        const ringProg = (frameCounter * 0.05 + i / ringCount) % 1;
+        const r = halfWidth * 0.8 + ringProg * (heightPx * 1.2);
+        ctx.beginPath();
+        ctx.arc(x, centerY, r, 0, Math.PI * 2);
+        ctx.strokeStyle = resolveColor("#f472b6", false, (1 - ringProg) * 0.85);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Floating musical notes ♪ ♫
+      ctx.font = "bold 14px system-ui, sans-serif";
+      ctx.fillStyle = "#ec4899";
+      ctx.shadowColor = "#f472b6";
+      ctx.shadowBlur = 8;
+      const note1Y =
+        centerY - heightPx * 0.6 + Math.sin(frameCounter * 0.2) * 4;
+      const note2Y =
+        centerY - heightPx * 0.4 + Math.cos(frameCounter * 0.25) * 4;
+      ctx.fillText("♪", x - halfWidth * 1.1, note1Y);
+      ctx.fillText("♫", x + halfWidth * 0.9, note2Y);
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "rest") {
+      ctx.save();
+      // Explosive critical hit star bloom with flower petals and Zzz sparkles
+      const bloomR = Math.max(14, heightPx * 0.8);
+      const isBurst = frameCounter < 10;
+
+      if (isBurst) {
+        // Massive flash beam burst
+        const beamCount = 8;
+        for (let i = 0; i < beamCount; i++) {
+          const ang = (i * Math.PI * 2) / beamCount;
+          ctx.beginPath();
+          ctx.moveTo(x, centerY);
+          ctx.lineTo(
+            x + Math.cos(ang) * (bloomR * 1.6),
+            centerY + Math.sin(ang) * (bloomR * 1.6),
+          );
+          ctx.strokeStyle = i % 2 === 0 ? "#f43f5e" : "#fde047";
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = "#f43f5e";
+          ctx.shadowBlur = 14;
+          ctx.stroke();
+        }
+      }
+
+      // Flower petal bloom
+      const petalCount = 5;
+      for (let i = 0; i < petalCount; i++) {
+        const ang = (i * Math.PI * 2) / petalCount;
+        const px = x + Math.cos(ang) * (bloomR * 0.6);
+        const py = centerY + Math.sin(ang) * (bloomR * 0.6);
+        ctx.beginPath();
+        ctx.arc(px, py, bloomR * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(244, 63, 94, 0.75)";
+        ctx.fill();
+      }
+
+      // White center flash
+      ctx.beginPath();
+      ctx.arc(x, centerY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      // Sleeping Zzz
+      ctx.font = "bold 11px system-ui, sans-serif";
+      ctx.fillStyle = "#93c5fd";
+      ctx.fillText("z", x + 8, centerY - heightPx * 0.5);
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Visualizes Donkey Kong's signature special moves:
+   * - Spinning Kong (Up-B): Rapid helicopter arm rotation discs and wind vortex swooshes.
+   * - Hand Slap (Down-B): Rhythmic ground quake slam with expanding earthquake shockwave rings and floor cracks.
+   * - Giant Punch (Neutral-B): Glowing charged fist windup.
+   */
+  private drawDKSpecial(
+    x: number,
+    y: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: DKSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+
+    if (specialType === "spinning_kong") {
+      ctx.save();
+      // Helicopter spin vortex discs
+      const spinSpeed = 0.45;
+      const vortexR = halfWidth * 1.55;
+
+      // 1. Horizontal wind vortex ellipse
+      ctx.beginPath();
+      ctx.ellipse(x, centerY, vortexR, heightPx * 0.35, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.lineWidth = 2.4;
+      ctx.shadowColor = "#fbbf24";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // 2. Spinning arm blur trails orbiting DK
+      for (let i = 0; i < 2; i++) {
+        const angle = frameCounter * spinSpeed + i * Math.PI;
+        const armX = x + Math.cos(angle) * vortexR;
+        const armY = centerY + Math.sin(angle) * (heightPx * 0.25);
+
+        ctx.beginPath();
+        ctx.arc(armX, armY, 8, 0, Math.PI * 2);
+        ctx.fillStyle = "#92400e"; // DK Fur Brown
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(armX, armY, 5, 0, Math.PI * 2);
+        ctx.fillStyle = "#fed7aa"; // DK Palm skin
+        ctx.fill();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "hand_slap") {
+      ctx.save();
+      // Down-B: Hand Slap ground earthquake shockwaves
+      const slamProg = (frameCounter % 14) / 14;
+      const shockRadius = halfWidth * 1.4 + slamProg * 36;
+      const alpha = 1 - slamProg;
+
+      // 1. Expanding earthquake floor ripple ellipse
+      ctx.beginPath();
+      ctx.ellipse(x, y, shockRadius, 6 + slamProg * 4, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = resolveColor("#f59e0b", false, alpha * 0.95);
+      ctx.lineWidth = 2.8;
+      ctx.shadowColor = "#d97706";
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // 2. Secondary inner shock ripple
+      ctx.beginPath();
+      ctx.ellipse(x, y, shockRadius * 0.6, 4, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = resolveColor("#fbbf24", false, alpha * 0.7);
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      // 3. Jagged floor fracture fissure lines radiating outwards
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = resolveColor("#b45309", false, alpha * 0.85);
+      for (const side of [-1, 1]) {
+        const crackX1 = x + side * (halfWidth * 0.5);
+        const crackX2 = x + side * (shockRadius * 0.9);
+        ctx.beginPath();
+        ctx.moveTo(crackX1, y);
+        ctx.lineTo(crackX1 + side * 8, y - 3);
+        ctx.lineTo(crackX1 + side * 16, y + 2);
+        ctx.lineTo(crackX2, y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "giant_punch_windup") {
+      ctx.save();
+      // Charged fist windup
+      const pulse = 1 + 0.25 * Math.sin(frameCounter * 0.3);
+      const fistX = x - dir * (halfWidth * 0.6);
+      ctx.beginPath();
+      ctx.arc(fistX, centerY, 9 * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(251, 191, 36, 0.4)";
+      ctx.shadowColor = "#f59e0b";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Visualizes Ness's signature special moves:
+   * - PK Fire (Neutral-B): Searing lightning-shaped stream of psychic flames streaming forward.
+   * - PK Thunder (Up-B): Psychic energy guiding spark & explosive rocket launch.
+   * - PSI Magnet (Down-B): Glowing hexagonal psychic absorption barrier shield.
+   */
+  private drawNessSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: NessSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const handX = x + dir * halfWidth;
+
+    if (specialType === "pk_fire") {
+      ctx.save();
+      // Searing lightning-shaped PK Fire stream projecting forward
+      const streamLen = halfWidth * 2.8;
+      const endX = handX + dir * streamLen;
+      const segs = 6;
+      const segW = streamLen / segs;
+
+      // 1. Fiery outer flame aura
+      ctx.beginPath();
+      ctx.moveTo(handX, centerY);
+      for (let i = 1; i <= segs; i++) {
+        const segX = handX + dir * (i * segW);
+        const jitterY =
+          i < segs ? Math.sin(frameCounter * 0.6 + i * 2.2) * 6 : 0;
+        ctx.lineTo(segX, centerY + jitterY);
+      }
+      ctx.strokeStyle = "rgba(249, 115, 22, 0.85)"; // Vibrant PK Fire orange
+      ctx.lineWidth = 4.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+
+      // 2. Bright yellow lightning core
+      ctx.beginPath();
+      ctx.moveTo(handX, centerY);
+      for (let i = 1; i <= segs; i++) {
+        const segX = handX + dir * (i * segW);
+        const jitterY =
+          i < segs ? Math.sin(frameCounter * 0.6 + i * 2.2) * 6 : 0;
+        ctx.lineTo(segX, centerY + jitterY);
+      }
+      ctx.strokeStyle = "#fef08a";
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+
+      // 3. Flame burst tip
+      ctx.beginPath();
+      ctx.arc(
+        endX,
+        centerY,
+        7 + Math.sin(frameCounter * 0.4) * 2,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#f97316";
+      ctx.shadowColor = "#ea580c";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(endX, centerY, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "pk_thunder_charge") {
+      ctx.save();
+      // Up-B: Guiding spark orb above Ness
+      const sparkY = centerY - heightPx * 0.9;
+      const pulse = 1 + 0.25 * Math.sin(frameCounter * 0.4);
+      const sparkR = 7 * pulse;
+
+      // Orbiting electric spark ring
+      ctx.beginPath();
+      ctx.arc(x, sparkY, sparkR * 1.5, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(129, 140, 248, 0.75)";
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Glowing psychic spark orb
+      ctx.beginPath();
+      ctx.arc(x, sparkY, sparkR, 0, Math.PI * 2);
+      ctx.fillStyle = "#818cf8"; // Electric indigo
+      ctx.shadowColor = "#6366f1";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(x, sparkY, sparkR * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "pk_thunder_rocket") {
+      ctx.save();
+      // PK Rocket launch: rocket thruster flames behind Ness
+      const backX = x - dir * halfWidth;
+      const thrustLen = halfWidth * 2.2;
+      ctx.beginPath();
+      ctx.moveTo(backX, centerY - heightPx * 0.3);
+      ctx.lineTo(backX - dir * thrustLen, centerY);
+      ctx.lineTo(backX, centerY + heightPx * 0.3);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(99, 102, 241, 0.65)";
+      ctx.shadowColor = "#818cf8";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.strokeStyle = "#c084fc";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "psi_magnet") {
+      ctx.save();
+      // Down-B: Hexagonal PSI absorption barrier shield
+      const radius =
+        Math.max(16, halfWidth * 1.45) + Math.sin(frameCounter * 0.3) * 2;
+      const sides = 6;
+
+      ctx.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * Math.PI * 2) / sides + frameCounter * 0.05;
+        const px = x + Math.cos(angle) * radius;
+        const py = centerY + Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "rgba(56, 189, 248, 0.28)"; // Translucent PSI cyan
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+
+      // Vertex nodes on hexagon
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * Math.PI * 2) / sides + frameCounter * 0.05;
+        const px = x + Math.cos(angle) * radius;
+        const py = centerY + Math.sin(angle) * radius;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+      }
+
       ctx.restore();
     }
   }

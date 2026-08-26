@@ -175,8 +175,8 @@ export class GameList {
       const port0 = summary.ports[0]!;
       const port1 = summary.ports[1]!;
 
-      const label0 = port0.playerName || characterName(port0.characterId);
-      const label1 = port1.playerName || characterName(port1.characterId);
+      const label0 = port0.playerName || `P${port0.port + 1}`;
+      const label1 = port1.playerName || `P${port1.port + 1}`;
 
       return `
         <div class="game-row ambiguous ${pulseClass}" data-id="${summary.id}">
@@ -189,21 +189,15 @@ export class GameList {
             <span class="game-duration">${duration}</span>
           </div>
           <div class="game-row-players">
-            <strong>${escapeHtml(port0.playerName || `P${port0.port + 1}`)}</strong>
-            <span class="char-label">(${escapeHtml(characterName(port0.characterId))})</span>
+            <button class="inline-perspective-btn choose-btn" data-port="${port0.port}">
+              ${escapeHtml(tr.imPlayer(label0))} <span class="char-label">(${escapeHtml(characterName(port0.characterId))})</span>
+            </button>
             <span class="vs-label">vs</span>
-            <strong>${escapeHtml(port1.playerName || `P${port1.port + 1}`)}</strong>
-            <span class="char-label">(${escapeHtml(characterName(port1.characterId))})</span>
+            <button class="inline-perspective-btn choose-btn" data-port="${port1.port}">
+              ${escapeHtml(tr.imPlayer(label1))} <span class="char-label">(${escapeHtml(characterName(port1.characterId))})</span>
+            </button>
           </div>
           <div class="game-row-actions">
-            <div class="inline-perspective-actions">
-              <button class="inline-perspective-btn" data-port="${port0.port}">
-                ${escapeHtml(tr.imPlayer(label0))}
-              </button>
-              <button class="inline-perspective-btn" data-port="${port1.port}">
-                ${escapeHtml(tr.imPlayer(label1))}
-              </button>
-            </div>
             <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
             <span class="drill-in-arrow">›</span>
           </div>

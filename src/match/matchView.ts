@@ -39,6 +39,8 @@ import {
   computeJigglypuffFThrowStats,
   computeShieldPressureEvents,
   computeShieldPressureStats,
+  getJigglypuffFThrowSituations,
+  getShieldPressureSituations,
   isJigglypuffCharacter,
   isNessCharacter,
   isYoshiCharacter,
@@ -588,7 +590,7 @@ export class MatchViewController {
       panel.className = "player-panel";
       panel.style.setProperty("--player-color", color);
 
-      const name = replay.gameStart.playerNames[port] || PORT_LABELS[port];
+      const name = replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
       panel.innerHTML = `
         <div class="player-name">${escapeHtml(name)} <span class="character">— ${escapeHtml(characterName(settings.characterId))} (${escapeHtml(PORT_LABELS[port])})</span></div>
         <div class="player-stats">
@@ -708,7 +710,7 @@ export class MatchViewController {
     }
 
     const name = (port: PortIndex) =>
-      replay.gameStart.playerNames[port] || PORT_LABELS[port];
+      replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
 
     if (
       ev.kind === "ledge-getup-entered" ||
@@ -984,7 +986,7 @@ export class MatchViewController {
     for (const port of seated) {
       const btn = document.createElement("button");
       btn.className = "perspective-btn";
-      const name = replay.gameStart.playerNames[port] || PORT_LABELS[port];
+      const name = replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
       btn.textContent = name;
 
       btn.addEventListener("click", () => {
@@ -1219,7 +1221,7 @@ export class MatchViewController {
         const deltaSpan = document.createElement("span");
         deltaSpan.className = `stat-match-delta ${diff > 0 ? "pct-delta-pos" : diff < 0 ? "pct-delta-neg" : ""}`;
         deltaSpan.textContent = ` (${sign}${diff}%)`;
-        deltaSpan.title = `${tr.vsMatchup(`${sign}${diff}%`)} (${Math.round(baselinePct)}% avg)`;
+        deltaSpan.title = `${tr.vsOverall(`${sign}${diff}%`)} (${Math.round(baselinePct)}% avg)`;
         val.appendChild(deltaSpan);
       }
 
@@ -1264,7 +1266,7 @@ export class MatchViewController {
         // For neutral hits per stock, fewer is better
         deltaSpan.className = `stat-match-delta ${diff < 0 ? "pct-delta-pos" : diff > 0 ? "pct-delta-neg" : ""}`;
         deltaSpan.textContent = ` (${sign}${diff.toFixed(1)})`;
-        deltaSpan.title = `${tr.vsMatchup(`${sign}${diff.toFixed(1)}`)} (${baselineHits.toFixed(1)} avg)`;
+        deltaSpan.title = `${tr.vsOverall(`${sign}${diff.toFixed(1)}`)} (${baselineHits.toFixed(1)} avg)`;
         val.appendChild(deltaSpan);
       }
 
@@ -1696,6 +1698,55 @@ export class MatchViewController {
       row.appendChild(lbl);
       row.appendChild(val);
       this.characterMetaPanel.appendChild(row);
+
+      const puffSituations = getJigglypuffFThrowSituations(
+        puffEvents,
+        this.perspectivePort,
+      );
+
+      if (puffSituations.length > 0) {
+        const listEl = document.createElement("div");
+        listEl.className = "situation-list";
+
+        puffSituations.forEach((sit, idx) => {
+          const itemRow = document.createElement("div");
+          itemRow.className = "situation-row";
+
+          const indexEl = document.createElement("span");
+          indexEl.className = "situation-index";
+          indexEl.textContent = `#${idx + 1}`;
+
+          const timeEl = document.createElement("span");
+          timeEl.className = "situation-time";
+          timeEl.textContent = `${formatElapsed(sit.enteredFrameIndex)} (${sit.enteredFrameIndex}F)`;
+
+          const badgeEl = document.createElement("span");
+          if (sit.outcome === "success") {
+            badgeEl.className = "situation-badge success";
+            badgeEl.textContent = tr.fthrowSuccessBadge;
+          } else if (sit.outcome === "failure") {
+            badgeEl.className = "situation-badge failure";
+            badgeEl.textContent = tr.fthrowFailureBadge;
+          } else {
+            badgeEl.className = "situation-badge open";
+            badgeEl.textContent = tr.situationOpenBadge;
+          }
+
+          itemRow.appendChild(indexEl);
+          itemRow.appendChild(timeEl);
+          itemRow.appendChild(badgeEl);
+
+          itemRow.addEventListener("click", () => {
+            const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
+            this.playback?.seek(targetFrameIndex);
+            this.playback?.play();
+          });
+
+          listEl.appendChild(itemRow);
+        });
+
+        this.characterMetaPanel.appendChild(listEl);
+      }
       return;
     }
 
@@ -1752,6 +1803,64 @@ export class MatchViewController {
       row.appendChild(lbl);
       row.appendChild(val);
       this.characterMetaPanel.appendChild(row);
+
+      const shieldSituations = getShieldPressureSituations(
+        shieldEvents,
+        this.perspectivePort,
+      );
+
+      if (shieldSituations.length > 0) {
+        const listEl = document.createElement("div");
+        listEl.className = "situation-list";
+
+        shieldSituations.forEach((sit, idx) => {
+          const itemRow = document.createElement("div");
+          itemRow.className = "situation-row";
+
+          const indexEl = document.createElement("span");
+          indexEl.className = "situation-index";
+          indexEl.textContent = `#${idx + 1}`;
+
+          const timeEl = document.createElement("span");
+          timeEl.className = "situation-time";
+          timeEl.textContent = `${formatElapsed(sit.enteredFrameIndex)} (${sit.enteredFrameIndex}F)`;
+
+          const hitsEl = document.createElement("span");
+          hitsEl.className = "situation-bracket bracket-under100";
+          hitsEl.textContent = tr.hitsUnit(sit.hitsOnShield);
+
+          const badgeEl = document.createElement("span");
+          if (sit.outcome === "shield-break") {
+            badgeEl.className = "situation-badge success";
+            badgeEl.textContent = tr.shieldBreakBadge;
+          } else if (sit.outcome === "shield-grab") {
+            badgeEl.className = "situation-badge success";
+            badgeEl.textContent = tr.shieldGrabBadge;
+          } else if (sit.outcome === "shield-escape") {
+            badgeEl.className = "situation-badge failure";
+            badgeEl.textContent = tr.shieldEscapeBadge;
+          } else {
+            badgeEl.className = "situation-badge open";
+            badgeEl.textContent = tr.situationOpenBadge;
+          }
+
+          itemRow.appendChild(indexEl);
+          itemRow.appendChild(timeEl);
+          itemRow.appendChild(hitsEl);
+          itemRow.appendChild(badgeEl);
+
+          itemRow.addEventListener("click", () => {
+            // Seek 1.5 seconds (90 frames at 60fps) before the shield pressure began and play automatically
+            const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
+            this.playback?.seek(targetFrameIndex);
+            this.playback?.play();
+          });
+
+          listEl.appendChild(itemRow);
+        });
+
+        this.characterMetaPanel.appendChild(listEl);
+      }
       return;
     }
 

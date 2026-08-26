@@ -4,6 +4,8 @@ import {
   aggregateFilteredGames,
   computeRateDeltas,
   computeOpponentCharacterBreakdown,
+  computeGroupedOpponentCharacterBreakdown,
+  computeOverallBaseline,
 } from "./aggregate.js";
 import type { GameSummary, RawCounters } from "./gameSummary.js";
 import { createDefaultIdentity } from "./identity.js";
@@ -302,5 +304,62 @@ describe("aggregate module", () => {
     expect(agg.wins).toBe(1);
     expect(agg.losses).toBe(1);
     expect(agg.winRatePct).toBe(50);
+  });
+
+  it("computes grouped opponent character breakdown by NA, JP, and Remix categories", () => {
+    const naGame = makeSummary({
+      id: "na1",
+      oppChar: 0x01, // Fox (NA)
+      yourStats: {},
+    });
+    const jpGame = makeSummary({
+      id: "jp1",
+      oppChar: 0x29, // Fox JP (0x29)
+      yourStats: {},
+    });
+    const remixGame = makeSummary({
+      id: "remix1",
+      oppChar: 0x1d, // Falco (Remix)
+      yourStats: {},
+    });
+
+    const filtered = filterGameSummaries([naGame, jpGame, remixGame], identity);
+    const grouped = computeGroupedOpponentCharacterBreakdown(filtered);
+
+    expect(grouped.length).toBe(3);
+    expect(grouped[0]?.group).toBe("na");
+    expect(grouped[0]?.rows[0]?.characterId).toBe(0x01);
+
+    expect(grouped[1]?.group).toBe("jp");
+    expect(grouped[1]?.rows[0]?.characterId).toBe(0x29);
+
+    expect(grouped[2]?.group).toBe("remix");
+    expect(grouped[2]?.rows[0]?.characterId).toBe(0x1d);
+  });
+
+  it("computes overall baseline across all resolved games for identity", () => {
+    const g1 = makeSummary({
+      id: "g1",
+      yourStats: { recoverySituations: 7, recoverySuccesses: 4 }, // 57.1%
+    });
+    const g2 = makeSummary({
+      id: "g2",
+      yourStats: { recoverySituations: 5, recoverySuccesses: 2 }, // 40.0%
+    });
+    const g3 = makeSummary({
+      id: "g3",
+      yourStats: { recoverySituations: 6, recoverySuccesses: 3 }, // 50.0%
+    });
+
+    // 1 game: returns null (needs at least 2 games for baseline)
+    expect(computeOverallBaseline([g1], identity)).toBeNull();
+
+    // 3 games: aggregates to 9 / 18 = 50.0%
+    const baseline = computeOverallBaseline([g1, g2, g3], identity);
+    expect(baseline).not.toBeNull();
+    expect(baseline?.totalGames).toBe(3);
+    expect(baseline?.recoveryTotal).toBe(18);
+    expect(baseline?.recoverySuccesses).toBe(9);
+    expect(baseline?.recoveryPct).toBe(50);
   });
 });
