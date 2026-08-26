@@ -953,25 +953,64 @@ describe("getNessSpecialType", () => {
 });
 
 describe("canAngleAttack", () => {
-  it("allows Fox, Falcon, and Samus to angle tilt attacks", () => {
-    expect(canAngleAttack(0x01, "tilt")).toBe(true); // Fox
-    expect(canAngleAttack(0x07, "tilt")).toBe(true); // Falcon
-    expect(canAngleAttack(0x03, "tilt")).toBe(true); // Samus
-    expect(canAngleAttack(0x00, "tilt")).toBe(false); // Mario
-    expect(canAngleAttack(0x09, "tilt")).toBe(false); // Pikachu
-    expect(canAngleAttack(0x0b, "tilt")).toBe(false); // Ness
+  it("allows Fox, Falcon, and Samus to angle forward tilt attacks", () => {
+    expect(canAngleAttack(0x01, { type: "tilt", direction: "forward" })).toBe(
+      true,
+    ); // Fox
+    expect(canAngleAttack(0x07, { type: "tilt", direction: "forward" })).toBe(
+      true,
+    ); // Falcon
+    expect(canAngleAttack(0x03, { type: "tilt", direction: "forward" })).toBe(
+      true,
+    ); // Samus
+    expect(canAngleAttack(0x00, { type: "tilt", direction: "forward" })).toBe(
+      false,
+    ); // Mario
+    expect(canAngleAttack(0x09, { type: "tilt", direction: "forward" })).toBe(
+      false,
+    ); // Pikachu
+    expect(canAngleAttack(0x0b, { type: "tilt", direction: "forward" })).toBe(
+      false,
+    ); // Ness
   });
 
-  it("allows Falcon and Samus to angle smash attacks", () => {
-    expect(canAngleAttack(0x07, "smash")).toBe(true); // Falcon
-    expect(canAngleAttack(0x03, "smash")).toBe(true); // Samus
-    expect(canAngleAttack(0x01, "smash")).toBe(false); // Fox
-    expect(canAngleAttack(0x00, "smash")).toBe(false); // Mario
-    expect(canAngleAttack(0x02, "smash")).toBe(false); // DK
+  it("allows Falcon and Samus to angle forward smash attacks", () => {
+    expect(canAngleAttack(0x07, { type: "smash", direction: "forward" })).toBe(
+      true,
+    ); // Falcon
+    expect(canAngleAttack(0x03, { type: "smash", direction: "forward" })).toBe(
+      true,
+    ); // Samus
+    expect(canAngleAttack(0x01, { type: "smash", direction: "forward" })).toBe(
+      false,
+    ); // Fox cannot angle FSmash
+    expect(canAngleAttack(0x00, { type: "smash", direction: "forward" })).toBe(
+      false,
+    ); // Mario
+    expect(canAngleAttack(0x02, { type: "smash", direction: "forward" })).toBe(
+      false,
+    ); // DK
+  });
+
+  it("disallows non-forward tilts and non-forward smashes from angling", () => {
+    expect(canAngleAttack(0x07, { type: "tilt", direction: "up" })).toBe(false); // UTilt
+    expect(canAngleAttack(0x07, { type: "tilt", direction: "down" })).toBe(
+      false,
+    ); // DTilt
+    expect(canAngleAttack(0x07, { type: "smash", direction: "up" })).toBe(
+      false,
+    ); // USmash
+    expect(canAngleAttack(0x03, { type: "smash", direction: "down" })).toBe(
+      false,
+    ); // DSmash
   });
 
   it("disallows jabs and aerials from angling", () => {
-    expect(canAngleAttack(0x07, "jab")).toBe(false);
-    expect(canAngleAttack(0x03, "aerial")).toBe(false);
+    expect(canAngleAttack(0x07, { type: "jab", direction: "forward" })).toBe(
+      false,
+    );
+    expect(canAngleAttack(0x03, { type: "aerial", direction: "forward" })).toBe(
+      false,
+    );
   });
 });

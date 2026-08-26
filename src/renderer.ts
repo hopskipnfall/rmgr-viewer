@@ -720,22 +720,25 @@ export function getAttackInfo(actionStateId: number): AttackInfo | null {
 }
 
 /**
- * Returns whether a character can angle their attack (e.g. forward tilt or forward smash).
- * - Fox, Captain Falcon, Samus can angle forward tilt attacks.
- * - Captain Falcon, Samus can angle forward smash attacks.
+ * Returns whether a character can angle their attack (specifically forward tilt or forward smash).
+ * - Fox, Captain Falcon, Samus can angle forward tilt (FTilt) attacks.
+ * - Captain Falcon, Samus can angle forward smash (FSmash) attacks.
  */
 export function canAngleAttack(
   characterId: number,
-  attackType: AttackType,
+  attack: AttackInfo,
 ): boolean {
-  if (attackType === "tilt") {
+  if (attack.direction !== "forward") {
+    return false;
+  }
+  if (attack.type === "tilt") {
     return (
       isFoxCharacter(characterId) ||
       isFalconCharacter(characterId) ||
       isSamusCharacter(characterId)
     );
   }
-  if (attackType === "smash") {
+  if (attack.type === "smash") {
     return isFalconCharacter(characterId) || isSamusCharacter(characterId);
   }
   return false;
@@ -1506,7 +1509,7 @@ export class StageRenderer {
         replay && frameIndex !== undefined
           ? replay.frames[frameIndex]?.ports[port]?.pre
           : null;
-      const angleable = canAngleAttack(post.characterId, attack.type);
+      const angleable = canAngleAttack(post.characterId, attack);
 
       this.drawAttackArc(
         x,
