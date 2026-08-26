@@ -95,6 +95,8 @@ export function isTauntState(actionStateId: number): boolean {
 }
 
 const DIZZY_ACTION_STATES = new Set([
+  0x09e, // ShieldBreakFly (launched into air dizzy)
+  0x09f, // ShieldBreakFall (falling through air dizzy)
   0x0a1, // ShieldBreakStand (standing up dizzy)
   0x0a2, // FuraFura (shield broken dizzy stuck state)
   0x0a4, // Stun (stunned dizzy)
@@ -377,13 +379,23 @@ export function isPikachuCharacter(characterId: number): boolean {
 }
 
 export type PikachuSpecialType =
-  "thunder" | "quick_attack" | "quick_attack_zip";
+  "thunder_jolt" | "thunder" | "quick_attack" | "quick_attack_zip";
 
 export function getPikachuSpecialType(
   characterId: number,
   actionStateId: number,
 ): PikachuSpecialType | null {
   if (!isPikachuCharacter(characterId)) return null;
+  // Neutral-B: Thunder Jolt (0x0dc, 0x0dd, 0x0de, 0x0df, 0x0e0)
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de ||
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0
+  ) {
+    return "thunder_jolt";
+  }
   // Down-B Thunder states: 0xe3, 0xe4, 0xe5, 0xe6, 0xe7
   if (
     actionStateId === 0x0e3 ||
@@ -406,6 +418,103 @@ export function getPikachuSpecialType(
     actionStateId === 0x0eb
   ) {
     return "quick_attack";
+  }
+  return null;
+}
+
+export type YoshiSpecialType =
+  | "egg_lay_tongue"
+  | "egg_throw"
+  | "yoshi_bomb_start"
+  | "yoshi_bomb_plummet"
+  | "yoshi_bomb_land";
+
+export function getYoshiSpecialType(
+  characterId: number,
+  actionStateId: number,
+): YoshiSpecialType | null {
+  if (!isYoshiCharacter(characterId)) return null;
+  // Neutral-B: Egg Lay (Tongue Catch)
+  if (
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0 ||
+    actionStateId === 0x0e1
+  ) {
+    return "egg_lay_tongue";
+  }
+  // Up-B: Egg Throw
+  if (actionStateId === 0x0e2 || actionStateId === 0x0e3) {
+    return "egg_throw";
+  }
+  // Down-B: Yoshi Bomb (Hip Drop)
+  if (actionStateId === 0x0e4) {
+    return "yoshi_bomb_start";
+  }
+  if (actionStateId === 0x0e5 || actionStateId === 0x0e6) {
+    return "yoshi_bomb_plummet";
+  }
+  if (actionStateId === 0x0e7) {
+    return "yoshi_bomb_land";
+  }
+  return null;
+}
+
+export type DKSpecialType =
+  "spinning_kong" | "hand_slap" | "giant_punch_windup" | "giant_punch";
+
+export function getDKSpecialType(
+  characterId: number,
+  actionStateId: number,
+): DKSpecialType | null {
+  if (!isDonkeyKongCharacter(characterId)) return null;
+  // Up-B: Spinning Kong
+  if (actionStateId === 0x0e6 || actionStateId === 0x0e7) {
+    return "spinning_kong";
+  }
+  // Down-B: Hand Slap
+  if (
+    actionStateId === 0x0e8 ||
+    actionStateId === 0x0e9 ||
+    actionStateId === 0x0ea
+  ) {
+    return "hand_slap";
+  }
+  // Neutral-B: Giant Punch
+  if (actionStateId === 0x0eb) {
+    return "giant_punch_windup";
+  }
+  if (actionStateId === 0x0ec) {
+    return "giant_punch";
+  }
+  return null;
+}
+
+export type NessSpecialType =
+  "pk_fire" | "pk_thunder_charge" | "pk_thunder_rocket" | "psi_magnet";
+
+export function getNessSpecialType(
+  characterId: number,
+  actionStateId: number,
+): NessSpecialType | null {
+  if (!isNessCharacter(characterId)) return null;
+  // Neutral-B: PK Fire
+  if (actionStateId === 0x0e6 || actionStateId === 0x0e7) {
+    return "pk_fire";
+  }
+  // Up-B: PK Thunder
+  if (actionStateId === 0x0e8 || actionStateId === 0x0e9) {
+    return "pk_thunder_charge";
+  }
+  if (actionStateId === 0x0ea) {
+    return "pk_thunder_rocket";
+  }
+  // Down-B: PSI Magnet
+  if (
+    actionStateId === 0x0eb ||
+    actionStateId === 0x0ec ||
+    actionStateId === 0x0ed
+  ) {
+    return "psi_magnet";
   }
   return null;
 }
@@ -1457,6 +1566,62 @@ export class StageRenderer {
         foxSpecial === "firefox_charge"
       ) {
         labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+      }
+    }
+
+    // Draw Yoshi special move visuals if applicable
+    const yoshiSpecial = getYoshiSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (yoshiSpecial) {
+      this.drawYoshiSpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        yoshiSpecial,
+        post.actionFrameCounter,
+      );
+    }
+
+    // Draw Donkey Kong special move visuals if applicable
+    const dkSpecial = getDKSpecialType(post.characterId, post.actionStateId);
+    if (dkSpecial) {
+      this.drawDKSpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        dkSpecial,
+        post.actionFrameCounter,
+      );
+    }
+
+    // Draw Ness special move visuals if applicable
+    const nessSpecial = getNessSpecialType(
+      post.characterId,
+      post.actionStateId,
+    );
+    if (nessSpecial) {
+      this.drawNessSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        nessSpecial,
+        post.actionFrameCounter,
+      );
+      if (nessSpecial === "pk_thunder_charge" || nessSpecial === "psi_magnet") {
+        labelY = Math.min(labelY, centerY - heightPx * 0.9 - 8);
       }
     }
 
@@ -5841,6 +6006,63 @@ export class StageRenderer {
     const dir = facingRight ? 1 : -1;
     const noseX = x + dir * halfWidth;
 
+    if (specialType === "thunder_jolt") {
+      ctx.save();
+      // Neutral-B: Thunder Jolt electric spark sphere condensing and discharging forward
+      const pulse = 1 + 0.3 * Math.sin(frameCounter * 0.5);
+      const sparkRadius = Math.max(6, halfWidth * 0.45) * pulse;
+      const sparkX = noseX + dir * 6;
+
+      // 1. Expanding electric shock ring
+      const ringProg = (frameCounter % 15) / 15;
+      ctx.beginPath();
+      ctx.arc(
+        sparkX + dir * (ringProg * 14),
+        centerY,
+        4 + ringProg * 10,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = resolveColor("#38bdf8", false, (1 - ringProg) * 0.85);
+      ctx.lineWidth = 1.8;
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // 2. Electric blue-yellow core spark
+      ctx.beginPath();
+      ctx.arc(sparkX, centerY, sparkRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.4)";
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+
+      // 3. 4 Branching zig-zag lightning sparks
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = "#fef08a";
+      for (let i = 0; i < 4; i++) {
+        const sAngle = (i * Math.PI) / 2 + frameCounter * 0.4;
+        const midX =
+          sparkX +
+          Math.cos(sAngle) * (sparkRadius * 0.8) +
+          (i % 2 === 0 ? 2 : -2);
+        const midY =
+          centerY +
+          Math.sin(sAngle) * (sparkRadius * 0.8) +
+          (i % 2 === 0 ? -2 : 2);
+        const endX = sparkX + Math.cos(sAngle) * (sparkRadius * 1.6);
+        const endY = centerY + Math.sin(sAngle) * (sparkRadius * 1.6);
+        ctx.beginPath();
+        ctx.moveTo(sparkX, centerY);
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
     if (specialType === "thunder") {
       ctx.save();
       // 1. Full-height lightning bolt coming down from sky (Y=0) straight to Pikachu (centerY)
@@ -5950,6 +6172,447 @@ export class StageRenderer {
       ctx.shadowColor = "#ffd700";
       ctx.shadowBlur = 8;
       ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Visualizes Yoshi's signature special moves:
+   * - Egg Lay (Neutral-B): Long pink/red elastic tongue extending from snout with sticky bulb tip.
+   * - Yoshi Bomb / Hip Drop (Down-B): Downward star-butt plummet and ground impact shockwave stars.
+   * - Egg Throw (Up-B): Egg aiming trajectory arc.
+   */
+  private drawYoshiSpecial(
+    x: number,
+    y: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: YoshiSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * (halfWidth * 0.7);
+    const noseY = centerY - heightPx * 0.05;
+
+    if (specialType === "egg_lay_tongue") {
+      ctx.save();
+      // Elastic tongue shoot / reach curve
+      const reachProgress = Math.sin(Math.min(frameCounter / 16, 1) * Math.PI);
+      const maxReach = halfWidth * 3.4;
+      const tongueLen = Math.max(4, reachProgress * maxReach);
+      const tipX = noseX + dir * tongueLen;
+      const tipY = noseY + Math.sin(frameCounter * 0.2) * 3;
+
+      // 1. Elastic tongue path
+      ctx.beginPath();
+      ctx.moveTo(noseX, noseY);
+      ctx.quadraticCurveTo(
+        noseX + dir * (tongueLen * 0.5),
+        noseY - 4,
+        tipX,
+        tipY,
+      );
+      ctx.strokeStyle = "#f43f5e"; // Vivid rose-red tongue
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#e11d48";
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+
+      // Inner lighter pink stripe
+      ctx.beginPath();
+      ctx.moveTo(noseX, noseY);
+      ctx.quadraticCurveTo(
+        noseX + dir * (tongueLen * 0.5),
+        noseY - 4,
+        tipX,
+        tipY,
+      );
+      ctx.strokeStyle = "#fda4af";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      // 2. Rounded sticky bulb tip at tongue end
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#f43f5e";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(tipX - dir * 1, tipY - 1, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (
+      specialType === "yoshi_bomb_start" ||
+      specialType === "yoshi_bomb_plummet"
+    ) {
+      ctx.save();
+      // Downward plummet trail and star aura
+      const trailH = heightPx * 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x - halfWidth * 0.6, centerY - trailH);
+      ctx.lineTo(x - halfWidth * 0.3, centerY);
+      ctx.moveTo(x + halfWidth * 0.6, centerY - trailH);
+      ctx.lineTo(x + halfWidth * 0.3, centerY);
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.8)";
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "#f59e0b";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // Plummet star icon
+      const starR = 7;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const r = i % 2 === 0 ? starR : starR * 0.45;
+        const angle = (i * Math.PI) / 4 + frameCounter * 0.15;
+        const sx = x + Math.cos(angle) * r;
+        const sy = y + 4 + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "#facc15";
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "yoshi_bomb_land") {
+      ctx.save();
+      const progress = Math.min(frameCounter / 18, 1);
+      const alpha = 1 - progress;
+      if (alpha <= 0) {
+        ctx.restore();
+        return;
+      }
+
+      // Ground impact dust shockwave
+      const shockR = halfWidth * 1.6 + progress * 32;
+      ctx.beginPath();
+      ctx.ellipse(x, y, shockR, 5 + progress * 4, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = resolveColor("#f59e0b", false, alpha * 0.9);
+      ctx.lineWidth = 2.2;
+      ctx.shadowColor = "#d97706";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // 2 Giant Yoshi Bomb stars shooting outward left and right across the floor
+      const starDist = progress * 38;
+      for (const sDir of [-1, 1]) {
+        const starX = x + sDir * (halfWidth * 0.8 + starDist);
+        const starY = y - 4;
+        const starR = Math.max(2, (1 - progress * 0.5) * 8);
+
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const r = i % 2 === 0 ? starR : starR * 0.4;
+          const angle = (i * Math.PI) / 4 + sDir * progress * 4;
+          const px = starX + Math.cos(angle) * r;
+          const py = starY + Math.sin(angle) * r;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = resolveColor("#facc15", false, alpha);
+        ctx.shadowColor = "#f59e0b";
+        ctx.shadowBlur = 6;
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Visualizes Donkey Kong's signature special moves:
+   * - Spinning Kong (Up-B): Rapid helicopter arm rotation discs and wind vortex swooshes.
+   * - Hand Slap (Down-B): Rhythmic ground quake slam with expanding earthquake shockwave rings and floor cracks.
+   * - Giant Punch (Neutral-B): Glowing charged fist windup.
+   */
+  private drawDKSpecial(
+    x: number,
+    y: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: DKSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+
+    if (specialType === "spinning_kong") {
+      ctx.save();
+      // Helicopter spin vortex discs
+      const spinSpeed = 0.45;
+      const vortexR = halfWidth * 1.55;
+
+      // 1. Horizontal wind vortex ellipse
+      ctx.beginPath();
+      ctx.ellipse(x, centerY, vortexR, heightPx * 0.35, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.lineWidth = 2.4;
+      ctx.shadowColor = "#fbbf24";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // 2. Spinning arm blur trails orbiting DK
+      for (let i = 0; i < 2; i++) {
+        const angle = frameCounter * spinSpeed + i * Math.PI;
+        const armX = x + Math.cos(angle) * vortexR;
+        const armY = centerY + Math.sin(angle) * (heightPx * 0.25);
+
+        ctx.beginPath();
+        ctx.arc(armX, armY, 8, 0, Math.PI * 2);
+        ctx.fillStyle = "#92400e"; // DK Fur Brown
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(armX, armY, 5, 0, Math.PI * 2);
+        ctx.fillStyle = "#fed7aa"; // DK Palm skin
+        ctx.fill();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "hand_slap") {
+      ctx.save();
+      // Down-B: Hand Slap ground earthquake shockwaves
+      const slamProg = (frameCounter % 14) / 14;
+      const shockRadius = halfWidth * 1.4 + slamProg * 36;
+      const alpha = 1 - slamProg;
+
+      // 1. Expanding earthquake floor ripple ellipse
+      ctx.beginPath();
+      ctx.ellipse(x, y, shockRadius, 6 + slamProg * 4, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = resolveColor("#f59e0b", false, alpha * 0.95);
+      ctx.lineWidth = 2.8;
+      ctx.shadowColor = "#d97706";
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // 2. Secondary inner shock ripple
+      ctx.beginPath();
+      ctx.ellipse(x, y, shockRadius * 0.6, 4, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = resolveColor("#fbbf24", false, alpha * 0.7);
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      // 3. Jagged floor fracture fissure lines radiating outwards
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = resolveColor("#b45309", false, alpha * 0.85);
+      for (const side of [-1, 1]) {
+        const crackX1 = x + side * (halfWidth * 0.5);
+        const crackX2 = x + side * (shockRadius * 0.9);
+        ctx.beginPath();
+        ctx.moveTo(crackX1, y);
+        ctx.lineTo(crackX1 + side * 8, y - 3);
+        ctx.lineTo(crackX1 + side * 16, y + 2);
+        ctx.lineTo(crackX2, y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "giant_punch_windup") {
+      ctx.save();
+      // Charged fist windup
+      const pulse = 1 + 0.25 * Math.sin(frameCounter * 0.3);
+      const fistX = x - dir * (halfWidth * 0.6);
+      ctx.beginPath();
+      ctx.arc(fistX, centerY, 9 * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(251, 191, 36, 0.4)";
+      ctx.shadowColor = "#f59e0b";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Visualizes Ness's signature special moves:
+   * - PK Fire (Neutral-B): Searing lightning-shaped stream of psychic flames streaming forward.
+   * - PK Thunder (Up-B): Psychic energy guiding spark & explosive rocket launch.
+   * - PSI Magnet (Down-B): Glowing hexagonal psychic absorption barrier shield.
+   */
+  private drawNessSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: NessSpecialType,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const handX = x + dir * halfWidth;
+
+    if (specialType === "pk_fire") {
+      ctx.save();
+      // Searing lightning-shaped PK Fire stream projecting forward
+      const streamLen = halfWidth * 2.8;
+      const endX = handX + dir * streamLen;
+      const segs = 6;
+      const segW = streamLen / segs;
+
+      // 1. Fiery outer flame aura
+      ctx.beginPath();
+      ctx.moveTo(handX, centerY);
+      for (let i = 1; i <= segs; i++) {
+        const segX = handX + dir * (i * segW);
+        const jitterY =
+          i < segs ? Math.sin(frameCounter * 0.6 + i * 2.2) * 6 : 0;
+        ctx.lineTo(segX, centerY + jitterY);
+      }
+      ctx.strokeStyle = "rgba(249, 115, 22, 0.85)"; // Vibrant PK Fire orange
+      ctx.lineWidth = 4.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+
+      // 2. Bright yellow lightning core
+      ctx.beginPath();
+      ctx.moveTo(handX, centerY);
+      for (let i = 1; i <= segs; i++) {
+        const segX = handX + dir * (i * segW);
+        const jitterY =
+          i < segs ? Math.sin(frameCounter * 0.6 + i * 2.2) * 6 : 0;
+        ctx.lineTo(segX, centerY + jitterY);
+      }
+      ctx.strokeStyle = "#fef08a";
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+
+      // 3. Flame burst tip
+      ctx.beginPath();
+      ctx.arc(
+        endX,
+        centerY,
+        7 + Math.sin(frameCounter * 0.4) * 2,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#f97316";
+      ctx.shadowColor = "#ea580c";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(endX, centerY, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "pk_thunder_charge") {
+      ctx.save();
+      // Up-B: Guiding spark orb above Ness
+      const sparkY = centerY - heightPx * 0.9;
+      const pulse = 1 + 0.25 * Math.sin(frameCounter * 0.4);
+      const sparkR = 7 * pulse;
+
+      // Orbiting electric spark ring
+      ctx.beginPath();
+      ctx.arc(x, sparkY, sparkR * 1.5, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(129, 140, 248, 0.75)";
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Glowing psychic spark orb
+      ctx.beginPath();
+      ctx.arc(x, sparkY, sparkR, 0, Math.PI * 2);
+      ctx.fillStyle = "#818cf8"; // Electric indigo
+      ctx.shadowColor = "#6366f1";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(x, sparkY, sparkR * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "pk_thunder_rocket") {
+      ctx.save();
+      // PK Rocket launch: rocket thruster flames behind Ness
+      const backX = x - dir * halfWidth;
+      const thrustLen = halfWidth * 2.2;
+      ctx.beginPath();
+      ctx.moveTo(backX, centerY - heightPx * 0.3);
+      ctx.lineTo(backX - dir * thrustLen, centerY);
+      ctx.lineTo(backX, centerY + heightPx * 0.3);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(99, 102, 241, 0.65)";
+      ctx.shadowColor = "#818cf8";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.strokeStyle = "#c084fc";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "psi_magnet") {
+      ctx.save();
+      // Down-B: Hexagonal PSI absorption barrier shield
+      const radius =
+        Math.max(16, halfWidth * 1.45) + Math.sin(frameCounter * 0.3) * 2;
+      const sides = 6;
+
+      ctx.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * Math.PI * 2) / sides + frameCounter * 0.05;
+        const px = x + Math.cos(angle) * radius;
+        const py = centerY + Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "rgba(56, 189, 248, 0.28)"; // Translucent PSI cyan
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+
+      // Vertex nodes on hexagon
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * Math.PI * 2) / sides + frameCounter * 0.05;
+        const px = x + Math.cos(angle) * radius;
+        const py = centerY + Math.sin(angle) * radius;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+      }
+
       ctx.restore();
     }
   }

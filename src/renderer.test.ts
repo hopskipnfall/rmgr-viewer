@@ -2,11 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   getAttackInfo,
   getDeathDirection,
+  getDKSpecialType,
   getFalconSpecialType,
   getFoxFlightAngle,
   getFoxSpecialType,
+  getNessSpecialType,
   getPikachuSpecialType,
   getStartNameAlpha,
+  getYoshiSpecialType,
   START_NAME_DISPLAY_FRAMES,
   START_NAME_SOLID_FRAMES,
   isCrouchState,
@@ -810,7 +813,9 @@ describe("getStartNameAlpha", () => {
 });
 
 describe("isDizzyState", () => {
-  it("identifies shield-broken dizzy and stun states correctly", () => {
+  it("identifies shield-broken dizzy, air fly/fall, and stun states correctly", () => {
+    expect(isDizzyState(0x09e)).toBe(true); // ShieldBreakFly
+    expect(isDizzyState(0x09f)).toBe(true); // ShieldBreakFall
     expect(isDizzyState(0x0a1)).toBe(true); // ShieldBreakStand
     expect(isDizzyState(0x0a2)).toBe(true); // FuraFura
     expect(isDizzyState(0x0a4)).toBe(true); // Stun
@@ -819,7 +824,7 @@ describe("isDizzyState", () => {
   it("returns false for non-dizzy states", () => {
     expect(isDizzyState(0x00a)).toBe(false); // Idle
     expect(isDizzyState(0x099)).toBe(false); // Shield
-    expect(isDizzyState(0x09e)).toBe(false); // ShieldBreakFly
+    expect(isDizzyState(0x01a)).toBe(false); // Fall
   });
 });
 
@@ -894,5 +899,54 @@ describe("Missed Tech and Prone state helpers", () => {
     expect(isMissedTechState(0x047)).toBe(true); // DownForwardD
     expect(isMissedTechState(0x04f)).toBe(true); // DownAttackD
     expect(isMissedTechState(0x00a)).toBe(false); // Idle
+  });
+});
+
+describe("ShieldBreak Dizzy in air states", () => {
+  it("treats ShieldBreakFly and ShieldBreakFall as dizzy states for swaying animation", () => {
+    expect(isDizzyState(0x09e)).toBe(true); // ShieldBreakFly
+    expect(isDizzyState(0x09f)).toBe(true); // ShieldBreakFall
+    expect(isDizzyState(0x0a1)).toBe(true); // ShieldBreakStand
+    expect(isDizzyState(0x0a2)).toBe(true); // FuraFura
+  });
+});
+
+describe("getYoshiSpecialType", () => {
+  it("classifies Yoshi special moves correctly", () => {
+    expect(getYoshiSpecialType(0x06, 0x0df)).toBe("egg_lay_tongue");
+    expect(getYoshiSpecialType(0x06, 0x0e0)).toBe("egg_lay_tongue");
+    expect(getYoshiSpecialType(0x06, 0x0e2)).toBe("egg_throw");
+    expect(getYoshiSpecialType(0x06, 0x0e4)).toBe("yoshi_bomb_start");
+    expect(getYoshiSpecialType(0x06, 0x0e5)).toBe("yoshi_bomb_plummet");
+    expect(getYoshiSpecialType(0x06, 0x0e6)).toBe("yoshi_bomb_plummet");
+    expect(getYoshiSpecialType(0x06, 0x0e7)).toBe("yoshi_bomb_land");
+    expect(getYoshiSpecialType(0x06, 0x00a)).toBeNull(); // Idle
+  });
+});
+
+describe("getDKSpecialType", () => {
+  it("classifies Donkey Kong special moves correctly", () => {
+    expect(getDKSpecialType(0x02, 0x0e6)).toBe("spinning_kong");
+    expect(getDKSpecialType(0x02, 0x0e7)).toBe("spinning_kong");
+    expect(getDKSpecialType(0x02, 0x0e8)).toBe("hand_slap");
+    expect(getDKSpecialType(0x02, 0x0e9)).toBe("hand_slap");
+    expect(getDKSpecialType(0x02, 0x0ea)).toBe("hand_slap");
+    expect(getDKSpecialType(0x02, 0x0eb)).toBe("giant_punch_windup");
+    expect(getDKSpecialType(0x02, 0x0ec)).toBe("giant_punch");
+    expect(getDKSpecialType(0x02, 0x00a)).toBeNull(); // Idle
+  });
+});
+
+describe("getNessSpecialType", () => {
+  it("classifies Ness special moves correctly", () => {
+    expect(getNessSpecialType(0x0b, 0x0e6)).toBe("pk_fire");
+    expect(getNessSpecialType(0x0b, 0x0e7)).toBe("pk_fire");
+    expect(getNessSpecialType(0x0b, 0x0e8)).toBe("pk_thunder_charge");
+    expect(getNessSpecialType(0x0b, 0x0e9)).toBe("pk_thunder_charge");
+    expect(getNessSpecialType(0x0b, 0x0ea)).toBe("pk_thunder_rocket");
+    expect(getNessSpecialType(0x0b, 0x0eb)).toBe("psi_magnet");
+    expect(getNessSpecialType(0x0b, 0x0ec)).toBe("psi_magnet");
+    expect(getNessSpecialType(0x0b, 0x0ed)).toBe("psi_magnet");
+    expect(getNessSpecialType(0x0b, 0x00a)).toBeNull(); // Idle
   });
 });
