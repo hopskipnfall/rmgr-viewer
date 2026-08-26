@@ -1109,6 +1109,43 @@
         border-radius: 8px;
         overflow: hidden;
       }
+      .qa-overlay-exit-btn {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 215, 0, 0.16);
+        border: 1.5px solid #ffd700;
+        color: #ffd700;
+        font-weight: 700;
+        font-size: 12px;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+        transition:
+          background 0.15s,
+          transform 0.12s,
+          box-shadow 0.15s,
+          color 0.15s;
+      }
+      .qa-overlay-exit-btn:hover {
+        background: #ffd700;
+        color: #12141a;
+        box-shadow: 0 0 16px rgba(255, 215, 0, 0.65);
+        transform: translateY(-1px);
+      }
+      .qa-overlay-exit-btn:active {
+        transform: translateY(0);
+      }
+      .qa-overlay-exit-btn[hidden] {
+        display: none !important;
+      }
       #stageOverlay {
         position: absolute;
         bottom: 12px;
@@ -2131,6 +2168,13 @@
       <div id="matchView" class="view-container" hidden>
         <div id="stageWrap">
           <canvas id="stage" width="960" height="540"></canvas>
+          <button
+            id="qaOverlayExitBtn"
+            class="qa-overlay-exit-btn"
+            hidden
+          >
+            ✕ Exit Overlay
+          </button>
           <div id="stageOverlay">
             <div id="stageOverlayList"></div>
           </div>

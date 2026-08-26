@@ -115,6 +115,7 @@ export class MatchViewController {
   private logFilterChips: HTMLDivElement;
   private stageOverlay: HTMLDivElement;
   private stageOverlayList: HTMLDivElement;
+  private qaOverlayExitBtn: HTMLButtonElement;
   private hudToggleBtn: HTMLButtonElement;
   private recoveryWidget: HTMLElement;
   private recoveryCollapseBtn: HTMLButtonElement;
@@ -235,6 +236,21 @@ export class MatchViewController {
     this.stageOverlayList = document.getElementById(
       "stageOverlayList",
     ) as HTMLDivElement;
+    this.qaOverlayExitBtn = document.getElementById(
+      "qaOverlayExitBtn",
+    ) as HTMLButtonElement;
+    this.qaOverlayExitBtn.addEventListener("click", () => {
+      this.stageRenderer.setQuickAttackOverlay(null);
+      this.stageRenderer.setHoveredQuickAttackIndex(null);
+      this.qaOverlayExitBtn.hidden = true;
+      if (this.currentReplay) {
+        this.renderCharacterMetaPanel(this.currentReplay);
+      }
+      if (this.lastFrame !== undefined) {
+        const currIdx = this.playback?.currentIndex ?? 0;
+        this.renderFrame(this.lastFrame, currIdx, true);
+      }
+    });
     this.hudToggleBtn = document.getElementById(
       "hudToggleBtn",
     ) as HTMLButtonElement;
@@ -572,6 +588,9 @@ export class MatchViewController {
     if (this.hudToggleBtn) {
       this.hudToggleBtn.textContent = tr.hudOverlay;
       this.hudToggleBtn.title = tr.hudOverlayTitle;
+    }
+    if (this.qaOverlayExitBtn) {
+      this.qaOverlayExitBtn.textContent = "✕ " + tr.hideQuickAttackOverlayBtn;
     }
     if (this.replayInfoHeaderTitle)
       this.replayInfoHeaderTitle.textContent = tr.replayInfoWidgetTitle;

@@ -55,6 +55,7 @@ import {
   isTurnState,
   isYoshiCharacter,
   toGrayscale,
+  toBlandPalette,
 } from "./renderer.js";
 import type { Replay } from "@rmg-k/rmgr";
 import {
@@ -940,6 +941,33 @@ describe("toGrayscale", () => {
 
   it("converts hsl colors to 0% saturation", () => {
     expect(toGrayscale("hsl(120, 85%, 55%)")).toBe("hsl(0, 0%, 55%)");
+  });
+});
+
+describe("toBlandPalette", () => {
+  it("converts hex colors to a muted, bland palette preserving hue nuance", () => {
+    expect(toBlandPalette("#ffffff")).toBe("rgb(255, 255, 255)");
+    expect(toBlandPalette("#000000")).toBe("rgb(0, 0, 0)");
+    // Yellow should still retain warm red/green bias rather than pure identical gray channels
+    const yellow = toBlandPalette("#facc15");
+    expect(yellow).toMatch(/^rgb\(\d+,\s*\d+,\s*\d+\)$/);
+    const match = yellow.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    expect(match).toBeTruthy();
+    const r = parseInt(match![1]!, 10);
+    const g = parseInt(match![2]!, 10);
+    const b = parseInt(match![3]!, 10);
+    expect(r).toBeGreaterThan(b);
+    expect(g).toBeGreaterThan(b);
+  });
+
+  it("preserves alpha for rgba strings", () => {
+    expect(toBlandPalette("rgba(255, 0, 0, 0.5)")).toMatch(
+      /^rgba\(\d+,\s*\d+,\s*\d+,\s*0\.5\)$/,
+    );
+  });
+
+  it("reduces saturation for hsl strings to 35% of original", () => {
+    expect(toBlandPalette("hsl(120, 80%, 50%)")).toBe("hsl(120, 28%, 50%)");
   });
 });
 
