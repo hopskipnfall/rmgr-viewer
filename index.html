@@ -56,6 +56,117 @@
         color: var(--text-dim);
         white-space: nowrap;
       }
+      #appTitleBtn {
+        background: none;
+        border: none;
+        padding: 0;
+        margin: 0;
+        cursor: pointer;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-dim);
+        white-space: nowrap;
+        transition: color 0.15s;
+      }
+      #appTitleBtn:hover {
+        color: var(--text);
+      }
+      /* About modal */
+      #aboutModal {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #aboutModal[hidden] {
+        display: none !important;
+      }
+      #aboutModalBackdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(2px);
+      }
+      #aboutModalDialog {
+        position: relative;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 28px 28px 24px;
+        max-width: 400px;
+        width: calc(100% - 32px);
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+      }
+      #aboutModalHeader {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      #aboutModalTitle {
+        font-size: 17px;
+        font-weight: 700;
+        margin: 0;
+        color: var(--text);
+        letter-spacing: -0.01em;
+      }
+      #aboutModalCloseBtn {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        cursor: pointer;
+        font-size: 16px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      #aboutModalCloseBtn:hover {
+        color: var(--text);
+        background: var(--panel-border);
+      }
+      #aboutModalDesc {
+        font-size: 13px;
+        color: var(--text-dim);
+        margin: 0;
+        line-height: 1.55;
+      }
+      .about-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+      }
+      .about-row-label {
+        color: var(--text-dim);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-size: 11px;
+      }
+      .about-row-value {
+        color: var(--text);
+        font-size: 13px;
+      }
+      .about-row-value a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .about-row-value a:hover {
+        text-decoration: underline;
+      }
+      #aboutModalFooter {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 4px;
+        border-top: 1px solid var(--panel-border);
+      }
       .back-btn {
         font-size: 12px;
         font-weight: 600;
@@ -740,6 +851,151 @@
       }
 
       /* =========================================================================
+         Character Preview / Debug View
+         ========================================================================= */
+      #previewView {
+        display: flex;
+        gap: 16px;
+        padding: 16px;
+        height: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+      .preview-stage-wrap {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .preview-canvas-container {
+        position: relative;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background: radial-gradient(
+          circle at 50% 60%,
+          #171b26 0%,
+          #0b0c10 100%
+        );
+      }
+      .preview-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .preview-overlay-badge {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        background: rgba(14, 16, 22, 0.85);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 13px;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        z-index: 10;
+      }
+      .preview-overlay-title {
+        font-weight: 700;
+        font-size: 15px;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .preview-overlay-subtitle {
+        color: var(--text-dim);
+        font-size: 12px;
+        font-family: monospace;
+      }
+      .preview-sidebar {
+        width: 360px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 14px;
+        overflow-y: auto;
+      }
+      .preview-control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .preview-control-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-dim);
+      }
+      .preview-btn-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .preview-chip-btn {
+        background: #22252f;
+        border: 1px solid var(--panel-border);
+        color: var(--text);
+        border-radius: 6px;
+        padding: 5px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .preview-chip-btn:hover {
+        background: #2c3040;
+        border-color: #3b4255;
+      }
+      .preview-chip-btn.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+        font-weight: 600;
+      }
+      .preview-select {
+        background: #0f1015;
+        border: 1px solid var(--panel-border);
+        color: var(--text);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 13px;
+        width: 100%;
+      }
+      .preview-slider-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .preview-slider-row input[type="range"] {
+        flex: 1;
+      }
+      .preview-slider-val {
+        font-family: monospace;
+        font-size: 12px;
+        color: var(--text-dim);
+        min-width: 32px;
+        text-align: right;
+      }
+
+      /* =========================================================================
          Match View Layout (Existing)
          ========================================================================= */
       #matchView {
@@ -904,6 +1160,7 @@
         transform: rotate(-90deg);
       }
       #matchStatsHeader h2,
+      #characterMetaHeader h2,
       #eventLogHeader h2 {
         font-size: 12px;
         font-weight: 600;
@@ -913,31 +1170,425 @@
         margin: 0;
         flex-shrink: 0;
       }
-      #statsCollapseBtn:hover h2 {
+      #statsCollapseBtn:hover h2,
+      #characterMetaCollapseBtn:hover h2 {
         color: var(--text);
+      }
+      #characterMetaWidget {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-left: 3px solid var(--char-iconic-color, var(--accent));
+        border-radius: 8px;
+        overflow: hidden;
+        transition: border-left-color 0.2s ease;
+      }
+      #characterMetaWidget[hidden] {
+        display: none !important;
+      }
+      #characterMetaHeader {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--panel-border);
+        background: linear-gradient(
+          90deg,
+          color-mix(
+              in srgb,
+              var(--char-iconic-color, transparent) 14%,
+              transparent
+            )
+            0%,
+          transparent 100%
+        );
+        flex-shrink: 0;
+        flex-wrap: wrap;
+      }
+      #characterMetaHeader h2 {
+        color: var(--char-iconic-color, var(--text));
+        font-weight: 700;
+        letter-spacing: 0.05em;
+      }
+      #characterMetaCollapseBtn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: var(--text-dim);
+      }
+      #characterMetaCollapseBtn:hover {
+        color: var(--text);
+      }
+      #characterMetaCollapseBtn.collapsed .collapse-icon {
+        transform: rotate(-90deg);
+      }
+      #characterMetaPanel {
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 12px;
+      }
+      #characterMetaPanel .pct-success {
+        color: var(--char-iconic-color, var(--success));
+      }
+      #characterMetaPanel[hidden] {
+        display: none !important;
+      }
+      /* Situation widgets (Recovery / Edge Guard) */
+      .situation-widget {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .situation-widget[hidden] {
+        display: none !important;
+      }
+      .situation-widget-header {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--panel-border);
+      }
+      .situation-collapse-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: var(--text-dim);
+      }
+      .situation-collapse-btn:hover {
+        color: var(--text);
+      }
+      .situation-collapse-btn.collapsed .collapse-icon {
+        transform: rotate(-90deg);
+      }
+      .situation-widget-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0;
+      }
+      .situation-collapse-btn:hover .situation-widget-title {
+        color: var(--text);
+      }
+      .situation-list {
+        display: flex;
+        flex-direction: column;
+      }
+      .situation-list[hidden] {
+        display: none !important;
+      }
+      .situation-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--panel-border);
+        transition: background 0.1s;
+      }
+      .situation-row:hover {
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .situation-row:last-child {
+        border-bottom: none;
+      }
+      .situation-index {
+        font-size: 11px;
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+        flex-shrink: 0;
+        min-width: 18px;
+      }
+      .situation-time {
+        font-size: 12px;
+        color: var(--text-dim);
+        flex: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .situation-badge {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 3px;
+        flex-shrink: 0;
+      }
+      .situation-badge.success {
+        background: rgba(79, 191, 106, 0.18);
+        color: #4fbf6a;
+      }
+      .situation-badge.failure {
+        background: rgba(224, 71, 63, 0.18);
+        color: #e0473f;
+      }
+      .situation-badge.open {
+        background: rgba(139, 143, 156, 0.15);
+        color: var(--text-dim);
+      }
+      .situation-bracket {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+        flex-shrink: 0;
+      }
+      .situation-bracket.bracket-under100 {
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.12);
+      }
+      .situation-bracket.bracket-over100 {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.12);
+      }
+      .situation-empty {
+        padding: 10px 12px;
+        font-size: 12px;
+        color: var(--text-dim);
+        font-style: italic;
+      }
+      #logFilterWidget {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      #logFilterHeader {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--panel-border);
+      }
+      #logFilterCollapseBtn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: var(--text-dim);
+      }
+      #logFilterCollapseBtn:hover {
+        color: var(--text);
+      }
+      #logFilterCollapseBtn.collapsed .collapse-icon {
+        transform: rotate(-90deg);
+      }
+      #logFilterHeaderTitle {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0;
+      }
+      #logFilterPanel {
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      #logFilterPanel[hidden] {
+        display: none !important;
+      }
+      .log-filter-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .log-filter-chip {
+        font-size: 11px;
+        font-weight: 500;
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--panel-border);
+        background: #22252f;
+        color: var(--text-dim);
+        cursor: pointer;
+        transition:
+          background 0.12s,
+          border-color 0.12s,
+          color 0.12s;
+        user-select: none;
+      }
+      .log-filter-chip:hover {
+        background: #2c3040;
+        color: var(--text);
+        border-color: #3b4050;
+      }
+      .log-filter-chip.active {
+        background: rgba(59, 130, 246, 0.2);
+        border-color: #3b82f6;
+        color: #93c5fd;
+        font-weight: 600;
+      }
+      #replayInfoWidget {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      #replayInfoWidget[hidden] {
+        display: none !important;
+      }
+      #replayInfoHeader {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--panel-border);
+      }
+      #replayInfoCollapseBtn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: var(--text-dim);
+      }
+      #replayInfoCollapseBtn:hover {
+        color: var(--text);
+      }
+      #replayInfoCollapseBtn.collapsed .collapse-icon {
+        transform: rotate(-90deg);
+      }
+      #replayInfoHeaderTitle {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0;
+      }
+      #replayInfoCollapseBtn:hover #replayInfoHeaderTitle {
+        color: var(--text);
+      }
+      #replayInfoPanel {
+        padding: 8px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 12px;
+      }
+      #replayInfoPanel[hidden] {
+        display: none !important;
+      }
+      .replay-info-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .replay-info-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .replay-info-value {
+        font-size: 12px;
+        color: var(--text);
+        font-family: var(--font-mono, monospace);
+        word-break: break-all;
+        line-height: 1.4;
+      }
+      #perspectiveWidget {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      #perspectiveWidgetHeader {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--panel-border);
+        flex-shrink: 0;
+      }
+      #perspectiveWidgetHeader h2 {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0;
+      }
+      #perspectiveWidgetBody {
+        padding: 8px 10px;
       }
       #perspectiveToggle {
         display: flex;
-        gap: 4px;
-        margin-left: auto;
-        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
       }
       .perspective-btn {
-        font-size: 11px;
+        flex: 1;
+        font-size: 12px;
         font-weight: 600;
-        padding: 2px 8px;
-        border-radius: 4px;
-        border: 1px solid transparent;
+        padding: 7px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--panel-border);
         cursor: pointer;
-        background: transparent;
+        background: #22252f;
         color: var(--text-dim);
-        opacity: 0.55;
-        transition: opacity 0.1s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition:
+          background 0.12s,
+          border-color 0.12s,
+          color 0.12s,
+          box-shadow 0.12s;
+      }
+      .perspective-btn:hover {
+        background: #2c3040;
+        color: var(--text);
+        border-color: #3b4050;
       }
       .perspective-btn.active {
-        opacity: 1;
-        border-color: currentColor;
-        background: rgba(255, 255, 255, 0.06);
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #ffffff;
+        font-weight: 700;
+        box-shadow: 0 2px 10px rgba(59, 130, 246, 0.45);
+      }
+      .perspective-btn.active:hover {
+        background: #2563eb;
+        border-color: #2563eb;
       }
       #statsPanel {
         padding: 10px 12px;
@@ -992,6 +1643,12 @@
       }
       .stat-match-delta.pct-delta-neg {
         color: #e0473f;
+      }
+      .stat-subdetail {
+        font-size: 11px;
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+        margin-top: 1px;
       }
 
       /* Player panel */
@@ -1260,7 +1917,7 @@
   </head>
   <body>
     <header>
-      <h1>rmgr-viewer</h1>
+      <h1><button id="appTitleBtn">rmgr-viewer</button></h1>
       <button id="backToLibraryBtn" class="back-btn" hidden>← Library</button>
 
       <div class="import-container" id="importContainer">
@@ -1297,6 +1954,9 @@
       <!-- Library View -->
       <div id="libraryView" class="view-container"></div>
 
+      <!-- Preview View -->
+      <div id="previewView" class="view-container" hidden></div>
+
       <!-- Match View -->
       <div id="matchView" class="view-container" hidden>
         <div id="stageWrap">
@@ -1306,6 +1966,14 @@
           </div>
         </div>
         <aside id="sidebar">
+          <section id="perspectiveWidget">
+            <div id="perspectiveWidgetHeader">
+              <h2 id="perspectiveHeaderTitle">Perspective</h2>
+            </div>
+            <div id="perspectiveWidgetBody">
+              <div id="perspectiveToggle"></div>
+            </div>
+          </section>
           <section id="matchStats">
             <div id="matchStatsHeader">
               <button
@@ -1315,7 +1983,6 @@
                 <span class="collapse-icon">▼</span>
                 <h2>Match Stats</h2>
               </button>
-              <div id="perspectiveToggle"></div>
             </div>
             <div id="statsPanel">
               <p id="statsEmpty">
@@ -1323,13 +1990,181 @@
               </p>
             </div>
           </section>
+          <section id="recoveryWidget" class="situation-widget" hidden>
+            <div class="situation-widget-header">
+              <button
+                id="recoveryCollapseBtn"
+                class="situation-collapse-btn"
+                title="Collapse / expand Recovery"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="recoveryWidgetTitle" class="situation-widget-title">
+                  Recovery
+                </h2>
+              </button>
+            </div>
+            <div id="recoveryList" class="situation-list"></div>
+          </section>
+          <section id="edgeGuardWidget" class="situation-widget" hidden>
+            <div class="situation-widget-header">
+              <button
+                id="edgeGuardCollapseBtn"
+                class="situation-collapse-btn"
+                title="Collapse / expand Edge Guard"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="edgeGuardWidgetTitle" class="situation-widget-title">
+                  Edge Guard
+                </h2>
+              </button>
+            </div>
+            <div id="edgeGuardList" class="situation-list"></div>
+          </section>
+          <section id="ledgeGetupWidget" class="situation-widget" hidden>
+            <div class="situation-widget-header">
+              <button
+                id="ledgeGetupCollapseBtn"
+                class="situation-collapse-btn"
+                title="Collapse / expand Ledge Getup"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="ledgeGetupWidgetTitle" class="situation-widget-title">
+                  Ledge Getup
+                </h2>
+              </button>
+            </div>
+            <div id="ledgeGetupList" class="situation-list"></div>
+          </section>
+          <section id="ledgeTrapWidget" class="situation-widget" hidden>
+            <div class="situation-widget-header">
+              <button
+                id="ledgeTrapCollapseBtn"
+                class="situation-collapse-btn"
+                title="Collapse / expand Ledge Trap"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="ledgeTrapWidgetTitle" class="situation-widget-title">
+                  Ledge Trap
+                </h2>
+              </button>
+            </div>
+            <div id="ledgeTrapList" class="situation-list"></div>
+          </section>
+          <section id="characterMetaWidget" hidden>
+            <div id="characterMetaHeader">
+              <button
+                id="characterMetaCollapseBtn"
+                title="Collapse / expand Character Stats"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="characterMetaHeaderTitle"></h2>
+              </button>
+            </div>
+            <div id="characterMetaPanel"></div>
+          </section>
           <div id="players"></div>
+          <section id="logFilterWidget">
+            <div id="logFilterHeader">
+              <button
+                id="logFilterCollapseBtn"
+                title="Collapse / expand Log Filters"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="logFilterHeaderTitle">Log Filters</h2>
+              </button>
+            </div>
+            <div id="logFilterPanel">
+              <div id="logFilterChips" class="log-filter-chips"></div>
+            </div>
+          </section>
+          <section id="replayInfoWidget">
+            <div id="replayInfoHeader">
+              <button
+                id="replayInfoCollapseBtn"
+                title="Collapse / expand Replay Info"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="replayInfoHeaderTitle">Replay Info</h2>
+              </button>
+            </div>
+            <div id="replayInfoPanel">
+              <div class="replay-info-row">
+                <span class="replay-info-label" id="replayInfoFileLabel"
+                  >File</span
+                >
+                <span id="replayInfoFileName" class="replay-info-value">—</span>
+              </div>
+              <div class="replay-info-row">
+                <span class="replay-info-label" id="replayInfoDateLabel"
+                  >Recorded</span
+                >
+                <span id="replayInfoDateLocal" class="replay-info-value"
+                  >—</span
+                >
+              </div>
+            </div>
+          </section>
         </aside>
       </div>
     </main>
 
     <!-- Modal for Onboarding and Alias Editing -->
     <div id="modalContainer" class="modal-container" hidden></div>
+
+    <!-- About Modal -->
+    <div id="aboutModal" hidden>
+      <div id="aboutModalBackdrop"></div>
+      <div id="aboutModalDialog">
+        <div id="aboutModalHeader">
+          <h2 id="aboutModalTitle">About rmgr-viewer</h2>
+          <button id="aboutModalCloseBtn" aria-label="Close">✕</button>
+        </div>
+        <p id="aboutModalDesc"></p>
+        <div class="about-row">
+          <span class="about-row-label" id="aboutAuthorLabel">Author</span>
+          <span class="about-row-value">
+            <a
+              id="aboutAuthorLink"
+              href="https://x.com/chanponsmash"
+              target="_blank"
+              rel="noopener noreferrer"
+              >nue (鵺)</a
+            >
+          </span>
+        </div>
+        <div class="about-row">
+          <span class="about-row-label" id="aboutTwitterLabel"
+            >Twitter / X</span
+          >
+          <span class="about-row-value">
+            <a
+              href="https://x.com/chanponsmash"
+              target="_blank"
+              rel="noopener noreferrer"
+              >@chanponsmash</a
+            >
+          </span>
+        </div>
+        <div class="about-row">
+          <span class="about-row-label" id="aboutGithubLabel"
+            >GitHub Repository</span
+          >
+          <span class="about-row-value">
+            <a
+              href="https://github.com/hopskipnfall/rmgr-viewer"
+              target="_blank"
+              rel="noopener noreferrer"
+              >hopskipnfall/rmgr-viewer</a
+            >
+          </span>
+        </div>
+        <div id="aboutModalFooter">
+          <button id="aboutModalFooterCloseBtn" class="btn-secondary">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Match View Footer Playback Controls -->
     <footer id="matchFooter" hidden>

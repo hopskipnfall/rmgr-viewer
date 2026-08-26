@@ -1,4 +1,5 @@
 import { getSeatedPorts, type PortIndex, type Replay } from "@rmg-k/rmgr";
+import { buildRecoveryMap, buildLedgeMap } from "./ledgeTrap.js";
 
 const PORTS: readonly PortIndex[] = [0, 1, 2, 3];
 
@@ -20,13 +21,19 @@ const CAPTURE_STATES = new Set([
  * (so `result[port][frameIndex]` matches `replay.frames[frameIndex]`). Resets
  * to 0 starting the frame after `stocksRemaining` drops.
  *
- * Precomputed once per loaded replay rather than tracked incrementally
- * during playback.
+ * Excludes hits landed while the victim is in an active recovery situation or
+ * ledge getup situation.
  */
 export function computeNeutralHitsPerStock(
   replay: Replay,
 ): Partial<Record<PortIndex, readonly number[]>> {
   const result: Partial<Record<PortIndex, number[]>> = {};
+  const seated = getSeatedPorts(replay);
+  const recoveryMap =
+    seated.length === 2
+      ? buildRecoveryMap(replay, seated[0]!, seated[1]!)
+      : null;
+  const ledgeMap = seated.length === 2 ? buildLedgeMap(replay) : null;
 
   for (const port of PORTS) {
     const values: number[] = new Array(replay.frames.length).fill(0);
@@ -49,7 +56,11 @@ export function computeNeutralHitsPerStock(
           : post.comboHitCount > 0;
       const isFreshGrab = inCapture && !lastInCapture;
 
-      if (isFreshAttackHit || isFreshGrab) {
+      const isDisadvantage =
+        (recoveryMap !== null && recoveryMap[i] === port) ||
+        (ledgeMap !== null && ledgeMap[i] === port);
+
+      if ((isFreshAttackHit || isFreshGrab) && !isDisadvantage) {
         neutralHits++;
       }
 
@@ -83,7 +94,8 @@ export interface NeutralHitEvent {
 }
 
 /**
- * Computes all neutral hit and grab events in chronological order.
+ * Computes all neutral hit and grab events in chronological order,
+ * excluding hits that occur during recovery or ledge getup situations.
  */
 export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
   const events: NeutralHitEvent[] = [];
@@ -91,6 +103,8 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
   if (seated.length !== 2) return events;
 
   const [portA, portB] = seated as [PortIndex, PortIndex];
+  const recoveryMap = buildRecoveryMap(replay, portA, portB);
+  const ledgeMap = buildLedgeMap(replay);
 
   let lastACombo: number | undefined;
   let lastBCombo: number | undefined;
@@ -108,6 +122,9 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
     const aInCapture = CAPTURE_STATES.has(postA.actionStateId);
     const bInCapture = CAPTURE_STATES.has(postB.actionStateId);
 
+    const bInDisadvantage = recoveryMap[i] === portB || ledgeMap[i] === portB;
+    const aInDisadvantage = recoveryMap[i] === portA || ledgeMap[i] === portA;
+
     // Check if A hit/grabbed B
     const aHitB =
       (lastBCombo === 0 || lastBCombo === undefined) &&
@@ -115,7 +132,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
       !lastBInCapture;
     const aGrabbedB = bInCapture && !lastBInCapture;
 
-    if (aHitB || aGrabbedB) {
+    if ((aHitB || aGrabbedB) && !bInDisadvantage) {
       events.push({
         frame: frameNumber,
         frameIndex: i,
@@ -133,7 +150,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
       !lastAInCapture;
     const bGrabbedA = aInCapture && !lastAInCapture;
 
-    if (bHitA || bGrabbedA) {
+    if ((bHitA || bGrabbedA) && !aInDisadvantage) {
       events.push({
         frame: frameNumber,
         frameIndex: i,
@@ -165,6 +182,7 @@ export interface NeutralHitsStats {
 /**
  * Computes the average number of neutral hits landed by `attackerPort`
  * before taking each stock from opponent(s). Grabs are counted as hits.
+ * Excludes hits landed during recovery or ledge getups.
  */
 export function computeNeutralHitsStats(
   replay: Replay,
@@ -175,6 +193,12 @@ export function computeNeutralHitsStats(
   if (opponents.length === 0) {
     return { stocksTaken: 0, totalHitsLanded: 0, averageHitsPerStock: null };
   }
+
+  const recoveryMap =
+    seated.length === 2
+      ? buildRecoveryMap(replay, seated[0]!, seated[1]!)
+      : null;
+  const ledgeMap = seated.length === 2 ? buildLedgeMap(replay) : null;
 
   const hitsPerStockTaken: number[] = [];
 
@@ -195,7 +219,11 @@ export function computeNeutralHitsStats(
           : post.comboHitCount > 0;
       const isFreshGrab = inCapture && !lastInCapture;
 
-      if (isFreshAttackHit || isFreshGrab) {
+      const isDisadvantage =
+        (recoveryMap !== null && recoveryMap[i] === victimPort) ||
+        (ledgeMap !== null && ledgeMap[i] === victimPort);
+
+      if ((isFreshAttackHit || isFreshGrab) && !isDisadvantage) {
         currentStockHits++;
       }
 

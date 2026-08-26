@@ -14,3 +14,16 @@ export const PORT_LABELS: Record<PortIndex, string> = {
   2: "P3",
   3: "P4",
 };
+
+export const MAIN_PLAYER_COLOR = "#3b82f6"; // Blue
+export const OPPONENT_COLOR = "#8a94a6"; // Grey
+
+export function getPlayerColor(
+  port: PortIndex,
+  perspectivePort?: PortIndex | null,
+): string {
+  if (perspectivePort === null || perspectivePort === undefined) {
+    return PORT_COLORS[port];
+  }
+  return port === perspectivePort ? MAIN_PLAYER_COLOR : OPPONENT_COLOR;
+}

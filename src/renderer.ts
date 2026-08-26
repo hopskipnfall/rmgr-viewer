@@ -1,6 +1,6 @@
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
 import { Camera } from "./camera.js";
-import { PORT_COLORS } from "./players.js";
+import { getPlayerColor } from "./players.js";
 import {
   stageGeometry,
   stageBlastZone,
@@ -87,6 +87,43 @@ const TAUNT_ACTION_STATES = new Set([
 
 export function isTauntState(actionStateId: number): boolean {
   return TAUNT_ACTION_STATES.has(actionStateId);
+}
+
+const TURN_ACTION_STATES = new Set([
+  0x012, // Turn (standing turnaround)
+  0x013, // TurnRun (pivot turnaround during dash/run)
+]);
+
+export function isTurnState(actionStateId: number): boolean {
+  return TURN_ACTION_STATES.has(actionStateId);
+}
+
+const ROLL_ACTION_STATES = new Set([
+  0x09c, // RollF (Forward shield roll)
+  0x09d, // RollB (Backward shield roll)
+  0x049, // TechF (Tech forward roll)
+  0x04a, // TechB (Tech backward roll)
+  0x047, // DownForwardD (Get-up roll forward from face down)
+  0x048, // DownBackD (Get-up roll back from face down)
+  0x04b, // DownForwardU (Get-up roll forward from face up)
+  0x04c, // DownBackU (Get-up roll back from face up)
+  0x058, // CliffRollQuick (Ledge roll quick)
+  0x05b, // CliffRollSlow (Ledge roll slow)
+]);
+
+export function isRollState(actionStateId: number): boolean {
+  return ROLL_ACTION_STATES.has(actionStateId);
+}
+
+export function isRollForward(actionStateId: number): boolean {
+  return (
+    actionStateId === 0x09c ||
+    actionStateId === 0x049 ||
+    actionStateId === 0x047 ||
+    actionStateId === 0x04b ||
+    actionStateId === 0x058 ||
+    actionStateId === 0x05b
+  );
 }
 
 export type AttackType = "tilt" | "smash" | "aerial" | "jab" | "grab";
@@ -208,6 +245,136 @@ export function isQuickAttackState(actionStateId: number): boolean {
   return QUICK_ATTACK_STATES.has(actionStateId);
 }
 
+export function isFoxCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x01 || // Fox
+    characterId === 0x0f || // Polygon Fox
+    characterId === 0x1d || // Falco
+    characterId === 0x29 || // Fox (JP)
+    characterId === 0x55 // Polygon Falco
+  );
+}
+
+export type FoxSpecialType =
+  | "firefox_charge"
+  | "firefox_fly"
+  | "firefox_end"
+  | "shine_start"
+  | "shine_loop"
+  | "shine_hit"
+  | "shine_end"
+  | "blaster";
+
+export function getFoxSpecialType(
+  characterId: number,
+  actionStateId: number,
+): FoxSpecialType | null {
+  if (!isFoxCharacter(characterId)) return null;
+
+  // Neutral-B Blaster: 0x0dc - 0x0e3
+  if (actionStateId >= 0x0dc && actionStateId <= 0x0e3) {
+    return "blaster";
+  }
+
+  // Up-B Fire Fox Charge / Startup: 0x0e4 - 0x0e7
+  if (actionStateId >= 0x0e4 && actionStateId <= 0x0e7) {
+    return "firefox_charge";
+  }
+  // Up-B Fire Fox Flight: 0x0e8, 0x0ec
+  if (actionStateId === 0x0e8 || actionStateId === 0x0ec) {
+    return "firefox_fly";
+  }
+  // Up-B Fire Fox End / Decel / Landing: 0x0e9, 0x0ea, 0x0eb, 0x0ed - 0x0f0
+  if (actionStateId >= 0x0e9 && actionStateId <= 0x0f0) {
+    return "firefox_end";
+  }
+
+  // Down-B Reflector / Shine: 0x0f1 - 0x0fa
+  if (actionStateId === 0x0f1 || actionStateId === 0x0f2) {
+    return "shine_start";
+  }
+  if (actionStateId === 0x0f5 || actionStateId === 0x0f6) {
+    return "shine_hit";
+  }
+  if (
+    actionStateId === 0x0f3 ||
+    actionStateId === 0x0f7 ||
+    actionStateId === 0x0f8
+  ) {
+    return "shine_end";
+  }
+  if (actionStateId >= 0x0f1 && actionStateId <= 0x0fa) {
+    return "shine_loop";
+  }
+
+  return null;
+}
+
+const FIRE_FOX_FLIGHT_STATES = new Set([0x0e8, 0x0ec]);
+
+export function isFireFoxFlightState(actionStateId: number): boolean {
+  return FIRE_FOX_FLIGHT_STATES.has(actionStateId);
+}
+
+/**
+ * Computes Fox's flight angle in screen space radians (where 0 is right, -PI/2 is straight up, +PI/2 is down, PI is left).
+ * Returns null if velocity cannot be determined.
+ */
+export function getFoxFlightAngle(
+  replay?: Replay | null,
+  frameIndex?: number,
+  port?: PortIndex,
+  post?: { positionX: number; positionY: number; facingDirection: 1 | -1 },
+): number | null {
+  if (!replay || frameIndex === undefined || port === undefined || !post) {
+    return null;
+  }
+
+  // Look back up to 4 frames for velocity delta
+  let prevX: number | null = null;
+  let prevY: number | null = null;
+  for (let back = 1; back <= 4; back++) {
+    const prevPost = replay.frames[frameIndex - back]?.ports[port]?.post;
+    if (
+      prevPost &&
+      (Math.abs(prevPost.positionX - post.positionX) > 0.001 ||
+        Math.abs(prevPost.positionY - post.positionY) > 0.001)
+    ) {
+      prevX = prevPost.positionX;
+      prevY = prevPost.positionY;
+      break;
+    }
+  }
+
+  // If at start of flight (frame 0), look forward up to 4 frames
+  if (prevX === null && frameIndex + 1 < replay.frames.length) {
+    for (let fwd = 1; fwd <= 4; fwd++) {
+      const fwdPost = replay.frames[frameIndex + fwd]?.ports[port]?.post;
+      if (
+        fwdPost &&
+        (Math.abs(fwdPost.positionX - post.positionX) > 0.001 ||
+          Math.abs(fwdPost.positionY - post.positionY) > 0.001)
+      ) {
+        prevX = 2 * post.positionX - fwdPost.positionX;
+        prevY = 2 * post.positionY - fwdPost.positionY;
+        break;
+      }
+    }
+  }
+
+  if (prevX !== null && prevY !== null) {
+    const dx = post.positionX - prevX;
+    const dy = post.positionY - prevY;
+    if (Math.hypot(dx, dy) > 0.001) {
+      // In world coords: +Y is UP, -Y is DOWN.
+      // In screen canvas: +Y is DOWN, -Y is UP.
+      return Math.atan2(-dy, dx);
+    }
+  }
+
+  return null;
+}
+
 export function getAttackInfo(actionStateId: number): AttackInfo | null {
   // Jabs
   if (actionStateId === 0x0be || actionStateId === 0x0bf) {
@@ -265,12 +432,168 @@ export function getAttackInfo(actionStateId: number): AttackInfo | null {
   return null;
 }
 
+export function isMarioCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x00 || // Mario
+    characterId === 0x0d || // Metal Mario
+    characterId === 0x0e || // Polygon Mario
+    characterId === 0x20 || // Dr. Mario
+    characterId === 0x2a || // Mario (JP)
+    characterId === 0x51 // Polygon Dr. Mario
+  );
+}
+
+export function isLuigiCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x04 || // Luigi
+    characterId === 0x12 || // Polygon Luigi
+    characterId === 0x2b || // Luigi (JP)
+    characterId === 0x45 || // Metal Luigi
+    characterId === 0x4b // Dr. Luigi
+  );
+}
+
+export function isDonkeyKongCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x02 || // Donkey Kong
+    characterId === 0x10 || // Polygon DK
+    characterId === 0x1a || // Giant DK
+    characterId === 0x2c // DK (JP)
+  );
+}
+
+export function isSamusCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x03 || // Samus
+    characterId === 0x11 || // Polygon Samus
+    characterId === 0x22 || // Dark Samus
+    characterId === 0x24 || // Samus (JP)
+    characterId === 0x33 || // Samus (EU)
+    characterId === 0x57 // Polygon Dark Samus
+  );
+}
+
+export function isLinkCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x05 || // Link
+    characterId === 0x13 || // Polygon Link
+    characterId === 0x1f || // Young Link
+    characterId === 0x23 || // Link (EU)
+    characterId === 0x27 || // Link (JP)
+    characterId === 0x5b // Polygon Young Link
+  );
+}
+
+export function isYoshiCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x06 || // Yoshi
+    characterId === 0x14 || // Polygon Yoshi
+    characterId === 0x31 // Yoshi (JP)
+  );
+}
+
+export function isKirbyCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x08 || // Kirby
+    characterId === 0x16 || // Polygon Kirby
+    characterId === 0x30 // Kirby (JP)
+  );
+}
+
+export function isJigglypuffCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x0a || // Jigglypuff
+    characterId === 0x18 || // Polygon Jigglypuff
+    characterId === 0x2e || // Jigglypuff (JP)
+    characterId === 0x2f // Jigglypuff (EU)
+  );
+}
+
+export function isNessCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x0b || // Ness
+    characterId === 0x19 || // Polygon Ness
+    characterId === 0x25 || // Ness (JP)
+    characterId === 0x26 || // Lucas
+    characterId === 0x4e // Polygon Lucas
+  );
+}
+
+export function toGrayscale(colorStr: string, overrideAlpha?: number): string {
+  if (colorStr.startsWith("#")) {
+    let hex = colorStr.slice(1);
+    if (hex.length === 3) {
+      hex = hex
+        .split("")
+        .map((c) => c + c)
+        .join("");
+    }
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const a = hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1;
+    const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+    const finalAlpha = overrideAlpha ?? a;
+    return finalAlpha < 1
+      ? `rgba(${lum}, ${lum}, ${lum}, ${finalAlpha})`
+      : `rgb(${lum}, ${lum}, ${lum})`;
+  }
+  if (colorStr.startsWith("rgba(") || colorStr.startsWith("rgb(")) {
+    const match = colorStr.match(
+      /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/,
+    );
+    if (match && match[1] && match[2] && match[3]) {
+      const r = parseInt(match[1], 10);
+      const g = parseInt(match[2], 10);
+      const b = parseInt(match[3], 10);
+      const a = match[4] !== undefined ? parseFloat(match[4]) : 1;
+      const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      const finalAlpha = overrideAlpha ?? a;
+      return finalAlpha < 1
+        ? `rgba(${lum}, ${lum}, ${lum}, ${finalAlpha})`
+        : `rgb(${lum}, ${lum}, ${lum})`;
+    }
+  }
+  if (colorStr.startsWith("hsl(")) {
+    return colorStr.replace(
+      /hsl\(\s*[\d.]+\s*,\s*[\d.]+%?\s*,\s*([\d.]+%?)\s*\)/,
+      "hsl(0, 0%, $1)",
+    );
+  }
+  return colorStr;
+}
+
+function resolveColor(
+  hexOrCss: string,
+  isOpponent: boolean,
+  alpha?: number,
+): string {
+  if (isOpponent) {
+    return toGrayscale(hexOrCss, alpha);
+  }
+  if (alpha !== undefined && alpha < 1) {
+    return hexToRgba(hexOrCss, alpha);
+  }
+  return hexOrCss;
+}
+
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
   const g = parseInt(clean.substring(2, 4), 16);
   const b = parseInt(clean.substring(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export interface CharacterAnimState {
+  taunting: boolean;
+  inCombo: boolean;
+  isRoll: boolean;
+  isInvulnerable: boolean;
+  isSpecial: boolean;
+  isLanding: boolean;
+  isOpponent: boolean;
+  actionFrameCounter: number;
 }
 
 export class StageRenderer {
@@ -289,6 +612,7 @@ export class StageRenderer {
     hoverScreen: { x: number; y: number } | undefined,
     replay?: Replay | null,
     frameIndex?: number,
+    perspectivePort?: PortIndex | null,
   ): void {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -299,7 +623,7 @@ export class StageRenderer {
     this.drawStage(camera, stageId);
 
     if (frame) {
-      // Draw Pikachu Quick Attack spatial flight streaks before characters
+      // Draw motion trails (Pikachu Quick Attack streaks, Fox Fire Fox streaks, Roll trails) before characters
       if (replay && frameIndex !== undefined) {
         for (const key of Object.keys(frame.ports)) {
           const port = Number(key) as PortIndex;
@@ -310,6 +634,9 @@ export class StageRenderer {
             isQuickAttackState(portData.post.actionStateId)
           ) {
             this.drawPikachuQuickAttackStreak(camera, port, replay, frameIndex);
+          }
+          if (isRollState(portData.post.actionStateId)) {
+            this.drawRollTrail(camera, port, replay, frameIndex);
           }
         }
       }
@@ -324,7 +651,14 @@ export class StageRenderer {
         ) {
           continue;
         }
-        this.drawPlayer(camera, port, portData.post);
+        this.drawPlayer(
+          camera,
+          port,
+          portData.post,
+          perspectivePort,
+          replay,
+          frameIndex,
+        );
       }
       this.drawDeathDirectionFlashes(frame);
     }
@@ -677,17 +1011,40 @@ export class StageRenderer {
       characterId: number;
       actionStateId: number;
       actionFrameCounter: number;
+      hurtboxState?: number;
       comboHitCount?: number;
       hitstunCounter?: number;
     },
+    perspectivePort?: PortIndex | null,
+    replay?: Replay | null,
+    frameIndex?: number,
   ): void {
     const { ctx } = this;
     // positionY is the character's foot position, not their center - Teeter
     // samples land exactly on platform surface Y (see stageGeometry.ts), so
     // the marker's bottom edge (not its middle) belongs at y.
     const { x, y } = camera.worldToScreen(post.positionX, post.positionY);
-    const color = PORT_COLORS[port];
-    const facingRight = post.facingDirection === 1;
+    const color = getPlayerColor(port, perspectivePort);
+    const turning = isTurnState(post.actionStateId);
+    // Smooth 3D-like yaw rotation around the vertical axis during turnaround (0 -> pi radians)
+    // Every frame within the turn state is an intermediate distorted phase between +100% and -100%.
+    // Frame 0: ~90% (initial turn inward) ... Midway: 0% (edge-on) ... Last Turn frame: ~90% (finishing turn) ... Next state: 100%
+    let effectiveDir = post.facingDirection;
+    if (turning) {
+      const turnTotalFrames = post.actionStateId === 0x013 ? 5 : 6;
+      const progress = Math.min(
+        1,
+        Math.max(0, (post.actionFrameCounter + 1) / (turnTotalFrames + 1)),
+      );
+      const turnScale = Math.cos(progress * Math.PI);
+      if (post.actionStateId === 0x012 && post.actionFrameCounter >= 5) {
+        // facingDirection has already flipped to the new direction in the engine on frame 5+
+        effectiveDir = post.facingDirection * Math.abs(turnScale);
+      } else {
+        effectiveDir = post.facingDirection * turnScale;
+      }
+    }
+    const facingRight = effectiveDir >= 0;
 
     const size = characterSize(post.characterId);
     const crouching = isCrouchState(post.actionStateId);
@@ -695,13 +1052,15 @@ export class StageRenderer {
       size.height * (crouching ? 0.5 : 1.0),
     );
     const halfWidth = camera.worldLengthToScreen(size.width) / 2;
+    const centerY = y - heightPx / 2;
     const topY = y - heightPx;
-    const centerY = y - heightPx * 0.5;
-    const noseY = y - heightPx * 0.5;
+    const noseY = centerY;
+
+    // Default label vertical position is above the character model
+    let labelY = topY - 8;
 
     // Draw shield bubble/oval if character is in a shield state
     const shielding = isShieldState(post.actionStateId);
-    let labelY = topY - 8;
 
     if (shielding) {
       const shieldStun = isShieldStunState(post.actionStateId);
@@ -886,6 +1245,39 @@ export class StageRenderer {
       );
     }
 
+    // Draw Fox special move visuals if applicable
+    const foxSpecial = getFoxSpecialType(post.characterId, post.actionStateId);
+    if (foxSpecial) {
+      const flightAngle =
+        foxSpecial === "firefox_fly"
+          ? getFoxFlightAngle(replay, frameIndex, port, post)
+          : null;
+
+      this.drawFoxSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        foxSpecial,
+        post.actionFrameCounter,
+        flightAngle,
+      );
+      if (
+        foxSpecial === "shine_start" ||
+        foxSpecial === "shine_loop" ||
+        foxSpecial === "shine_hit" ||
+        foxSpecial === "shine_end" ||
+        foxSpecial === "firefox_charge"
+      ) {
+        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 8);
+      }
+    }
+
+    const isRoll = isRollState(post.actionStateId);
+    const isInvulnerable = isRoll && post.hurtboxState === 0x03;
+
     const taunting = isTauntState(post.actionStateId);
     let triangleColor = color;
 
@@ -893,6 +1285,9 @@ export class StageRenderer {
       // Smoothly cycle through colors across the rainbow spectrum
       const hue = (post.actionFrameCounter * 10) % 360;
       triangleColor = `hsl(${hue}, 85%, 55%)`;
+    } else if (isRoll) {
+      // Ethereal / semi-translucent ghost appearance for the entire roll state
+      triangleColor = hexToRgba(color, 0.45);
     }
 
     const inHitstun = isHitstunState(
@@ -903,75 +1298,259 @@ export class StageRenderer {
     const comboHits = inHitstun ? (post.comboHitCount ?? 0) : 0;
     const isSpecial = isSpecialState(post.actionStateId);
     const isLanding = isLandingState(post.actionStateId);
+    const isOpponent =
+      perspectivePort !== null &&
+      perspectivePort !== undefined &&
+      port !== perspectivePort;
 
-    // Isosceles triangle, nose pointing in the facing direction, feet at y and head at topY.
-    const triX =
-      inCombo && !taunting
-        ? x + (post.actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
-        : x;
-    const noseX = triX + (facingRight ? halfWidth : -halfWidth);
-    const backX = triX + (facingRight ? -halfWidth : halfWidth);
+    const animState: CharacterAnimState = {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter: post.actionFrameCounter,
+    };
 
-    ctx.save();
-    if (taunting) {
-      // Spin triangle continuously around its geometric center (x, centerY)
-      const spinAngle = post.actionFrameCounter * 0.25 * (facingRight ? 1 : -1);
-      ctx.translate(x, centerY);
-      ctx.rotate(spinAngle);
-      ctx.translate(-x, -centerY);
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(noseX, noseY);
-    ctx.lineTo(backX, topY);
-    ctx.lineTo(backX, y);
-    ctx.closePath();
-    ctx.fillStyle = triangleColor;
-    ctx.fill();
-
-    if (inCombo) {
-      // Active combo hit stun electric outline & outer glow (taking damage)
-      ctx.save();
-      ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = "rgba(255, 120, 0, 0.85)";
-      ctx.shadowBlur = 6;
-      ctx.stroke();
-      ctx.restore();
-
-      ctx.beginPath();
-      ctx.moveTo(noseX, noseY);
-      ctx.lineTo(backX, topY);
-      ctx.lineTo(backX, y);
-      ctx.closePath();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    } else if (isSpecial || isLanding) {
-      // Special move & Landing animation: neutral cool-silver/gray energy outline
-      ctx.save();
-      ctx.strokeStyle = "rgba(190, 205, 225, 0.95)";
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = "rgba(170, 195, 230, 0.7)";
-      ctx.shadowBlur = 6;
-      ctx.stroke();
-      ctx.restore();
-
-      ctx.beginPath();
-      ctx.moveTo(noseX, noseY);
-      ctx.lineTo(backX, topY);
-      ctx.lineTo(backX, y);
-      ctx.closePath();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
+    if (isPikachuCharacter(post.characterId)) {
+      this.drawPikachuPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isFalconCharacter(post.characterId)) {
+      this.drawFalconPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isMarioCharacter(post.characterId)) {
+      this.drawMarioPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isLuigiCharacter(post.characterId)) {
+      this.drawLuigiPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isKirbyCharacter(post.characterId)) {
+      this.drawKirbyPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isJigglypuffCharacter(post.characterId)) {
+      this.drawJigglypuffPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isFoxCharacter(post.characterId)) {
+      this.drawFoxPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isYoshiCharacter(post.characterId)) {
+      this.drawYoshiPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isDonkeyKongCharacter(post.characterId)) {
+      this.drawDonkeyKongPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isLinkCharacter(post.characterId)) {
+      this.drawLinkPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isNessCharacter(post.characterId)) {
+      this.drawNessPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isSamusCharacter(post.characterId)) {
+      this.drawSamusPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
     } else {
-      ctx.strokeStyle = "rgba(0,0,0,0.5)";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
+      // Isosceles triangle, nose pointing in the facing direction, feet at y and head at topY.
+      const triX =
+        inCombo && !taunting
+          ? x + (post.actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+          : x;
+      const noseX = triX + effectiveDir * halfWidth;
+      const backX = triX - effectiveDir * halfWidth;
 
-    ctx.restore();
+      ctx.save();
+      if (taunting) {
+        // Spin triangle continuously around its geometric center (x, centerY)
+        const spinAngle =
+          post.actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+        ctx.translate(x, centerY);
+        ctx.rotate(spinAngle);
+        ctx.translate(-x, -centerY);
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(noseX, noseY);
+      ctx.lineTo(backX, topY);
+      ctx.lineTo(backX, y);
+      ctx.closePath();
+      ctx.fillStyle = triangleColor;
+      ctx.fill();
+
+      if (inCombo) {
+        // Active combo hit stun electric outline & outer glow (taking damage)
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = "rgba(255, 120, 0, 0.85)";
+        ctx.shadowBlur = 6;
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.moveTo(noseX, noseY);
+        ctx.lineTo(backX, topY);
+        ctx.lineTo(backX, y);
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      } else if (isRoll) {
+        // Ethereal silver glow during roll (with brighter cyan aura when actively intangible)
+        ctx.save();
+        ctx.strokeStyle = isInvulnerable
+          ? "rgba(220, 235, 255, 0.95)"
+          : "rgba(190, 205, 225, 0.95)";
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = isInvulnerable
+          ? "rgba(180, 215, 255, 0.85)"
+          : "rgba(170, 195, 230, 0.7)";
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.moveTo(noseX, noseY);
+        ctx.lineTo(backX, topY);
+        ctx.lineTo(backX, y);
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      } else if (isSpecial || isLanding) {
+        // Special move & Landing animation: neutral cool-silver/gray energy outline
+        ctx.save();
+        ctx.strokeStyle = "rgba(190, 205, 225, 0.95)";
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = "rgba(170, 195, 230, 0.7)";
+        ctx.shadowBlur = 6;
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.moveTo(noseX, noseY);
+        ctx.lineTo(backX, topY);
+        ctx.lineTo(backX, y);
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = "rgba(0,0,0,0.5)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
 
     // Damage% label above the triangle, in the player's color (or cycling if taunting).
     ctx.font = "bold 13px system-ui, sans-serif";
@@ -994,6 +1573,2984 @@ export class StageRenderer {
 
       ctx.fillStyle = "#ff4d4f";
       ctx.fillText(badgeText, x, badgeY);
+    }
+  }
+
+  /**
+   * Draws a crisp, recognizable low-poly Pikachu with distinct pointed ears (black tips),
+   * zig-zag lightning bolt tail, red cheeks, back stripes, and facial features.
+   */
+  /**
+   * 1. PIKACHU: Pointed ears with black tips, zig-zag lightning bolt tail, red cheeks, back stripes.
+   */
+  private drawPikachuPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let bodyColor = resolveColor("#facc15", isOpponent);
+    let earTipColor = resolveColor("#1e1e24", isOpponent);
+    let cheekColor = resolveColor("#ef4444", isOpponent);
+    let stripeColor = resolveColor("#854d0e", isOpponent);
+    let tailBaseColor = resolveColor("#854d0e", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      bodyColor = resolveColor(`hsl(${hue}, 85%, 55%)`, isOpponent);
+      cheekColor = resolveColor(
+        `hsl(${(hue + 60) % 360}, 90%, 55%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      bodyColor = resolveColor("#facc15", isOpponent, 0.45);
+      earTipColor = resolveColor("#1e1e24", isOpponent, 0.45);
+      cheekColor = resolveColor("#ef4444", isOpponent, 0.45);
+      stripeColor = resolveColor("#854d0e", isOpponent, 0.45);
+      tailBaseColor = resolveColor("#854d0e", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Tail Base (Brown)
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.45 * dir * w, y - 0.32 * h);
+    ctx.lineTo(posX - 0.68 * dir * w, y - 0.44 * h);
+    ctx.lineTo(posX - 0.72 * dir * w, y - 0.36 * h);
+    ctx.lineTo(posX - 0.5 * dir * w, y - 0.24 * h);
+    ctx.closePath();
+    ctx.fillStyle = tailBaseColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Tail Mid & Tip (Yellow Lightning Bolt)
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.68 * dir * w, y - 0.44 * h);
+    ctx.lineTo(posX - 0.52 * dir * w, y - 0.64 * h);
+    ctx.lineTo(posX - 0.76 * dir * w, y - 0.62 * h);
+    ctx.lineTo(posX - 0.62 * dir * w, y - 0.85 * h);
+    ctx.lineTo(posX - 0.95 * dir * w, y - 1.12 * h);
+    ctx.lineTo(posX - 1.28 * dir * w, y - 0.88 * h);
+    ctx.lineTo(posX - 0.92 * dir * w, y - 0.75 * h);
+    ctx.lineTo(posX - 0.72 * dir * w, y - 0.36 * h);
+    ctx.closePath();
+    ctx.fillStyle = bodyColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Back Ear
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.18 * dir * w, y - 0.94 * h);
+    ctx.lineTo(posX - 0.02 * dir * w, y - 0.98 * h);
+    ctx.lineTo(posX - 0.2 * dir * w, y - 1.2 * h);
+    ctx.lineTo(posX - 0.3 * dir * w, y - 1.18 * h);
+    ctx.closePath();
+    ctx.fillStyle = bodyColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Back Ear Black Tip
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.3 * dir * w, y - 1.18 * h);
+    ctx.lineTo(posX - 0.2 * dir * w, y - 1.2 * h);
+    ctx.lineTo(posX - 0.4 * dir * w, y - 1.4 * h);
+    ctx.closePath();
+    ctx.fillStyle = earTipColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Main Body & Head
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.4 * dir * w, y);
+    ctx.lineTo(posX - 0.66 * dir * w, y - 0.28 * h);
+    ctx.lineTo(posX - 0.62 * dir * w, y - 0.62 * h);
+    ctx.lineTo(posX - 0.42 * dir * w, y - 0.84 * h);
+    ctx.lineTo(posX - 0.2 * dir * w, y - 0.96 * h);
+    ctx.lineTo(posX + 0.12 * dir * w, y - 1.02 * h);
+    ctx.lineTo(posX + 0.58 * dir * w, y - 0.86 * h);
+    ctx.lineTo(posX + 0.86 * dir * w, y - 0.6 * h);
+    ctx.lineTo(posX + 0.66 * dir * w, y - 0.46 * h);
+    ctx.lineTo(posX + 0.78 * dir * w, y - 0.3 * h);
+    ctx.lineTo(posX + 0.46 * dir * w, y);
+    ctx.closePath();
+    ctx.fillStyle = bodyColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Back Stripes
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.6 * dir * w, y - 0.7 * h);
+    ctx.lineTo(posX - 0.22 * dir * w, y - 0.66 * h);
+    ctx.lineTo(posX - 0.24 * dir * w, y - 0.58 * h);
+    ctx.lineTo(posX - 0.62 * dir * w, y - 0.62 * h);
+    ctx.closePath();
+    ctx.fillStyle = stripeColor;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.65 * dir * w, y - 0.48 * h);
+    ctx.lineTo(posX - 0.2 * dir * w, y - 0.44 * h);
+    ctx.lineTo(posX - 0.22 * dir * w, y - 0.36 * h);
+    ctx.lineTo(posX - 0.66 * dir * w, y - 0.4 * h);
+    ctx.closePath();
+    ctx.fillStyle = stripeColor;
+    ctx.fill();
+
+    // Front Ear
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.14 * dir * w, y - 1.0 * h);
+    ctx.lineTo(posX + 0.36 * dir * w, y - 0.9 * h);
+    ctx.lineTo(posX + 0.64 * dir * w, y - 1.18 * h);
+    ctx.lineTo(posX + 0.48 * dir * w, y - 1.22 * h);
+    ctx.closePath();
+    ctx.fillStyle = bodyColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Front Ear Black Tip
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.48 * dir * w, y - 1.22 * h);
+    ctx.lineTo(posX + 0.64 * dir * w, y - 1.18 * h);
+    ctx.lineTo(posX + 0.88 * dir * w, y - 1.44 * h);
+    ctx.closePath();
+    ctx.fillStyle = earTipColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Red Cheek
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.46 * dir * w,
+      y - 0.54 * h,
+      Math.max(0.1, Math.abs(0.18 * w)),
+      Math.max(0.1, 0.18 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = cheekColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // Eye, Nose, Smile
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + 0.44 * dir * w,
+        y - 0.74 * h,
+        Math.max(0.1, Math.abs(0.11 * w)),
+        Math.max(0.1, 0.13 * w),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#18181b", isOpponent);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + (0.44 + 0.04 * dir) * w,
+        y - 0.77 * h,
+        Math.max(0.1, Math.abs(0.04 * w)),
+        Math.max(0.1, 0.04 * w),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(posX + 0.82 * dir * w, y - 0.62 * h);
+      ctx.lineTo(posX + 0.78 * dir * w, y - 0.6 * h);
+      ctx.lineTo(posX + 0.78 * dir * w, y - 0.64 * h);
+      ctx.closePath();
+      ctx.fillStyle = resolveColor("#18181b", isOpponent);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(posX + 0.64 * dir * w, y - 0.54 * h);
+      ctx.quadraticCurveTo(
+        posX + 0.7 * dir * w,
+        y - 0.5 * h,
+        posX + 0.74 * dir * w,
+        y - 0.54 * h,
+      );
+      ctx.strokeStyle = stripeColor;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 2. CAPTAIN FALCON: Helmet with gold crest and white visor, flowing yellow scarf, athletic racing suit, boots.
+   */
+  private drawFalconPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let suitColor = resolveColor("#1e293b", isOpponent);
+    let goldColor = resolveColor("#fbbf24", isOpponent);
+    let whiteColor = resolveColor("#f8fafc", isOpponent);
+    let skinColor = resolveColor("#fed7aa", isOpponent);
+    let helmetColor = resolveColor("#1e3a8a", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      suitColor = resolveColor(`hsl(${hue}, 80%, 45%)`, isOpponent);
+      goldColor = resolveColor(
+        `hsl(${(hue + 60) % 360}, 90%, 55%)`,
+        isOpponent,
+      );
+      helmetColor = resolveColor(
+        `hsl(${(hue + 20) % 360}, 85%, 40%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      suitColor = resolveColor("#1e293b", isOpponent, 0.45);
+      goldColor = resolveColor("#fbbf24", isOpponent, 0.45);
+      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
+      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
+      helmetColor = resolveColor("#1e3a8a", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Scarf
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.12 * dir * w, y - 0.74 * h);
+    ctx.lineTo(posX - 0.55 * dir * w, y - 0.78 * h);
+    ctx.lineTo(posX - 1.05 * dir * w, y - 0.7 * h);
+    ctx.lineTo(posX - 0.85 * dir * w, y - 0.75 * h);
+    ctx.lineTo(posX - 1.15 * dir * w, y - 0.82 * h);
+    ctx.lineTo(posX - 0.5 * dir * w, y - 0.84 * h);
+    ctx.lineTo(posX - 0.08 * dir * w, y - 0.8 * h);
+    ctx.closePath();
+    ctx.fillStyle = goldColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Back Leg & Boot
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.18 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX - 0.42 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX - 0.48 * dir * w, y - 0.22 * h);
+    ctx.lineTo(posX - 0.28 * dir * w, y - 0.22 * h);
+    ctx.closePath();
+    ctx.fillStyle = suitColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.49 * dir * w, y - 0.23 * h);
+    ctx.lineTo(posX - 0.27 * dir * w, y - 0.23 * h);
+    ctx.lineTo(posX - 0.29 * dir * w, y - 0.17 * h);
+    ctx.lineTo(posX - 0.47 * dir * w, y - 0.17 * h);
+    ctx.closePath();
+    ctx.fillStyle = goldColor;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.47 * dir * w, y - 0.17 * h);
+    ctx.lineTo(posX - 0.29 * dir * w, y - 0.17 * h);
+    ctx.lineTo(posX - 0.22 * dir * w, y);
+    ctx.lineTo(posX - 0.55 * dir * w, y);
+    ctx.closePath();
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Front Leg & Boot
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.05 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX + 0.22 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 0.22 * h);
+    ctx.lineTo(posX + 0.16 * dir * w, y - 0.22 * h);
+    ctx.closePath();
+    ctx.fillStyle = suitColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.15 * dir * w, y - 0.23 * h);
+    ctx.lineTo(posX + 0.39 * dir * w, y - 0.23 * h);
+    ctx.lineTo(posX + 0.42 * dir * w, y - 0.17 * h);
+    ctx.lineTo(posX + 0.18 * dir * w, y - 0.17 * h);
+    ctx.closePath();
+    ctx.fillStyle = goldColor;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.18 * dir * w, y - 0.17 * h);
+    ctx.lineTo(posX + 0.42 * dir * w, y - 0.17 * h);
+    ctx.lineTo(posX + 0.65 * dir * w, y);
+    ctx.lineTo(posX + 0.28 * dir * w, y);
+    ctx.closePath();
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Torso & Belt
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.32 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX - 0.38 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX - 0.18 * dir * w, y - 0.78 * h);
+    ctx.lineTo(posX + 0.22 * dir * w, y - 0.78 * h);
+    ctx.lineTo(posX + 0.46 * dir * w, y - 0.66 * h);
+    ctx.lineTo(posX + 0.26 * dir * w, y - 0.42 * h);
+    ctx.closePath();
+    ctx.fillStyle = suitColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.34 * dir * w, y - 0.43 * h);
+    ctx.lineTo(posX + 0.28 * dir * w, y - 0.43 * h);
+    ctx.lineTo(posX + 0.26 * dir * w, y - 0.38 * h);
+    ctx.lineTo(posX - 0.32 * dir * w, y - 0.38 * h);
+    ctx.closePath();
+    ctx.fillStyle = goldColor;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.12 * dir * w, y - 0.76 * h);
+    ctx.lineTo(posX - 0.02 * dir * w, y - 0.77 * h);
+    ctx.lineTo(posX + 0.24 * dir * w, y - 0.46 * h);
+    ctx.lineTo(posX + 0.16 * dir * w, y - 0.45 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+
+    // Shoulder Pauldron
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.12 * dir * w, y - 0.78 * h);
+    ctx.lineTo(posX + 0.54 * dir * w, y - 0.75 * h);
+    ctx.lineTo(posX + 0.46 * dir * w, y - 0.62 * h);
+    ctx.lineTo(posX + 0.16 * dir * w, y - 0.65 * h);
+    ctx.closePath();
+    ctx.fillStyle = goldColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Arms & Gloves
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.44 * dir * w, y - 0.64 * h);
+    ctx.lineTo(posX + 0.72 * dir * w, y - 0.56 * h);
+    ctx.lineTo(posX + 0.88 * dir * w, y - 0.48 * h);
+    ctx.lineTo(posX + 0.74 * dir * w, y - 0.44 * h);
+    ctx.lineTo(posX + 0.46 * dir * w, y - 0.52 * h);
+    ctx.closePath();
+    ctx.fillStyle = suitColor;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.68 * dir * w, y - 0.57 * h);
+    ctx.lineTo(posX + 0.88 * dir * w, y - 0.48 * h);
+    ctx.lineTo(posX + 0.74 * dir * w, y - 0.44 * h);
+    ctx.lineTo(posX + 0.62 * dir * w, y - 0.52 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.32 * dir * w, y - 0.64 * h);
+    ctx.lineTo(posX - 0.58 * dir * w, y - 0.52 * h);
+    ctx.lineTo(posX - 0.46 * dir * w, y - 0.46 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+
+    // Helmet & Visor
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.16 * dir * w, y - 0.78 * h);
+    ctx.lineTo(posX - 0.22 * dir * w, y - 0.94 * h);
+    ctx.lineTo(posX + 0.06 * dir * w, y - 1.02 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 0.92 * h);
+    ctx.lineTo(posX + 0.1 * dir * w, y - 0.82 * h);
+    ctx.lineTo(posX - 0.08 * dir * w, y - 0.76 * h);
+    ctx.closePath();
+    ctx.fillStyle = helmetColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.06 * dir * w, y - 0.8 * h);
+    ctx.lineTo(posX + 0.24 * dir * w, y - 0.8 * h);
+    ctx.lineTo(posX + 0.3 * dir * w, y - 0.73 * h);
+    ctx.lineTo(posX + 0.12 * dir * w, y - 0.74 * h);
+    ctx.closePath();
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.moveTo(posX + 0.12 * dir * w, y - 0.88 * h);
+      ctx.lineTo(posX + 0.36 * dir * w, y - 0.88 * h);
+      ctx.lineTo(posX + 0.32 * dir * w, y - 0.82 * h);
+      ctx.lineTo(posX + 0.14 * dir * w, y - 0.82 * h);
+      ctx.closePath();
+      ctx.fillStyle = whiteColor;
+      ctx.fill();
+      ctx.strokeStyle = outlineColor;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.36 * dir * w, y - 0.94 * h);
+    ctx.lineTo(posX + 0.18 * dir * w, y - 1.0 * h);
+    ctx.lineTo(posX - 0.02 * dir * w, y - 0.96 * h);
+    ctx.lineTo(posX + 0.16 * dir * w, y - 0.93 * h);
+    ctx.closePath();
+    ctx.fillStyle = goldColor;
+    ctx.fill();
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 3. MARIO: Red cap with brim, blue overalls with yellow buttons, red shirt, mustache, brown shoes.
+   */
+  private drawMarioPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let redColor = resolveColor("#dc2626", isOpponent);
+    let blueColor = resolveColor("#2563eb", isOpponent);
+    let goldColor = resolveColor("#facc15", isOpponent);
+    let whiteColor = resolveColor("#f8fafc", isOpponent);
+    let skinColor = resolveColor("#fed7aa", isOpponent);
+    let brownColor = resolveColor("#78350f", isOpponent);
+    let hairColor = resolveColor("#1c1917", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      redColor = resolveColor(`hsl(${hue}, 85%, 50%)`, isOpponent);
+      blueColor = resolveColor(
+        `hsl(${(hue + 180) % 360}, 80%, 45%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      redColor = resolveColor("#dc2626", isOpponent, 0.45);
+      blueColor = resolveColor("#2563eb", isOpponent, 0.45);
+      goldColor = resolveColor("#facc15", isOpponent, 0.45);
+      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
+      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
+      brownColor = resolveColor("#78350f", isOpponent, 0.45);
+      hairColor = resolveColor("#1c1917", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Back Shoe & Leg
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.35 * dir * w,
+      y - 0.08 * h,
+      Math.max(0.1, 0.25 * w),
+      Math.max(0.1, 0.12 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = brownColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.15 * dir * w, y - 0.4 * h);
+    ctx.lineTo(posX - 0.45 * dir * w, y - 0.4 * h);
+    ctx.lineTo(posX - 0.48 * dir * w, y - 0.15 * h);
+    ctx.lineTo(posX - 0.22 * dir * w, y - 0.15 * h);
+    ctx.closePath();
+    ctx.fillStyle = blueColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Front Shoe & Leg
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.38 * dir * w,
+      y - 0.08 * h,
+      Math.max(0.1, 0.28 * w),
+      Math.max(0.1, 0.12 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = brownColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.05 * dir * w, y - 0.4 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.4 * h);
+    ctx.lineTo(posX + 0.48 * dir * w, y - 0.15 * h);
+    ctx.lineTo(posX + 0.18 * dir * w, y - 0.15 * h);
+    ctx.closePath();
+    ctx.fillStyle = blueColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Overalls Torso & Red Shirt
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.35 * dir * w, y - 0.65 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.65 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.38 * h);
+    ctx.lineTo(posX - 0.35 * dir * w, y - 0.38 * h);
+    ctx.closePath();
+    ctx.fillStyle = redColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.28 * dir * w, y - 0.62 * h);
+    ctx.lineTo(posX + 0.28 * dir * w, y - 0.62 * h);
+    ctx.lineTo(posX + 0.32 * dir * w, y - 0.38 * h);
+    ctx.lineTo(posX - 0.32 * dir * w, y - 0.38 * h);
+    ctx.closePath();
+    ctx.fillStyle = blueColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Yellow Button on Overalls
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.18 * dir * w,
+      y - 0.55 * h,
+      Math.max(0.1, 0.08 * w),
+      Math.max(0.1, 0.08 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = goldColor;
+    ctx.fill();
+
+    // Arms & White Gloves
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.45 * dir * w,
+      y - 0.48 * h,
+      Math.max(0.1, 0.16 * w),
+      Math.max(0.1, 0.16 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.52 * dir * w,
+      y - 0.48 * h,
+      Math.max(0.1, 0.18 * w),
+      Math.max(0.1, 0.18 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Head, Face & Cap
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.12 * dir * w,
+      y - 0.76 * h,
+      Math.max(0.1, 0.35 * w),
+      Math.max(0.1, 0.22 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+
+    // Big Mario Nose
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.46 * dir * w,
+      y - 0.74 * h,
+      Math.max(0.1, 0.18 * w),
+      Math.max(0.1, 0.14 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Mustache
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.18 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.62 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.68 * dir * w, y - 0.62 * h);
+    ctx.lineTo(posX + 0.32 * dir * w, y - 0.62 * h);
+    ctx.closePath();
+    ctx.fillStyle = hairColor;
+    ctx.fill();
+
+    // Eye
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + 0.28 * dir * w,
+        y - 0.8 * h,
+        Math.max(0.1, 0.08 * w),
+        Math.max(0.1, 0.12 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = blueColor;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + (0.28 + 0.03 * dir) * w,
+        y - 0.82 * h,
+        Math.max(0.1, 0.03 * w),
+        Math.max(0.1, 0.04 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent);
+      ctx.fill();
+    }
+
+    // Red Cap Dome & Visor
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.28 * dir * w, y - 0.8 * h);
+    ctx.lineTo(posX - 0.32 * dir * w, y - 1.0 * h);
+    ctx.lineTo(posX + 0.15 * dir * w, y - 1.05 * h);
+    ctx.lineTo(posX + 0.52 * dir * w, y - 0.92 * h);
+    ctx.lineTo(posX + 0.25 * dir * w, y - 0.85 * h);
+    ctx.closePath();
+    ctx.fillStyle = redColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.18 * dir * w, y - 0.88 * h);
+    ctx.lineTo(posX + 0.72 * dir * w, y - 0.84 * h);
+    ctx.lineTo(posX + 0.52 * dir * w, y - 0.8 * h);
+    ctx.closePath();
+    ctx.fillStyle = redColor;
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 4. LUIGI: Green cap with brim, navy overalls with yellow buttons, green shirt, wavy mustache.
+   */
+  private drawLuigiPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let greenColor = resolveColor("#16a34a", isOpponent);
+    let navyColor = resolveColor("#1e3a8a", isOpponent);
+    let goldColor = resolveColor("#facc15", isOpponent);
+    let whiteColor = resolveColor("#f8fafc", isOpponent);
+    let skinColor = resolveColor("#fed7aa", isOpponent);
+    let brownColor = resolveColor("#78350f", isOpponent);
+    let hairColor = resolveColor("#1c1917", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      greenColor = resolveColor(`hsl(${hue}, 85%, 45%)`, isOpponent);
+      navyColor = resolveColor(
+        `hsl(${(hue + 180) % 360}, 80%, 40%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      greenColor = resolveColor("#16a34a", isOpponent, 0.45);
+      navyColor = resolveColor("#1e3a8a", isOpponent, 0.45);
+      goldColor = resolveColor("#facc15", isOpponent, 0.45);
+      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
+      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
+      brownColor = resolveColor("#78350f", isOpponent, 0.45);
+      hairColor = resolveColor("#1c1917", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Back Shoe & Leg
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.32 * dir * w,
+      y - 0.08 * h,
+      Math.max(0.1, 0.22 * w),
+      Math.max(0.1, 0.11 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = brownColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.12 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX - 0.4 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX - 0.42 * dir * w, y - 0.15 * h);
+    ctx.lineTo(posX - 0.18 * dir * w, y - 0.15 * h);
+    ctx.closePath();
+    ctx.fillStyle = navyColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Front Shoe & Leg
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.35 * dir * w,
+      y - 0.08 * h,
+      Math.max(0.1, 0.25 * w),
+      Math.max(0.1, 0.11 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = brownColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.05 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX + 0.3 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX + 0.42 * dir * w, y - 0.15 * h);
+    ctx.lineTo(posX + 0.16 * dir * w, y - 0.15 * h);
+    ctx.closePath();
+    ctx.fillStyle = navyColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Overalls Torso & Green Shirt
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.3 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.3 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.3 * dir * w, y - 0.4 * h);
+    ctx.lineTo(posX - 0.3 * dir * w, y - 0.4 * h);
+    ctx.closePath();
+    ctx.fillStyle = greenColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.24 * dir * w, y - 0.64 * h);
+    ctx.lineTo(posX + 0.24 * dir * w, y - 0.64 * h);
+    ctx.lineTo(posX + 0.28 * dir * w, y - 0.4 * h);
+    ctx.lineTo(posX - 0.28 * dir * w, y - 0.4 * h);
+    ctx.closePath();
+    ctx.fillStyle = navyColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.15 * dir * w,
+      y - 0.58 * h,
+      Math.max(0.1, 0.07 * w),
+      Math.max(0.1, 0.07 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = goldColor;
+    ctx.fill();
+
+    // Arms & Gloves
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.42 * dir * w,
+      y - 0.5 * h,
+      Math.max(0.1, 0.15 * w),
+      Math.max(0.1, 0.15 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.48 * dir * w,
+      y - 0.5 * h,
+      Math.max(0.1, 0.16 * w),
+      Math.max(0.1, 0.16 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Head, Face & Cap
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.1 * dir * w,
+      y - 0.78 * h,
+      Math.max(0.1, 0.3 * w),
+      Math.max(0.1, 0.22 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.42 * dir * w,
+      y - 0.76 * h,
+      Math.max(0.1, 0.16 * w),
+      Math.max(0.1, 0.13 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.15 * dir * w, y - 0.7 * h);
+    ctx.quadraticCurveTo(
+      posX + 0.35 * dir * w,
+      y - 0.65 * h,
+      posX + 0.6 * dir * w,
+      y - 0.7 * h,
+    );
+    ctx.lineTo(posX + 0.55 * dir * w, y - 0.64 * h);
+    ctx.closePath();
+    ctx.fillStyle = hairColor;
+    ctx.fill();
+
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + 0.25 * dir * w,
+        y - 0.82 * h,
+        Math.max(0.1, 0.07 * w),
+        Math.max(0.1, 0.11 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = navyColor;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + (0.25 + 0.02 * dir) * w,
+        y - 0.84 * h,
+        Math.max(0.1, 0.03 * w),
+        Math.max(0.1, 0.04 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent);
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.25 * dir * w, y - 0.82 * h);
+    ctx.lineTo(posX - 0.28 * dir * w, y - 1.04 * h);
+    ctx.lineTo(posX + 0.12 * dir * w, y - 1.08 * h);
+    ctx.lineTo(posX + 0.48 * dir * w, y - 0.94 * h);
+    ctx.lineTo(posX + 0.22 * dir * w, y - 0.87 * h);
+    ctx.closePath();
+    ctx.fillStyle = greenColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.15 * dir * w, y - 0.9 * h);
+    ctx.lineTo(posX + 0.68 * dir * w, y - 0.86 * h);
+    ctx.lineTo(posX + 0.48 * dir * w, y - 0.82 * h);
+    ctx.closePath();
+    ctx.fillStyle = greenColor;
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 5. KIRBY: Round pink ball body, oversized red feet, blue eyes, rosy cheeks, stubby arms.
+   */
+  private drawKirbyPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let pinkColor = resolveColor("#f472b6", isOpponent);
+    let redFootColor = resolveColor("#e11d48", isOpponent);
+    let cheekColor = resolveColor("#fb7185", isOpponent);
+    let eyeBlue = resolveColor("#3b82f6", isOpponent);
+    let mouthColor = resolveColor("#be123c", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      pinkColor = resolveColor(`hsl(${hue}, 85%, 65%)`, isOpponent);
+      redFootColor = resolveColor(
+        `hsl(${(hue + 45) % 360}, 90%, 55%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      pinkColor = resolveColor("#f472b6", isOpponent, 0.45);
+      redFootColor = resolveColor("#e11d48", isOpponent, 0.45);
+      cheekColor = resolveColor("#fb7185", isOpponent, 0.45);
+      eyeBlue = resolveColor("#3b82f6", isOpponent, 0.45);
+      mouthColor = resolveColor("#be123c", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Back Foot & Arm
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.42 * dir * w,
+      y - 0.16 * h,
+      Math.max(0.1, 0.38 * w),
+      Math.max(0.1, 0.18 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = redFootColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.68 * dir * w,
+      y - 0.52 * h,
+      Math.max(0.1, 0.22 * w),
+      Math.max(0.1, 0.22 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = pinkColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Main Pink Body Sphere
+    ctx.beginPath();
+    ctx.ellipse(
+      posX,
+      y - 0.52 * h,
+      Math.max(0.1, 0.78 * w),
+      Math.max(0.1, 0.46 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = pinkColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Front Foot & Arm
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.42 * dir * w,
+      y - 0.16 * h,
+      Math.max(0.1, 0.42 * w),
+      Math.max(0.1, 0.18 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = redFootColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.68 * dir * w,
+      y - 0.48 * h,
+      Math.max(0.1, 0.24 * w),
+      Math.max(0.1, 0.24 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = pinkColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Face: Rosy Cheek, Blue Eyes, Open Smile
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.36 * dir * w,
+      y - 0.44 * h,
+      Math.max(0.1, 0.18 * w),
+      Math.max(0.1, 0.12 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = cheekColor;
+    ctx.fill();
+
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + 0.22 * dir * w,
+        y - 0.62 * h,
+        Math.max(0.1, 0.12 * w),
+        Math.max(0.1, 0.22 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#18181b", isOpponent);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + 0.22 * dir * w,
+        y - 0.54 * h,
+        Math.max(0.1, 0.1 * w),
+        Math.max(0.1, 0.12 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = eyeBlue;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + (0.22 + 0.03 * dir) * w,
+        y - 0.68 * h,
+        Math.max(0.1, 0.05 * w),
+        Math.max(0.1, 0.08 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(
+        posX + 0.15 * dir * w,
+        y - 0.42 * h,
+        Math.max(0.1, 0.12 * w),
+        0,
+        Math.PI,
+      );
+      ctx.fillStyle = mouthColor;
+      ctx.fill();
+      ctx.strokeStyle = outlineColor;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 6. JIGGLYPUFF: Light pink balloon body, forehead swirl tuft, cat-like ears with dark inner ears, teal shiny eyes.
+   */
+  private drawJigglypuffPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let lightPink = resolveColor("#f9a8d4", isOpponent);
+    let deepPink = resolveColor("#f472b6", isOpponent);
+    let innerEar = resolveColor("#3f3f46", isOpponent);
+    let tealEye = resolveColor("#14b8a6", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      lightPink = resolveColor(`hsl(${hue}, 85%, 75%)`, isOpponent);
+      deepPink = resolveColor(`hsl(${(hue + 30) % 360}, 90%, 65%)`, isOpponent);
+    } else if (isRoll) {
+      lightPink = resolveColor("#f9a8d4", isOpponent, 0.45);
+      deepPink = resolveColor("#f472b6", isOpponent, 0.45);
+      innerEar = resolveColor("#3f3f46", isOpponent, 0.45);
+      tealEye = resolveColor("#14b8a6", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Back Ear
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.38 * dir * w, y - 0.72 * h);
+    ctx.lineTo(posX - 0.62 * dir * w, y - 1.15 * h);
+    ctx.lineTo(posX - 0.15 * dir * w, y - 0.88 * h);
+    ctx.closePath();
+    ctx.fillStyle = lightPink;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.35 * dir * w, y - 0.76 * h);
+    ctx.lineTo(posX - 0.52 * dir * w, y - 1.05 * h);
+    ctx.lineTo(posX - 0.2 * dir * w, y - 0.86 * h);
+    ctx.closePath();
+    ctx.fillStyle = innerEar;
+    ctx.fill();
+
+    // Feet
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.28 * dir * w,
+      y - 0.08 * h,
+      Math.max(0.1, 0.22 * w),
+      Math.max(0.1, 0.1 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = deepPink;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.28 * dir * w,
+      y - 0.08 * h,
+      Math.max(0.1, 0.24 * w),
+      Math.max(0.1, 0.1 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = deepPink;
+    ctx.fill();
+    ctx.stroke();
+
+    // Body Sphere
+    ctx.beginPath();
+    ctx.ellipse(
+      posX,
+      y - 0.52 * h,
+      Math.max(0.1, 0.76 * w),
+      Math.max(0.1, 0.46 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = lightPink;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Front Ear
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.12 * dir * w, y - 0.85 * h);
+    ctx.lineTo(posX + 0.42 * dir * w, y - 1.22 * h);
+    ctx.lineTo(posX + 0.52 * dir * w, y - 0.75 * h);
+    ctx.closePath();
+    ctx.fillStyle = lightPink;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.18 * dir * w, y - 0.86 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 1.12 * h);
+    ctx.lineTo(posX + 0.44 * dir * w, y - 0.8 * h);
+    ctx.closePath();
+    ctx.fillStyle = innerEar;
+    ctx.fill();
+
+    // Forehead Swirl / Tuft
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.05 * dir * w, y - 0.78 * h);
+    ctx.quadraticCurveTo(
+      posX + 0.2 * dir * w,
+      y - 1.05 * h,
+      posX + 0.45 * dir * w,
+      y - 0.88 * h,
+    );
+    ctx.quadraticCurveTo(
+      posX + 0.1 * dir * w,
+      y - 0.75 * h,
+      posX + 0.22 * dir * w,
+      y - 0.72 * h,
+    );
+    ctx.closePath();
+    ctx.fillStyle = deepPink;
+    ctx.fill();
+    ctx.stroke();
+
+    // Big Teal Eye & Cute Mouth
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + 0.32 * dir * w,
+        y - 0.52 * h,
+        Math.max(0.1, 0.24 * w),
+        Math.max(0.1, 0.24 * w),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = tealEye;
+      ctx.fill();
+      ctx.strokeStyle = outlineColor;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + (0.32 + 0.06 * dir) * w,
+        y - 0.58 * h,
+        Math.max(0.1, 0.09 * w),
+        Math.max(0.1, 0.09 * w),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(
+        posX + 0.45 * dir * w,
+        y - 0.36 * h,
+        Math.max(0.1, 0.08 * w),
+        0,
+        Math.PI,
+      );
+      ctx.strokeStyle = resolveColor("#be123c", isOpponent);
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 7. FOX: Pointed fox snout, white cheek ruff, pointed ears, white flight jacket, green jumpsuit, bushy tail.
+   */
+  private drawFoxPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let furColor = resolveColor("#c8732a", isOpponent); // Muted amber fox fur
+    let whiteFur = resolveColor("#f8fafc", isOpponent);
+    let purpleJacket = resolveColor("#7c3aed", isOpponent); // Purple jacket / torso
+    let navyPants = resolveColor("#1e3a5f", isOpponent); // Dark navy blue pants
+    let purpleBoots = resolveColor("#a855f7", isOpponent); // Purple boots / feet
+    let darkEar = resolveColor("#18181b", isOpponent);
+    let beltColor = resolveColor("#3b1f6e", isOpponent); // Deep purple belt
+    let scouterColor = resolveColor("#06b6d4", isOpponent); // Cyan scouter
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      furColor = resolveColor(`hsl(${hue}, 70%, 50%)`, isOpponent);
+      purpleJacket = resolveColor(
+        `hsl(${(hue + 120) % 360}, 80%, 45%)`,
+        isOpponent,
+      );
+      navyPants = resolveColor(
+        `hsl(${(hue + 200) % 360}, 75%, 30%)`,
+        isOpponent,
+      );
+      purpleBoots = resolveColor(
+        `hsl(${(hue + 120) % 360}, 80%, 60%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      furColor = resolveColor("#c8732a", isOpponent, 0.45);
+      whiteFur = resolveColor("#f8fafc", isOpponent, 0.45);
+      purpleJacket = resolveColor("#7c3aed", isOpponent, 0.45);
+      navyPants = resolveColor("#1e3a5f", isOpponent, 0.45);
+      purpleBoots = resolveColor("#a855f7", isOpponent, 0.45);
+      darkEar = resolveColor("#18181b", isOpponent, 0.45);
+      beltColor = resolveColor("#3b1f6e", isOpponent, 0.45);
+      scouterColor = resolveColor("#06b6d4", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Bushy Fox Tail (Background)
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.4 * dir * w, y - 0.35 * h);
+    ctx.lineTo(posX - 1.05 * dir * w, y - 0.7 * h);
+    ctx.lineTo(posX - 0.85 * dir * w, y - 0.82 * h);
+    ctx.lineTo(posX - 0.3 * dir * w, y - 0.45 * h);
+    ctx.closePath();
+    ctx.fillStyle = furColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 1.05 * dir * w, y - 0.7 * h);
+    ctx.lineTo(posX - 1.25 * dir * w, y - 0.8 * h);
+    ctx.lineTo(posX - 0.85 * dir * w, y - 0.82 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteFur;
+    ctx.fill();
+    ctx.stroke();
+
+    // Back Ear
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.15 * dir * w, y - 0.9 * h);
+    ctx.lineTo(posX - 0.32 * dir * w, y - 1.32 * h);
+    ctx.lineTo(posX + 0.05 * dir * w, y - 1.05 * h);
+    ctx.closePath();
+    ctx.fillStyle = furColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.22 * dir * w, y - 1.15 * h);
+    ctx.lineTo(posX - 0.32 * dir * w, y - 1.32 * h);
+    ctx.lineTo(posX - 0.08 * dir * w, y - 1.18 * h);
+    ctx.closePath();
+    ctx.fillStyle = darkEar;
+    ctx.fill();
+
+    // Dark navy blue pants (legs)
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.35 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX + 0.25 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX - 0.35 * dir * w, y - 0.2 * h);
+    ctx.closePath();
+    ctx.fillStyle = navyPants;
+    ctx.fill();
+    ctx.stroke();
+
+    // Purple boots (left)
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.42 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX - 0.16 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX - 0.16 * dir * w, y);
+    ctx.lineTo(posX - 0.42 * dir * w, y);
+    ctx.closePath();
+    ctx.fillStyle = purpleBoots;
+    ctx.fill();
+    ctx.stroke();
+
+    // Purple boots (right)
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.18 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX + 0.5 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX + 0.5 * dir * w, y);
+    ctx.lineTo(posX + 0.18 * dir * w, y);
+    ctx.closePath();
+    ctx.fillStyle = purpleBoots;
+    ctx.fill();
+    ctx.stroke();
+
+    // Purple jacket / torso
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.32 * dir * w, y - 0.72 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 0.72 * h);
+    ctx.lineTo(posX + 0.3 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX - 0.3 * dir * w, y - 0.42 * h);
+    ctx.closePath();
+    ctx.fillStyle = purpleJacket;
+    ctx.fill();
+    ctx.stroke();
+
+    // White chest / flight vest patch
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.1 * dir * w, y - 0.72 * h);
+    ctx.lineTo(posX + 0.18 * dir * w, y - 0.72 * h);
+    ctx.lineTo(posX + 0.14 * dir * w, y - 0.52 * h);
+    ctx.lineTo(posX - 0.08 * dir * w, y - 0.52 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteFur;
+    ctx.fill();
+
+    // Belt
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.32 * dir * w, y - 0.44 * h);
+    ctx.lineTo(posX + 0.32 * dir * w, y - 0.44 * h);
+    ctx.lineTo(posX + 0.32 * dir * w, y - 0.38 * h);
+    ctx.lineTo(posX - 0.32 * dir * w, y - 0.38 * h);
+    ctx.closePath();
+    ctx.fillStyle = beltColor;
+    ctx.fill();
+
+    // Front Ear
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.12 * dir * w, y - 0.95 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 1.35 * h);
+    ctx.lineTo(posX + 0.42 * dir * w, y - 0.95 * h);
+    ctx.closePath();
+    ctx.fillStyle = furColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.28 * dir * w, y - 1.2 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 1.35 * h);
+    ctx.lineTo(posX + 0.4 * dir * w, y - 1.15 * h);
+    ctx.closePath();
+    ctx.fillStyle = darkEar;
+    ctx.fill();
+
+    // Fox Snout, Cheeks, Scouter, Eye
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.15 * dir * w, y - 0.92 * h);
+    ctx.lineTo(posX + 0.45 * dir * w, y - 0.92 * h);
+    ctx.lineTo(posX + 0.88 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.52 * dir * w, y - 0.6 * h);
+    ctx.lineTo(posX - 0.15 * dir * w, y - 0.7 * h);
+    ctx.closePath();
+    ctx.fillStyle = furColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.35 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.85 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.55 * dir * w, y - 0.58 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteFur;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.86 * dir * w,
+      y - 0.68 * h,
+      Math.max(0.1, 0.06 * w),
+      Math.max(0.1, 0.06 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = darkEar;
+    ctx.fill();
+
+    // Cyan Scouter Headset
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.15 * dir * w, y - 0.86 * h);
+    ctx.lineTo(posX + 0.33 * dir * w, y - 0.86 * h);
+    ctx.lineTo(posX + 0.33 * dir * w, y - 0.78 * h);
+    ctx.lineTo(posX + 0.15 * dir * w, y - 0.78 * h);
+    ctx.closePath();
+    ctx.fillStyle = scouterColor;
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 8. YOSHI: Big round green snout, white cheeks & belly, red shell saddle on back, orange boots.
+   */
+  private drawYoshiPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let greenColor = resolveColor("#22c55e", isOpponent);
+    let whiteColor = resolveColor("#f8fafc", isOpponent);
+    let orangeBoot = resolveColor("#f97316", isOpponent);
+    let redShell = resolveColor("#ef4444", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      greenColor = resolveColor(`hsl(${hue}, 85%, 50%)`, isOpponent);
+      orangeBoot = resolveColor(
+        `hsl(${(hue + 60) % 360}, 90%, 55%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      greenColor = resolveColor("#22c55e", isOpponent, 0.45);
+      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
+      orangeBoot = resolveColor("#f97316", isOpponent, 0.45);
+      redShell = resolveColor("#ef4444", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Tail & Red Shell (Background)
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.4 * dir * w, y - 0.3 * h);
+    ctx.lineTo(posX - 0.95 * dir * w, y - 0.52 * h);
+    ctx.lineTo(posX - 0.45 * dir * w, y - 0.58 * h);
+    ctx.closePath();
+    ctx.fillStyle = greenColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.48 * dir * w,
+      y - 0.62 * h,
+      Math.max(0.1, 0.24 * w),
+      Math.max(0.1, 0.16 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = redShell;
+    ctx.fill();
+    ctx.stroke();
+
+    // Orange Boots
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.35 * dir * w,
+      y - 0.1 * h,
+      Math.max(0.1, 0.28 * w),
+      Math.max(0.1, 0.14 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = orangeBoot;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.32 * dir * w,
+      y - 0.1 * h,
+      Math.max(0.1, 0.32 * w),
+      Math.max(0.1, 0.14 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = orangeBoot;
+    ctx.fill();
+    ctx.stroke();
+
+    // Body & White Belly
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.4 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX - 0.45 * dir * w, y - 0.65 * h);
+    ctx.lineTo(posX + 0.15 * dir * w, y - 0.72 * h);
+    ctx.lineTo(posX + 0.42 * dir * w, y - 0.35 * h);
+    ctx.lineTo(posX + 0.25 * dir * w, y - 0.2 * h);
+    ctx.closePath();
+    ctx.fillStyle = greenColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.1 * dir * w, y - 0.25 * h);
+    ctx.lineTo(posX + 0.15 * dir * w, y - 0.7 * h);
+    ctx.lineTo(posX + 0.4 * dir * w, y - 0.45 * h);
+    ctx.lineTo(posX + 0.22 * dir * w, y - 0.22 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+
+    // Head, Eyes & Big Snout
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.1 * dir * w,
+      y - 0.85 * h,
+      Math.max(0.1, 0.14 * w),
+      Math.max(0.1, 0.18 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+    ctx.stroke();
+
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + (0.1 + 0.04 * dir) * w,
+        y - 0.85 * h,
+        Math.max(0.1, 0.05 * w),
+        Math.max(0.1, 0.08 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#18181b", isOpponent);
+      ctx.fill();
+    }
+
+    // Big Rounded Green Snout
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.52 * dir * w,
+      y - 0.72 * h,
+      Math.max(0.1, 0.38 * w),
+      Math.max(0.1, 0.22 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = greenColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Red Spines along neck
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.2 * dir * w, y - 0.82 * h);
+    ctx.lineTo(posX - 0.38 * dir * w, y - 0.88 * h);
+    ctx.lineTo(posX - 0.25 * dir * w, y - 0.74 * h);
+    ctx.closePath();
+    ctx.fillStyle = redShell;
+    ctx.fill();
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 9. DONKEY KONG: Muscular brown gorilla body, head crest, tan face & chest plate, red "DK" tie.
+   */
+  private drawDonkeyKongPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let furColor = resolveColor("#78350f", isOpponent);
+    let skinColor = resolveColor("#fed7aa", isOpponent);
+    let tieRed = resolveColor("#dc2626", isOpponent);
+    let tieYellow = resolveColor("#facc15", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      furColor = resolveColor(`hsl(${hue}, 80%, 35%)`, isOpponent);
+      tieRed = resolveColor(`hsl(${(hue + 60) % 360}, 90%, 55%)`, isOpponent);
+    } else if (isRoll) {
+      furColor = resolveColor("#78350f", isOpponent, 0.45);
+      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
+      tieRed = resolveColor("#dc2626", isOpponent, 0.45);
+      tieYellow = resolveColor("#facc15", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Heavy Gorilla Feet & Legs
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.4 * dir * w,
+      y - 0.1 * h,
+      Math.max(0.1, 0.35 * w),
+      Math.max(0.1, 0.15 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = furColor;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.38 * dir * w,
+      y - 0.1 * h,
+      Math.max(0.1, 0.38 * w),
+      Math.max(0.1, 0.15 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = furColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Muscular Torso & Arms
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.45 * dir * w, y - 0.25 * h);
+    ctx.lineTo(posX - 0.55 * dir * w, y - 0.7 * h);
+    ctx.lineTo(posX + 0.55 * dir * w, y - 0.7 * h);
+    ctx.lineTo(posX + 0.45 * dir * w, y - 0.25 * h);
+    ctx.closePath();
+    ctx.fillStyle = furColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Tan Pectoral Chest Plate
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.12 * dir * w,
+      y - 0.55 * h,
+      Math.max(0.1, 0.38 * w),
+      Math.max(0.1, 0.22 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+
+    // Red Necktie with "DK" Mark
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.05 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.25 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.32 * dir * w, y - 0.38 * h);
+    ctx.lineTo(posX + 0.18 * dir * w, y - 0.32 * h);
+    ctx.lineTo(posX + 0.08 * dir * w, y - 0.42 * h);
+    ctx.closePath();
+    ctx.fillStyle = tieRed;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.2 * dir * w,
+      y - 0.48 * h,
+      Math.max(0.1, 0.08 * w),
+      Math.max(0.1, 0.06 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = tieYellow;
+    ctx.fill();
+
+    // Head with Hair Peak & Tan Face
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.3 * dir * w, y - 0.72 * h);
+    ctx.lineTo(posX - 0.35 * dir * w, y - 0.98 * h);
+    ctx.lineTo(posX - 0.1 * dir * w, y - 1.15 * h); // Hair peak
+    ctx.lineTo(posX + 0.25 * dir * w, y - 0.98 * h);
+    ctx.lineTo(posX + 0.42 * dir * w, y - 0.72 * h);
+    ctx.closePath();
+    ctx.fillStyle = furColor;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.25 * dir * w,
+      y - 0.8 * h,
+      Math.max(0.1, 0.28 * w),
+      Math.max(0.1, 0.16 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 10. LINK: Green floppy cap, blonde hair bangs, pointed elf ear, green tunic, Hylian shield on back.
+   */
+  private drawLinkPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let tunicGreen = resolveColor("#16a34a", isOpponent);
+    let blondeHair = resolveColor("#facc15", isOpponent);
+    let skinColor = resolveColor("#fed7aa", isOpponent);
+    let leatherBrown = resolveColor("#78350f", isOpponent);
+    let shieldBlue = resolveColor("#1e3a8a", isOpponent);
+    let shieldSilver = resolveColor("#cbd5e1", isOpponent);
+    let whiteColor = resolveColor("#f8fafc", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      tunicGreen = resolveColor(`hsl(${hue}, 85%, 45%)`, isOpponent);
+      shieldBlue = resolveColor(
+        `hsl(${(hue + 180) % 360}, 80%, 45%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      tunicGreen = resolveColor("#16a34a", isOpponent, 0.45);
+      blondeHair = resolveColor("#facc15", isOpponent, 0.45);
+      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
+      leatherBrown = resolveColor("#78350f", isOpponent, 0.45);
+      shieldBlue = resolveColor("#1e3a8a", isOpponent, 0.45);
+      shieldSilver = resolveColor("#cbd5e1", isOpponent, 0.45);
+      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Hylian Shield on Back
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.25 * dir * w, y - 0.78 * h);
+    ctx.lineTo(posX - 0.65 * dir * w, y - 0.78 * h);
+    ctx.lineTo(posX - 0.55 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX - 0.22 * dir * w, y - 0.45 * h);
+    ctx.closePath();
+    ctx.fillStyle = shieldBlue;
+    ctx.fill();
+    ctx.strokeStyle = shieldSilver;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Floppy Green Cap (Trailing)
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.15 * dir * w, y - 0.88 * h);
+    ctx.lineTo(posX - 0.95 * dir * w, y - 0.85 * h);
+    ctx.lineTo(posX - 0.22 * dir * w, y - 1.05 * h);
+    ctx.lineTo(posX + 0.25 * dir * w, y - 0.98 * h);
+    ctx.closePath();
+    ctx.fillStyle = tunicGreen;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Legs, Boots, Tights
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.35 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX - 0.35 * dir * w, y - 0.2 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Back boot
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.4 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX - 0.1 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX - 0.1 * dir * w, y);
+    ctx.lineTo(posX - 0.4 * dir * w, y);
+    ctx.closePath();
+    ctx.fillStyle = leatherBrown;
+    ctx.fill();
+    ctx.stroke();
+
+    // Front boot
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.15 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX + 0.47 * dir * w, y - 0.2 * h);
+    ctx.lineTo(posX + 0.47 * dir * w, y);
+    ctx.lineTo(posX + 0.15 * dir * w, y);
+    ctx.closePath();
+    ctx.fillStyle = leatherBrown;
+    ctx.fill();
+    ctx.stroke();
+
+    // Green Tunic Torso & Belt
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.3 * dir * w, y - 0.75 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.75 * h);
+    ctx.lineTo(posX + 0.45 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX - 0.35 * dir * w, y - 0.42 * h);
+    ctx.closePath();
+    ctx.fillStyle = tunicGreen;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.35 * dir * w, y - 0.48 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 0.48 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 0.42 * h);
+    ctx.lineTo(posX - 0.35 * dir * w, y - 0.42 * h);
+    ctx.closePath();
+    ctx.fillStyle = leatherBrown;
+    ctx.fill();
+
+    // Head, Blonde Hair, Pointed Ear
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.15 * dir * w,
+      y - 0.78 * h,
+      Math.max(0.1, 0.28 * w),
+      Math.max(0.1, 0.18 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+
+    // Pointed Elf Ear
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.05 * dir * w, y - 0.8 * h);
+    ctx.lineTo(posX - 0.35 * dir * w, y - 0.86 * h);
+    ctx.lineTo(posX - 0.08 * dir * w, y - 0.74 * h);
+    ctx.closePath();
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+    ctx.stroke();
+
+    // Blonde Hair Bangs
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.05 * dir * w, y - 0.9 * h);
+    ctx.lineTo(posX + 0.45 * dir * w, y - 0.88 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 0.76 * h);
+    ctx.lineTo(posX + 0.12 * dir * w, y - 0.8 * h);
+    ctx.closePath();
+    ctx.fillStyle = blondeHair;
+    ctx.fill();
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 11. NESS: Red baseball cap with blue brim, yellow/blue striped shirt, blue shorts, red sneakers, backpack.
+   */
+  private drawNessPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let capRed = resolveColor("#dc2626", isOpponent);
+    let brimBlue = resolveColor("#2563eb", isOpponent);
+    let stripeYellow = resolveColor("#facc15", isOpponent);
+    let stripeBlue = resolveColor("#1e3a8a", isOpponent);
+    let backpackBrown = resolveColor("#92400e", isOpponent);
+    let skinColor = resolveColor("#fed7aa", isOpponent);
+    let whiteColor = resolveColor("#f8fafc", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      capRed = resolveColor(`hsl(${hue}, 85%, 55%)`, isOpponent);
+      stripeYellow = resolveColor(
+        `hsl(${(hue + 60) % 360}, 90%, 55%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      capRed = resolveColor("#dc2626", isOpponent, 0.45);
+      brimBlue = resolveColor("#2563eb", isOpponent, 0.45);
+      stripeYellow = resolveColor("#facc15", isOpponent, 0.45);
+      stripeBlue = resolveColor("#1e3a8a", isOpponent, 0.45);
+      backpackBrown = resolveColor("#92400e", isOpponent, 0.45);
+      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
+      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Backpack (Background)
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.55 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX - 0.27 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX - 0.27 * dir * w, y - 0.36 * h);
+    ctx.lineTo(posX - 0.55 * dir * w, y - 0.36 * h);
+    ctx.closePath();
+    ctx.fillStyle = backpackBrown;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    // Red Sneakers & White Socks
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.36 * dir * w, y - 0.18 * h);
+    ctx.lineTo(posX - 0.14 * dir * w, y - 0.18 * h);
+    ctx.lineTo(posX - 0.14 * dir * w, y - 0.1 * h);
+    ctx.lineTo(posX - 0.36 * dir * w, y - 0.1 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.24 * dir * w, y - 0.18 * h);
+    ctx.lineTo(posX + 0.46 * dir * w, y - 0.18 * h);
+    ctx.lineTo(posX + 0.46 * dir * w, y - 0.1 * h);
+    ctx.lineTo(posX + 0.24 * dir * w, y - 0.1 * h);
+    ctx.closePath();
+    ctx.fillStyle = whiteColor;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.32 * dir * w,
+      y - 0.08 * h,
+      Math.max(0.1, 0.25 * w),
+      Math.max(0.1, 0.12 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = capRed;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.35 * dir * w,
+      y - 0.08 * h,
+      Math.max(0.1, 0.28 * w),
+      Math.max(0.1, 0.12 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = capRed;
+    ctx.fill();
+    ctx.stroke();
+
+    // Blue Shorts
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.32 * dir * w, y - 0.38 * h);
+    ctx.lineTo(posX + 0.32 * dir * w, y - 0.38 * h);
+    ctx.lineTo(posX + 0.32 * dir * w, y - 0.18 * h);
+    ctx.lineTo(posX - 0.32 * dir * w, y - 0.18 * h);
+    ctx.closePath();
+    ctx.fillStyle = stripeBlue;
+    ctx.fill();
+    ctx.stroke();
+
+    // Striped Shirt Torso
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.35 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.68 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.38 * h);
+    ctx.lineTo(posX - 0.35 * dir * w, y - 0.38 * h);
+    ctx.closePath();
+    ctx.fillStyle = stripeYellow;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.35 * dir * w, y - 0.58 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.58 * h);
+    ctx.lineTo(posX + 0.35 * dir * w, y - 0.48 * h);
+    ctx.lineTo(posX - 0.35 * dir * w, y - 0.48 * h);
+    ctx.closePath();
+    ctx.fillStyle = stripeBlue;
+    ctx.fill();
+
+    // Head, Face & Baseball Cap
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.12 * dir * w,
+      y - 0.78 * h,
+      Math.max(0.1, 0.35 * w),
+      Math.max(0.1, 0.22 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = skinColor;
+    ctx.fill();
+
+    // Eye & Smile
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.ellipse(
+        posX + 0.32 * dir * w,
+        y - 0.78 * h,
+        Math.max(0.1, 0.06 * w),
+        Math.max(0.1, 0.09 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#18181b", isOpponent);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(
+        posX + 0.28 * dir * w,
+        y - 0.68 * h,
+        Math.max(0.1, 0.08 * w),
+        0,
+        Math.PI,
+      );
+      ctx.strokeStyle = outlineColor;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Red Cap Dome & Blue Visor Brim
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.28 * dir * w, y - 0.82 * h);
+    ctx.lineTo(posX - 0.3 * dir * w, y - 1.05 * h);
+    ctx.lineTo(posX + 0.15 * dir * w, y - 1.08 * h);
+    ctx.lineTo(posX + 0.45 * dir * w, y - 0.94 * h);
+    ctx.lineTo(posX + 0.22 * dir * w, y - 0.86 * h);
+    ctx.closePath();
+    ctx.fillStyle = capRed;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.18 * dir * w, y - 0.9 * h);
+    ctx.lineTo(posX + 0.72 * dir * w, y - 0.86 * h);
+    ctx.lineTo(posX + 0.45 * dir * w, y - 0.82 * h);
+    ctx.closePath();
+    ctx.fillStyle = brimBlue;
+    ctx.fill();
+    ctx.stroke();
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * 12. SAMUS: Varia Suit power armor, red/orange helmet with green T-visor, massive yellow sphere pauldrons, arm cannon.
+   */
+  private drawSamusPolygons(
+    x: number,
+    y: number,
+    _topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    const { ctx } = this;
+    const {
+      taunting,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+      isOpponent,
+      actionFrameCounter,
+    } = state;
+    ctx.save();
+    const posX =
+      inCombo && !taunting
+        ? x + (actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+        : x;
+    const facingRight = effectiveDir >= 0;
+    if (taunting) {
+      const spinAngle = actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+      ctx.translate(posX, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-posX, -centerY);
+    }
+
+    let armorOrange = resolveColor("#ea580c", isOpponent);
+    let armorRed = resolveColor("#c2410c", isOpponent);
+    let pauldronYellow = resolveColor("#eab308", isOpponent);
+    let visorGreen = resolveColor("#22c55e", isOpponent);
+    let cannonGreen = resolveColor("#15803d", isOpponent);
+    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const outlineWidth = 1.2;
+
+    if (taunting) {
+      const hue = (actionFrameCounter * 10) % 360;
+      armorOrange = resolveColor(`hsl(${hue}, 90%, 55%)`, isOpponent);
+      pauldronYellow = resolveColor(
+        `hsl(${(hue + 60) % 360}, 95%, 55%)`,
+        isOpponent,
+      );
+      visorGreen = resolveColor(
+        `hsl(${(hue + 180) % 360}, 90%, 55%)`,
+        isOpponent,
+      );
+    } else if (isRoll) {
+      armorOrange = resolveColor("#ea580c", isOpponent, 0.45);
+      armorRed = resolveColor("#c2410c", isOpponent, 0.45);
+      pauldronYellow = resolveColor("#eab308", isOpponent, 0.45);
+      visorGreen = resolveColor("#22c55e", isOpponent, 0.45);
+      cannonGreen = resolveColor("#15803d", isOpponent, 0.45);
+    }
+
+    const dir = effectiveDir;
+    const w = halfWidth;
+    const h = heightPx;
+
+    // Armored Power Boots & Legs
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.42 * dir * w, y - 0.22 * h);
+    ctx.lineTo(posX - 0.16 * dir * w, y - 0.22 * h);
+    ctx.lineTo(posX - 0.16 * dir * w, y);
+    ctx.lineTo(posX - 0.42 * dir * w, y);
+    ctx.closePath();
+    ctx.fillStyle = armorOrange;
+    ctx.fill();
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = outlineWidth;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.18 * dir * w, y - 0.22 * h);
+    ctx.lineTo(posX + 0.5 * dir * w, y - 0.22 * h);
+    ctx.lineTo(posX + 0.5 * dir * w, y);
+    ctx.lineTo(posX + 0.18 * dir * w, y);
+    ctx.closePath();
+    ctx.fillStyle = armorOrange;
+    ctx.fill();
+    ctx.stroke();
+
+    // Red/Orange Leg Armor & Pelvis
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.32 * dir * w, y - 0.45 * h);
+    ctx.lineTo(posX + 0.32 * dir * w, y - 0.45 * h);
+    ctx.lineTo(posX + 0.32 * dir * w, y - 0.22 * h);
+    ctx.lineTo(posX - 0.32 * dir * w, y - 0.22 * h);
+    ctx.closePath();
+    ctx.fillStyle = pauldronYellow;
+    ctx.fill();
+    ctx.stroke();
+
+    // Red Chest Armor Plate
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.32 * dir * w, y - 0.75 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 0.75 * h);
+    ctx.lineTo(posX + 0.28 * dir * w, y - 0.45 * h);
+    ctx.lineTo(posX - 0.28 * dir * w, y - 0.45 * h);
+    ctx.closePath();
+    ctx.fillStyle = armorRed;
+    ctx.fill();
+    ctx.stroke();
+
+    // Green Chest Gem
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.08 * dir * w,
+      y - 0.62 * h,
+      Math.max(0.1, 0.09 * w),
+      Math.max(0.1, 0.09 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = visorGreen;
+    ctx.fill();
+
+    // Back Pauldron
+    ctx.beginPath();
+    ctx.ellipse(
+      posX - 0.35 * dir * w,
+      y - 0.75 * h,
+      Math.max(0.1, 0.26 * w),
+      Math.max(0.1, 0.26 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = pauldronYellow;
+    ctx.fill();
+    ctx.stroke();
+
+    // Helmet & Glowing Green T-Visor
+    ctx.beginPath();
+    ctx.moveTo(posX - 0.18 * dir * w, y - 0.78 * h);
+    ctx.lineTo(posX - 0.22 * dir * w, y - 0.98 * h);
+    ctx.lineTo(posX + 0.1 * dir * w, y - 1.05 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 0.92 * h);
+    ctx.lineTo(posX + 0.25 * dir * w, y - 0.76 * h);
+    ctx.closePath();
+    ctx.fillStyle = armorRed;
+    ctx.fill();
+    ctx.stroke();
+
+    // Green T-Visor
+    if (Math.abs(dir) > 0.15) {
+      ctx.beginPath();
+      ctx.moveTo(posX + 0.12 * dir * w, y - 0.9 * h);
+      ctx.lineTo(posX + 0.35 * dir * w, y - 0.9 * h);
+      ctx.lineTo(posX + 0.28 * dir * w, y - 0.82 * h);
+      ctx.lineTo(posX + 0.2 * dir * w, y - 0.82 * h);
+      ctx.closePath();
+      ctx.fillStyle = visorGreen;
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Massive Front Shoulder Pauldron
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.32 * dir * w,
+      y - 0.75 * h,
+      Math.max(0.1, 0.32 * w),
+      Math.max(0.1, 0.32 * w),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = pauldronYellow;
+    ctx.fill();
+    ctx.stroke();
+
+    // Green Arm Cannon
+    ctx.beginPath();
+    ctx.moveTo(posX + 0.42 * dir * w, y - 0.65 * h);
+    ctx.lineTo(posX + 0.92 * dir * w, y - 0.52 * h);
+    ctx.lineTo(posX + 0.82 * dir * w, y - 0.38 * h);
+    ctx.lineTo(posX + 0.38 * dir * w, y - 0.48 * h);
+    ctx.closePath();
+    ctx.fillStyle = cannonGreen;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.87 * dir * w,
+      y - 0.45 * h,
+      Math.max(0.1, 0.08 * w),
+      Math.max(0.1, 0.12 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = visorGreen;
+    ctx.fill();
+
+    this.drawCharacterStateAuras(
+      ctx,
+      posX,
+      y,
+      w,
+      h,
+      dir,
+      inCombo,
+      isRoll,
+      isInvulnerable,
+      isSpecial,
+      isLanding,
+    );
+    ctx.restore();
+  }
+
+  /**
+   * Helper to draw combo hitstun, roll invulnerability, and landing energy outlines consistently.
+   */
+  private drawCharacterStateAuras(
+    ctx: CanvasRenderingContext2D,
+    posX: number,
+    y: number,
+    w: number,
+    h: number,
+    dir: number,
+    inCombo: boolean,
+    isRoll: boolean,
+    isInvulnerable: boolean,
+    isSpecial: boolean,
+    isLanding: boolean,
+  ): void {
+    if (inCombo) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "rgba(255, 120, 0, 0.85)";
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.ellipse(
+        posX,
+        y - 0.5 * h,
+        Math.max(0.1, 0.8 * w),
+        Math.max(0.1, 0.5 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+      ctx.restore();
+    } else if (isRoll) {
+      ctx.save();
+      ctx.strokeStyle = isInvulnerable
+        ? "rgba(220, 235, 255, 0.95)"
+        : "rgba(190, 205, 225, 0.95)";
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = isInvulnerable
+        ? "rgba(180, 215, 255, 0.85)"
+        : "rgba(170, 195, 230, 0.7)";
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.ellipse(
+        posX,
+        y - 0.5 * h,
+        Math.max(0.1, 0.8 * w),
+        Math.max(0.1, 0.5 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+      ctx.restore();
+    } else if (isSpecial || isLanding) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(190, 205, 225, 0.95)";
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "rgba(170, 195, 230, 0.7)";
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.ellipse(
+        posX,
+        y - 0.5 * h,
+        Math.max(0.1, 0.8 * w),
+        Math.max(0.1, 0.5 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -1040,32 +4597,88 @@ export class StageRenderer {
     }
 
     if (attack.type === "jab") {
-      // Jab: two vertical dots like a colon in front of the nose
+      // Jab: small punching boxing glove appearing right in front of the character
+      ctx.save();
       const dir = facingRight ? 1 : -1;
       const noseX = x + dir * halfWidth;
-      const dotX = noseX + dir * Math.max(7, halfWidth * 0.35);
-      const dotRadius = 3;
-      const dotGap = heightPx * 0.22;
+      const gloveW = Math.max(8, halfWidth * 0.52);
+      const gloveH = Math.max(8, heightPx * 0.24);
+      const gloveX = noseX + dir * Math.max(3, halfWidth * 0.18);
+      const gloveY = centerY - heightPx * 0.05;
 
-      // Top dot
+      // 1. Motion thrust speed lines behind the glove
       ctx.beginPath();
-      ctx.arc(dotX, centerY - dotGap, dotRadius, 0, Math.PI * 2);
+      ctx.moveTo(gloveX - dir * (gloveW * 0.5), gloveY - gloveH * 0.35);
+      ctx.lineTo(gloveX - dir * (gloveW * 0.95), gloveY - gloveH * 0.35);
+      ctx.moveTo(gloveX - dir * (gloveW * 0.5), gloveY + gloveH * 0.35);
+      ctx.lineTo(gloveX - dir * (gloveW * 0.95), gloveY + gloveH * 0.35);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // 2. White wrist cuff band
+      ctx.beginPath();
+      ctx.ellipse(
+        gloveX - dir * (gloveW * 0.42),
+        gloveY,
+        Math.max(0.1, gloveW * 0.22),
+        Math.max(0.1, gloveH * 0.42),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "rgba(240, 245, 255, 0.95)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // 3. Main boxing glove fist / mitten body
+      ctx.beginPath();
+      ctx.ellipse(
+        gloveX + dir * (gloveW * 0.12),
+        gloveY,
+        Math.max(0.1, gloveW * 0.52),
+        Math.max(0.1, gloveH * 0.48),
+        0,
+        0,
+        Math.PI * 2,
+      );
       ctx.fillStyle = color;
       ctx.fill();
-      ctx.beginPath();
-      ctx.arc(dotX, centerY - dotGap, dotRadius * 0.55, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
 
-      // Bottom dot
+      // 4. Thumb folded on upper-front
       ctx.beginPath();
-      ctx.arc(dotX, centerY + dotGap, dotRadius, 0, Math.PI * 2);
+      ctx.ellipse(
+        gloveX + dir * (gloveW * 0.18),
+        gloveY - gloveH * 0.32,
+        Math.max(0.1, gloveW * 0.28),
+        Math.max(0.1, gloveH * 0.22),
+        dir * 0.35,
+        0,
+        Math.PI * 2,
+      );
       ctx.fillStyle = color;
       ctx.fill();
+      ctx.stroke();
+
+      // 5. Knuckle shine highlight
       ctx.beginPath();
-      ctx.arc(dotX, centerY + dotGap, dotRadius * 0.55, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.arc(
+        gloveX + dir * (gloveW * 0.35),
+        gloveY - gloveH * 0.15,
+        Math.max(0.1, gloveH * 0.18),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
       ctx.fill();
+
+      ctx.restore();
       return;
     }
 
@@ -1364,33 +4977,72 @@ export class StageRenderer {
     }
 
     if (specialType === "dive_explosion") {
-      // Falcon Dive Detachment Explosion: fiery shockwave burst as Falcon kicks off
+      // Falcon Dive Detachment Detonation: punchy forward fiery explosion at contact point
       ctx.save();
-      const blastX = x - dir * halfWidth * 0.3;
-      const blastY = centerY + heightPx * 0.2;
-      const radius = 22;
+      // Center the blast in front of Falcon's chest where the victim was grabbed & launched
+      const blastX = x + dir * halfWidth * 0.7;
+      const blastY = centerY - heightPx * 0.1;
 
-      // 1. Expanding fiery explosion fill
+      const baseRadius = Math.max(halfWidth * 0.75, heightPx * 0.35);
+      const frameProgress = Math.min(1, (frameCounter + 1) / 8);
+      const radius = baseRadius * (0.75 + 0.35 * frameProgress);
+
+      // 1. Fiery explosion glow aura
+      const grad = ctx.createRadialGradient(
+        blastX,
+        blastY,
+        radius * 0.1,
+        blastX,
+        blastY,
+        radius,
+      );
+      grad.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+      grad.addColorStop(0.25, "rgba(255, 220, 50, 0.85)");
+      grad.addColorStop(0.6, "rgba(255, 80, 0, 0.65)");
+      grad.addColorStop(1, "rgba(220, 20, 0, 0)");
+
       ctx.beginPath();
       ctx.arc(blastX, blastY, radius, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255, 60, 0, 0.35)";
+      ctx.fillStyle = grad;
       ctx.shadowColor = "#ff4500";
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 10;
       ctx.fill();
 
-      // 2. Dashed shockwave perimeter ring
+      // 2. Starburst flame spikes radiating from blast center
+      const spikeCount = 8;
+      const innerR = radius * 0.45;
+      const outerR = radius * 1.2;
       ctx.beginPath();
-      ctx.arc(blastX, blastY, radius * 1.25, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(255, 200, 50, 0.9)";
+      for (let i = 0; i < spikeCount * 2; i++) {
+        const angle = (i * Math.PI) / spikeCount + frameCounter * 0.1;
+        const r = i % 2 === 0 ? outerR : innerR;
+        const px = blastX + Math.cos(angle) * r;
+        const py = blastY + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255, 200, 40, 0.75)";
+      ctx.strokeStyle = "rgba(255, 80, 0, 0.9)";
       ctx.lineWidth = 2;
-      ctx.setLineDash([5, 4]);
+      ctx.fill();
       ctx.stroke();
-      ctx.setLineDash([]);
 
-      // 3. Central white flare
+      // 3. Shockwave ring expanding outward
       ctx.beginPath();
-      ctx.arc(blastX, blastY, radius * 0.45, 0, Math.PI * 2);
+      ctx.arc(blastX, blastY, radius * 1.15, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "#ffea00";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+
+      // 4. Intense white core flash
+      ctx.beginPath();
+      ctx.arc(blastX, blastY, radius * 0.35, 0, Math.PI * 2);
       ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = "#ffffff";
+      ctx.shadowBlur = 10;
       ctx.fill();
 
       ctx.restore();
@@ -1605,7 +5257,12 @@ export class StageRenderer {
     if (pathPoints.length < 2) return;
     pathPoints.reverse(); // Chronological order: [startPoint, ..., currentPoint]
 
-    const screenPts = pathPoints.map((pt) => camera.worldToScreen(pt.x, pt.y));
+    const charId = replay.gameStart.ports[port]?.characterId ?? 0x09;
+    const size = characterSize(charId);
+    const halfHeightWorld = size.height * 0.5;
+    const screenPts = pathPoints.map((pt) =>
+      camera.worldToScreen(pt.x, pt.y + halfHeightWorld),
+    );
 
     ctx.save();
     // 1. Wide outer electric golden-yellow aura glow
@@ -1653,6 +5310,376 @@ export class StageRenderer {
     ctx.fillStyle = "#ffe600";
     ctx.shadowColor = "#ffd700";
     ctx.shadowBlur = 10;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Visualizes Fox's signature special moves:
+   * - Fire Fox (Up-B): Fiery startup/charge with radiating flame sparks + blazing fire missile flight envelope.
+   * - Reflector / Shine (Down-B): Radiant glowing cyan hexagonal crystal barrier with inner facets and central spark.
+   * - Blaster (Neutral-B): Laser blaster muzzle flare.
+   */
+  private drawFoxSpecial(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    _color: string,
+    specialType: FoxSpecialType,
+    frameCounter: number,
+    flightAngle?: number | null,
+  ): void {
+    const { ctx } = this;
+    const dir = facingRight ? 1 : -1;
+    const noseX = x + dir * halfWidth;
+
+    if (specialType === "firefox_charge") {
+      ctx.save();
+      const chargeRadius = Math.max(16, heightPx * 0.75);
+      const pulse = Math.sin(frameCounter * 0.45) * 3;
+      const currentRadius = chargeRadius + pulse;
+
+      // 1. Fiery heat aura
+      ctx.beginPath();
+      ctx.arc(x, centerY, currentRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 80, 0, 0.3)";
+      ctx.shadowColor = "#ff4500";
+      ctx.shadowBlur = 16;
+      ctx.fill();
+
+      // 2. Radiating flame sparks / bursts
+      const sparkCount = 6;
+      const baseAngle = frameCounter * 0.22;
+      ctx.beginPath();
+      for (let i = 0; i < sparkCount; i++) {
+        const ang = baseAngle + (i * Math.PI * 2) / sparkCount;
+        const rInner = currentRadius * 0.65;
+        const rOuter = currentRadius * (1.15 + (i % 2 === 0 ? 0.25 : 0));
+        ctx.moveTo(
+          x + Math.cos(ang) * rInner,
+          centerY + Math.sin(ang) * rInner,
+        );
+        ctx.lineTo(
+          x + Math.cos(ang) * rOuter,
+          centerY + Math.sin(ang) * rOuter,
+        );
+      }
+      ctx.strokeStyle = "#ffbb00";
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // 3. Central white-hot ignition core
+      ctx.beginPath();
+      ctx.arc(x, centerY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "firefox_fly") {
+      ctx.save();
+      // Translate to Fox's center and rotate to align +X with flight direction on screen
+      const angle =
+        flightAngle !== null && flightAngle !== undefined
+          ? flightAngle
+          : facingRight
+            ? 0
+            : Math.PI;
+
+      ctx.translate(x, centerY);
+      ctx.rotate(angle);
+
+      const flameLen = Math.max(halfWidth * 2.4, heightPx * 1.5);
+      const flameWidth = Math.max(halfWidth * 1.1, heightPx * 0.5);
+
+      // Flickering flame variations based on frameCounter
+      const flick1 = Math.sin(frameCounter * 0.8) * (flameWidth * 0.15);
+      const flick2 = Math.cos(frameCounter * 0.9) * (flameWidth * 0.15);
+      const flickLen = Math.sin(frameCounter * 1.1) * (flameLen * 0.1);
+
+      // 1. Outer blazing thrust flame cone pointing OPPOSITE to flight direction (-X)
+      ctx.beginPath();
+      ctx.moveTo(0, -flameWidth * 0.45);
+      ctx.lineTo(-flameLen * 0.5, -flameWidth * 0.65 + flick1);
+      ctx.lineTo(-(flameLen + flickLen), 0); // Main apex exhaust flame tip
+      ctx.lineTo(-flameLen * 0.5, flameWidth * 0.65 + flick2);
+      ctx.lineTo(0, flameWidth * 0.45);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255, 69, 0, 0.75)";
+      ctx.shadowColor = "#ff4500";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+
+      // 2. Mid golden-yellow flame body
+      ctx.beginPath();
+      ctx.moveTo(0, -flameWidth * 0.3);
+      ctx.lineTo(-flameLen * 0.4, -flameWidth * 0.45 - flick2);
+      ctx.lineTo(-(flameLen * 0.75 + flickLen * 0.5), 0);
+      ctx.lineTo(-flameLen * 0.4, flameWidth * 0.45 - flick1);
+      ctx.lineTo(0, flameWidth * 0.3);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255, 204, 0, 0.9)";
+      ctx.fill();
+
+      // 3. Inner intense white-hot thrust core
+      ctx.beginPath();
+      ctx.moveTo(0, -flameWidth * 0.15);
+      ctx.lineTo(-flameLen * 0.35, 0);
+      ctx.lineTo(0, flameWidth * 0.15);
+      ctx.closePath();
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      // 4. Forward aerodynamic shock cone enveloping Fox's front in flight (+X)
+      ctx.beginPath();
+      ctx.moveTo(-flameWidth * 0.2, -flameWidth * 0.5);
+      ctx.lineTo(halfWidth * 1.1, 0);
+      ctx.lineTo(-flameWidth * 0.2, flameWidth * 0.5);
+      ctx.strokeStyle = "rgba(255, 220, 100, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "firefox_end") {
+      // Lingering smoke / ember ring
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, centerY, 12, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 120, 0, 0.35)";
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    if (
+      specialType === "shine_start" ||
+      specialType === "shine_loop" ||
+      specialType === "shine_hit" ||
+      specialType === "shine_end"
+    ) {
+      ctx.save();
+      const radius = Math.max(16, heightPx * 0.85);
+
+      // Compute regular hexagon vertices
+      const hexPoints: Array<{ x: number; y: number }> = [];
+      for (let i = 0; i < 6; i++) {
+        const theta = (i * Math.PI) / 3 - Math.PI / 6;
+        hexPoints.push({
+          x: x + Math.cos(theta) * radius,
+          y: centerY + Math.sin(theta) * radius,
+        });
+      }
+
+      // 1. Semi-transparent luminous cyan crystal fill
+      ctx.beginPath();
+      ctx.moveTo(hexPoints[0]!.x, hexPoints[0]!.y);
+      for (let i = 1; i < 6; i++) {
+        ctx.lineTo(hexPoints[i]!.x, hexPoints[i]!.y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "rgba(0, 220, 255, 0.22)";
+      ctx.shadowColor = "#00d4ff";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      // 2. Radiant cyan hexagon border
+      ctx.strokeStyle = "rgba(0, 240, 255, 0.95)";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // 3. Inner crystal facet lines (connecting center to each vertex)
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        ctx.moveTo(x, centerY);
+        ctx.lineTo(hexPoints[i]!.x, hexPoints[i]!.y);
+      }
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // 4. Central starburst / flare spark on startup or hit
+      const isStartOrHit =
+        specialType === "shine_start" ||
+        specialType === "shine_hit" ||
+        frameCounter < 4;
+
+      if (isStartOrHit) {
+        // Bright 4-point starburst flare
+        const flareSize = radius * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(x - flareSize, centerY);
+        ctx.quadraticCurveTo(x, centerY, x, centerY - flareSize);
+        ctx.quadraticCurveTo(x, centerY, x + flareSize, centerY);
+        ctx.quadraticCurveTo(x, centerY, x, centerY + flareSize);
+        ctx.quadraticCurveTo(x, centerY, x - flareSize, centerY);
+        ctx.fillStyle = "#ffffff";
+        ctx.shadowColor = "#00ffff";
+        ctx.shadowBlur = 16;
+        ctx.fill();
+      } else {
+        // Subtle central diamond core
+        const coreSize = 4;
+        ctx.beginPath();
+        ctx.moveTo(x - coreSize, centerY);
+        ctx.lineTo(x, centerY - coreSize);
+        ctx.lineTo(x + coreSize, centerY);
+        ctx.lineTo(x, centerY + coreSize);
+        ctx.closePath();
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "blaster") {
+      ctx.save();
+      const gunX = noseX + dir * 4;
+      const beamStart = gunX + dir * 4;
+      const beamEnd = gunX + dir * 28;
+
+      // 1. Glowing red laser bolt shot
+      ctx.beginPath();
+      ctx.moveTo(beamStart, centerY);
+      ctx.lineTo(beamEnd, centerY);
+      ctx.strokeStyle = "rgba(255, 30, 30, 0.95)";
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#ff0000";
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // 2. White-hot laser inner core
+      ctx.beginPath();
+      ctx.moveTo(beamStart + dir * 2, centerY);
+      ctx.lineTo(beamEnd - dir * 2, centerY);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // 3. Muzzle flare at blaster tip
+      ctx.beginPath();
+      ctx.arc(gunX, centerY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = "#ff2222";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(gunX, centerY, 2, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+  }
+
+  /**
+   * Traces a continuous bright white/silver motion trail ribbon spanning the character's height
+   * extending behind the character's edge as they roll.
+   */
+  private drawRollTrail(
+    camera: Camera,
+    port: PortIndex,
+    replay: Replay,
+    frameIndex: number,
+  ): void {
+    const { ctx } = this;
+    const pathPoints: Array<{
+      x: number;
+      y: number;
+      halfWidth: number;
+      heightPx: number;
+      facingDirection: 1 | -1;
+      actionStateId: number;
+    }> = [];
+
+    let currIdx = frameIndex;
+    while (currIdx >= 0) {
+      const pData = replay.frames[currIdx]?.ports[port]?.post;
+      if (!pData || !isRollState(pData.actionStateId)) {
+        break;
+      }
+      const size = characterSize(pData.characterId);
+      const crouching = isCrouchState(pData.actionStateId);
+      const heightPx = camera.worldLengthToScreen(
+        size.height * (crouching ? 0.5 : 1.0),
+      );
+      const halfWidth = camera.worldLengthToScreen(size.width) / 2;
+      pathPoints.push({
+        x: pData.positionX,
+        y: pData.positionY,
+        halfWidth,
+        heightPx,
+        facingDirection: pData.facingDirection,
+        actionStateId: pData.actionStateId,
+      });
+      if (pData.actionFrameCounter === 0) {
+        break;
+      }
+      currIdx--;
+    }
+
+    if (pathPoints.length < 2) return;
+    pathPoints.reverse(); // Chronological order: [start, ..., current]
+
+    const startPt = pathPoints[0]!;
+    const endPt = pathPoints[pathPoints.length - 1]!;
+
+    // Determine horizontal movement direction (+1 for moving right, -1 for moving left)
+    let motionDir: 1 | -1 = endPt.x >= startPt.x ? 1 : -1;
+    if (Math.abs(endPt.x - startPt.x) < 0.1) {
+      const isForward = isRollForward(endPt.actionStateId);
+      motionDir = isForward
+        ? endPt.facingDirection
+        : (-endPt.facingDirection as 1 | -1);
+    }
+
+    // Full-height motion trail extending from the origin's back edge to the current character's far leading edge
+    const screenPoints = pathPoints.map((pt, idx) => {
+      const screen = camera.worldToScreen(pt.x, pt.y);
+      const isCurrent = idx === pathPoints.length - 1;
+      const offsetSign = isCurrent ? motionDir : -motionDir;
+      const edgeX = screen.x + offsetSign * pt.halfWidth;
+      return {
+        bottomX: edgeX,
+        bottomY: screen.y,
+        topX: edgeX,
+        topY: screen.y - pt.heightPx,
+      };
+    });
+
+    const start = screenPoints[0]!;
+    const end = screenPoints[screenPoints.length - 1]!;
+
+    ctx.save();
+    // 1. Build the full-height trail ribbon polygon extending from back origin to far leading edge
+    ctx.beginPath();
+    ctx.moveTo(start.topX, start.topY);
+    for (let i = 1; i < screenPoints.length; i++) {
+      ctx.lineTo(screenPoints[i]!.topX, screenPoints[i]!.topY);
+    }
+    for (let i = screenPoints.length - 1; i >= 0; i--) {
+      ctx.lineTo(screenPoints[i]!.bottomX, screenPoints[i]!.bottomY);
+    }
+    ctx.closePath();
+
+    // 2. Linear gradient fading from start (faint/0%) to the far edge of the current character (vibrant white)
+    const grad = ctx.createLinearGradient(start.bottomX, 0, end.bottomX, 0);
+    grad.addColorStop(0, "rgba(255, 255, 255, 0.0)");
+    grad.addColorStop(0.5, "rgba(245, 250, 255, 0.35)");
+    grad.addColorStop(1, "rgba(255, 255, 255, 0.72)");
+    ctx.fillStyle = grad;
+    ctx.shadowColor = "rgba(255, 255, 255, 0.65)";
+    ctx.shadowBlur = 8;
     ctx.fill();
 
     ctx.restore();

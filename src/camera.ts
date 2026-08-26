@@ -34,9 +34,9 @@ export class Camera {
   private offsetX = 0;
   private offsetY = 0;
 
-  /** Never frame tighter than this world-unit span, so a single player alone on screen (or two players standing right on top of each other) doesn't zoom in absurdly close. */
-  private static readonly MIN_SPAN = 900;
-  private static readonly PADDING_FRACTION = 0.35;
+  /** Never frame tighter than this world-unit span, so characters near each other or a single player doesn't zoom in absurdly close. */
+  private static readonly MIN_SPAN = 1400;
+  private static readonly PADDING_FRACTION = 0.3;
   /** Fraction lerped toward the target view per update() call during smooth (non-snap) tracking. */
   private static readonly LERP_FACTOR = 0.12;
 

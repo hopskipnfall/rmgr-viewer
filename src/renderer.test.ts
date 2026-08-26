@@ -3,24 +3,48 @@ import {
   getAttackInfo,
   getDeathDirection,
   getFalconSpecialType,
+  getFoxFlightAngle,
+  getFoxSpecialType,
   getPikachuSpecialType,
   isCrouchState,
   isDeadState,
+  isDonkeyKongCharacter,
   isFalconCharacter,
+  isFireFoxFlightState,
+  isFoxCharacter,
   isGrabbedState,
+  isJigglypuffCharacter,
+  isKirbyCharacter,
   isLandingState,
+  isLinkCharacter,
+  isLuigiCharacter,
+  isMarioCharacter,
+  isNessCharacter,
   isPikachuCharacter,
   isQuickAttackState,
+  isRollForward,
+  isRollState,
+  isSamusCharacter,
   isShieldState,
   isShieldStunState,
   isSpecialState,
   isTauntState,
+  isTurnState,
+  isYoshiCharacter,
+  toGrayscale,
 } from "./renderer.js";
+import type { Replay } from "@rmg-k/rmgr";
 import {
   DREAM_LAND_BLAST_ZONE,
   DREAM_LAND_STAGE_ID,
   stageBlastZone,
 } from "./stageGeometry.js";
+import {
+  PORT_COLORS,
+  MAIN_PLAYER_COLOR,
+  OPPONENT_COLOR,
+  getPlayerColor,
+} from "./players.js";
 
 describe("isShieldState", () => {
   it("identifies shield action states correctly", () => {
@@ -253,6 +277,58 @@ describe("isTauntState", () => {
   });
 });
 
+describe("isTurnState", () => {
+  it("identifies turn action states correctly", () => {
+    expect(isTurnState(0x012)).toBe(true); // Turn
+    expect(isTurnState(0x013)).toBe(true); // TurnRun
+  });
+
+  it("returns false for non-turn action states", () => {
+    expect(isTurnState(0x00a)).toBe(false); // Idle
+    expect(isTurnState(0x00f)).toBe(false); // Dash
+    expect(isTurnState(0x010)).toBe(false); // Run
+    expect(isTurnState(0x01c)).toBe(false); // Crouch
+    expect(isTurnState(0x099)).toBe(false); // Shield
+  });
+});
+
+describe("isRollState", () => {
+  it("identifies shield rolls, tech rolls, get-up rolls, and ledge rolls correctly", () => {
+    expect(isRollState(0x09c)).toBe(true); // RollF
+    expect(isRollState(0x09d)).toBe(true); // RollB
+    expect(isRollState(0x049)).toBe(true); // TechF
+    expect(isRollState(0x04a)).toBe(true); // TechB
+    expect(isRollState(0x047)).toBe(true); // DownForwardD
+    expect(isRollState(0x048)).toBe(true); // DownBackD
+    expect(isRollState(0x04b)).toBe(true); // DownForwardU
+    expect(isRollState(0x04c)).toBe(true); // DownBackU
+    expect(isRollState(0x058)).toBe(true); // CliffRollQuick
+    expect(isRollState(0x05b)).toBe(true); // CliffRollSlow
+  });
+
+  it("returns false for non-roll action states", () => {
+    expect(isRollState(0x00a)).toBe(false); // Idle
+    expect(isRollState(0x00f)).toBe(false); // Dash
+    expect(isRollState(0x099)).toBe(false); // Shield
+    expect(isRollState(0x09e)).toBe(false); // ShieldBreak
+  });
+});
+
+describe("isRollForward", () => {
+  it("classifies forward rolls vs backward rolls correctly", () => {
+    expect(isRollForward(0x09c)).toBe(true); // RollF
+    expect(isRollForward(0x049)).toBe(true); // TechF
+    expect(isRollForward(0x047)).toBe(true); // DownForwardD
+    expect(isRollForward(0x04b)).toBe(true); // DownForwardU
+    expect(isRollForward(0x058)).toBe(true); // CliffRollQuick
+
+    expect(isRollForward(0x09d)).toBe(false); // RollB
+    expect(isRollForward(0x04a)).toBe(false); // TechB
+    expect(isRollForward(0x048)).toBe(false); // DownBackD
+    expect(isRollForward(0x04c)).toBe(false); // DownBackU
+  });
+});
+
 describe("getAttackInfo", () => {
   it("identifies jab attacks correctly", () => {
     expect(getAttackInfo(0x0be)).toEqual({
@@ -398,5 +474,300 @@ describe("stageBlastZone", () => {
   it("returns undefined for unknown stage", () => {
     expect(stageBlastZone(999)).toBeUndefined();
     expect(stageBlastZone(undefined)).toBeUndefined();
+  });
+});
+
+describe("getPlayerColor", () => {
+  it("returns default port colors when no perspective is selected", () => {
+    expect(getPlayerColor(0, null)).toBe(PORT_COLORS[0]);
+    expect(getPlayerColor(1, null)).toBe(PORT_COLORS[1]);
+    expect(getPlayerColor(0, undefined)).toBe(PORT_COLORS[0]);
+  });
+
+  it("returns blue for the main perspective character and grey for the opponent", () => {
+    expect(getPlayerColor(0, 0)).toBe(MAIN_PLAYER_COLOR);
+    expect(getPlayerColor(1, 0)).toBe(OPPONENT_COLOR);
+
+    expect(getPlayerColor(1, 1)).toBe(MAIN_PLAYER_COLOR);
+    expect(getPlayerColor(0, 1)).toBe(OPPONENT_COLOR);
+  });
+});
+
+describe("isFoxCharacter", () => {
+  it("identifies Fox variants correctly", () => {
+    expect(isFoxCharacter(0x01)).toBe(true); // Fox
+    expect(isFoxCharacter(0x0f)).toBe(true); // Polygon Fox
+    expect(isFoxCharacter(0x1d)).toBe(true); // Falco
+    expect(isFoxCharacter(0x29)).toBe(true); // Fox (JP)
+    expect(isFoxCharacter(0x55)).toBe(true); // Polygon Falco
+  });
+
+  it("returns false for non-Fox characters", () => {
+    expect(isFoxCharacter(0x00)).toBe(false); // Mario
+    expect(isFoxCharacter(0x07)).toBe(false); // Falcon
+    expect(isFoxCharacter(0x09)).toBe(false); // Pikachu
+  });
+});
+
+describe("getFoxSpecialType", () => {
+  it("identifies Fire Fox (Up-B) states correctly", () => {
+    expect(getFoxSpecialType(0x01, 0x0e4)).toBe("firefox_charge");
+    expect(getFoxSpecialType(0x29, 0x0e7)).toBe("firefox_charge");
+    expect(getFoxSpecialType(0x01, 0x0e8)).toBe("firefox_fly");
+    expect(getFoxSpecialType(0x29, 0x0ec)).toBe("firefox_fly");
+    expect(getFoxSpecialType(0x01, 0x0e9)).toBe("firefox_end");
+    expect(getFoxSpecialType(0x29, 0x0ea)).toBe("firefox_end");
+  });
+
+  it("identifies Reflector / Shine (Down-B) states correctly", () => {
+    expect(getFoxSpecialType(0x01, 0x0f1)).toBe("shine_start");
+    expect(getFoxSpecialType(0x29, 0x0f2)).toBe("shine_start");
+    expect(getFoxSpecialType(0x01, 0x0f4)).toBe("shine_loop");
+    expect(getFoxSpecialType(0x29, 0x0f9)).toBe("shine_loop"); // Turn
+    expect(getFoxSpecialType(0x01, 0x0f5)).toBe("shine_hit");
+    expect(getFoxSpecialType(0x29, 0x0f6)).toBe("shine_hit");
+    expect(getFoxSpecialType(0x01, 0x0f3)).toBe("shine_end");
+    expect(getFoxSpecialType(0x29, 0x0f7)).toBe("shine_end");
+    expect(getFoxSpecialType(0x29, 0x0f8)).toBe("shine_end");
+  });
+
+  it("identifies Blaster (Neutral-B) states correctly", () => {
+    expect(getFoxSpecialType(0x01, 0x0dc)).toBe("blaster");
+    expect(getFoxSpecialType(0x29, 0x0dd)).toBe("blaster");
+    expect(getFoxSpecialType(0x01, 0x0e1)).toBe("blaster");
+    expect(getFoxSpecialType(0x29, 0x0e2)).toBe("blaster");
+  });
+
+  it("returns null for non-special states or non-Fox characters", () => {
+    expect(getFoxSpecialType(0x01, 0x00a)).toBeNull(); // Idle
+    expect(getFoxSpecialType(0x00, 0x0f1)).toBeNull(); // Mario in 0x0f1
+  });
+});
+
+describe("isFireFoxFlightState", () => {
+  it("identifies Fire Fox flight states", () => {
+    expect(isFireFoxFlightState(0x0e8)).toBe(true);
+    expect(isFireFoxFlightState(0x0ec)).toBe(true);
+    expect(isFireFoxFlightState(0x0e4)).toBe(false);
+    expect(isFireFoxFlightState(0x0f1)).toBe(false);
+  });
+});
+
+describe("getFoxFlightAngle", () => {
+  it("returns null when inputs are missing", () => {
+    expect(getFoxFlightAngle(null, 0, 0, undefined)).toBeNull();
+  });
+
+  it("calculates correct angle when flying straight up (-PI/2 in screen coords)", () => {
+    const replay = {
+      gameStart: { ports: { 0: { characterId: 0x01 } } },
+      frames: [
+        { ports: { 0: { post: { positionX: 0, positionY: 0 } } } },
+        { ports: { 0: { post: { positionX: 0, positionY: 5 } } } },
+      ],
+    } as unknown as Replay;
+    const angle = getFoxFlightAngle(replay, 1, 0, {
+      positionX: 0,
+      positionY: 5,
+      facingDirection: 1,
+    });
+    expect(angle).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it("calculates correct angle when flying right (0 rad in screen coords)", () => {
+    const replay = {
+      gameStart: { ports: { 0: { characterId: 0x01 } } },
+      frames: [
+        { ports: { 0: { post: { positionX: 0, positionY: 0 } } } },
+        { ports: { 0: { post: { positionX: 5, positionY: 0 } } } },
+      ],
+    } as unknown as Replay;
+    const angle = getFoxFlightAngle(replay, 1, 0, {
+      positionX: 5,
+      positionY: 0,
+      facingDirection: 1,
+    });
+    expect(angle).toBeCloseTo(0);
+  });
+
+  it("calculates correct angle when flying diagonally up-right (-PI/4 rad)", () => {
+    const replay = {
+      gameStart: { ports: { 0: { characterId: 0x01 } } },
+      frames: [
+        { ports: { 0: { post: { positionX: 0, positionY: 0 } } } },
+        { ports: { 0: { post: { positionX: 5, positionY: 5 } } } },
+      ],
+    } as unknown as Replay;
+    const angle = getFoxFlightAngle(replay, 1, 0, {
+      positionX: 5,
+      positionY: 5,
+      facingDirection: 1,
+    });
+    expect(angle).toBeCloseTo(-Math.PI / 4);
+  });
+});
+
+describe("isPikachuCharacter", () => {
+  it("identifies all Pikachu character variants", () => {
+    expect(isPikachuCharacter(0x09)).toBe(true); // Vanilla Pikachu
+    expect(isPikachuCharacter(0x17)).toBe(true); // Polygon Pikachu
+    expect(isPikachuCharacter(0x2d)).toBe(true); // Pikachu (EU)
+    expect(isPikachuCharacter(0x32)).toBe(true); // Pikachu (JP)
+    expect(isPikachuCharacter(0x00)).toBe(false); // Mario
+    expect(isPikachuCharacter(0x01)).toBe(false); // Fox
+  });
+});
+
+describe("isFalconCharacter", () => {
+  it("identifies all Captain Falcon character variants", () => {
+    expect(isFalconCharacter(0x07)).toBe(true); // Vanilla Falcon
+    expect(isFalconCharacter(0x15)).toBe(true); // Polygon Falcon
+    expect(isFalconCharacter(0x28)).toBe(true); // Falcon (JP)
+    expect(isFalconCharacter(0x00)).toBe(false); // Mario
+    expect(isFalconCharacter(0x01)).toBe(false); // Fox
+    expect(isFalconCharacter(0x09)).toBe(false); // Pikachu
+  });
+});
+
+describe("getFalconSpecialType", () => {
+  it("identifies Falcon Punch (Neutral-B) states", () => {
+    expect(getFalconSpecialType(0x07, 0x0e6)).toBe("punch");
+    expect(getFalconSpecialType(0x07, 0x0e7)).toBe("punch");
+  });
+
+  it("identifies Falcon Dive (Up-B) states", () => {
+    expect(getFalconSpecialType(0x07, 0x0e8)).toBe("dive_reach");
+    expect(getFalconSpecialType(0x07, 0x0ea)).toBe("dive_catch");
+    expect(getFalconSpecialType(0x07, 0x0ee)).toBe("dive_explosion");
+  });
+
+  it("identifies Falcon Kick (Down-B) states", () => {
+    expect(getFalconSpecialType(0x07, 0x0eb)).toBe("kick");
+    expect(getFalconSpecialType(0x07, 0x0ed)).toBe("kick_end");
+  });
+
+  it("returns null for non-Falcon or non-special states", () => {
+    expect(getFalconSpecialType(0x01, 0x0e6)).toBeNull(); // Fox
+    expect(getFalconSpecialType(0x07, 0x00a)).toBeNull(); // Idle
+  });
+});
+
+describe("getPikachuSpecialType", () => {
+  it("identifies Thunder (Down-B) states", () => {
+    expect(getPikachuSpecialType(0x09, 0x0e3)).toBe("thunder");
+    expect(getPikachuSpecialType(0x09, 0x0e5)).toBe("thunder");
+    expect(getPikachuSpecialType(0x32, 0x0e7)).toBe("thunder");
+  });
+
+  it("identifies Quick Attack (Up-B) zip states", () => {
+    expect(getPikachuSpecialType(0x09, 0x0ec)).toBe("quick_attack_zip");
+    expect(getPikachuSpecialType(0x09, 0x0ed)).toBe("quick_attack_zip");
+  });
+
+  it("identifies Quick Attack startup/landing states", () => {
+    expect(getPikachuSpecialType(0x09, 0x0e8)).toBe("quick_attack");
+    expect(getPikachuSpecialType(0x09, 0x0ea)).toBe("quick_attack");
+  });
+
+  it("returns null for non-Pikachu or non-special states", () => {
+    expect(getPikachuSpecialType(0x01, 0x0e3)).toBeNull(); // Fox
+    expect(getPikachuSpecialType(0x09, 0x00a)).toBeNull(); // Idle
+  });
+});
+
+describe("Original 12 Character Classifiers", () => {
+  it("identifies Mario variants correctly", () => {
+    expect(isMarioCharacter(0x00)).toBe(true);
+    expect(isMarioCharacter(0x0d)).toBe(true);
+    expect(isMarioCharacter(0x0e)).toBe(true);
+    expect(isMarioCharacter(0x20)).toBe(true);
+    expect(isMarioCharacter(0x2a)).toBe(true);
+    expect(isMarioCharacter(0x51)).toBe(true);
+    expect(isMarioCharacter(0x04)).toBe(false);
+  });
+
+  it("identifies Luigi variants correctly", () => {
+    expect(isLuigiCharacter(0x04)).toBe(true);
+    expect(isLuigiCharacter(0x12)).toBe(true);
+    expect(isLuigiCharacter(0x2b)).toBe(true);
+    expect(isLuigiCharacter(0x45)).toBe(true);
+    expect(isLuigiCharacter(0x4b)).toBe(true);
+    expect(isLuigiCharacter(0x00)).toBe(false);
+  });
+
+  it("identifies Donkey Kong variants correctly", () => {
+    expect(isDonkeyKongCharacter(0x02)).toBe(true);
+    expect(isDonkeyKongCharacter(0x10)).toBe(true);
+    expect(isDonkeyKongCharacter(0x1a)).toBe(true);
+    expect(isDonkeyKongCharacter(0x2c)).toBe(true);
+    expect(isDonkeyKongCharacter(0x00)).toBe(false);
+  });
+
+  it("identifies Samus variants correctly", () => {
+    expect(isSamusCharacter(0x03)).toBe(true);
+    expect(isSamusCharacter(0x11)).toBe(true);
+    expect(isSamusCharacter(0x22)).toBe(true);
+    expect(isSamusCharacter(0x24)).toBe(true);
+    expect(isSamusCharacter(0x33)).toBe(true);
+    expect(isSamusCharacter(0x57)).toBe(true);
+    expect(isSamusCharacter(0x00)).toBe(false);
+  });
+
+  it("identifies Link variants correctly", () => {
+    expect(isLinkCharacter(0x05)).toBe(true);
+    expect(isLinkCharacter(0x13)).toBe(true);
+    expect(isLinkCharacter(0x1f)).toBe(true);
+    expect(isLinkCharacter(0x23)).toBe(true);
+    expect(isLinkCharacter(0x27)).toBe(true);
+    expect(isLinkCharacter(0x5b)).toBe(true);
+    expect(isLinkCharacter(0x00)).toBe(false);
+  });
+
+  it("identifies Yoshi variants correctly", () => {
+    expect(isYoshiCharacter(0x06)).toBe(true);
+    expect(isYoshiCharacter(0x14)).toBe(true);
+    expect(isYoshiCharacter(0x31)).toBe(true);
+    expect(isYoshiCharacter(0x00)).toBe(false);
+  });
+
+  it("identifies Kirby variants correctly", () => {
+    expect(isKirbyCharacter(0x08)).toBe(true);
+    expect(isKirbyCharacter(0x16)).toBe(true);
+    expect(isKirbyCharacter(0x30)).toBe(true);
+    expect(isKirbyCharacter(0x00)).toBe(false);
+  });
+
+  it("identifies Jigglypuff variants correctly", () => {
+    expect(isJigglypuffCharacter(0x0a)).toBe(true);
+    expect(isJigglypuffCharacter(0x18)).toBe(true);
+    expect(isJigglypuffCharacter(0x2e)).toBe(true);
+    expect(isJigglypuffCharacter(0x2f)).toBe(true);
+    expect(isJigglypuffCharacter(0x00)).toBe(false);
+  });
+
+  it("identifies Ness variants correctly", () => {
+    expect(isNessCharacter(0x0b)).toBe(true);
+    expect(isNessCharacter(0x19)).toBe(true);
+    expect(isNessCharacter(0x25)).toBe(true);
+    expect(isNessCharacter(0x26)).toBe(true);
+    expect(isNessCharacter(0x4e)).toBe(true);
+    expect(isNessCharacter(0x00)).toBe(false);
+  });
+});
+
+describe("toGrayscale", () => {
+  it("converts hex colors to grayscale luminance values", () => {
+    expect(toGrayscale("#ffffff")).toBe("rgb(255, 255, 255)");
+    expect(toGrayscale("#000000")).toBe("rgb(0, 0, 0)");
+    const yellow = toGrayscale("#facc15");
+    expect(yellow).toMatch(/^rgb\((\d+),\s*\1,\s*\1\)$/);
+  });
+
+  it("converts rgba colors and preserves alpha", () => {
+    expect(toGrayscale("rgba(255, 0, 0, 0.5)")).toBe("rgba(76, 76, 76, 0.5)");
+  });
+
+  it("converts hsl colors to 0% saturation", () => {
+    expect(toGrayscale("hsl(120, 85%, 55%)")).toBe("hsl(0, 0%, 55%)");
   });
 });
