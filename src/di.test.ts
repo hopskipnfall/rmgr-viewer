@@ -88,10 +88,15 @@ describe("classifyDIRelative", () => {
 });
 
 describe("calculateHitDI and extractAllHitsWithDI", () => {
-  function makeMockReplay(): Replay {
+  function makeMockReplay(opts?: {
+    hitActionState?: number;
+    withDI?: boolean;
+  }): Replay {
     const frames: Frame[] = [];
     const port0 = 0 as PortIndex;
     const port1 = 1 as PortIndex;
+    const hitState = opts?.hitActionState ?? 0x033;
+    const withDI = opts?.withDI ?? true;
 
     // Build 30 frames:
     // Frame 0-9: Victim on Port 1 is at (1000, 500) with 0% damage
@@ -102,8 +107,8 @@ describe("calculateHitDI and extractAllHitsWithDI", () => {
     for (let f = 0; f < 30; f++) {
       const isHitlag = f >= 10 && f <= 17;
       const dmg = f < 10 ? 0 : 10;
-      const stickX = f >= 13 && f <= 17 ? -80 : 0;
-      const posX = f >= 13 ? 832 : 1000;
+      const stickX = withDI && f >= 13 && f <= 17 ? -80 : 0;
+      const posX = withDI && f >= 13 ? 832 : 1000;
 
       frames.push({
         frame: f,
@@ -159,7 +164,7 @@ describe("calculateHitDI and extractAllHitsWithDI", () => {
             },
             post: {
               characterId: 1,
-              actionStateId: isHitlag ? 0x033 : 0x00a,
+              actionStateId: isHitlag ? hitState : 0x00a,
               actionFrameCounter: isHitlag ? f - 10 : f,
               positionX: posX,
               positionY: 500,
@@ -225,5 +230,23 @@ describe("calculateHitDI and extractAllHitsWithDI", () => {
     expect(allHits[0]?.victimPort).toBe(1);
     expect(allHits[0]?.damageDealt).toBe(10);
     expect(allHits[0]?.inputCount).toBe(1);
+  });
+
+  it("ignores hits originating from throw or capture action states", () => {
+    // Simulate victim in DamageThrown (0x0ba)
+    const replay = makeMockReplay({ hitActionState: 0x0ba });
+    const hitDI = calculateHitDI(replay, 10, 1 as PortIndex, 0 as PortIndex);
+    expect(hitDI).toBeNull();
+  });
+
+  it("returns zero displacement and distance when no DI inputs occur", () => {
+    const replay = makeMockReplay({ withDI: false });
+    const hitDI = calculateHitDI(replay, 10, 1 as PortIndex, 0 as PortIndex);
+    expect(hitDI).not.toBeNull();
+    expect(hitDI?.inputCount).toBe(0);
+    expect(hitDI?.displacement.dx).toBe(0);
+    expect(hitDI?.displacement.dy).toBe(0);
+    expect(hitDI?.displacement.distance).toBe(0);
+    expect(hitDI?.cardinal).toBe("neutral");
   });
 });

@@ -1635,7 +1635,7 @@ export class StageRenderer {
 
   /**
    * Visualizes Smash 64 Directional Influence (DI) during hitlag and the initial knockback frames.
-   * Draws a glowing displacement vector arrow, activation step pips, and an overhead badge.
+   * Draws a bold glowing displacement vector arrow, activation step pips, and a high-contrast overhead badge.
    */
   private drawDIIndicator(
     camera: Camera,
@@ -1653,7 +1653,7 @@ export class StageRenderer {
       currentFrameIndex >= hitDI.hitFrameIndex &&
       currentFrameIndex <= hitDI.endHitlagFrameIndex;
     const framesAfterHitlag = currentFrameIndex - hitDI.endHitlagFrameIndex;
-    const maxPostFrames = 22;
+    const maxPostFrames = 26;
     if (framesAfterHitlag > maxPostFrames) return;
 
     const alpha = isDuringHitlag
@@ -1663,23 +1663,25 @@ export class StageRenderer {
     ctx.save();
 
     const isStrongDI = hitDI.inputCount >= 2;
-    const mainColor = isStrongDI
-      ? `rgba(251, 191, 36, ${alpha * 0.95})` // Golden amber for 2x+ DI
+    const strokeColor = isStrongDI
+      ? `rgba(251, 191, 36, ${alpha * 0.98})` // Bold amber gold for 2x+ DI
       : hitDI.inputCount === 1
-        ? `rgba(56, 189, 248, ${alpha * 0.95})` // Cyan for 1x DI
-        : `rgba(148, 163, 184, ${alpha * 0.55})`; // Muted slate for 0x DI
+        ? `rgba(56, 189, 248, ${alpha * 0.98})` // Bright cyan for 1x DI
+        : `rgba(148, 163, 184, ${alpha * 0.7})`; // Neutral slate for No DI
 
     const glowColor = isStrongDI
-      ? `rgba(245, 158, 11, ${alpha * 0.8})`
-      : `rgba(14, 165, 233, ${alpha * 0.8})`;
+      ? `rgba(245, 158, 11, ${alpha * 0.9})`
+      : hitDI.inputCount === 1
+        ? `rgba(14, 165, 233, ${alpha * 0.9})`
+        : `rgba(100, 116, 139, ${alpha * 0.5})`;
 
-    // 1. Draw physical displacement vector arrow
-    if (hitDI.displacement.distance >= 6) {
-      ctx.strokeStyle = mainColor;
-      ctx.fillStyle = mainColor;
-      ctx.lineWidth = isStrongDI ? 3 : 2;
+    // 1. Draw physical displacement vector arrow (ONLY when DI inputs occurred)
+    if (hitDI.inputCount > 0 && hitDI.displacement.distance >= 6) {
+      ctx.strokeStyle = strokeColor;
+      ctx.fillStyle = strokeColor;
+      ctx.lineWidth = isStrongDI ? 5 : 3.5;
       ctx.shadowColor = glowColor;
-      ctx.shadowBlur = isStrongDI ? 8 : 5;
+      ctx.shadowBlur = isStrongDI ? 12 : 8;
 
       // Vector line
       ctx.beginPath();
@@ -1687,45 +1689,53 @@ export class StageRenderer {
       ctx.lineTo(endScreen.x, endScreen.y);
       ctx.stroke();
 
-      // Arrowhead at endScreen
+      // Bold Arrowhead at endScreen
       const angle = Math.atan2(
         endScreen.y - startScreen.y,
         endScreen.x - startScreen.x,
       );
-      const headLen = isStrongDI ? 10 : 8;
+      const headLen = isStrongDI ? 13 : 10;
       ctx.beginPath();
       ctx.moveTo(endScreen.x, endScreen.y);
       ctx.lineTo(
-        endScreen.x - headLen * Math.cos(angle - Math.PI / 6),
-        endScreen.y - headLen * Math.sin(angle - Math.PI / 6),
+        endScreen.x - headLen * Math.cos(angle - Math.PI / 5.5),
+        endScreen.y - headLen * Math.sin(angle - Math.PI / 5.5),
       );
       ctx.lineTo(
-        endScreen.x - headLen * Math.cos(angle + Math.PI / 6),
-        endScreen.y - headLen * Math.sin(angle + Math.PI / 6),
+        endScreen.x - headLen * Math.cos(angle + Math.PI / 5.5),
+        endScreen.y - headLen * Math.sin(angle + Math.PI / 5.5),
       );
       ctx.closePath();
       ctx.fill();
 
-      // Start impact point
+      // Start impact circle with white core
       ctx.beginPath();
-      ctx.arc(startScreen.x, startScreen.y, 3, 0, Math.PI * 2);
+      ctx.arc(startScreen.x, startScreen.y, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(startScreen.x, startScreen.y, 2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
       ctx.fill();
 
-      // Activation pips along the line for multi-input DI
+      // Intermediate activation step pips for multi-input DI
       if (hitDI.inputCount > 1) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
         for (let i = 1; i < hitDI.inputCount; i++) {
           const t = i / hitDI.inputCount;
           const px = startScreen.x + (endScreen.x - startScreen.x) * t;
           const py = startScreen.y + (endScreen.y - startScreen.y) * t;
           ctx.beginPath();
-          ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+          ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = strokeColor;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(px, py, 1.8, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
           ctx.fill();
         }
       }
     }
 
-    // 2. Overhead floating DI pill badge
+    // 2. High-contrast overhead floating DI pill badge
     const arrowGlyph = DI_ARROW_GLYPHS[hitDI.cardinal] ?? "•";
     const dirLabel =
       hitDI.relative !== "neutral" ? hitDI.relative : hitDI.cardinal;
@@ -1735,30 +1745,35 @@ export class StageRenderer {
         : `No DI`;
 
     const badgeX = endScreen.x;
-    const badgeY = endScreen.y - 42;
+    const badgeY = endScreen.y - 50;
 
-    ctx.font = "bold 10px monospace, system-ui, sans-serif";
+    ctx.font = "bold 12px monospace, system-ui, sans-serif";
     const textMetrics = ctx.measureText(badgeText);
-    const padX = 6;
+    const padX = 9;
     const bgWidth = textMetrics.width + padX * 2;
-    const bgHeight = 16;
+    const bgHeight = 21;
     const rx = badgeX - bgWidth / 2;
     const ry = badgeY - bgHeight / 2;
 
-    ctx.fillStyle = `rgba(15, 23, 42, ${alpha * 0.88})`;
-    ctx.strokeStyle = mainColor;
-    ctx.lineWidth = 1.2;
+    // High-opacity dark card background
+    ctx.fillStyle = `rgba(10, 14, 26, ${alpha * 0.94})`;
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 1.6;
     ctx.shadowColor = glowColor;
-    ctx.shadowBlur = 4;
+    ctx.shadowBlur = 6;
     ctx.beginPath();
-    ctx.roundRect(rx, ry, bgWidth, bgHeight, 4);
+    ctx.roundRect(rx, ry, bgWidth, bgHeight, 5);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = mainColor;
+    // Text render
+    ctx.fillStyle =
+      hitDI.inputCount > 0
+        ? strokeColor
+        : `rgba(226, 232, 240, ${alpha * 0.85})`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(badgeText, badgeX, badgeY);
+    ctx.fillText(badgeText, badgeX, badgeY + 0.5);
 
     ctx.restore();
   }

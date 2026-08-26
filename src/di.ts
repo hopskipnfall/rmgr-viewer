@@ -204,6 +204,25 @@ export function classifyDIRelative(
   return "neutral";
 }
 
+const CAPTURE_OR_THROW_STATES = new Set([
+  0x0a9, // ThrowF
+  0x0aa, // ThrowB
+  0x0ab, // CapturePull / ThrowLw
+  0x0ac, // CaptureWait
+  0x0ad, // CaptureDamage
+  0x0b2, // FalconDive
+  0x0b3, // CaptureFalconDive
+  0x0b4, // CargoThrowF
+  0x0b5, // CargoThrowB
+  0x0b6, // CaptureCargo
+  0x0b7, // CargoThrowHi
+  0x0b8, // CargoThrowLw
+  0x0b9, // CapturePulled
+  0x0ba, // DamageThrown / Thrown
+  0x0bb, // DamageThrown
+  0x0bc, // DamageThrown
+]);
+
 /**
  * Analyzes DI for a specific hit on `victimPort` starting at `hitFrameIndex`.
  */
@@ -226,6 +245,20 @@ export function calculateHitDI(
     startPost.damagePercent - prevPost.damagePercent,
   );
   if (damageDealt <= 0) return null;
+
+  const attackerPost =
+    attackerPort !== null
+      ? (startFrame.ports[attackerPort]?.post ?? null)
+      : null;
+
+  // In Smash 64, throws and grab captures cannot be DI'd
+  if (
+    CAPTURE_OR_THROW_STATES.has(prevPost.actionStateId) ||
+    CAPTURE_OR_THROW_STATES.has(startPost.actionStateId) ||
+    (attackerPost && CAPTURE_OR_THROW_STATES.has(attackerPost.actionStateId))
+  ) {
+    return null;
+  }
 
   const isElectric = ELECTRIC_HIT_STATES.has(startPost.actionStateId);
   const diWindow = calculateDIFrames(damageDealt, isElectric);
@@ -282,21 +315,31 @@ export function calculateHitDI(
     lastY = currY;
   }
 
-  const endPost = replay.frames[endFrameIndex]?.ports[victimPort]?.post;
-  const endPos = endPost
-    ? { x: endPost.positionX, y: endPost.positionY }
-    : lastRecordedPos;
+  let dx = 0;
+  let dy = 0;
 
-  const dx = endPos.x - startPos.x;
-  const dy = endPos.y - startPos.y;
+  if (inputCount > 0) {
+    // Measure spatial displacement strictly while in hitlag before knockback velocity begins
+    for (let k = 0; k <= diWindow; k++) {
+      const fIdx = hitFrameIndex + k;
+      const f = replay.frames[fIdx];
+      if (!f) break;
+      const post = f.ports[victimPort]?.post;
+      if (!post) break;
+      if (post.velocityX === 0 && post.velocityY === 0) {
+        dx = post.positionX - startPos.x;
+        dy = post.positionY - startPos.y;
+      } else {
+        break;
+      }
+    }
+  }
+
   const distance = Math.hypot(dx, dy);
   const angleRad = Math.atan2(dy, dx);
   const angleDeg = (angleRad * 180) / Math.PI;
+  const endPos = { x: startPos.x + dx, y: startPos.y + dy };
 
-  const attackerPost =
-    attackerPort !== null
-      ? (startFrame.ports[attackerPort]?.post ?? null)
-      : null;
   const attackerX = attackerPost ? attackerPost.positionX : null;
 
   const cardinal = classifyDICardinal(dx, dy);
