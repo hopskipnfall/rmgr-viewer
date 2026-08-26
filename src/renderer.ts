@@ -316,7 +316,8 @@ export function getStartNameAlpha(frameIndex: number | undefined): number {
   );
 }
 
-export type AttackType = "tilt" | "smash" | "aerial" | "jab" | "grab";
+export type AttackType =
+  "tilt" | "smash" | "aerial" | "jab" | "grab" | "dash-attack";
 export type AttackDirection = "up" | "down" | "forward" | "back" | "neutral";
 
 export interface AttackInfo {
@@ -978,6 +979,11 @@ export function getAttackInfo(actionStateId: number): AttackInfo | null {
   // Jabs
   if (actionStateId === 0x0be || actionStateId === 0x0bf) {
     return { type: "jab", direction: "forward" };
+  }
+
+  // Dash Attack
+  if (actionStateId === 0x0c0) {
+    return { type: "dash-attack", direction: "forward" };
   }
 
   // Grabs
@@ -6095,6 +6101,94 @@ export class StageRenderer {
       ctx.setLineDash([3, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      ctx.restore();
+      return;
+    }
+
+    if (attack.type === "dash-attack") {
+      // Dash Attack: dynamic low-to-ground forward sliding thrust wave with speed trails
+      ctx.save();
+      const dir = facingRight ? 1 : -1;
+      const frontX = x + dir * (halfWidth * 1.5);
+      const startX = x - dir * (halfWidth * 0.4);
+      const bottomY = centerY + heightPx * 0.45;
+      const midY = centerY + heightPx * 0.15;
+      const topY = centerY - heightPx * 0.2;
+
+      // 1. Triple sliding speed streak lines along the ground / lower body
+      const trailLevels = [
+        {
+          y: bottomY,
+          xStart: startX - dir * (halfWidth * 0.8),
+          xEnd: frontX - dir * (halfWidth * 0.2),
+          w: 2.5,
+          alpha: 0.8,
+        },
+        {
+          y: midY,
+          xStart: startX - dir * (halfWidth * 0.5),
+          xEnd: frontX - dir * (halfWidth * 0.4),
+          w: 2.0,
+          alpha: 0.65,
+        },
+        {
+          y: topY,
+          xStart: startX - dir * (halfWidth * 0.2),
+          xEnd: frontX - dir * (halfWidth * 0.7),
+          w: 1.5,
+          alpha: 0.5,
+        },
+      ];
+
+      for (const t of trailLevels) {
+        ctx.beginPath();
+        ctx.moveTo(t.xStart, t.y);
+        ctx.lineTo(t.xEnd, t.y);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${t.alpha})`;
+        ctx.lineWidth = t.w;
+        ctx.lineCap = "round";
+        ctx.stroke();
+
+        // Outer glow on trail
+        ctx.beginPath();
+        ctx.moveTo(t.xStart, t.y);
+        ctx.lineTo(t.xEnd, t.y);
+        ctx.strokeStyle = hexToRgba(color, t.alpha * 0.6);
+        ctx.lineWidth = t.w + 2;
+        ctx.stroke();
+      }
+
+      // 2. Translucent forward-lunging energy wedge
+      ctx.beginPath();
+      ctx.moveTo(startX, bottomY);
+      ctx.lineTo(frontX, midY);
+      ctx.lineTo(x + dir * (halfWidth * 0.5), topY);
+      ctx.closePath();
+      ctx.fillStyle = hexToRgba(color, 0.28);
+      ctx.fill();
+
+      // 3. Sharp dynamic leading slash blade (forward chevron)
+      ctx.beginPath();
+      ctx.moveTo(x + dir * (halfWidth * 0.5), topY);
+      ctx.lineTo(frontX, midY);
+      ctx.lineTo(x + dir * (halfWidth * 0.1), bottomY);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4.0;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // 4. White-hot leading edge core
+      ctx.beginPath();
+      ctx.moveTo(x + dir * (halfWidth * 0.5), topY + 2);
+      ctx.lineTo(frontX - dir * 1, midY);
+      ctx.lineTo(x + dir * (halfWidth * 0.1), bottomY - 1);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
 
       ctx.restore();
       return;

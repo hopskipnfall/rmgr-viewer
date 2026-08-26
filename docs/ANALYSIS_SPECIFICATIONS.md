@@ -110,50 +110,88 @@ Initiated when a player enters:
 
 Implemented in [`src/neutralHits.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/neutralHits.ts).
 
-### 4.1 Disadvantage Exclusion
+### 4.1 Advantage Hierarchy & Neutral Interaction Chains
 
-A hit or grab is only classified as a **Neutral Interaction** if neither player is currently in an active disadvantage state:
+Gameplay flows through a 5-tier advantage state machine:
+
+```
+[ Level 4: Stock Lost / Blastzone KO ]
+                 ▲
+[ Level 3: Offstage (Edge Guard Situation) ]
+                 ▲
+[ Level 2: Ledge (Ledge Trap Situation) ]
+                 ▲
+[ Level 1: Stage Advantage (Combos, Juggles, Tech Chases, Scramble) ]
+                 ▲
+[ Level 0: True Neutral (Equal Stage Positioning, Actionable) ]
+```
+
+An **End-to-End Neutral Interaction** begins on the first hit or grab landed in Level 0 (True Neutral) and tracks the full conversion sequence across all advantage levels until:
+
+1. **Level 4 (KO)**: Defender loses a stock.
+2. **Neutral Reset**: Exactly 60 consecutive frames ($1.0\text{ s}$ at 60 fps) elapse where both players are fully actionable, undamaged, and on stage.
+3. **Reversal**: Defender turns advantage around via counter-attack or crouch-cancel punish.
+
+### 4.2 The 1-Second (60-Frame) Neutral Reset Rule
+
+Neutral officially resets when **60 consecutive frames** satisfy all of the following conditions:
+
+1. **Zero damage/hits/grabs** occur.
+2. **Both players are fully actionable** (neither player in hitstun, grab capture, tumble with hitstun, knockdown/prone `0x032`–`0x037`, shield stun `0x023`, or dead/respawning `0x000`–`0x009`).
+3. **Neither player is in a tracked situation** (offstage recovery, ledge getup, or angel invincibility).
+
+Follow-up hits landed before 60 consecutive actionable frames elapse extend the existing interaction rather than opening a new neutral event.
+
+### 4.3 Disadvantage Exclusion
+
+A hit or grab is only classified as the opening of a **Neutral Interaction** if neither player is currently in an active disadvantage state:
 
 - Excludes frames where victim is in an active **Recovery Situation** (`buildRecoveryMap`).
 - Excludes frames where victim is in an active **Ledge Getup Situation** (`buildLedgeMap`).
-- Excludes active Respawn Angel Invincibility.
+- Excludes active Respawn Angel Invincibility (`buildAngelMap`).
 
-### 4.2 Priority Classification Hierarchy
+### 4.4 Priority Classification Hierarchy
 
-When a fresh hit (`comboHitCount` increments from 0) or fresh grab (`0x0ab`–`0x0bc`) lands, the victim's state over the preceding 30 frames ($0.5\text{ s}$) is evaluated sequentially:
+When a fresh hit (`comboHitCount` increments from 0) or fresh grab (`0x0ab`–`0x0bc`) lands in True Neutral, the preceding frames are evaluated sequentially:
 
 ```
                       [ Fresh Hit / Grab in Neutral ]
                                      │
-                 Is victim in landing lag at hit frame?
-                 (0x01f, 0x020, 0x03b, 0x0db)
+                 Did victim attack into attacker's shield
+                 within preceding 45 frames (0.75s)?
                              /               \
                           [YES]              [NO]
                            │                  │
-                    LANDING LAG        Did victim whiff an attack / grab
-                                       within preceding 30 frames (0.5s)?
-                                                   /              \
-                                                [YES]             [NO]
-                                                 │                 │
-                                           WHIFF PUNISH      Did victim jump without attacking
-                                                             within preceding 30 frames (0.5s)?
-                                                                         /             \
-                                                                      [YES]            [NO]
-                                                                       │                │
-                                                                  JUMP PUNISH    Was victim grounded
-                                                                                 at hit frame?
-                                                                                     /       \
-                                                                                  [YES]      [NO]
-                                                                                   │          │
-                                                                             STANDING HIT   UNKNOWN
-                                                                             / STANDING GRAB
+                UNSAFE SHIELD PRESSURE    Did victim land from the air / in landing lag
+                                          within preceding 30 frames (0.5s)?
+                                                      /              \
+                                                   [YES]             [NO]
+                                                    │                 │
+                                               LAND PUNISH      Did victim whiff an attack / grab
+                                                                within preceding 30 frames (0.5s)?
+                                                                            /             \
+                                                                         [YES]            [NO]
+                                                                          │                │
+                                                                    WHIFF PUNISH     Did victim jump without attacking
+                                                                                     within preceding 30 frames (0.5s)?
+                                                                                                 /             \
+                                                                                              [YES]            [NO]
+                                                                                               │                │
+                                                                                          JUMP PUNISH    Was victim grounded
+                                                                                                         at hit frame?
+                                                                                                             /       \
+                                                                                                          [YES]      [NO]
+                                                                                                           │          │
+                                                                                                     STANDING HIT   UNKNOWN
+                                                                                                     / STANDING GRAB
 ```
 
-1. **`landing-lag`**: Victim is in landing animation (`0x01f` LandingLight, `0x020` LandingHeavy, `0x03b` LandingSpecial, `0x0db` LandingAirX).
-2. **`whiff-punish`**: Victim initiated an attack or grab that ended without landing a hit within 30 frames prior to being hit.
-3. **`jump-punish`**: Victim initiated jump squat (`0x014`, `0x015`) or airborne jump (`0x016`–`0x019`) without executing an aerial attack within 30 frames prior to being hit.
-4. **`standing-hit` / `standing-grab`**: Victim was grounded in neutral stand/walk/run/crouch when hit or grabbed.
-5. **`unknown`**: Airborne neutral hit outside of above conditions.
+1. **`shield-pressure` ("Unsafe Shield Pressure")**: Victim initiated an attack within the preceding 45 frames that made contact with the opponent's shield (`0x098`–`0x09b` or shield stun `0x09b`/`0x023`), and was punished out of shield.
+2. **`landing-lag` ("Land Punish")**: Victim was in landing lag animation (`0x01f`, `0x020`, `0x03b`, `0x0db`) or transitioned from airborne to grounded within 30 frames ($0.5\text{ s}$) prior to being hit.
+3. **`whiff-punish` ("Whiff Punish")**: Victim initiated an attack or grab that ended without landing a hit within 30 frames prior to being hit.
+4. **`jump-punish` ("Jump Punish")**: Victim initiated jump squat (`0x014`, `0x015`) or airborne jump (`0x016`–`0x019`) without executing an aerial attack within 30 frames prior to being hit.
+5. **`standing-hit` / `standing-grab` ("Standing Hit" / "Standing Grab")**: Victim was grounded in neutral stand/walk/run/crouch when hit or grabbed.
+6. **`unknown` ("Neutral Hit")**: Airborne neutral hit outside of above conditions.
 
 ---
 

@@ -75,6 +75,7 @@ const COMMON_STATES: StateOption[] = [
 
   // Attacks
   { id: 0x0be, name: "Jab1", category: "attack" },
+  { id: 0x0c0, name: "Dash Attack", category: "attack" },
   { id: 0x0c3, name: "FTilt", category: "attack" },
   { id: 0x0c7, name: "UTilt", category: "attack" },
   { id: 0x0c9, name: "DTilt", category: "attack" },

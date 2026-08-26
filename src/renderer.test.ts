@@ -614,11 +614,14 @@ describe("getAttackInfo", () => {
       type: "aerial",
       direction: "down",
     }); // Dair
+    expect(getAttackInfo(0x0c0)).toEqual({
+      type: "dash-attack",
+      direction: "forward",
+    }); // DashAttack
   });
 
   it("returns null for non-attack states", () => {
     expect(getAttackInfo(0x00a)).toBeNull(); // Idle
-    expect(getAttackInfo(0x0c0)).toBeNull(); // DashAttack
     expect(getAttackInfo(0x0db)).toBeNull(); // LandingAirX
     expect(getAttackInfo(0x099)).toBeNull(); // Shield
     expect(getAttackInfo(0x0ab)).toBeNull(); // CapturePull

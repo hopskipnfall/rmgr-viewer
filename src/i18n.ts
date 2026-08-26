@@ -233,12 +233,19 @@ export interface Translations {
   noNeutralHits: string;
   noNeutralOpeningsLanded: string;
   noNeutralPunishesTaken: string;
+  neutralReasonShieldPressure: string;
   neutralReasonLandingLag: string;
   neutralReasonWhiffPunish: string;
   neutralReasonJumpPunish: string;
   neutralReasonStandingHit: string;
   neutralReasonStandingGrab: string;
   neutralReasonUnknown: string;
+  neutralHitsBadge: (count: number) => string;
+  neutralConversionEdgeGuard: string;
+  neutralConversionLedgeTrap: string;
+  neutralConversionKO: string;
+  neutralConversionReset: string;
+  neutralConversionReversal: string;
 
   // Combos widget
   combosWidgetTitle: string;
@@ -506,12 +513,19 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noNeutralHits: "No neutral hits in this match.",
     noNeutralOpeningsLanded: "No neutral openings landed.",
     noNeutralPunishesTaken: "No neutral punishes taken.",
-    neutralReasonLandingLag: "Landing Lag",
+    neutralReasonShieldPressure: "Unsafe Shield Pressure",
+    neutralReasonLandingLag: "Land Punish",
     neutralReasonWhiffPunish: "Whiff Punish",
     neutralReasonJumpPunish: "Jump Punish",
     neutralReasonStandingHit: "Standing Hit",
     neutralReasonStandingGrab: "Standing Grab",
     neutralReasonUnknown: "Neutral Hit",
+    neutralHitsBadge: (count) => `${count} ${count === 1 ? "hit" : "hits"}`,
+    neutralConversionEdgeGuard: "Edge Guard",
+    neutralConversionLedgeTrap: "Ledge Trap",
+    neutralConversionKO: "KO",
+    neutralConversionReset: "Reset",
+    neutralConversionReversal: "Reversal",
 
     combosWidgetTitle: "Kill Combos",
     comboHitsBadge: (count) => `${count} hits`,
@@ -762,12 +776,19 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noNeutralHits: "この試合で差し込みヒットはありません。",
     noNeutralOpeningsLanded: "差し込みヒットはありません。",
     noNeutralPunishesTaken: "ニュートラルでの被弾はありません。",
-    neutralReasonLandingLag: "着地隙狩り",
+    neutralReasonShieldPressure: "シールド反撃",
+    neutralReasonLandingLag: "着地狩り",
     neutralReasonWhiffPunish: "後隙狩り (空振り)",
     neutralReasonJumpPunish: "ジャンプ狩り",
     neutralReasonStandingHit: "地上ヒット",
     neutralReasonStandingGrab: "地上掴み",
     neutralReasonUnknown: "ニュートラルヒット",
+    neutralHitsBadge: (count) => `${count}ヒット`,
+    neutralConversionEdgeGuard: "復帰阻止",
+    neutralConversionLedgeTrap: "崖狩り",
+    neutralConversionKO: "撃墜",
+    neutralConversionReset: "仕切り直し",
+    neutralConversionReversal: "反撃",
 
     combosWidgetTitle: "撃墜コンボ",
     comboHitsBadge: (count) => `${count}ヒット`,
