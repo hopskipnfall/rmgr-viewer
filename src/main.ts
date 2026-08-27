@@ -22,6 +22,14 @@ import {
   resolvePerspectivePort,
 } from "./data/identity.js";
 import { computeOverallBaseline, type DerivedRates } from "./data/aggregate.js";
+import { groupGamesIntoSessions } from "./data/session.js";
+import {
+  hasVideoLink,
+  loadVideoLink,
+  propagateVideoLinkToSession,
+  saveVideoLink,
+  type VideoLinkData,
+} from "./video/youtubeSync.js";
 
 // DOM Elements
 const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
@@ -67,6 +75,15 @@ const importProgressText = document.getElementById(
   "importProgressText",
 ) as HTMLSpanElement;
 const loadStatus = document.getElementById("loadStatus") as HTMLSpanElement;
+const appLoadingScreen = document.getElementById(
+  "appLoadingScreen",
+) as HTMLDivElement;
+const appLoadingProgressBar = document.getElementById(
+  "appLoadingProgressBar",
+) as HTMLDivElement;
+const appLoadingText = document.getElementById(
+  "appLoadingText",
+) as HTMLDivElement;
 const langToggleEl = document.getElementById("langToggle") as HTMLDivElement;
 const appTitleBtn = document.getElementById("appTitleBtn") as HTMLButtonElement;
 const aboutModal = document.getElementById("aboutModal") as HTMLDivElement;
@@ -155,6 +172,26 @@ const DEMO_REPLAY_URLS = [
   `${import.meta.env.BASE_URL}replays/20260822-222803-Harold-George-23.rmgr`,
   `${import.meta.env.BASE_URL}replays/20260822-222803-Harold-George-37.rmgr`,
   `${import.meta.env.BASE_URL}replays/20260825-105731-George-Harold.rmgr`,
+  // Full 12 Character Battle session, George vs Harold.
+  `${import.meta.env.BASE_URL}replays/20260820-175726-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-180010-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-180146-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-180229-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-180657-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-181042-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-181157-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-181413-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-181511-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-181820-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-181916-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-182308-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-182538-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-182632-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-182926-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-183112-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-183150-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-183423-George-Harold.rmgr`,
+  `${import.meta.env.BASE_URL}replays/20260820-183646-George-Harold.rmgr`,
 ];
 
 function updateHeaderTranslations(): void {
@@ -338,7 +375,20 @@ async function handleRouteChange(route: Route): Promise<void> {
 
       matchController.setIdentity(identity);
       matchController.setCurrentReplayId(summary.id);
-      matchController.setSessionSummaries(libraryController.getSummaries());
+      // Scope to just this game's own session cluster, not the whole
+      // library - propagateVideoLinkToSession's realtime check requires
+      // every consecutive pair in the list it's given to look continuous,
+      // and unrelated sessions recorded on other days (with their own
+      // internal timing quirks) can make that check fail for the entire
+      // set, silently falling back to giving every game an identical
+      // offset instead of one relative to this session's own timestamps.
+      const allSummaries = libraryController.getSummaries();
+      const ownSession = groupGamesIntoSessions(allSummaries, identity).find(
+        (session) => session.games.some((g) => g.id === summary.id),
+      );
+      matchController.setSessionSummaries(
+        ownSession ? [...ownSession.games] : allSummaries,
+      );
       matchController.loadMatch(loaded, initialPort, matchupBaseline);
       matchController.activate();
       loadStatus.textContent = "";
@@ -486,8 +536,15 @@ async function init(): Promise<void> {
     }
   });
 
-  // 3. Seed Demo Replays
+  // 3. Initialize Language (before the demo-seeding progress text below,
+  // and before the router's initial route can render anything, so both
+  // are localized from the very first frame)
+  const initialLang = initLanguage();
+  applyLanguage(initialLang);
+
+  // 4. Seed Demo Replays
   const demoSummaries: GameSummary[] = [];
+  let demoLoadedCount = 0;
   for (const url of DEMO_REPLAY_URLS) {
     try {
       const sampleLoaded = await loadReplayFromUrl(url);
@@ -497,6 +554,14 @@ async function init(): Promise<void> {
       demoSummaries.push(summary);
     } catch (err) {
       console.warn("Could not load demo sample:", url, err);
+    } finally {
+      demoLoadedCount++;
+      const pct = Math.round((demoLoadedCount / DEMO_REPLAY_URLS.length) * 100);
+      appLoadingProgressBar.style.setProperty("--progress-pct", `${pct}%`);
+      appLoadingText.textContent = t().loadingDemoReplaysProgress(
+        demoLoadedCount,
+        DEMO_REPLAY_URLS.length,
+      );
     }
   }
 
@@ -506,13 +571,89 @@ async function init(): Promise<void> {
     libraryController.addSummaries(demoSummaries);
   }
 
-  // 4. Initialize Language
-  const initialLang = initLanguage();
-  applyLanguage(initialLang);
+  // 3b. Seed the default YouTube sync link for the 12CB session recorded on
+  // 2026-08-20: frame 0 of the first file was confirmed to line up with
+  // 0:05.80 in the linked video. Propagate it across the rest of that same
+  // real-time session (not the unrelated 08-22/08-25 demo files) as a
+  // rough estimate so every match in the battle opens already synced.
+  // Skip if a visitor already set their own link for this game.
+  const TWELVE_CB_VIDEO_ID = "tcMChEWcHZ4";
+  const TWELVE_CB_VIDEO_URL = `https://www.youtube.com/watch?v=${TWELVE_CB_VIDEO_ID}`;
+  const TWELVE_CB_VIDEO_SOURCE = "20260820-175726-George-Harold.rmgr";
+  const twelveCbSourceSummary = demoSummaries.find(
+    (s) => s.sourceName === TWELVE_CB_VIDEO_SOURCE,
+  );
+  const twelveCbSessionGames = demoSummaries.filter((s) =>
+    s.sourceName.startsWith("20260820-"),
+  );
+  if (twelveCbSourceSummary && !hasVideoLink(twelveCbSourceSummary.id)) {
+    const linkData: VideoLinkData = {
+      videoId: TWELVE_CB_VIDEO_ID,
+      url: TWELVE_CB_VIDEO_URL,
+      offsetSeconds: 5.8,
+      viewMode: "video-only",
+    };
+    saveVideoLink(twelveCbSourceSummary.id, linkData);
+    if (twelveCbSessionGames.length > 1) {
+      propagateVideoLinkToSession(
+        twelveCbSourceSummary.id,
+        linkData,
+        twelveCbSessionGames,
+      );
+    }
+  }
 
-  // 5. Connect Router
+  // 3c. Hand-synced exact offsets, replacing the proportional-delta
+  // estimate above as they're confirmed against the actual video (which
+  // drifts over a session this long - real matches don't run back-to-back
+  // at a constant cadence). Extend this map as more are confirmed; existing
+  // viewMode preference is preserved.
+  const TWELVE_CB_EXACT_OFFSETS: Record<string, number> = {
+    "20260820-175726-George-Harold.rmgr": 5.8,
+    "20260820-180010-George-Harold.rmgr": 169.95,
+    "20260820-180146-George-Harold.rmgr": 266.45,
+    "20260820-180229-George-Harold.rmgr": 309.2,
+    "20260820-180657-George-Harold.rmgr": 576.92,
+    "20260820-181042-George-Harold.rmgr": 802.21,
+    "20260820-181157-George-Harold.rmgr": 877.19,
+    "20260820-181413-George-Harold.rmgr": 1013.36,
+    "20260820-181511-George-Harold.rmgr": 1071.31,
+    "20260820-181820-George-Harold.rmgr": 1260.43,
+    "20260820-181916-George-Harold.rmgr": 1315.78,
+    "20260820-182308-George-Harold.rmgr": 1547.75,
+    "20260820-182538-George-Harold.rmgr": 1698.34,
+    "20260820-182632-George-Harold.rmgr": 1752.19,
+    "20260820-182926-George-Harold.rmgr": 1926.45,
+    "20260820-183112-George-Harold.rmgr": 2031.7,
+    "20260820-183150-George-Harold.rmgr": 2070.16,
+    "20260820-183423-George-Harold.rmgr": 2222.8,
+    "20260820-183646-George-Harold.rmgr": 2366.29,
+  };
+  for (const game of twelveCbSessionGames) {
+    const offsetSeconds = TWELVE_CB_EXACT_OFFSETS[game.sourceName];
+    if (offsetSeconds === undefined) continue;
+    const existing = loadVideoLink(game.id);
+    saveVideoLink(game.id, {
+      videoId: TWELVE_CB_VIDEO_ID,
+      url: TWELVE_CB_VIDEO_URL,
+      offsetSeconds,
+      viewMode: existing?.viewMode ?? "video-only",
+    });
+  }
+
+  // 5. Connect Router. onRoute() fires its callback once synchronously
+  // during registration for the current URL (covering a direct
+  // #/match/<id> load, not just #/) - keep the loading screen up through
+  // that first resolution, whichever branch it takes, then hide it.
+  let isFirstRoute = true;
   onRoute((route) => {
-    void handleRouteChange(route);
+    const routePromise = handleRouteChange(route);
+    if (isFirstRoute) {
+      isFirstRoute = false;
+      void routePromise.finally(() => {
+        appLoadingScreen.hidden = true;
+      });
+    }
   });
 }
 

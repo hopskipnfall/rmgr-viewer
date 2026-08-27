@@ -172,7 +172,7 @@ export function loadVideoLink(replayId: string): VideoLinkData | null {
         url: parsed.url || `https://www.youtube.com/watch?v=${parsed.videoId}`,
         offsetSeconds:
           typeof parsed.offsetSeconds === "number" ? parsed.offsetSeconds : 0,
-        viewMode: parsed.viewMode || "video-pip",
+        viewMode: parsed.viewMode || "video-only",
       };
     }
   } catch {
@@ -464,6 +464,20 @@ export class YouTubeSyncController {
     const newOffset = Number(
       (this.linkData.offsetSeconds + deltaSeconds).toFixed(3),
     );
+    this.linkData = { ...this.linkData, offsetSeconds: newOffset };
+    if (this.currentReplayId) {
+      saveVideoLink(this.currentReplayId, this.linkData);
+    }
+    this.onLinkDataChange(this.linkData);
+    this.seekVideoToFrame(currentReplayFrame);
+  }
+
+  public setOffsetSeconds(
+    offsetSeconds: number,
+    currentReplayFrame: number,
+  ): void {
+    if (!this.linkData) return;
+    const newOffset = Number(offsetSeconds.toFixed(3));
     this.linkData = { ...this.linkData, offsetSeconds: newOffset };
     if (this.currentReplayId) {
       saveVideoLink(this.currentReplayId, this.linkData);

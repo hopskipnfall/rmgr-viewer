@@ -147,6 +147,7 @@ export interface Translations {
   importFiles: string;
   importFolder: string;
   importingProgress: (loaded: number, total: number) => string;
+  loadingDemoReplaysProgress: (loaded: number, total: number) => string;
   backToLibrary: string;
   you: string;
   aliasesCount: (n: number) => string;
@@ -308,11 +309,7 @@ export interface Translations {
   // YouTube Video Sync
   youtubeVideoTitle: string;
   linkYouTubeVideoBtn: string;
-  linkYouTubeVideoModalTitle: string;
-  youtubeVideoUrlLabel: string;
   youtubeVideoUrlPlaceholder: string;
-  youtubeOffsetLabel: string;
-  youtubeOffsetHelp: string;
   youtubeSaveLinkBtn: string;
   youtubeUnlinkBtn: string;
   youtubeSyncCurrentFrameBtn: string;
@@ -323,11 +320,18 @@ export interface Translations {
   youtubeViewModeVideoPip: string;
   youtubeViewModeVideoOnly: string;
   youtubeViewModeCanvasOnly: string;
-  youtubeSettingsBtnTitle: string;
   youtubeTogglePipBtnTitle: string;
   youtubeInvalidUrlError: string;
   videoAttachedBadge: string;
+  vodWidgetTitle: string;
+  vodPlaybackModeLabel: string;
+  vodFixSyncLabel: string;
+  vodWatchOnYouTube: string;
+  vodEditLinkBtn: string;
+  vodEditLinkTitle: string;
+  pipCloseBtnTitle: string;
   syncSessionVideosBtn: string;
+  vodSyncBannerPrompt: (count: number) => string;
   sessionSyncedSuccess: (count: number) => string;
   sessionNotRealtimeWarning: string;
 
@@ -524,6 +528,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     importFiles: "Select files (.rmgr)",
     importFolder: "Select folder",
     importingProgress: (l, tot) => `Importing replays (${l}/${tot})...`,
+    loadingDemoReplaysProgress: (l, tot) =>
+      `Loading demo replays (${l}/${tot})...`,
     backToLibrary: "← Library",
     you: "YOU",
     aliasesCount: (n) => `${n} alias${n !== 1 ? "es" : ""}`,
@@ -677,15 +683,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     // YouTube Video Sync
     youtubeVideoTitle: "YouTube Video",
     linkYouTubeVideoBtn: "Link Video",
-    linkYouTubeVideoModalTitle: "Link YouTube Video to Match",
-    youtubeVideoUrlLabel: "YouTube URL or Video ID",
     youtubeVideoUrlPlaceholder:
       "https://www.youtube.com/watch?v=... or youtu.be/...",
-    youtubeOffsetLabel: "Start Offset (seconds or mm:ss)",
-    youtubeOffsetHelp:
-      "Replay frame 0 corresponds to this timestamp in the video.",
-    youtubeSaveLinkBtn: "Save & Sync",
-    youtubeUnlinkBtn: "Unlink Video",
+    youtubeSaveLinkBtn: "Save",
+    youtubeUnlinkBtn: "Unlink video",
     youtubeSyncCurrentFrameBtn: "Sync to Current Frame",
     youtubeNudgeMinus1s: "-1.0s",
     youtubeNudgeMinus1f: "-1f",
@@ -693,12 +694,20 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     youtubeNudgePlus1s: "+1.0s",
     youtubeViewModeVideoPip: "Video + Mini 2D Overlay",
     youtubeViewModeVideoOnly: "Video Only",
-    youtubeViewModeCanvasOnly: "2D Canvas Only",
-    youtubeSettingsBtnTitle: "Video sync settings",
+    youtubeViewModeCanvasOnly: "Replay Only",
     youtubeTogglePipBtnTitle: "Toggle mini overlay (p)",
     youtubeInvalidUrlError: "Please enter a valid YouTube video URL or ID.",
     videoAttachedBadge: "YouTube video linked",
-    syncSessionVideosBtn: "Auto-Sync Session Timestamps",
+    vodWidgetTitle: "VOD",
+    vodPlaybackModeLabel: "Playback mode:",
+    vodFixSyncLabel: "Fix sync:",
+    vodWatchOnYouTube: "Watch on YouTube",
+    vodEditLinkBtn: "✎ Edit",
+    vodEditLinkTitle: "Edit linked video",
+    pipCloseBtnTitle: "Close PiP",
+    syncSessionVideosBtn: "Sync now",
+    vodSyncBannerPrompt: (count: number) =>
+      `Apply this timing to the other ${count} game${count === 1 ? "" : "s"} in this session?`,
     sessionSyncedSuccess: (count: number) =>
       `Successfully synchronized video timestamps for ${count} games in session.`,
     sessionNotRealtimeWarning:
@@ -889,6 +898,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     importFiles: "ファイルを選択 (.rmgr)",
     importFolder: "フォルダを選択",
     importingProgress: (l, tot) => `読み込み中 (${l}/${tot})...`,
+    loadingDemoReplaysProgress: (l, tot) =>
+      `デモリプレイを読み込み中 (${l}/${tot})...`,
     backToLibrary: "← ライブラリに戻る",
     you: "プレイヤー",
     aliasesCount: (n) => `別名: ${n}件`,
@@ -1040,13 +1051,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     // YouTube Video Sync
     youtubeVideoTitle: "YouTube 動画",
     linkYouTubeVideoBtn: "動画を連携",
-    linkYouTubeVideoModalTitle: "YouTube 動画をリプレイに連携",
-    youtubeVideoUrlLabel: "YouTube URL または 動画ID",
     youtubeVideoUrlPlaceholder:
       "https://www.youtube.com/watch?v=... または youtu.be/...",
-    youtubeOffsetLabel: "開始オフセット (秒 または 分:秒)",
-    youtubeOffsetHelp: "リプレイのフレーム0に対応する動画の再生位置です。",
-    youtubeSaveLinkBtn: "保存して同期",
+    youtubeSaveLinkBtn: "保存",
     youtubeUnlinkBtn: "連携を解除",
     youtubeSyncCurrentFrameBtn: "現在のフレームに同期",
     youtubeNudgeMinus1s: "-1.0秒",
@@ -1055,13 +1062,21 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     youtubeNudgePlus1s: "+1.0秒",
     youtubeViewModeVideoPip: "動画 + ミニ2D画面",
     youtubeViewModeVideoOnly: "動画のみ",
-    youtubeViewModeCanvasOnly: "2Dキャンバスのみ",
-    youtubeSettingsBtnTitle: "動画同期設定",
+    youtubeViewModeCanvasOnly: "リプレイのみ",
     youtubeTogglePipBtnTitle: "ミニ画面の切り替え (p)",
     youtubeInvalidUrlError:
       "有効なYouTubeのURLまたは動画IDを入力してください。",
     videoAttachedBadge: "YouTube動画リンク済み",
-    syncSessionVideosBtn: "セッション動画タイムスタンプ自動同期",
+    vodWidgetTitle: "VOD",
+    vodPlaybackModeLabel: "再生モード:",
+    vodFixSyncLabel: "同期を調整:",
+    vodWatchOnYouTube: "YouTubeで見る",
+    vodEditLinkBtn: "✎ 編集",
+    vodEditLinkTitle: "連携動画を編集",
+    pipCloseBtnTitle: "PiPを閉じる",
+    syncSessionVideosBtn: "今すぐ同期",
+    vodSyncBannerPrompt: (count: number) =>
+      `このタイミングをセッション内の他の${count}試合にも適用しますか？`,
     sessionSyncedSuccess: (count: number) =>
       `セッション内の${count}試合の動画タイムスタンプを自動同期しました。`,
     sessionNotRealtimeWarning:
