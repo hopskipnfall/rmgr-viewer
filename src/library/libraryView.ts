@@ -15,11 +15,16 @@ import {
   aggregateFilteredGames,
   computeRateDeltas,
   computeOpponentCharacterBreakdown,
+  computeCharacterBaselines,
+  computeBaselineDeltas,
 } from "../data/aggregate.js";
+import { computeOpponentStrength } from "../data/opponentStrength.js";
+import { detectMainCharacter } from "../data/mainCharacter.js";
 import { IdentityPanel } from "./identityPanel.js";
 import { StatCards } from "./statCards.js";
 import { BreakdownTable } from "./breakdownTable.js";
 import { GameList } from "./gameList.js";
+import { NeutralScorePanel } from "./neutralScorePanel.js";
 
 function matchesFilters(
   summary: GameSummary,
@@ -95,9 +100,13 @@ export class LibraryViewController {
   private statCards: StatCards;
   private breakdownTable: BreakdownTable;
   private gameList: GameList;
+  private neutralScorePanel: NeutralScorePanel;
 
   private mobileSidebarExpanded = false;
   private onSelectGameCallback: (summary: GameSummary) => void;
+
+  /** Effort filter (§3.4): when false, the Neutral Score panel excludes "below"/"unknown" tier opponents. */
+  private includeExperimentation = false;
 
   constructor(
     container: HTMLElement,
@@ -127,6 +136,7 @@ export class LibraryViewController {
       <div id="libraryMain" class="library-main">
         <div id="libraryFilterBar" class="library-filter-bar"></div>
         <div id="overallHeader" class="overall-header"></div>
+        <div id="neutralScoreWrap" class="neutral-score-wrap"></div>
         <div id="statCardsWrap" class="stat-cards-wrap"></div>
         <div id="breakdownWrap" class="breakdown-wrap"></div>
         <div id="gameListWrap" class="game-list-wrap"></div>
@@ -168,6 +178,9 @@ export class LibraryViewController {
     const gameListWrap = this.container.querySelector(
       "#gameListWrap",
     ) as HTMLElement;
+    const neutralScoreWrap = this.container.querySelector(
+      "#neutralScoreWrap",
+    ) as HTMLElement;
 
     this.identityPanel = new IdentityPanel(
       identityCard,
@@ -182,6 +195,7 @@ export class LibraryViewController {
 
     this.statCards = new StatCards(statCardsWrap);
     this.breakdownTable = new BreakdownTable(breakdownWrap);
+    this.neutralScorePanel = new NeutralScorePanel(neutralScoreWrap);
 
     this.gameList = new GameList(
       gameListWrap,
@@ -515,11 +529,15 @@ export class LibraryViewController {
     const breakdownWrapEl = this.container.querySelector(
       "#breakdownWrap",
     ) as HTMLElement;
+    const neutralScoreWrapEl = this.container.querySelector(
+      "#neutralScoreWrap",
+    ) as HTMLElement;
 
     if (!hasSufficientGames) {
       if (overallHeaderEl) overallHeaderEl.hidden = true;
       if (statCardsWrapEl) statCardsWrapEl.hidden = true;
       if (breakdownWrapEl) breakdownWrapEl.hidden = true;
+      if (neutralScoreWrapEl) neutralScoreWrapEl.hidden = true;
     } else {
       if (overallHeaderEl) {
         overallHeaderEl.hidden = false;
@@ -537,6 +555,7 @@ export class LibraryViewController {
       }
       if (statCardsWrapEl) statCardsWrapEl.hidden = false;
       if (breakdownWrapEl) breakdownWrapEl.hidden = false;
+      if (neutralScoreWrapEl) neutralScoreWrapEl.hidden = false;
 
       // 5. Stat Cards with comparative deltas when filtered
       this.statCards.render(filteredRates, deltas, isFiltered);
@@ -546,6 +565,66 @@ export class LibraryViewController {
         filteredResolvedGames,
       );
       this.breakdownTable.render(breakdownRows);
+
+      // 6b. Neutral Score panel (§6) — the driving statistic, symmetric and
+      // robust to the sandbagging problem. Defaults to Peer+Above opponents (§3.4).
+      //
+      // Character scoping for THIS PANEL ONLY: when the user hasn't picked a
+      // "My Character" filter, fall back to the auto-detected main character
+      // (§6.1) so the panel's own asymmetric deltas are meaningful. This must
+      // never mutate `this.filters` or reuse `filteredResolvedGames` — doing
+      // so previously hid every off-main-character game from the game list,
+      // stat cards, and breakdown table (most visibly the "experimentation"
+      // games against weaker opponents that are often played off-main).
+      const neutralCharId: number | "all" =
+        this.filters.yourCharacterId !== undefined &&
+        this.filters.yourCharacterId !== "all"
+          ? this.filters.yourCharacterId
+          : (detectMainCharacter(this.summaries, this.identity) ?? "all");
+      const neutralScopedGames = filterGameSummaries(
+        this.summaries,
+        this.identity,
+        {
+          ...this.filters,
+          yourCharacterId: neutralCharId,
+        },
+      );
+
+      const opponentStrengths = computeOpponentStrength(
+        this.summaries,
+        this.identity,
+      );
+      const neutralResolvedGames = this.includeExperimentation
+        ? neutralScopedGames
+        : neutralScopedGames.filter(({ summary, oppPort }) => {
+            const oppP = summary.ports.find((p) => p.port === oppPort);
+            const name = oppP?.playerName.trim();
+            const tier = name ? opponentStrengths.get(name)?.tier : undefined;
+            return tier === "peer" || tier === "above";
+          });
+      const excludedGamesCount =
+        neutralScopedGames.length - neutralResolvedGames.length;
+      const neutralRates = aggregateFilteredGames(neutralResolvedGames);
+      const baselines = computeCharacterBaselines(
+        this.summaries,
+        this.identity,
+      );
+      const baselineDeltas = computeBaselineDeltas(
+        neutralRates,
+        baselines,
+        neutralCharId,
+        this.filters.oppCharacterId ?? "all",
+      );
+      this.neutralScorePanel.render(
+        neutralRates,
+        baselineDeltas,
+        excludedGamesCount,
+        this.includeExperimentation,
+        (checked) => {
+          this.includeExperimentation = checked;
+          this.render();
+        },
+      );
     }
 
     // 7. Game List - displays filtered games with interactive player perspective choice

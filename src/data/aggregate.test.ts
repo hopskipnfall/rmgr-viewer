@@ -6,6 +6,9 @@ import {
   computeOpponentCharacterBreakdown,
   computeGroupedOpponentCharacterBreakdown,
   computeOverallBaseline,
+  computeReasonDifferentials,
+  computeCharacterBaselines,
+  computeBaselineDeltas,
 } from "./aggregate.js";
 import type { GameSummary, RawCounters } from "./gameSummary.js";
 import { createDefaultIdentity } from "./identity.js";
@@ -401,5 +404,84 @@ describe("aggregate module", () => {
     expect(baseline?.recoveryTotal).toBe(18);
     expect(baseline?.recoverySuccesses).toBe(9);
     expect(baseline?.recoveryPct).toBe(50);
+  });
+
+  it("computes opening share as a symmetric, self-normalizing metric (§5.1)", () => {
+    const g1 = makeSummary({
+      id: "g1",
+      yourStats: {
+        openingsWon: 8,
+        openingsLost: 2,
+        openingsWonByReason: { "whiff-punish": 5, "standing-hit": 3 },
+        openingsLostByReason: { reversal: 2 },
+        damageDealtOnOpenings: 80,
+        damageLeakOnOpenings: 20,
+        openingsConvertedToKill: 2,
+      },
+    });
+    const g2 = makeSummary({
+      id: "g2",
+      yourStats: {
+        openingsWon: 2,
+        openingsLost: 8,
+        openingsWonByReason: { "whiff-punish": 2 },
+        openingsLostByReason: { "standing-hit": 8 },
+      },
+    });
+
+    const filtered = filterGameSummaries([g1, g2], identity);
+    const agg = aggregateFilteredGames(filtered);
+
+    expect(agg.openingsWon).toBe(10);
+    expect(agg.openingsLost).toBe(10);
+    expect(agg.openingShare).toBe(50);
+    expect(agg.damagePerOpening).toBe(8); // 80 / 10
+    expect(agg.leakPerOpening).toBe(2); // 20 / 10
+    expect(agg.conversionToKillPct).toBe(20); // 2 / 10
+
+    const differentials = computeReasonDifferentials(agg);
+    const whiffPunish = differentials.find((d) => d.reason === "whiff-punish");
+    expect(whiffPunish?.wonPct).toBe(70); // 7/10
+    expect(whiffPunish?.lostPct).toBe(0);
+    expect(whiffPunish?.differential).toBe(70);
+
+    const standingHit = differentials.find((d) => d.reason === "standing-hit");
+    expect(standingHit?.wonPct).toBe(30); // 3/10
+    expect(standingHit?.lostPct).toBe(80); // 8/10
+    expect(standingHit?.differential).toBe(-50);
+  });
+
+  it("shrinks character-level baselines toward the global rate and produces deltas (§4.1, §6)", () => {
+    // Global: 74/100 recovery. Pikachu (char 7): 12/12 -> should shrink well below 100%.
+    const globalFiller = makeSummary({
+      id: "filler",
+      yourChar: 1,
+      yourStats: { recoverySituations: 88, recoverySuccesses: 62 },
+    });
+    const pikachuGame = makeSummary({
+      id: "pika",
+      yourChar: 7,
+      oppChar: 7,
+      yourStats: { recoverySituations: 12, recoverySuccesses: 12 },
+    });
+
+    const baselines = computeCharacterBaselines(
+      [globalFiller, pikachuGame],
+      identity,
+    );
+
+    expect(baselines.globalRecovery.raw).toBeCloseTo(74, 0); // 74/100
+    const pikaBaseline = baselines.recoveryByMyCharacter.get(7);
+    expect(pikaBaseline?.raw).toBe(100);
+    // Shrunk toward ~74% parent with K=15 on 12 opportunities should land well under 100.
+    expect(pikaBaseline?.shrunk ?? 0).toBeLessThan(90);
+    expect(pikaBaseline?.shrunk ?? 0).toBeGreaterThan(74);
+
+    const filteredRates = aggregateFilteredGames(
+      filterGameSummaries([pikachuGame], identity),
+    );
+    const deltas = computeBaselineDeltas(filteredRates, baselines, 7, 7);
+    expect(deltas.recoveryDeltaPct).not.toBeNull();
+    expect(deltas.recoveryDeltaPct ?? 0).toBeGreaterThan(0); // 100% raw is above its own shrunk baseline
   });
 });

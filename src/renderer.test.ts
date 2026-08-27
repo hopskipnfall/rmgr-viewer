@@ -27,6 +27,7 @@ import {
   isFireFoxFlightState,
   isFoxCharacter,
   isGrabbedState,
+  isEggEncasedState,
   isJigglypuffCharacter,
   isKirbyCharacter,
   isLandingState,
@@ -181,6 +182,17 @@ describe("isGrabbedState", () => {
     expect(isGrabbedState(0x00a)).toBe(false); // Idle
     expect(isGrabbedState(0x0a6)).toBe(false); // Grab (attacker)
     expect(isGrabbedState(0x099)).toBe(false); // Shield
+  });
+});
+
+describe("isEggEncasedState", () => {
+  it("identifies 0x0b2 as egg-encased (confirmed empirically, universal across characters)", () => {
+    expect(isEggEncasedState(0x0b2)).toBe(true);
+  });
+
+  it("returns false for other states", () => {
+    expect(isEggEncasedState(0x00a)).toBe(false); // Idle
+    expect(isEggEncasedState(0x0b3)).toBe(false); // CaptureFalconDive
   });
 });
 
@@ -1211,12 +1223,26 @@ describe("getYoshiSpecialType", () => {
   it("classifies Yoshi special moves correctly", () => {
     expect(getYoshiSpecialType(0x06, 0x0df)).toBe("egg_lay_tongue");
     expect(getYoshiSpecialType(0x06, 0x0e0)).toBe("egg_lay_tongue");
-    expect(getYoshiSpecialType(0x06, 0x0e2)).toBe("egg_throw");
     expect(getYoshiSpecialType(0x06, 0x0e4)).toBe("yoshi_bomb_start");
     expect(getYoshiSpecialType(0x06, 0x0e5)).toBe("yoshi_bomb_plummet");
     expect(getYoshiSpecialType(0x06, 0x0e6)).toBe("yoshi_bomb_plummet");
-    expect(getYoshiSpecialType(0x06, 0x0e7)).toBe("yoshi_bomb_land");
     expect(getYoshiSpecialType(0x06, 0x00a)).toBeNull(); // Idle
+  });
+
+  it("classifies 0x0de as the grounded egg throw (confirmed empirically, previously unmapped)", () => {
+    expect(getYoshiSpecialType(0x06, 0x0de)).toBe("egg_throw");
+  });
+
+  it("classifies 0x0e2 as the aerial Down-B (hip drop) phase, not egg throw (confirmed empirically - previously misclassified as egg throw)", () => {
+    expect(getYoshiSpecialType(0x06, 0x0e2)).toBe("yoshi_bomb_plummet");
+  });
+
+  it("classifies 0x0e1 as the Down-B landing, not egg lay (confirmed empirically - previously misclassified as egg lay tongue)", () => {
+    expect(getYoshiSpecialType(0x06, 0x0e1)).toBe("yoshi_bomb_land");
+  });
+
+  it("classifies 0x0e7 as the egg lay tongue grab, not Down-B landing (confirmed empirically - previously misclassified as yoshi_bomb_land)", () => {
+    expect(getYoshiSpecialType(0x06, 0x0e7)).toBe("egg_lay_tongue");
   });
 });
 
@@ -1235,15 +1261,21 @@ describe("getDKSpecialType", () => {
 
 describe("getNessSpecialType", () => {
   it("classifies Ness special moves correctly", () => {
-    expect(getNessSpecialType(0x0b, 0x0e6)).toBe("pk_fire");
     expect(getNessSpecialType(0x0b, 0x0e7)).toBe("pk_fire");
     expect(getNessSpecialType(0x0b, 0x0e8)).toBe("pk_thunder_charge");
     expect(getNessSpecialType(0x0b, 0x0e9)).toBe("pk_thunder_charge");
     expect(getNessSpecialType(0x0b, 0x0ea)).toBe("pk_thunder_rocket");
     expect(getNessSpecialType(0x0b, 0x0eb)).toBe("psi_magnet");
-    expect(getNessSpecialType(0x0b, 0x0ec)).toBe("psi_magnet");
     expect(getNessSpecialType(0x0b, 0x0ed)).toBe("psi_magnet");
     expect(getNessSpecialType(0x0b, 0x00a)).toBeNull(); // Idle
+  });
+
+  it("classifies 0x0ec as PK Fire 2, not PSI Magnet (confirmed empirically - previously misclassified as PSI Magnet)", () => {
+    expect(getNessSpecialType(0x0b, 0x0ec)).toBe("pk_fire");
+  });
+
+  it("returns null for 0x0e6 (landing lag after PK Fire 2, not the active move - confirmed empirically, previously misclassified as PK Fire)", () => {
+    expect(getNessSpecialType(0x0b, 0x0e6)).toBeNull();
   });
 });
 
@@ -1340,7 +1372,7 @@ describe("getMarioSpecialType", () => {
 describe("getSamusSpecialType", () => {
   it("classifies Samus special moves correctly", () => {
     expect(getSamusSpecialType(0x03, 0x0dc)).toBe("charge_shot");
-    expect(getSamusSpecialType(0x03, 0x0e5)).toBe("screw_attack");
+    expect(getSamusSpecialType(0x03, 0x0e3)).toBe("screw_attack");
     expect(getSamusSpecialType(0x03, 0x0e8)).toBe("bomb");
   });
 
@@ -1348,18 +1380,57 @@ describe("getSamusSpecialType", () => {
     expect(getSamusSpecialType(0x03, 0x00a)).toBeNull(); // Idle
     expect(getSamusSpecialType(0x00, 0x0dc)).toBeNull(); // Mario
   });
+
+  it("classifies 0x0df as charging (confirmed empirically, previously unmapped)", () => {
+    expect(getSamusSpecialType(0x03, 0x0df)).toBe("charge_shot");
+  });
+
+  it("classifies 0x0de as the charge-shot startup (drawing the arm cannon out), distinct from charging (confirmed empirically - previously misclassified as a firing animation)", () => {
+    expect(getSamusSpecialType(0x03, 0x0de)).toBe("charge_shot_startup");
+  });
+
+  it("classifies 0x0e3 (ground) and 0x0e4 (air) as screw attack (confirmed empirically, previously unmapped)", () => {
+    expect(getSamusSpecialType(0x03, 0x0e3)).toBe("screw_attack");
+    expect(getSamusSpecialType(0x03, 0x0e4)).toBe("screw_attack");
+  });
+
+  it("classifies 0x0e6 as dropping a bomb, not screw attack (confirmed empirically - previously misclassified as screw attack)", () => {
+    expect(getSamusSpecialType(0x03, 0x0e6)).toBe("bomb");
+  });
+
+  it("classifies 0x0e2 as firing the charged shot while airborne (confirmed empirically, previously unmapped)", () => {
+    expect(getSamusSpecialType(0x03, 0x0e2)).toBe("charge_shot_fire");
+  });
+
+  it("returns null for 0x0e5 (landing after dropping the bomb, not a special move - confirmed empirically, previously misclassified as screw attack)", () => {
+    expect(getSamusSpecialType(0x03, 0x0e5)).toBeNull();
+  });
 });
 
 describe("getLinkSpecialType", () => {
   it("classifies Link special moves correctly", () => {
     expect(getLinkSpecialType(0x05, 0x0dc)).toBe("boomerang");
-    expect(getLinkSpecialType(0x05, 0x0e5)).toBe("spin_attack");
+    expect(getLinkSpecialType(0x05, 0x0e6)).toBe("spin_attack");
     expect(getLinkSpecialType(0x05, 0x0e9)).toBe("bomb");
   });
 
   it("returns null for non-Link or non-special states", () => {
     expect(getLinkSpecialType(0x05, 0x00a)).toBeNull(); // Idle
     expect(getLinkSpecialType(0x01, 0x0dc)).toBeNull(); // Fox
+  });
+
+  it("classifies 0x0e5 and 0x0e8 as the boomerang throw, not spin attack (confirmed empirically - ground and air use the same animation)", () => {
+    expect(getLinkSpecialType(0x05, 0x0e5)).toBe("boomerang");
+    expect(getLinkSpecialType(0x05, 0x0e8)).toBe("boomerang");
+  });
+
+  it("classifies 0x0e4 as the aerial spin attack (confirmed empirically, previously unmapped)", () => {
+    expect(getLinkSpecialType(0x05, 0x0e4)).toBe("spin_attack");
+  });
+
+  it("classifies 0x0ec as pulling out a bomb in the air, and 0x74 as throwing the held bomb (confirmed empirically, previously unmapped)", () => {
+    expect(getLinkSpecialType(0x05, 0x0ec)).toBe("bomb");
+    expect(getLinkSpecialType(0x05, 0x074)).toBe("bomb");
   });
 });
 
@@ -1378,15 +1449,14 @@ describe("getKirbySpecialType", () => {
 
 describe("getJigglypuffSpecialType", () => {
   it("classifies Jigglypuff special moves correctly", () => {
-    // Pound variations (0x0dc - 0x0e1, 0x0e6 - 0x0e8)
+    // Pound variations (0x0dc, 0x0dd, 0x0e6 - 0x0e8)
     expect(getJigglypuffSpecialType(0x0a, 0x0dc)).toBe("pound");
-    expect(getJigglypuffSpecialType(0x0a, 0x0df)).toBe("pound");
-    expect(getJigglypuffSpecialType(0x0a, 0x0e1)).toBe("pound");
+    expect(getJigglypuffSpecialType(0x0a, 0x0dd)).toBe("pound");
     expect(getJigglypuffSpecialType(0x0a, 0x0e7)).toBe("pound");
 
-    // Sing (0x0e2 - 0x0e5)
-    expect(getJigglypuffSpecialType(0x0a, 0x0e2)).toBe("sing");
+    // Sing (0x0e3 - 0x0e5)
     expect(getJigglypuffSpecialType(0x0a, 0x0e3)).toBe("sing");
+    expect(getJigglypuffSpecialType(0x0a, 0x0e4)).toBe("sing");
 
     // Rest (0x0e9 - 0x0eb)
     expect(getJigglypuffSpecialType(0x0a, 0x0ea)).toBe("rest");
@@ -1397,6 +1467,13 @@ describe("getJigglypuffSpecialType", () => {
     expect(getJigglypuffSpecialType(0x0a, 0x00a)).toBeNull(); // Idle
     expect(getJigglypuffSpecialType(0x02, 0x0dc)).toBeNull(); // DK
   });
+
+  it("returns null for 0x0df, 0x0e0, 0x0e1, 0x0e2 (just extra mid-air jumps, not special moves - confirmed empirically, previously misclassified as Pound/Sing)", () => {
+    expect(getJigglypuffSpecialType(0x0a, 0x0df)).toBeNull();
+    expect(getJigglypuffSpecialType(0x0a, 0x0e0)).toBeNull();
+    expect(getJigglypuffSpecialType(0x0a, 0x0e1)).toBeNull();
+    expect(getJigglypuffSpecialType(0x0a, 0x0e2)).toBeNull();
+  });
 });
 
 describe("Fox Blaster and Yoshi Egg Throw", () => {
@@ -1406,7 +1483,7 @@ describe("Fox Blaster and Yoshi Egg Throw", () => {
   });
 
   it("classifies Yoshi Egg Throw correctly", () => {
-    expect(getYoshiSpecialType(0x06, 0x0e2)).toBe("egg_throw");
+    expect(getYoshiSpecialType(0x06, 0x0de)).toBe("egg_throw");
     expect(getYoshiSpecialType(0x06, 0x0e3)).toBe("egg_throw");
   });
 });

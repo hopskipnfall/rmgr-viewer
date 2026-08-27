@@ -5,9 +5,16 @@ import {
   computeAngelInvincibilityEvents,
   computeAngelInvincibilityStats,
 } from "../angelInvincibility.js";
-import { computeNeutralHitsStats } from "../neutralHits.js";
+import {
+  computeNeutralHitsStats,
+  computeNeutralHitEvents,
+  type NeutralOpeningReason,
+} from "../neutralHits.js";
 import { computeKillCombos } from "../combos.js";
 import type { LoadedReplay } from "../replaySource.js";
+
+/** Pooled per-reason opening counts, keyed by `NeutralOpeningReason`. */
+export type OpeningReasonCounts = Partial<Record<NeutralOpeningReason, number>>;
 
 export interface KillComboSummary {
   readonly hitCount: number;
@@ -30,6 +37,21 @@ export interface RawCounters {
   stocksTaken: number;
   killCombos?: number;
   combosList?: KillComboSummary[];
+
+  /** Neutral openings this port won (landed the initiating hit/grab). */
+  openingsWon?: number;
+  /** Neutral openings this port conceded (was hit/grabbed first). */
+  openingsLost?: number;
+  /** Openings won, broken out by why the opponent was caught. */
+  openingsWonByReason?: OpeningReasonCounts;
+  /** Openings lost, broken out by how this port was caught. */
+  openingsLostByReason?: OpeningReasonCounts;
+  /** Total damage dealt across all openings this port won. */
+  damageDealtOnOpenings?: number;
+  /** Total damage taken *while holding advantage* on openings this port won (the "leak"). */
+  damageLeakOnOpenings?: number;
+  /** Openings won that were converted all the way to a kill. */
+  openingsConvertedToKill?: number;
 }
 
 export interface GamePortSummary {
@@ -72,6 +94,13 @@ export function createEmptyCounters(): RawCounters {
     stocksTaken: 0,
     killCombos: 0,
     combosList: [],
+    openingsWon: 0,
+    openingsLost: 0,
+    openingsWonByReason: {},
+    openingsLostByReason: {},
+    damageDealtOnOpenings: 0,
+    damageLeakOnOpenings: 0,
+    openingsConvertedToKill: 0,
   };
 }
 
@@ -103,6 +132,30 @@ export function computeRawCountersForPort(
     endDamage: Math.round(c.endDamage),
   }));
 
+  const openingEvents = computeNeutralHitEvents(replay);
+  let openingsWon = 0;
+  let openingsLost = 0;
+  const openingsWonByReason: OpeningReasonCounts = {};
+  const openingsLostByReason: OpeningReasonCounts = {};
+  let damageDealtOnOpenings = 0;
+  let damageLeakOnOpenings = 0;
+  let openingsConvertedToKill = 0;
+
+  for (const event of openingEvents) {
+    if (event.attackerPort === port) {
+      openingsWon++;
+      openingsWonByReason[event.reason] =
+        (openingsWonByReason[event.reason] ?? 0) + 1;
+      damageDealtOnOpenings += event.totalDamageDealt ?? 0;
+      damageLeakOnOpenings += event.damageTakenDuringAdvantage ?? 0;
+      if (event.convertedToKill) openingsConvertedToKill++;
+    } else if (event.victimPort === port) {
+      openingsLost++;
+      openingsLostByReason[event.reason] =
+        (openingsLostByReason[event.reason] ?? 0) + 1;
+    }
+  }
+
   return {
     recoverySituations: edgeStats.recoverySituations,
     recoverySuccesses: edgeStats.recoverySuccesses,
@@ -118,6 +171,13 @@ export function computeRawCountersForPort(
     stocksTaken: neutralStats.stocksTaken,
     killCombos: playerCombos.length,
     combosList,
+    openingsWon,
+    openingsLost,
+    openingsWonByReason,
+    openingsLostByReason,
+    damageDealtOnOpenings,
+    damageLeakOnOpenings,
+    openingsConvertedToKill,
   };
 }
 
