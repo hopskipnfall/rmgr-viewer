@@ -188,4 +188,60 @@ describe("GameList rendering", () => {
     expect(mockContainer.innerHTML).not.toContain('class="session-group"');
     expect(mockContainer.innerHTML).toContain('class="game-row');
   });
+
+  it("renders Uneven Start badge on game row when starting stocks are uneven", () => {
+    const mockContainer = {
+      innerHTML: "",
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    } as unknown as HTMLElement;
+
+    const gameList = new GameList(
+      mockContainer,
+      () => {},
+      () => {},
+      () => {},
+      () => {},
+    );
+
+    const identity = {
+      ...createDefaultIdentity(),
+      aliases: new Set(["nue"]),
+    };
+
+    const summary: GameSummary = {
+      id: "uneven-game",
+      sourceName: "20260827-171139-nue-shidozz2.rmgr",
+      recordedAt: new Date("2026-08-27T17:11:39"),
+      stageId: DREAM_LAND_STAGE_ID,
+      frameCount: 3600,
+      isComplete: true,
+      fileRef: null,
+      isUnevenStockStart: true,
+      ports: [
+        {
+          port: 0,
+          playerName: "nue",
+          characterId: 43,
+          finalStocks: 0,
+          startStocks: 2,
+        },
+        {
+          port: 1,
+          playerName: "shidozz2",
+          characterId: 43,
+          finalStocks: 1,
+          startStocks: 4,
+        },
+      ],
+      statsByPort: {},
+    };
+
+    gameList.render([summary], identity, 1);
+
+    const html = mockContainer.innerHTML;
+    expect(html).toContain('class="uneven-stocks-badge"');
+    expect(html).toContain("Uneven Start");
+    expect(html).not.toContain('class="session-12cb-badge"');
+  });
 });

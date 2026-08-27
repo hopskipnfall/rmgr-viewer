@@ -158,7 +158,13 @@ export function groupGamesIntoSessions(
         if (yourP) yourCharSet.add(yourP.characterId);
         if (oppP) oppCharSet.add(oppP.characterId);
 
-        if (yourP && oppP && yourP.finalStocks >= 0 && oppP.finalStocks >= 0) {
+        if (
+          yourP &&
+          oppP &&
+          yourP.finalStocks >= 0 &&
+          oppP.finalStocks >= 0 &&
+          !game.isUnevenStockStart
+        ) {
           if (yourP.finalStocks > oppP.finalStocks) {
             wins++;
           } else if (oppP.finalStocks > yourP.finalStocks) {

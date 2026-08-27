@@ -175,7 +175,13 @@ export function aggregateFilteredGames(
   for (const { summary, yourPort, oppPort } of resolvedGames) {
     const yourP = summary.ports.find((p) => p.port === yourPort);
     const oppP = summary.ports.find((p) => p.port === oppPort);
-    if (yourP && oppP && yourP.finalStocks >= 0 && oppP.finalStocks >= 0) {
+    if (
+      yourP &&
+      oppP &&
+      yourP.finalStocks >= 0 &&
+      oppP.finalStocks >= 0 &&
+      !summary.isUnevenStockStart
+    ) {
       if (yourP.finalStocks > oppP.finalStocks) {
         wins++;
       } else if (oppP.finalStocks > yourP.finalStocks) {
@@ -442,7 +448,7 @@ export function computeOpponentCharacterBreakdown(
     for (const g of games) {
       const yourP = g.summary.ports.find((p) => p.port === g.yourPort);
       const oppP = g.summary.ports.find((p) => p.port === g.oppPort);
-      if (yourP && oppP) {
+      if (yourP && oppP && !g.summary.isUnevenStockStart) {
         if (yourP.finalStocks > oppP.finalStocks) {
           wins++;
         } else if (oppP.finalStocks > yourP.finalStocks) {

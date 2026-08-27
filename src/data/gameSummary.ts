@@ -37,6 +37,7 @@ export interface GamePortSummary {
   playerName: string;
   characterId: number;
   finalStocks: number;
+  startStocks?: number;
 }
 
 export interface GameSummary {
@@ -52,6 +53,7 @@ export interface GameSummary {
   fileRef: File | null;
   url?: string;
   isBundledSample?: boolean;
+  isUnevenStockStart?: boolean;
 }
 
 export function createEmptyCounters(): RawCounters {
@@ -170,13 +172,35 @@ export function summarizeReplay(
         finalStocks = post.stocksRemaining >= 0 ? post.stocksRemaining + 1 : 0;
       }
     }
+
+    let startStocks: number | undefined;
+    for (let fIdx = 0; fIdx < Math.min(replay.frames.length, 30); fIdx++) {
+      const post = replay.frames[fIdx]?.ports[port]?.post;
+      if (post && post.stocksRemaining >= 0) {
+        startStocks = post.stocksRemaining + 1;
+        break;
+      }
+    }
+    if (startStocks === undefined) {
+      startStocks = (replay.gameStart?.stockCountSetting ?? 3) + 1;
+    }
+
     return {
       port,
       playerName: name,
       characterId: settings.characterId,
       finalStocks,
+      startStocks,
     };
   });
+
+  const seatedStartStocks = ports.map((p) => p.startStocks);
+  const isUnevenStockStart =
+    seated.length === 2 &&
+    seatedStartStocks.length === 2 &&
+    seatedStartStocks[0] !== undefined &&
+    seatedStartStocks[1] !== undefined &&
+    seatedStartStocks[0] !== seatedStartStocks[1];
 
   const statsByPort: Partial<Record<PortIndex, RawCounters>> = {};
   if (seated.length === 2) {
@@ -207,5 +231,6 @@ export function summarizeReplay(
     ports,
     statsByPort,
     fileRef,
+    isUnevenStockStart,
   };
 }

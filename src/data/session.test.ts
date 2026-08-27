@@ -162,4 +162,36 @@ describe("groupGamesIntoSessions", () => {
     expect(sessions[0]!.hasVideo).toBe(true);
     expect(sessions[0]!.videoId).toBe("cmw0olwhLaQ");
   });
+
+  it("excludes uneven start games from session win and loss tallies", () => {
+    const baseTime = new Date("2026-08-23T14:00:00Z");
+    const g1 = createGame("g1", baseTime, "Mew2King", 0x09, 0x01, 3, 0); // Win
+    const g2 = createGame(
+      "g2",
+      new Date(baseTime.getTime() + 5 * 60 * 1000),
+      "Mew2King",
+      0x09,
+      0x01,
+      1,
+      0,
+    );
+    g2.isUnevenStockStart = true; // Uneven start game won
+
+    const g3 = createGame(
+      "g3",
+      new Date(baseTime.getTime() + 10 * 60 * 1000),
+      "Mew2King",
+      0x09,
+      0x01,
+      0,
+      2,
+    );
+    g3.isUnevenStockStart = true; // Uneven start game lost
+
+    const sessions = groupGamesIntoSessions([g1, g2, g3], identity, "newest");
+    expect(sessions.length).toBe(1);
+    expect(sessions[0]!.games.length).toBe(3);
+    expect(sessions[0]!.wins).toBe(1);
+    expect(sessions[0]!.losses).toBe(0);
+  });
 });

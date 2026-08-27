@@ -409,6 +409,10 @@ export class GameList {
     const hasSupplementary =
       Boolean(stocksDetail) || statChips.length > 0 || comboChips.length > 0;
 
+    const unevenTag = summary.isUnevenStockStart
+      ? `<span class="uneven-stocks-badge" title="${escapeHtml(tr.unevenStocksTooltip(yourP.startStocks ?? 4, oppP.startStocks ?? 4))}">${escapeHtml(tr.unevenStocksBadge)}</span>`
+      : "";
+
     return `
       <div class="game-row ${pulseClass} ${yourP.finalStocks > oppP.finalStocks ? "row-won" : yourP.finalStocks < oppP.finalStocks ? "row-lost" : ""}" data-id="${summary.id}">
         <div class="game-row-header">
@@ -419,6 +423,7 @@ export class GameList {
             <span class="meta-dot">·</span>
             <span class="game-duration">${duration}</span>
             ${videoBadge ? `<span class="meta-dot">·</span>${videoBadge}` : ""}
+            ${unevenTag ? `<span class="meta-dot">·</span>${unevenTag}` : ""}
           </div>
           <div class="game-row-players">
             <strong class="you-player">${escapeHtml(yourName)}</strong>

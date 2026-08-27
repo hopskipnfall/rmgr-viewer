@@ -285,10 +285,13 @@ Implemented in [`src/characterMeta.ts`](file:///Users/ness/workspaces/rmgr-viewe
 ### 8.1 Pikachu Quick Attack (Up-B) Trajectory
 
 - **State IDs**: `0x0e5` (`SpecialHi` - Zip 1) and `0x0e6` (`SpecialHiEnd` - Zip 2).
-- **Extraction**:
+- **Extraction & Overlay Visualization**:
   - Trajectory vectors extracted per zip segment from velocity and position deltas.
   - Successive angle delta calculated to evaluate angle distinction requirements ($>38^\circ$ between Zip 1 and Zip 2).
-  - Canvas stage overlay renders full recovery paths, zip turnpoints, and frame coordinates.
+  - Recovery approach trajectory segmented visually:
+    - **Grey line**: Offstage approach trajectory prior to airborne jump initiation.
+    - **White line**: Airborne jump states (`JumpAerialF`, `JumpAerialB`, `JumpF`, `JumpB`) from jump initiation until Up-B startup.
+    - **Yellow line**: Active Quick Attack Up-B trajectory with electric aura effect.
 
 ### 8.2 Jigglypuff Forward Throw Follow-ups
 
@@ -326,11 +329,19 @@ For any metric $M$ across set of replays $G$:
 $$\text{Overall Rate} = \frac{\sum_{g \in G} \text{Successes}_g}{\sum_{g \in G} \text{Situations}_g} \times 100\%$$
 $$\text{Average Neutral Hits / Stock} = \frac{\sum_{g \in G} \text{Total Neutral Hits Taken}_g}{\sum_{g \in G} \text{Total Stocks Lost}_g}$$
 
-### 9.3 Matchup Baseline Deltas ($\Delta\%$)
+### 9.3 Uneven Start Matches (12-Character Battles & Handicaps)
 
-- When inspecting from the **User Perspective**, match statistics display delta comparisons against historical averages:
-  $$\Delta = \text{Match Rate}\% - \text{Historical Baseline}\%$$
-- When inspecting from the **Opponent Perspective**, deltas are **suppressed** to prevent comparing opponent match play against the user's personal baseline.
+- Replays where players begin with unequal initial stock counts (captured from frame 0 post-data) are flagged as `isUnevenStockStart = true`.
+- Individual game rows display an `Uneven Start` (`変則スタート`) badge with tooltip details.
+- **Win/Loss Exclusion**: Uneven start games are excluded from win/loss records and win rate percentage calculations to preserve pure competitive record tracking.
+
+### 9.4 Home Page Comparative Filtering & Matchup Baseline Deltas ($\Delta\%$)
+
+- **Library Filters**: Interactive dropdowns for Opponent Name, My Character, and Opponent Character filter the library data.
+- **Comparative Baseline ($\Delta\%$)**:
+  - When filters are active, Stat Cards display filtered metrics with comparative deltas ($\Delta\%$) against the unfiltered baseline across all resolved games:
+    $$\Delta = \text{Filtered Rate}\% - \text{Baseline Rate}\%$$
+  - Match view stats compare user performance against matchup-specific or overall historical baselines. Deltas are suppressed when inspecting from opponent perspective.
 
 ---
 

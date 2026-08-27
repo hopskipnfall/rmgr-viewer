@@ -268,6 +268,15 @@ Filters select a subset of `GameSummary`s, then aggregate that subset:
 All filters are AND-ed. Ambiguous-identity games are excluded from every result set
 regardless of filters (§2.2).
 
+When filters are applied on the Home Page, the Stat Cards display the filtered rates
+alongside delta comparisons against the unfiltered baseline ($\Delta\% = \text{Filtered}\% - \text{Baseline}\%$).
+
+### 4.4 Uneven Start Games (12-Character Battles & Handicaps)
+
+Matches starting with unequal stock counts (`isUnevenStockStart = true`) are tagged with
+an `Uneven Start` badge on individual game rows and are **excluded from win/loss and win rate
+calculations** to preserve accurate competitive records.
+
 ---
 
 ## 5. Visual design
