@@ -539,6 +539,24 @@ export function getMarioSpecialType(
   if (!isMarioCharacter(characterId) && !isLuigiCharacter(characterId)) {
     return null;
   }
+  // Character-specific action states (>= 0x0dc) are NOT shared across
+  // characters (docs/RMGR_SPEC.md §8) - Mario and Luigi's IDs only
+  // coincidentally overlapped for most of this range. Confirmed empirically
+  // for BOTH characters: 0x0e0 is the Neutral-B fireball throw - it was
+  // misclassified as Up-B here before, which is the bug this carves out.
+  // The remaining boundaries (0x0e1, 0x0e2, and the down-B range) are NOT
+  // yet confirmed for either character - don't extend this guess further
+  // without real data.
+  if (actionStateId === 0x0e0) {
+    return "fireball";
+  }
+  // 0x0df is Luigi's landing lag right after the throw, not a second/third
+  // fireball - render his normal (non-special) pose for it instead of
+  // falling through to the shared Up-B bucket below, which would draw the
+  // Super Jump Punch coins/fist for a state that's just standing there.
+  if (isLuigiCharacter(characterId) && actionStateId === 0x0df) {
+    return null;
+  }
   // Neutral-B Fireball: 0x0dc, 0x0dd, 0x0de
   if (
     actionStateId === 0x0dc ||
@@ -7243,8 +7261,19 @@ export class StageRenderer {
     const noseX = x + dir * halfWidth;
 
     if (specialType === "fireball") {
+      // frameCounter is frames-since-this-action-state-started, not
+      // frames-since-thrown, so a plain "% 20" loop restarted the bounce
+      // every 20 frames and looked like a new fireball each time on any
+      // throw lasting longer than that. Padding the cycle to 80 frames -
+      // 20 of bounce, 60 of nothing - keeps the single-throw animation but
+      // stops it from visibly repeating within one real throw (Luigi's is
+      // the longest of the two, and doesn't run anywhere near 80 frames).
+      const cyclePos = frameCounter % 80;
+      if (cyclePos >= 20) {
+        return;
+      }
       ctx.save();
-      const fbProg = (frameCounter % 20) / 20;
+      const fbProg = cyclePos / 20;
       const fbX = noseX + dir * (10 + fbProg * halfWidth * 2.5);
       const bounceY =
         centerY +

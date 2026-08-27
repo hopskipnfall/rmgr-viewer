@@ -1317,10 +1317,18 @@ describe("getMarioSpecialType", () => {
     expect(getMarioSpecialType(0x04, 0x0dd)).toBe("fireball");
     // Super Jump Punch
     expect(getMarioSpecialType(0x00, 0x0df)).toBe("super_jump_punch");
-    expect(getMarioSpecialType(0x04, 0x0e0)).toBe("super_jump_punch");
     // Tornado / Cyclone
     expect(getMarioSpecialType(0x00, 0x0e3)).toBe("tornado");
     expect(getMarioSpecialType(0x04, 0x0e4)).toBe("tornado");
+  });
+
+  it("classifies 0x0e0 as the fireball throw for BOTH Mario and Luigi (confirmed empirically for each - it was misclassified as shared Up-B before), and Luigi's 0x0df landing lag as no special at all", () => {
+    expect(getMarioSpecialType(0x00, 0x0e0)).toBe("fireball"); // Mario throw
+    expect(getMarioSpecialType(0x04, 0x0e0)).toBe("fireball"); // Luigi throw
+    // Landing lag right after Luigi's throw - not a second fireball, and not
+    // his shared Up-B bucket either (this state doesn't punch). Not yet
+    // confirmed whether Mario has the same landing-lag state.
+    expect(getMarioSpecialType(0x04, 0x0df)).toBeNull();
   });
 
   it("returns null for non-Mario/Luigi or non-special states", () => {

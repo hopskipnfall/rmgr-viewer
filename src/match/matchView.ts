@@ -127,7 +127,6 @@ export class MatchViewController {
   private twelveCbMatchWidget: HTMLElement;
   private twelveCbWidgetHeaderTitle: HTMLHeadingElement;
   private twelveCbCollapseBtn: HTMLButtonElement;
-  private twelveCbMatchProgressEl: HTMLDivElement;
   private twelveCbPlayersContainerEl: HTMLDivElement;
   private twelveCbPrevMatchBtn: HTMLButtonElement;
   private twelveCbNextMatchBtn: HTMLButtonElement;
@@ -217,33 +216,35 @@ export class MatchViewController {
 
   private youtubeSync: YouTubeSyncController;
   private youtubePlayerWrap: HTMLDivElement;
-  private videoSyncBar: HTMLDivElement;
+  private vodWidget: HTMLElement;
+  private vodWidgetHeaderTitle: HTMLHeadingElement;
+  private vodModeLabel: HTMLSpanElement;
+  private vodSyncLabel: HTMLSpanElement;
+  private vodYoutubeLink: HTMLAnchorElement;
   private viewModePipBtn: HTMLButtonElement;
   private viewModeVideoBtn: HTMLButtonElement;
   private viewModeCanvasBtn: HTMLButtonElement;
-  private videoOffsetBadge: HTMLSpanElement;
   private nudgeMinus1sBtn: HTMLButtonElement;
   private nudgeMinus1fBtn: HTMLButtonElement;
   private nudgePlus1fBtn: HTMLButtonElement;
   private nudgePlus1sBtn: HTMLButtonElement;
-  private videoSettingsBtn: HTMLButtonElement;
+  private pipCloseBtn: HTMLButtonElement;
+  private pipVideoCatcher: HTMLDivElement;
+  private pipPrimary: "video" | "canvas" = "canvas";
 
-  private videoLinkModal: HTMLDivElement;
-  private videoLinkModalBackdrop: HTMLDivElement;
-  private videoLinkModalCloseBtn: HTMLButtonElement;
-  private videoLinkModalTitle: HTMLHeadingElement;
-  private videoLinkForm: HTMLFormElement;
-  private videoUrlLabel: HTMLLabelElement;
+  private vodLinkDisplayRow: HTMLDivElement;
+  private vodEditLinkBtn: HTMLButtonElement;
+  private vodLinkEditRow: HTMLDivElement;
   private videoUrlInput: HTMLInputElement;
-  private videoOffsetLabel: HTMLLabelElement;
   private videoOffsetInput: HTMLInputElement;
-  private videoOffsetHelp: HTMLParagraphElement;
   private videoLinkError: HTMLDivElement;
-  private videoLinkSessionNotice: HTMLDivElement;
   private videoUnlinkBtn: HTMLButtonElement;
-  private syncSessionVideosBtn: HTMLButtonElement;
   private videoLinkCancelBtn: HTMLButtonElement;
   private videoLinkSaveBtn: HTMLButtonElement;
+  private vodSyncBanner: HTMLDivElement;
+  private vodSyncBannerText: HTMLSpanElement;
+  private syncSessionVideosBtn: HTMLButtonElement;
+  private vodSyncBannerDismissBtn: HTMLButtonElement;
   private currentVideoViewMode: VideoViewMode = "canvas";
   private sessionSummaries: GameSummary[] = [];
   private currentReplayId: string | null = null;
@@ -265,7 +266,7 @@ export class MatchViewController {
   private activeLogCategories: Set<
     "recovery" | "ledge" | "angel" | "neutral" | "character" | "debug"
   >;
-  private hudOverlayEnabled = true;
+  private hudOverlayEnabled = false;
   private matchupBaseline: DerivedRates | null = null;
   private onPerspectiveChangedCb?: (port: PortIndex) => void;
 
@@ -309,9 +310,6 @@ export class MatchViewController {
     this.twelveCbCollapseBtn = document.getElementById(
       "twelveCbCollapseBtn",
     ) as HTMLButtonElement;
-    this.twelveCbMatchProgressEl = document.getElementById(
-      "twelveCbMatchProgress",
-    ) as HTMLDivElement;
     this.twelveCbPlayersContainerEl = document.getElementById(
       "twelveCbPlayersContainer",
     ) as HTMLDivElement;
@@ -534,9 +532,19 @@ export class MatchViewController {
     this.youtubePlayerWrap = document.getElementById(
       "youtubePlayerWrap",
     ) as HTMLDivElement;
-    this.videoSyncBar = document.getElementById(
-      "videoSyncBar",
-    ) as HTMLDivElement;
+    this.vodWidget = document.getElementById("vodWidget") as HTMLElement;
+    this.vodWidgetHeaderTitle = document.getElementById(
+      "vodHeaderTitle",
+    ) as HTMLHeadingElement;
+    this.vodModeLabel = document.getElementById(
+      "vodModeLabel",
+    ) as HTMLSpanElement;
+    this.vodSyncLabel = document.getElementById(
+      "vodSyncLabel",
+    ) as HTMLSpanElement;
+    this.vodYoutubeLink = document.getElementById(
+      "vodYoutubeLink",
+    ) as HTMLAnchorElement;
     this.viewModePipBtn = document.getElementById(
       "viewModePipBtn",
     ) as HTMLButtonElement;
@@ -546,9 +554,6 @@ export class MatchViewController {
     this.viewModeCanvasBtn = document.getElementById(
       "viewModeCanvasBtn",
     ) as HTMLButtonElement;
-    this.videoOffsetBadge = document.getElementById(
-      "videoOffsetBadge",
-    ) as HTMLSpanElement;
     this.nudgeMinus1sBtn = document.getElementById(
       "nudgeMinus1sBtn",
     ) as HTMLButtonElement;
@@ -561,57 +566,51 @@ export class MatchViewController {
     this.nudgePlus1sBtn = document.getElementById(
       "nudgePlus1sBtn",
     ) as HTMLButtonElement;
-    this.videoSettingsBtn = document.getElementById(
-      "videoSettingsBtn",
+    this.pipCloseBtn = document.getElementById(
+      "pipCloseBtn",
     ) as HTMLButtonElement;
+    this.pipVideoCatcher = document.getElementById(
+      "pipVideoCatcher",
+    ) as HTMLDivElement;
 
-    this.videoLinkModal = document.getElementById(
-      "videoLinkModal",
+    this.vodLinkDisplayRow = document.getElementById(
+      "vodLinkDisplayRow",
     ) as HTMLDivElement;
-    this.videoLinkModalBackdrop = document.getElementById(
-      "videoLinkModalBackdrop",
-    ) as HTMLDivElement;
-    this.videoLinkModalCloseBtn = document.getElementById(
-      "videoLinkModalCloseBtn",
+    this.vodEditLinkBtn = document.getElementById(
+      "vodEditLinkBtn",
     ) as HTMLButtonElement;
-    this.videoLinkModalTitle = document.getElementById(
-      "videoLinkModalTitle",
-    ) as HTMLHeadingElement;
-    this.videoLinkForm = document.getElementById(
-      "videoLinkForm",
-    ) as HTMLFormElement;
-    this.videoUrlLabel = document.getElementById(
-      "videoUrlLabel",
-    ) as HTMLLabelElement;
+    this.vodLinkEditRow = document.getElementById(
+      "vodLinkEditRow",
+    ) as HTMLDivElement;
     this.videoUrlInput = document.getElementById(
       "videoUrlInput",
     ) as HTMLInputElement;
-    this.videoOffsetLabel = document.getElementById(
-      "videoOffsetLabel",
-    ) as HTMLLabelElement;
     this.videoOffsetInput = document.getElementById(
       "videoOffsetInput",
     ) as HTMLInputElement;
-    this.videoOffsetHelp = document.getElementById(
-      "videoOffsetHelp",
-    ) as HTMLParagraphElement;
     this.videoLinkError = document.getElementById(
       "videoLinkError",
     ) as HTMLDivElement;
-    this.videoLinkSessionNotice = document.getElementById(
-      "videoLinkSessionNotice",
-    ) as HTMLDivElement;
     this.videoUnlinkBtn = document.getElementById(
       "videoUnlinkBtn",
-    ) as HTMLButtonElement;
-    this.syncSessionVideosBtn = document.getElementById(
-      "syncSessionVideosBtn",
     ) as HTMLButtonElement;
     this.videoLinkCancelBtn = document.getElementById(
       "videoLinkCancelBtn",
     ) as HTMLButtonElement;
     this.videoLinkSaveBtn = document.getElementById(
       "videoLinkSaveBtn",
+    ) as HTMLButtonElement;
+    this.vodSyncBanner = document.getElementById(
+      "vodSyncBanner",
+    ) as HTMLDivElement;
+    this.vodSyncBannerText = document.getElementById(
+      "vodSyncBannerText",
+    ) as HTMLSpanElement;
+    this.syncSessionVideosBtn = document.getElementById(
+      "syncSessionVideosBtn",
+    ) as HTMLButtonElement;
+    this.vodSyncBannerDismissBtn = document.getElementById(
+      "vodSyncBannerDismissBtn",
     ) as HTMLButtonElement;
 
     this.youtubeSync = new YouTubeSyncController(
@@ -641,8 +640,11 @@ export class MatchViewController {
     this.stageRenderer = new StageRenderer(this.stageCanvas);
 
     try {
+      // Defaults OFF (only "true" turns it on) - this used to default ON
+      // for anyone who'd never touched the toggle, which is exactly what
+      // we don't want.
       this.hudOverlayEnabled =
-        localStorage.getItem("rmgr-viewer-hud") !== "false";
+        localStorage.getItem("rmgr-viewer-hud") === "true";
     } catch {
       // Ignore localStorage read error
     }
@@ -671,7 +673,18 @@ export class MatchViewController {
     }
 
     this.boundOnKeyDown = (e: KeyboardEvent) => this.handleKeyDown(e);
-    this.boundOnResize = () => this.resizeStageCanvas();
+    this.boundOnResize = () => {
+      // Re-resolve from the persisted preference (not currentVideoViewMode,
+      // which may already be a mobile-forced-down value) so resizing back
+      // up past the mobile breakpoint restores PiP instead of getting
+      // stuck on whatever it was downgraded to.
+      const desiredMode = this.youtubeSync.getLinkData()?.viewMode;
+      if (desiredMode) {
+        this.applyVideoViewMode(desiredMode);
+      } else {
+        this.resizeStageCanvas();
+      }
+    };
 
     this.initEventListeners();
   }
@@ -907,34 +920,68 @@ export class MatchViewController {
     this.nudgePlus1sBtn.addEventListener("click", () => {
       this.youtubeSync.nudgeOffset(1, this.playback?.currentIndex ?? 0);
     });
-    this.videoSettingsBtn.addEventListener("click", () => {
-      this.openVideoLinkModal();
+    this.videoOffsetInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        this.videoOffsetInput.blur();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        this.updateVideoSyncUI(this.youtubeSync.getLinkData());
+        this.videoOffsetInput.blur();
+      }
+    });
+    this.videoOffsetInput.addEventListener("blur", () => {
+      this.handleOffsetInputCommit();
     });
 
-    this.videoLinkModalCloseBtn.addEventListener("click", () => {
-      this.closeVideoLinkModal();
-    });
-    this.videoLinkModalBackdrop.addEventListener("click", () => {
-      this.closeVideoLinkModal();
+    this.vodEditLinkBtn.addEventListener("click", () => {
+      this.openLinkEdit();
     });
     this.videoLinkCancelBtn.addEventListener("click", () => {
-      this.closeVideoLinkModal();
+      this.closeLinkEdit();
     });
     this.videoUnlinkBtn.addEventListener("click", () => {
       this.youtubeSync.setLinkData(null);
-      this.closeVideoLinkModal();
+      this.closeLinkEdit();
+    });
+    this.videoLinkSaveBtn.addEventListener("click", () => {
+      this.handleVideoLinkSave();
+    });
+    this.videoUrlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        this.handleVideoLinkSave();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        this.closeLinkEdit();
+      }
     });
     this.syncSessionVideosBtn.addEventListener("click", () => {
       this.handleSyncSessionVideos();
     });
-    this.videoLinkForm.addEventListener("submit", (e) => {
-      this.handleVideoFormSubmit(e);
+    this.vodSyncBannerDismissBtn.addEventListener("click", () => {
+      this.vodSyncBanner.hidden = true;
     });
 
     this.stageCanvas.addEventListener("click", () => {
-      if (this.currentVideoViewMode === "video-pip") {
-        this.youtubeSync.setViewMode("canvas");
+      if (
+        this.currentVideoViewMode === "video-pip" &&
+        this.pipPrimary === "video"
+      ) {
+        this.setPipPrimary("canvas");
       }
+    });
+    this.pipVideoCatcher.addEventListener("click", () => {
+      if (
+        this.currentVideoViewMode === "video-pip" &&
+        this.pipPrimary === "canvas"
+      ) {
+        this.setPipPrimary("video");
+      }
+    });
+    this.pipCloseBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.exitPipMode();
     });
   }
 
@@ -1029,17 +1076,11 @@ export class MatchViewController {
     const shortcutsModal = document.getElementById("shortcutsModal");
     const aboutModal = document.getElementById("aboutModal");
     const modalContainer = document.getElementById("modalContainer");
-    const videoLinkModal = this.videoLinkModal;
     if (
       (shortcutsModal && !shortcutsModal.hidden) ||
       (aboutModal && !aboutModal.hidden) ||
-      (modalContainer && !modalContainer.hidden) ||
-      (videoLinkModal && !videoLinkModal.hidden)
+      (modalContainer && !modalContainer.hidden)
     ) {
-      if (e.code === "Escape" && videoLinkModal && !videoLinkModal.hidden) {
-        e.preventDefault();
-        this.closeVideoLinkModal();
-      }
       return;
     }
     if (e.code === "KeyT") {
@@ -1190,21 +1231,19 @@ export class MatchViewController {
       this.replayInfoDateLabel.textContent = tr.replayInfoRecordedLabel;
     if (this.replayInfoVideoLabel)
       this.replayInfoVideoLabel.textContent = tr.youtubeVideoTitle;
-    if (this.videoLinkModalTitle)
-      this.videoLinkModalTitle.textContent = tr.linkYouTubeVideoModalTitle;
-    if (this.videoUrlLabel)
-      this.videoUrlLabel.textContent = tr.youtubeVideoUrlLabel;
     if (this.videoUrlInput)
       this.videoUrlInput.placeholder = tr.youtubeVideoUrlPlaceholder;
-    if (this.videoOffsetLabel)
-      this.videoOffsetLabel.textContent = tr.youtubeOffsetLabel;
-    if (this.videoOffsetHelp)
-      this.videoOffsetHelp.textContent = tr.youtubeOffsetHelp;
     if (this.videoLinkSaveBtn)
       this.videoLinkSaveBtn.textContent = tr.youtubeSaveLinkBtn;
     if (this.videoUnlinkBtn)
       this.videoUnlinkBtn.textContent = tr.youtubeUnlinkBtn;
     if (this.videoLinkCancelBtn) this.videoLinkCancelBtn.textContent = tr.close;
+    if (this.vodEditLinkBtn) {
+      this.vodEditLinkBtn.textContent = tr.vodEditLinkBtn;
+      this.vodEditLinkBtn.title = tr.vodEditLinkTitle;
+    }
+    if (this.syncSessionVideosBtn)
+      this.syncSessionVideosBtn.textContent = tr.syncSessionVideosBtn;
     if (this.viewModePipBtn)
       this.viewModePipBtn.title = tr.youtubeViewModeVideoPip;
     if (this.viewModeVideoBtn)
@@ -1217,8 +1256,14 @@ export class MatchViewController {
       this.nudgeMinus1fBtn.title = tr.youtubeNudgeMinus1f;
     if (this.nudgePlus1fBtn) this.nudgePlus1fBtn.title = tr.youtubeNudgePlus1f;
     if (this.nudgePlus1sBtn) this.nudgePlus1sBtn.title = tr.youtubeNudgePlus1s;
-    if (this.videoSettingsBtn)
-      this.videoSettingsBtn.title = tr.youtubeSettingsBtnTitle;
+    if (this.vodWidgetHeaderTitle)
+      this.vodWidgetHeaderTitle.textContent = tr.vodWidgetTitle;
+    if (this.vodModeLabel)
+      this.vodModeLabel.textContent = tr.vodPlaybackModeLabel;
+    if (this.vodSyncLabel) this.vodSyncLabel.textContent = tr.vodFixSyncLabel;
+    if (this.vodYoutubeLink)
+      this.vodYoutubeLink.textContent = `▶ ${tr.vodWatchOnYouTube} ↗`;
+    if (this.pipCloseBtn) this.pipCloseBtn.title = tr.pipCloseBtnTitle;
     const shortcutsTogglePipEl = document.getElementById("shortcutsTogglePip");
     if (shortcutsTogglePipEl)
       shortcutsTogglePipEl.textContent = tr.shortcutsTogglePip;
@@ -2848,13 +2893,6 @@ export class MatchViewController {
       this.twelveCbMatchWidget.hidden = false;
     }
 
-    if (this.twelveCbMatchProgressEl) {
-      this.twelveCbMatchProgressEl.innerHTML = `
-        <span>⚔️ ${escapeHtml(tr.twelveCbMatchProgress(state.matchIndex, state.totalMatches))}</span>
-        <span>${escapeHtml(tr.twelveCharacterBattleShort)}</span>
-      `;
-    }
-
     if (this.twelveCbPrevMatchBtn) {
       this.twelveCbPrevMatchBtn.disabled = state.previousGameId === null;
       if (state.previousGameId) {
@@ -2885,7 +2923,8 @@ export class MatchViewController {
 
               if (slot.status === "active") {
                 statusText = `${charName} · ${tr.twelveCbActiveLabel} (${slot.stocksRemaining} ${tr.twelveCbStocksLabel(slot.stocksRemaining ?? 0)})`;
-                stocksPill = `<span class="slot-stocks">⚡ ${slot.stocksRemaining}st</span>`;
+                const stockCount = Math.max(0, slot.stocksRemaining ?? 0);
+                stocksPill = `<span class="slot-stocks">${"⭐".repeat(stockCount)}</span>`;
               } else if (slot.status === "available") {
                 statusText = `${charName} · ${tr.twelveCbAvailableLabel}`;
               } else {
@@ -3515,7 +3554,10 @@ export class MatchViewController {
   public resizeStageCanvas(): void {
     let width: number;
     let height: number;
-    if (this.currentVideoViewMode === "video-pip") {
+    if (
+      this.currentVideoViewMode === "video-pip" &&
+      this.pipPrimary === "video"
+    ) {
       width = 280;
       height = 158;
     } else {
@@ -3695,31 +3737,25 @@ export class MatchViewController {
     this.render12CbMatchWidget();
   }
 
-  private openVideoLinkModal(): void {
+  private openLinkEdit(): void {
     const data = this.youtubeSync.getLinkData();
-    if (data) {
-      this.videoUrlInput.value = data.url;
-      this.videoOffsetInput.value = formatVideoTime(data.offsetSeconds);
-      this.videoUnlinkBtn.hidden = false;
-    } else {
-      this.videoUrlInput.value = "";
-      this.videoOffsetInput.value = "0:00.00";
-      this.videoUnlinkBtn.hidden = true;
-    }
+    this.videoUrlInput.value = data?.url ?? "";
+    this.videoUnlinkBtn.hidden = !data;
     this.videoLinkError.hidden = true;
-    this.videoLinkSessionNotice.hidden = true;
-    this.syncSessionVideosBtn.hidden = this.sessionSummaries.length <= 1;
-    this.syncSessionVideosBtn.textContent = t().syncSessionVideosBtn;
-    this.videoLinkModal.hidden = false;
+    this.vodWidget.hidden = false;
+    this.vodLinkDisplayRow.hidden = true;
+    this.vodLinkEditRow.hidden = false;
     this.videoUrlInput.focus();
   }
 
-  private closeVideoLinkModal(): void {
-    this.videoLinkModal.hidden = true;
+  private closeLinkEdit(): void {
+    this.vodLinkEditRow.hidden = true;
+    const data = this.youtubeSync.getLinkData();
+    this.vodLinkDisplayRow.hidden = !data;
+    this.vodWidget.hidden = !data;
   }
 
-  private handleVideoFormSubmit(e: Event): void {
-    e.preventDefault();
+  private handleVideoLinkSave(): void {
     const urlValue = this.videoUrlInput.value.trim();
     const parsed = parseYouTubeUrl(urlValue);
     if (!parsed) {
@@ -3729,124 +3765,175 @@ export class MatchViewController {
     }
     this.videoLinkError.hidden = true;
 
-    let offsetSec = parseYouTubeTimestamp(this.videoOffsetInput.value.trim());
-    if (offsetSec === 0 && parsed.startSeconds > 0) {
-      offsetSec = parsed.startSeconds;
-    }
-
     const currentData = this.youtubeSync.getLinkData();
-    const viewMode = currentData?.viewMode ?? "video-pip";
+    // Preserve the existing offset unless the pasted URL carries its own
+    // timestamp (e.g. a "&t=90" link) - editing the video shouldn't reset
+    // a sync that's already been dialed in.
+    const offsetSeconds =
+      parsed.startSeconds > 0
+        ? parsed.startSeconds
+        : (currentData?.offsetSeconds ?? 0);
+    const viewMode = currentData?.viewMode ?? "video-only";
 
     const linkData: VideoLinkData = {
       videoId: parsed.videoId,
       url: urlValue,
-      offsetSeconds: offsetSec,
+      offsetSeconds,
       viewMode,
     };
 
     this.youtubeSync.setLinkData(linkData);
+    this.closeLinkEdit();
+    this.showSyncBannerIfApplicable();
+  }
 
-    if (this.currentReplayId && this.sessionSummaries.length > 1) {
-      propagateVideoLinkToSession(
-        this.currentReplayId,
-        linkData,
-        this.sessionSummaries,
-      );
-    }
+  private handleOffsetInputCommit(): void {
+    const data = this.youtubeSync.getLinkData();
+    if (!data) return;
+    const seconds = parseYouTubeTimestamp(this.videoOffsetInput.value.trim());
+    this.youtubeSync.setOffsetSeconds(
+      seconds,
+      this.playback?.currentIndex ?? 0,
+    );
+    this.showSyncBannerIfApplicable();
+  }
 
-    this.closeVideoLinkModal();
+  // The bulk "apply to the rest of the session" action only makes sense
+  // right after you've actually changed something about the sync (a new
+  // video, or a corrected offset) - it's a contextual prompt, not a
+  // standing button, since a stale offset shouldn't silently get pushed
+  // onto sibling games that already have their own exact timing.
+  private showSyncBannerIfApplicable(): void {
+    if (!this.currentReplayId || this.sessionSummaries.length <= 1) return;
+    this.vodSyncBanner.className = "form-notice vod-sync-banner";
+    this.vodSyncBannerText.textContent = t().vodSyncBannerPrompt(
+      this.sessionSummaries.length - 1,
+    );
+    this.vodSyncBanner.hidden = false;
   }
 
   private handleSyncSessionVideos(): void {
-    const urlValue = this.videoUrlInput.value.trim();
-    const parsed = parseYouTubeUrl(urlValue);
-    if (!parsed) {
-      this.videoLinkError.textContent = t().youtubeInvalidUrlError;
-      this.videoLinkError.hidden = false;
-      return;
-    }
-    this.videoLinkError.hidden = true;
-
-    let offsetSec = parseYouTubeTimestamp(this.videoOffsetInput.value.trim());
-    if (offsetSec === 0 && parsed.startSeconds > 0) {
-      offsetSec = parsed.startSeconds;
-    }
-
-    const currentData = this.youtubeSync.getLinkData();
-    const viewMode = currentData?.viewMode ?? "video-pip";
-
-    const linkData: VideoLinkData = {
-      videoId: parsed.videoId,
-      url: urlValue,
-      offsetSeconds: offsetSec,
-      viewMode,
-    };
-
-    this.youtubeSync.setLinkData(linkData);
-
+    const linkData = this.youtubeSync.getLinkData();
+    if (!this.currentReplayId || !linkData) return;
+    const result = propagateVideoLinkToSession(
+      this.currentReplayId,
+      linkData,
+      this.sessionSummaries,
+      true,
+    );
     const tr = t();
-    if (this.currentReplayId && this.sessionSummaries.length > 1) {
-      const result = propagateVideoLinkToSession(
-        this.currentReplayId,
-        linkData,
-        this.sessionSummaries,
-        true,
+    if (result.isRealtime) {
+      this.vodSyncBanner.className = "form-notice vod-sync-banner success";
+      this.vodSyncBannerText.textContent = tr.sessionSyncedSuccess(
+        result.updatedCount,
       );
-      this.videoLinkSessionNotice.hidden = false;
-      if (result.isRealtime) {
-        this.videoLinkSessionNotice.className = "form-notice success";
-        this.videoLinkSessionNotice.textContent = tr.sessionSyncedSuccess(
-          result.updatedCount,
-        );
-      } else {
-        this.videoLinkSessionNotice.className = "form-notice warning";
-        this.videoLinkSessionNotice.textContent = tr.sessionNotRealtimeWarning;
-      }
+    } else {
+      this.vodSyncBanner.className = "form-notice vod-sync-banner warning";
+      this.vodSyncBannerText.textContent = tr.sessionNotRealtimeWarning;
     }
+    setTimeout(() => {
+      this.vodSyncBanner.hidden = true;
+    }, 3000);
   }
 
   private applyVideoViewMode(mode: VideoViewMode): void {
-    this.currentVideoViewMode = mode;
+    // PiP isn't offered on mobile (too much on one small screen) - if a
+    // stale/synced preference still says "video-pip" there, fall back to
+    // the plain video toggle instead. This is presentation-only: we don't
+    // tell youtubeSync about the downgrade, so the real stored preference
+    // (and desktop's PiP view) is untouched.
+    const isMobile = typeof window !== "undefined" && window.innerWidth <= 860;
+    const resolvedMode = isMobile && mode === "video-pip" ? "video-only" : mode;
+
+    // Only reset which side is primary when actually entering PiP fresh -
+    // resize-triggered re-resolution while already in PiP (see
+    // boundOnResize) shouldn't undo a swap the user just made.
+    const enteringPip =
+      resolvedMode === "video-pip" && this.currentVideoViewMode !== "video-pip";
+    this.currentVideoViewMode = resolvedMode;
+    if (enteringPip) {
+      this.pipPrimary = "canvas";
+    }
     this.stageWrap.classList.remove(
       "mode-video",
       "mode-video-only",
       "mode-video-pip",
       "mode-canvas",
     );
-    this.stageWrap.classList.add(`mode-${mode}`);
+    this.stageWrap.classList.add(`mode-${resolvedMode}`);
 
-    this.viewModePipBtn.classList.toggle("active", mode === "video-pip");
-    this.viewModeVideoBtn.classList.toggle("active", mode === "video-only");
-    this.viewModeCanvasBtn.classList.toggle("active", mode === "canvas");
+    this.viewModePipBtn.classList.toggle(
+      "active",
+      resolvedMode === "video-pip",
+    );
+    this.viewModeVideoBtn.classList.toggle(
+      "active",
+      resolvedMode === "video-only",
+    );
+    this.viewModeCanvasBtn.classList.toggle(
+      "active",
+      resolvedMode === "canvas",
+    );
 
+    this.applyPipLayout();
+  }
+
+  private setPipPrimary(primary: "video" | "canvas"): void {
+    this.pipPrimary = primary;
+    this.applyPipLayout();
+  }
+
+  private applyPipLayout(): void {
+    const inPip = this.currentVideoViewMode === "video-pip";
+    const canvasSmall = inPip && this.pipPrimary === "video";
+    const videoSmall = inPip && this.pipPrimary === "canvas";
+    this.stageCanvas.classList.toggle("pip-small", canvasSmall);
+    this.youtubePlayerWrap.classList.toggle("pip-small", videoSmall);
+    this.pipVideoCatcher.hidden = !videoSmall;
     this.resizeStageCanvas();
+  }
+
+  private exitPipMode(): void {
+    this.youtubeSync.setViewMode(
+      this.pipPrimary === "video" ? "video-only" : "canvas",
+    );
   }
 
   private updateVideoSyncUI(data: VideoLinkData | null): void {
     const tr = t();
+    // Reset transient UI state on every call, not just when unlinking - a
+    // banner or edit row left open from switching away from a different
+    // game shouldn't bleed into this one.
+    this.vodSyncBanner.hidden = true;
+    this.vodLinkEditRow.hidden = true;
     if (data) {
-      this.videoSyncBar.hidden = false;
-      this.videoOffsetBadge.textContent = `⏱ ${formatVideoTime(data.offsetSeconds)}`;
+      this.vodWidget.hidden = false;
+      this.vodLinkDisplayRow.hidden = false;
+      if (document.activeElement !== this.videoOffsetInput) {
+        this.videoOffsetInput.value = formatVideoTime(data.offsetSeconds);
+      }
+      this.vodYoutubeLink.href = data.url;
       this.videoUnlinkBtn.hidden = false;
       this.replayInfoVideoValue.innerHTML = `
         <span class="video-linked-status">
           🎬 Linked
-          <button id="replayInfoEditVideoBtn" class="btn-xs" title="${escapeHtml(tr.youtubeSettingsBtnTitle)}">⚙</button>
+          <button id="replayInfoEditVideoBtn" class="btn-xs" title="${escapeHtml(tr.vodEditLinkTitle)}">⚙</button>
         </span>
       `;
       const editBtn = document.getElementById("replayInfoEditVideoBtn");
       if (editBtn) {
-        editBtn.addEventListener("click", () => this.openVideoLinkModal());
+        editBtn.addEventListener("click", () => this.openLinkEdit());
       }
     } else {
-      this.videoSyncBar.hidden = true;
+      this.vodWidget.hidden = true;
+      this.vodLinkDisplayRow.hidden = true;
       this.videoUnlinkBtn.hidden = true;
       this.replayInfoVideoValue.innerHTML = `
         <button id="replayInfoLinkVideoBtn" class="link-video-btn">+ ${escapeHtml(tr.linkYouTubeVideoBtn)}</button>
       `;
       const linkBtn = document.getElementById("replayInfoLinkVideoBtn");
       if (linkBtn) {
-        linkBtn.addEventListener("click", () => this.openVideoLinkModal());
+        linkBtn.addEventListener("click", () => this.openLinkEdit());
       }
     }
   }
