@@ -869,6 +869,12 @@
         background: rgba(224, 71, 63, 0.16);
         color: #e0473f;
       }
+      .session-stat-pill.session-12cb-pill {
+        background: rgba(168, 85, 247, 0.16);
+        border: 1px solid rgba(168, 85, 247, 0.38);
+        color: #c084fc;
+        font-weight: 600;
+      }
       .session-duration {
         font-size: 11px;
         color: var(--text-dim);
@@ -899,6 +905,41 @@
         color: var(--text-dim);
         letter-spacing: 0.02em;
         white-space: nowrap;
+      }
+      .twelve-cb-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: rgba(168, 85, 247, 0.12);
+        border: 1px solid rgba(168, 85, 247, 0.28);
+        color: #c084fc;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+      .twelve-cb-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 12px;
+        margin: 4px 0 2px;
+        background: linear-gradient(
+          90deg,
+          rgba(168, 85, 247, 0.14) 0%,
+          rgba(99, 102, 241, 0.06) 100%
+        );
+        border-left: 3px solid #a855f7;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #e2e8f0;
+      }
+      .twelve-cb-banner .outcome-tag {
+        font-weight: 500;
+        color: #c084fc;
       }
       .session-body {
         padding: 8px 10px 10px;

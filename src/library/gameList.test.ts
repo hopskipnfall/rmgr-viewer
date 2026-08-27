@@ -242,6 +242,93 @@ describe("GameList rendering", () => {
     const html = mockContainer.innerHTML;
     expect(html).toContain('class="uneven-stocks-badge"');
     expect(html).toContain("Uneven Start");
-    expect(html).not.toContain('class="session-12cb-badge"');
+    expect(html).toContain("Excluded from overall W-L stats");
+  });
+
+  it("renders 12CB session pill, banner, and match index badge for 12CB sessions", () => {
+    const mockContainer = {
+      innerHTML: "",
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    } as unknown as HTMLElement;
+
+    const gameList = new GameList(
+      mockContainer,
+      () => {},
+      () => {},
+      () => {},
+      () => {},
+    );
+
+    const identity = {
+      ...createDefaultIdentity("nue"),
+      aliases: new Set(["nue"]),
+    };
+
+    const g1: GameSummary = {
+      id: "cb1",
+      sourceName: "g1.rmgr",
+      recordedAt: new Date("2026-08-27T17:00:00Z"),
+      stageId: DREAM_LAND_STAGE_ID,
+      frameCount: 3600,
+      isComplete: true,
+      fileRef: null,
+      isUnevenStockStart: false,
+      ports: [
+        {
+          port: 0,
+          playerName: "nue",
+          characterId: 43,
+          finalStocks: 2,
+          startStocks: 4,
+        },
+        {
+          port: 1,
+          playerName: "shidozz2",
+          characterId: 39,
+          finalStocks: 0,
+          startStocks: 4,
+        },
+      ],
+      statsByPort: {},
+    };
+
+    const g2: GameSummary = {
+      id: "cb2",
+      sourceName: "g2.rmgr",
+      recordedAt: new Date("2026-08-27T17:03:00Z"),
+      stageId: DREAM_LAND_STAGE_ID,
+      frameCount: 3600,
+      isComplete: true,
+      fileRef: null,
+      isUnevenStockStart: true,
+      ports: [
+        {
+          port: 0,
+          playerName: "nue",
+          characterId: 43,
+          finalStocks: 0,
+          startStocks: 2,
+        },
+        {
+          port: 1,
+          playerName: "shidozz2",
+          characterId: 43,
+          finalStocks: 2,
+          startStocks: 4,
+        },
+      ],
+      statsByPort: {},
+    };
+
+    gameList.render([g1, g2], identity, 2);
+
+    const html = mockContainer.innerHTML;
+    expect(html).toContain('class="session-stat-pill session-12cb-pill"');
+    expect(html).toContain("12CB");
+    expect(html).toContain('class="twelve-cb-banner"');
+    expect(html).toContain('class="twelve-cb-badge"');
+    expect(html).toContain("12CB Match 1/2");
+    expect(html).toContain("12CB Match 2/2");
   });
 });

@@ -220,13 +220,84 @@ export class GameList {
       ? `<span class="session-stat-pill ${recordClass}">${escapeHtml(tr.sessionRecord(session.wins, session.losses))}</span>`
       : "";
 
+    const battles = session.twelveCharacterBattles || [];
+    let twelveCbPill = "";
+    if (battles.length > 0) {
+      const cbWins = battles.filter((b) => b.winner === "you").length;
+      const cbLosses = battles.filter((b) => b.winner === "opponent").length;
+      const label =
+        cbWins > 0 || cbLosses > 0
+          ? tr.session12CbRecord(cbWins, cbLosses)
+          : `${tr.twelveCharacterBattleShort} (${battles.length})`;
+      twelveCbPill = `<span class="session-stat-pill session-12cb-pill" title="${escapeHtml(tr.twelveCharacterBattleTitle)}">⚔️ ${escapeHtml(label)}</span>`;
+    }
+
     const videoBadge = session.hasVideo
       ? `<span class="session-video-badge" title="${escapeHtml(tr.sessionVideoAttached)}">🎬 ${escapeHtml(tr.youtubeVideoTitle)}</span>`
       : "";
 
-    const rowsHtml = session.games
-      .map((g) => this.renderGameRow(g, identity, isSingleGame))
-      .join("");
+    // Build map for 12CB match indices and banners
+    const gameBattleMap = new Map<
+      string,
+      {
+        battle: (typeof battles)[number];
+        battleIndex: number;
+        matchIndex: number;
+        totalMatches: number;
+      }
+    >();
+
+    battles.forEach((battle, bIdx) => {
+      const sortedBattleGames = [...battle.games].sort(
+        (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime(),
+      );
+      sortedBattleGames.forEach((bg, gIdx) => {
+        gameBattleMap.set(bg.id, {
+          battle,
+          battleIndex: bIdx,
+          matchIndex: gIdx + 1,
+          totalMatches: battle.games.length,
+        });
+      });
+    });
+
+    const renderedBanners = new Set<string>();
+    const rowsHtmlParts: string[] = [];
+
+    for (const g of session.games) {
+      const cbInfo = gameBattleMap.get(g.id);
+      if (cbInfo && !renderedBanners.has(cbInfo.battle.id)) {
+        renderedBanners.add(cbInfo.battle.id);
+        const b = cbInfo.battle;
+        let outcomeText: string;
+        if (b.winner === "you") {
+          outcomeText = tr.twelveCbWon(
+            b.winnerRemainingCharacters,
+            b.winnerRemainingStocks,
+          );
+        } else if (b.winner === "opponent") {
+          outcomeText = tr.twelveCbLost(
+            b.winnerRemainingCharacters,
+            b.winnerRemainingStocks,
+          );
+        } else {
+          outcomeText = b.winnerName;
+        }
+        rowsHtmlParts.push(
+          `<div class="twelve-cb-banner"><span>⚔️ ${escapeHtml(tr.twelveCbBanner(cbInfo.battleIndex + 1, outcomeText))}</span></div>`,
+        );
+      }
+
+      const matchBadge = cbInfo
+        ? `<span class="twelve-cb-badge">${escapeHtml(tr.twelveCbMatchIndex(cbInfo.matchIndex, cbInfo.totalMatches))}</span>`
+        : "";
+
+      rowsHtmlParts.push(
+        this.renderGameRow(g, identity, isSingleGame, matchBadge),
+      );
+    }
+
+    const rowsHtml = rowsHtmlParts.join("");
 
     return `
       <div class="session-group${isCollapsed ? " collapsed" : ""}" data-session-id="${escapeHtml(session.id)}">
@@ -242,6 +313,7 @@ export class GameList {
           <div class="session-header-right">
             <span class="session-stat-pill">${escapeHtml(tr.sessionGamesCount(session.games.length))}</span>
             ${recordPill}
+            ${twelveCbPill}
             <span class="session-duration">⏱ ${duration}</span>
             ${videoBadge}
           </div>
@@ -257,6 +329,7 @@ export class GameList {
     summary: GameSummary,
     identity: Identity,
     isSingleGame: boolean = false,
+    extraBadge: string = "",
   ): string {
     const tr = t();
     const is2Player = summary.ports.length === 2;
@@ -422,6 +495,7 @@ export class GameList {
             <span class="game-stage">${escapeHtml(stage)}</span>
             <span class="meta-dot">·</span>
             <span class="game-duration">${duration}</span>
+            ${extraBadge ? `<span class="meta-dot">·</span>${extraBadge}` : ""}
             ${videoBadge ? `<span class="meta-dot">·</span>${videoBadge}` : ""}
             ${unevenTag ? `<span class="meta-dot">·</span>${unevenTag}` : ""}
           </div>

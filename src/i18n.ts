@@ -355,6 +355,15 @@ export interface Translations {
     total: number,
     dreamLand: number,
   ) => string;
+
+  // 12 Character Battle (12CB)
+  twelveCharacterBattleTitle: string;
+  twelveCharacterBattleShort: string;
+  session12CbRecord: (wins: number, losses: number) => string;
+  twelveCbBanner: (setNum: number, outcomeText: string) => string;
+  twelveCbWon: (remainingChars: number, remainingStocks: number) => string;
+  twelveCbLost: (remainingChars: number, remainingStocks: number) => string;
+  twelveCbMatchIndex: (idx: number, total: number) => string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -705,9 +714,21 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     filterReset: "Clear filters",
     unevenStocksBadge: "Uneven Start",
     unevenStocksTooltip: (yourStart, oppStart) =>
-      `Uneven starting stocks: ${yourStart} vs ${oppStart}`,
+      `Uneven starting stocks: ${yourStart} vs ${oppStart} · Excluded from overall W-L stats`,
     overallFilteredHeader: (filtered, total, dreamLand) =>
       `OVERALL STATISTICS (${filtered}/${total} games · ${dreamLand} on Dream Land)`,
+
+    // 12 Character Battle (12CB)
+    twelveCharacterBattleTitle: "12 Character Battle",
+    twelveCharacterBattleShort: "12CB",
+    session12CbRecord: (wins, losses) => `12CB: ${wins}W – ${losses}L`,
+    twelveCbBanner: (setNum, outcomeText) =>
+      `12 Character Battle #${setNum} — ${outcomeText}`,
+    twelveCbWon: (remainingChars, remainingStocks) =>
+      `Won (Remaining: ${remainingChars} chars, ${remainingStocks} stocks)`,
+    twelveCbLost: (remainingChars, remainingStocks) =>
+      `Lost (Opponent had ${remainingChars} chars, ${remainingStocks} stocks left)`,
+    twelveCbMatchIndex: (idx, total) => `12CB Match ${idx}/${total}`,
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -1044,9 +1065,21 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     filterReset: "フィルター解除",
     unevenStocksBadge: "変則スタート",
     unevenStocksTooltip: (yourStart, oppStart) =>
-      `変則開始ストック: ${yourStart} vs ${oppStart}`,
+      `変則開始ストック: ${yourStart} vs ${oppStart} · 総合勝敗数には含まれません`,
     overallFilteredHeader: (filtered, total, dreamLand) =>
       `総合戦績 (${filtered}/${total}試合 · プププランド${dreamLand}試合)`,
+
+    // 12 Character Battle (12CB)
+    twelveCharacterBattleTitle: "12キャラ戦",
+    twelveCharacterBattleShort: "12キャラ",
+    session12CbRecord: (wins, losses) => `12キャラ: ${wins}勝 – ${losses}敗`,
+    twelveCbBanner: (setNum, outcomeText) =>
+      `12キャラ戦 第${setNum}セット — ${outcomeText}`,
+    twelveCbWon: (remainingChars, remainingStocks) =>
+      `勝利 (残り${remainingChars}キャラ・${remainingStocks}ストック)`,
+    twelveCbLost: (remainingChars, remainingStocks) =>
+      `敗北 (相手残り${remainingChars}キャラ・${remainingStocks}ストック)`,
+    twelveCbMatchIndex: (idx, total) => `12キャラ 第${idx}/${total}戦`,
   },
 };
 

@@ -329,11 +329,18 @@ For any metric $M$ across set of replays $G$:
 $$\text{Overall Rate} = \frac{\sum_{g \in G} \text{Successes}_g}{\sum_{g \in G} \text{Situations}_g} \times 100\%$$
 $$\text{Average Neutral Hits / Stock} = \frac{\sum_{g \in G} \text{Total Neutral Hits Taken}_g}{\sum_{g \in G} \text{Total Stocks Lost}_g}$$
 
-### 9.3 Uneven Start Matches (12-Character Battles & Handicaps)
+### 9.3 Uneven Start Matches & 12 Character Battles (12CB / 12キャラ戦)
 
-- Replays where players begin with unequal initial stock counts (captured from frame 0 post-data) are flagged as `isUnevenStockStart = true`.
-- Individual game rows display an `Uneven Start` (`変則スタート`) badge with tooltip details.
-- **Win/Loss Exclusion**: Uneven start games are excluded from win/loss records and win rate percentage calculations to preserve pure competitive record tracking.
+- **Uneven Start Detection**: Replays where seated players begin with unequal initial stock counts (captured from frame 0 post-data) are flagged as `isUnevenStockStart = true`.
+- **Win/Loss Exclusion**: Uneven start matches are excluded from aggregate win/loss records and win rate percentage calculations to preserve pure competitive record tracking. Tooltips indicate this exclusion explicitly.
+- **12 Character Battle (12CB) Recognition**:
+  - Implemented in [`src/data/twelveCharacterBattle.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/data/twelveCharacterBattle.ts).
+  - Recognizes multi-game 12CB sets by verifying carry-over conditions:
+    1. The winner of match $k$ carries over their remaining stocks $S_{\text{rem}} > 0$ and character to match $k+1$.
+    2. The loser of match $k$ is eliminated on that character and counterpicks a new character starting with full stocks ($N=4$).
+    3. The battle completes when a player exhausts all 12 roster characters ($12\text{ eliminations}$).
+  - Computes remaining character count in reserve ($12 - \text{eliminations}$) and remaining stocks on the final surviving character.
+  - Renders `⚔️ 12CB` series pills in session headers, sectional set outcome banners, and match index badges (`12CB Match X/Y`).
 
 ### 9.4 Home Page Comparative Filtering & Matchup Baseline Deltas ($\Delta\%$)
 

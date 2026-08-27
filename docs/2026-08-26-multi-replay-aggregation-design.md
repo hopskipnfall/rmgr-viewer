@@ -271,11 +271,19 @@ regardless of filters (§2.2).
 When filters are applied on the Home Page, the Stat Cards display the filtered rates
 alongside delta comparisons against the unfiltered baseline ($\Delta\% = \text{Filtered}\% - \text{Baseline}\%$).
 
-### 4.4 Uneven Start Games (12-Character Battles & Handicaps)
+### 4.4 Uneven Start Games & 12 Character Battles (12CB)
 
 Matches starting with unequal stock counts (`isUnevenStockStart = true`) are tagged with
 an `Uneven Start` badge on individual game rows and are **excluded from win/loss and win rate
 calculations** to preserve accurate competitive records.
+
+Sessions containing uneven starts are parsed into **12 Character Battle (12CB / 12キャラ戦)**
+sets where:
+
+1. The winning character carries over their remaining stocks $S_{\text{rem}} > 0$.
+2. The losing character is eliminated and the opponent counterpicks a new character.
+3. The battle completes when a player loses all 12 roster characters.
+4. Sessions display a `⚔️ 12CB` series pill, sectional battle banners with remaining character/stock counts, and match index badges (`12CB Match X/Y`).
 
 ---
 
