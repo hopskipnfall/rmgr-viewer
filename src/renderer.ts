@@ -338,6 +338,16 @@ export function isGrabbedState(actionStateId: number): boolean {
   return CAPTURE_STATES.has(actionStateId);
 }
 
+/**
+ * 0x0b2 is any character encased in a Yoshi egg (from Yoshi's Neutral-B Egg
+ * Lay) - universal across characters, confirmed empirically. It fully
+ * obscures the character, so the body is replaced with an egg shape instead
+ * of drawing the (invisible) underlying character pose.
+ */
+export function isEggEncasedState(actionStateId: number): boolean {
+  return actionStateId === 0x0b2;
+}
+
 export function isFalconCharacter(characterId: number): boolean {
   return characterId === 0x07 || characterId === 0x15 || characterId === 0x28;
 }
@@ -445,26 +455,36 @@ export function getYoshiSpecialType(
   actionStateId: number,
 ): YoshiSpecialType | null {
   if (!isYoshiCharacter(characterId)) return null;
-  // Neutral-B: Egg Lay (Tongue Catch)
+  // Neutral-B: Egg Lay (Tongue Catch). 0x0e7 confirmed empirically to be the
+  // tongue lashing out to grab the opponent (previously misclassified as the
+  // Down-B landing below). 0x0e1 confirmed empirically to be the landing
+  // after Down-B, not part of this move (moved below).
   if (
     actionStateId === 0x0df ||
     actionStateId === 0x0e0 ||
-    actionStateId === 0x0e1
+    actionStateId === 0x0e7
   ) {
     return "egg_lay_tongue";
   }
-  // Up-B: Egg Throw
-  if (actionStateId === 0x0e2 || actionStateId === 0x0e3) {
+  // Egg Throw (grounded, confirmed empirically). 0x0e3 unconfirmed but left as-is.
+  if (actionStateId === 0x0de || actionStateId === 0x0e3) {
     return "egg_throw";
   }
-  // Down-B: Yoshi Bomb (Hip Drop)
+  // Down-B: Yoshi Bomb (Hip Drop). 0x0e2 confirmed empirically to be the
+  // aerial/falling phase (previously misclassified as Egg Throw above).
   if (actionStateId === 0x0e4) {
     return "yoshi_bomb_start";
   }
-  if (actionStateId === 0x0e5 || actionStateId === 0x0e6) {
+  if (
+    actionStateId === 0x0e2 ||
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e6
+  ) {
     return "yoshi_bomb_plummet";
   }
-  if (actionStateId === 0x0e7) {
+  // 0x0e1 confirmed empirically to be the Down-B landing (was misclassified
+  // as Egg Lay above).
+  if (actionStateId === 0x0e1) {
     return "yoshi_bomb_land";
   }
   return null;
@@ -508,8 +528,12 @@ export function getNessSpecialType(
   actionStateId: number,
 ): NessSpecialType | null {
   if (!isNessCharacter(characterId)) return null;
-  // Neutral-B: PK Fire
-  if (actionStateId === 0x0e6 || actionStateId === 0x0e7) {
+  // 0x0e6 confirmed empirically to be the landing lag after PK Fire 2
+  // (0x0ec) - just a normal landing, not the active move, so no overlay.
+  if (actionStateId === 0x0e6) return null;
+  // Neutral-B: PK Fire. 0x0ec ("PK Fire 2") confirmed empirically to belong
+  // here, not Down-B PSI Magnet as previously guessed.
+  if (actionStateId === 0x0e7 || actionStateId === 0x0ec) {
     return "pk_fire";
   }
   // Up-B: PK Thunder
@@ -520,11 +544,7 @@ export function getNessSpecialType(
     return "pk_thunder_rocket";
   }
   // Down-B: PSI Magnet
-  if (
-    actionStateId === 0x0eb ||
-    actionStateId === 0x0ec ||
-    actionStateId === 0x0ed
-  ) {
+  if (actionStateId === 0x0eb || actionStateId === 0x0ed) {
     return "psi_magnet";
   }
   return null;
@@ -585,31 +605,53 @@ export function getMarioSpecialType(
   return null;
 }
 
-export type SamusSpecialType = "charge_shot" | "screw_attack" | "bomb";
+export type SamusSpecialType =
+  | "charge_shot_startup"
+  | "charge_shot"
+  | "charge_shot_fire"
+  | "screw_attack"
+  | "bomb";
 
 export function getSamusSpecialType(
   characterId: number,
   actionStateId: number,
 ): SamusSpecialType | null {
   if (!isSamusCharacter(characterId)) return null;
-  // Neutral-B: Charge Shot (0x0dc - 0x0de)
+  // Neutral-B: Startup (drawing the arm cannon out) - confirmed empirically
+  // to be a distinct early phase before the charge itself, previously
+  // misclassified as the firing animation.
+  if (actionStateId === 0x0de) {
+    return "charge_shot_startup";
+  }
+  // Neutral-B: Charging (holding the shot). 0x0df confirmed empirically to
+  // belong here (previously unmapped).
   if (
     actionStateId === 0x0dc ||
     actionStateId === 0x0dd ||
-    actionStateId === 0x0de
+    actionStateId === 0x0df
   ) {
     return "charge_shot";
   }
-  // Up-B: Screw Attack (0x0e5 - 0x0e7)
+  // Neutral-B: Firing the charged shot while airborne - confirmed
+  // empirically (previously unmapped).
+  if (actionStateId === 0x0e2) {
+    return "charge_shot_fire";
+  }
+  // Up-B: Screw Attack. 0x0e3 (ground) and 0x0e4 (air) confirmed empirically
+  // to belong here (previously unmapped). 0x0e5 confirmed empirically to be
+  // the landing after dropping the bomb, not part of Screw Attack (excluded
+  // below). 0x0e6 moved to Bomb below.
   if (
-    actionStateId === 0x0e5 ||
-    actionStateId === 0x0e6 ||
+    actionStateId === 0x0e3 ||
+    actionStateId === 0x0e4 ||
     actionStateId === 0x0e7
   ) {
     return "screw_attack";
   }
-  // Down-B: Bomb (0x0e8 - 0x0ea)
+  // Down-B: Bomb. 0x0e6 confirmed empirically to belong here (previously
+  // misclassified as Screw Attack above).
   if (
+    actionStateId === 0x0e6 ||
     actionStateId === 0x0e8 ||
     actionStateId === 0x0e9 ||
     actionStateId === 0x0ea
@@ -626,28 +668,37 @@ export function getLinkSpecialType(
   actionStateId: number,
 ): LinkSpecialType | null {
   if (!isLinkCharacter(characterId)) return null;
-  // Neutral-B: Boomerang (0x0dc - 0x0de)
+  // Neutral-B: Boomerang throw (0x0dc - 0x0de: charge/wind-up, 0x0e5 and
+  // 0x0e8: ground and air throw - same animation either way, confirmed
+  // empirically). 0x0e5/0x0e8 were previously misclassified as Up-B below.
   if (
     actionStateId === 0x0dc ||
     actionStateId === 0x0dd ||
-    actionStateId === 0x0de
+    actionStateId === 0x0de ||
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e8
   ) {
     return "boomerang";
   }
-  // Up-B: Spin Attack (0x0e5 - 0x0e8)
+  // Up-B: Spin Attack. 0x0e4 is the aerial version (confirmed empirically,
+  // was previously unmapped). 0x0e6/0x0e7 unconfirmed but left as-is.
   if (
-    actionStateId === 0x0e5 ||
+    actionStateId === 0x0e4 ||
     actionStateId === 0x0e6 ||
-    actionStateId === 0x0e7 ||
-    actionStateId === 0x0e8
+    actionStateId === 0x0e7
   ) {
     return "spin_attack";
   }
-  // Down-B: Bomb (0x0e9 - 0x0eb)
+  // Down-B: Bomb. 0x0e9/0x0ea/0x0eb pull out on the ground, 0x0ec pulls out
+  // in the air (landing while holding a pulled bomb transitions back into
+  // this same state - not a second bomb). 0x74 is the shared/universal
+  // item-throw state Link enters when throwing the bomb he's holding.
   if (
     actionStateId === 0x0e9 ||
     actionStateId === 0x0ea ||
-    actionStateId === 0x0eb
+    actionStateId === 0x0eb ||
+    actionStateId === 0x0ec ||
+    actionStateId === 0x074
   ) {
     return "bomb";
   }
@@ -696,6 +747,18 @@ export function getJigglypuffSpecialType(
   actionStateId: number,
 ): JigglypuffSpecialType | null {
   if (!isJigglypuffCharacter(characterId)) return null;
+  // 0x0df, 0x0e0, 0x0e1, 0x0e2 confirmed empirically to just be extra
+  // mid-air jumps (Puff has more than 2 jumps, hence the extra states) - not
+  // special moves, so they're excluded from the ranges below and fall
+  // through to no overlay.
+  if (
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0 ||
+    actionStateId === 0x0e1 ||
+    actionStateId === 0x0e2
+  ) {
+    return null;
+  }
   // Neutral-B: Pound (0x0dc - 0x0e1, 0x0e6 - 0x0e8: Straight, Angled Up, Angled Down, Ground & Air)
   if (
     (actionStateId >= 0x0dc && actionStateId <= 0x0e1) ||
@@ -2486,7 +2549,9 @@ export class StageRenderer {
       ctx.translate(-x, -y);
     }
 
-    if (isPikachuCharacter(post.characterId)) {
+    if (isEggEncasedState(post.actionStateId)) {
+      this.drawYoshiEggShell(x, centerY, halfWidth, heightPx);
+    } else if (isPikachuCharacter(post.characterId)) {
       this.drawPikachuPolygons(
         x,
         y,
@@ -5039,6 +5104,45 @@ export class StageRenderer {
   }
 
   /**
+   * Encased-in-egg overlay (action state 0x0b2, universal across
+   * characters) - a cream Yoshi egg shell with green spots, replacing the
+   * fully-obscured character body.
+   */
+  private drawYoshiEggShell(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+  ): void {
+    const { ctx } = this;
+    const eggW = halfWidth * 1.3;
+    const eggH = heightPx * 0.55;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(x, centerY, eggW, eggH, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#fdf6e3";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const spots: [number, number, number][] = [
+      [-eggW * 0.35, -eggH * 0.35, eggW * 0.18],
+      [eggW * 0.3, -eggH * 0.05, eggW * 0.14],
+      [-eggW * 0.05, eggH * 0.4, eggW * 0.16],
+      [eggW * 0.35, eggH * 0.35, eggW * 0.13],
+    ];
+    ctx.fillStyle = "#4ade80";
+    for (const [dx, dy, r] of spots) {
+      ctx.beginPath();
+      ctx.ellipse(x + dx, centerY + dy, r, r * 0.75, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /**
    * 8. YOSHI: Big round green snout, white cheeks & belly, red shell saddle on back, orange boots.
    */
   private drawYoshiPolygons(
@@ -7461,6 +7565,59 @@ export class StageRenderer {
         ctx.arc(cannonX, cannonY, radius * 1.1, ang, ang + 0.8);
         ctx.stroke();
       }
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "charge_shot_startup") {
+      ctx.save();
+      // Arm cannon drawing/extending out, growing to full length as the
+      // charge is about to begin - a small spark at the tip, no plasma ball yet.
+      const extend = Math.min(1, (frameCounter + 1) / 6);
+      const cannonLen = Math.max(6, halfWidth * 0.5) * extend;
+      const cannonBaseX = x + dir * (halfWidth * 0.65);
+      const cannonTipX = cannonBaseX + dir * cannonLen;
+
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(cannonBaseX, cannonY);
+      ctx.lineTo(cannonTipX, cannonY);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cannonTipX, cannonY, 3 * extend, 0, Math.PI * 2);
+      ctx.fillStyle = "#e0f2fe";
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 6;
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
+    if (specialType === "charge_shot_fire") {
+      ctx.save();
+      // Traveling plasma bolt fired from the cannon tip.
+      const travel = Math.min(1, frameCounter / 6);
+      const boltX = cannonX + dir * travel * halfWidth * 3;
+      const boltLen = Math.max(10, halfWidth * 1.1);
+
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 4;
+      ctx.shadowColor = "#0284c7";
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(boltX - dir * boltLen, cannonY);
+      ctx.lineTo(boltX, cannonY);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(boltX, cannonY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
 
       ctx.restore();
       return;

@@ -591,7 +591,7 @@ async function init(): Promise<void> {
       videoId: TWELVE_CB_VIDEO_ID,
       url: TWELVE_CB_VIDEO_URL,
       offsetSeconds: 5.8,
-      viewMode: "video-only",
+      viewMode: "canvas",
     };
     saveVideoLink(twelveCbSourceSummary.id, linkData);
     if (twelveCbSessionGames.length > 1) {
@@ -637,7 +637,7 @@ async function init(): Promise<void> {
       videoId: TWELVE_CB_VIDEO_ID,
       url: TWELVE_CB_VIDEO_URL,
       offsetSeconds,
-      viewMode: existing?.viewMode ?? "video-only",
+      viewMode: existing?.viewMode ?? "canvas",
     });
   }
 

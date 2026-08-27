@@ -1,11 +1,22 @@
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
-import type { GameSummary } from "./gameSummary.js";
+import type { GameSummary, OpeningReasonCounts } from "./gameSummary.js";
 import {
   resolvePerspectivePort,
   resolveOpponentPort,
   type Identity,
 } from "./identity.js";
 import { getCharacterGroup, type CharacterGroup } from "../lookups.js";
+import type { NeutralOpeningReason } from "../neutralHits.js";
+
+export const NEUTRAL_OPENING_REASONS: readonly NeutralOpeningReason[] = [
+  "whiff-punish",
+  "reversal",
+  "landing-lag",
+  "jump-punish",
+  "standing-hit",
+  "shield-pressure",
+  "unknown",
+];
 
 export interface FilterCriteria {
   yourCharacterId?: number | "all";
@@ -44,6 +55,37 @@ export interface DerivedRates {
   neutralHitsPerStock: number | null;
   neutralHitsLanded: number;
   stocksTaken: number;
+
+  /** Total frames across the resolved games, for opportunity-rate ("per minute") displays (§5.3). */
+  totalFrames: number;
+
+  // Neutral game / opening share (§5.1-5.2) — symmetric, self-normalizing.
+  openingsWon: number;
+  openingsLost: number;
+  /** won / (won + lost) as a percentage — the "Neutral Score" (§6). */
+  openingShare: number | null;
+  openingsWonByReason: OpeningReasonCounts;
+  openingsLostByReason: OpeningReasonCounts;
+
+  /** Sum of damage dealt across openings won. */
+  damageDealtOnOpenings: number;
+  /** Damage per opening won — conversion efficiency. */
+  damagePerOpening: number | null;
+  /** Sum of damage taken while holding advantage on openings won ("leak"). */
+  damageLeakOnOpenings: number;
+  /** Leak per opening won — advantage retention. */
+  leakPerOpening: number | null;
+  openingsConvertedToKill: number;
+  /** % of openings won that converted all the way to a kill. */
+  conversionToKillPct: number | null;
+}
+
+export interface ReasonDifferential {
+  reason: NeutralOpeningReason;
+  wonPct: number | null;
+  lostPct: number | null;
+  /** wonPct - lostPct. Positive = this reason favors you; negative = it favors your opponent. */
+  differential: number | null;
 }
 
 export interface RateDeltas {
@@ -171,6 +213,15 @@ export function aggregateFilteredGames(
   let angelAvoidSuccesses = 0;
   let neutralHitsLanded = 0;
   let stocksTaken = 0;
+  let totalFrames = 0;
+
+  let openingsWon = 0;
+  let openingsLost = 0;
+  const openingsWonByReason: OpeningReasonCounts = {};
+  const openingsLostByReason: OpeningReasonCounts = {};
+  let damageDealtOnOpenings = 0;
+  let damageLeakOnOpenings = 0;
+  let openingsConvertedToKill = 0;
 
   for (const { summary, yourPort, oppPort } of resolvedGames) {
     const yourP = summary.ports.find((p) => p.port === yourPort);
@@ -209,6 +260,21 @@ export function aggregateFilteredGames(
     angelAvoidSuccesses += stats.angelAvoidSuccesses;
     neutralHitsLanded += stats.neutralHitsLanded;
     stocksTaken += stats.stocksTaken;
+    totalFrames += summary.frameCount;
+
+    openingsWon += stats.openingsWon ?? 0;
+    openingsLost += stats.openingsLost ?? 0;
+    damageDealtOnOpenings += stats.damageDealtOnOpenings ?? 0;
+    damageLeakOnOpenings += stats.damageLeakOnOpenings ?? 0;
+    openingsConvertedToKill += stats.openingsConvertedToKill ?? 0;
+    for (const reason of NEUTRAL_OPENING_REASONS) {
+      openingsWonByReason[reason] =
+        (openingsWonByReason[reason] ?? 0) +
+        (stats.openingsWonByReason?.[reason] ?? 0);
+      openingsLostByReason[reason] =
+        (openingsLostByReason[reason] ?? 0) +
+        (stats.openingsLostByReason?.[reason] ?? 0);
+    }
   }
 
   const rate = (num: number, den: number): number | null =>
@@ -248,7 +314,51 @@ export function aggregateFilteredGames(
       stocksTaken > 0 ? neutralHitsLanded / stocksTaken : null,
     neutralHitsLanded,
     stocksTaken,
+
+    totalFrames,
+
+    openingsWon,
+    openingsLost,
+    openingShare: rate(openingsWon, openingsWon + openingsLost),
+    openingsWonByReason,
+    openingsLostByReason,
+
+    damageDealtOnOpenings,
+    damagePerOpening:
+      openingsWon > 0 ? damageDealtOnOpenings / openingsWon : null,
+    damageLeakOnOpenings,
+    leakPerOpening: openingsWon > 0 ? damageLeakOnOpenings / openingsWon : null,
+    openingsConvertedToKill,
+    conversionToKillPct: rate(openingsConvertedToKill, openingsWon),
   };
+}
+
+/** Frames per second replays are recorded at. */
+const FRAMES_PER_SECOND = 60;
+
+/** Converts a `DerivedRates.totalFrames` count into minutes of play. */
+export function ratesToMinutes(rates: DerivedRates): number {
+  return rates.totalFrames / FRAMES_PER_SECOND / 60;
+}
+
+/**
+ * Computes the per-reason won%/conceded% differential (§5.2) — the "neutral fingerprint".
+ * Positive differential means that reason favors you; negative means it favors your opponent.
+ */
+export function computeReasonDifferentials(
+  rates: DerivedRates,
+): ReasonDifferential[] {
+  return NEUTRAL_OPENING_REASONS.map((reason) => {
+    const wonCount = rates.openingsWonByReason[reason] ?? 0;
+    const lostCount = rates.openingsLostByReason[reason] ?? 0;
+    const wonPct =
+      rates.openingsWon > 0 ? (wonCount / rates.openingsWon) * 100 : null;
+    const lostPct =
+      rates.openingsLost > 0 ? (lostCount / rates.openingsLost) * 100 : null;
+    const differential =
+      wonPct !== null && lostPct !== null ? wonPct - lostPct : null;
+    return { reason, wonPct, lostPct, differential };
+  });
 }
 
 /**
@@ -514,4 +624,160 @@ export function computeGroupedOpponentCharacterBreakdown(
   }
 
   return groups;
+}
+
+// ---------------------------------------------------------------------------
+// Character-level shrinkage baselines (§4.1)
+//
+// Recovery success is driven almost entirely by *your* character; edge guard
+// success is driven almost entirely by the *opponent's* character (§1.1-1.2).
+// Every asymmetric rate is displayed shrunk toward its parent so a 12/12
+// doesn't read as a flawless 100% and a 1/3 doesn't scream as a 33%.
+// ---------------------------------------------------------------------------
+
+/** Shrinkage constant (in opportunities) for character-level baselines. */
+const SHRINKAGE_K = 15;
+
+export interface ShrunkRate {
+  raw: number | null;
+  shrunk: number | null;
+  successes: number;
+  opportunities: number;
+}
+
+function shrinkRate(
+  successes: number,
+  opportunities: number,
+  parentRatePct: number | null,
+): ShrunkRate {
+  const raw = opportunities > 0 ? (successes / opportunities) * 100 : null;
+  if (parentRatePct === null) {
+    return { raw, shrunk: raw, successes, opportunities };
+  }
+  const parentFrac = parentRatePct / 100;
+  const shrunk =
+    ((successes + SHRINKAGE_K * parentFrac) / (opportunities + SHRINKAGE_K)) *
+    100;
+  return { raw, shrunk, successes, opportunities };
+}
+
+export interface CharacterBaselines {
+  globalRecovery: ShrunkRate;
+  globalEdgeGuard: ShrunkRate;
+  /** Recovery baseline per your-character ID, shrunk toward the global rate. */
+  recoveryByMyCharacter: Map<number, ShrunkRate>;
+  /** Edge guard baseline per opponent-character ID, shrunk toward the global rate. */
+  edgeGuardByOppCharacter: Map<number, ShrunkRate>;
+}
+
+/**
+ * Computes the aggregation hierarchy from §4: global -> my character (recovery)
+ * and global -> opponent character (edge guard). Always pools over every
+ * resolved game for the identity, ignoring the currently active filter —
+ * baselines must be stable regardless of what the user is looking at.
+ */
+export function computeCharacterBaselines(
+  summaries: GameSummary[],
+  identity: Identity,
+): CharacterBaselines {
+  const allResolved = filterGameSummaries(summaries, identity, {});
+  const overall = aggregateFilteredGames(allResolved);
+  const globalRecovery = shrinkRate(
+    overall.recoverySuccesses,
+    overall.recoveryTotal,
+    null,
+  );
+  const globalEdgeGuard = shrinkRate(
+    overall.edgeGuardSuccesses,
+    overall.edgeGuardTotal,
+    null,
+  );
+
+  const byMyChar = new Map<number, { succ: number; opp: number }>();
+  const byOppChar = new Map<number, { succ: number; opp: number }>();
+
+  for (const { summary, yourPort, oppPort } of allResolved) {
+    if (summary.stageId !== DREAM_LAND_STAGE_ID) continue; // recovery/edge guard are Dream Land-only (§4.2 of aggregateFilteredGames)
+    const yourP = summary.ports.find((p) => p.port === yourPort);
+    const oppP = summary.ports.find((p) => p.port === oppPort);
+    const stats = summary.statsByPort[yourPort as 0 | 1 | 2 | 3];
+    if (!yourP || !oppP || !stats) continue;
+
+    const rc = byMyChar.get(yourP.characterId) ?? { succ: 0, opp: 0 };
+    rc.succ += stats.recoverySuccesses;
+    rc.opp += stats.recoverySituations;
+    byMyChar.set(yourP.characterId, rc);
+
+    const ec = byOppChar.get(oppP.characterId) ?? { succ: 0, opp: 0 };
+    ec.succ += stats.edgeGuardSuccesses;
+    ec.opp += stats.edgeGuardSituations;
+    byOppChar.set(oppP.characterId, ec);
+  }
+
+  const recoveryByMyCharacter = new Map<number, ShrunkRate>();
+  for (const [charId, { succ, opp }] of byMyChar) {
+    recoveryByMyCharacter.set(
+      charId,
+      shrinkRate(succ, opp, globalRecovery.raw),
+    );
+  }
+
+  const edgeGuardByOppCharacter = new Map<number, ShrunkRate>();
+  for (const [charId, { succ, opp }] of byOppChar) {
+    edgeGuardByOppCharacter.set(
+      charId,
+      shrinkRate(succ, opp, globalEdgeGuard.raw),
+    );
+  }
+
+  return {
+    globalRecovery,
+    globalEdgeGuard,
+    recoveryByMyCharacter,
+    edgeGuardByOppCharacter,
+  };
+}
+
+export interface BaselineDeltas {
+  /** Filtered raw recovery% minus the shrunk baseline for the selected my-character (or global, if "all"). */
+  recoveryDeltaPct: number | null;
+  recoveryBaselinePct: number | null;
+  /** Filtered raw edge guard% minus the shrunk baseline for the selected opponent-character (or global, if "all"). */
+  edgeGuardDeltaPct: number | null;
+  edgeGuardBaselinePct: number | null;
+}
+
+/**
+ * Computes Recovery Δ / Edge guard Δ (§6 items 4-5) — always shown as a delta
+ * against the character baseline, never as a bare percentage.
+ */
+export function computeBaselineDeltas(
+  filteredRates: DerivedRates,
+  baselines: CharacterBaselines,
+  myCharacterId: number | "all",
+  oppCharacterId: number | "all",
+): BaselineDeltas {
+  const recoveryBaselinePct =
+    (myCharacterId !== "all"
+      ? baselines.recoveryByMyCharacter.get(myCharacterId)?.shrunk
+      : undefined) ?? baselines.globalRecovery.shrunk;
+  const edgeGuardBaselinePct =
+    (oppCharacterId !== "all"
+      ? baselines.edgeGuardByOppCharacter.get(oppCharacterId)?.shrunk
+      : undefined) ?? baselines.globalEdgeGuard.shrunk;
+
+  const round1 = (v: number): number => Number(v.toFixed(1));
+
+  return {
+    recoveryDeltaPct:
+      filteredRates.recoveryPct !== null && recoveryBaselinePct !== null
+        ? round1(filteredRates.recoveryPct - recoveryBaselinePct)
+        : null,
+    recoveryBaselinePct: recoveryBaselinePct ?? null,
+    edgeGuardDeltaPct:
+      filteredRates.edgeGuardPct !== null && edgeGuardBaselinePct !== null
+        ? round1(filteredRates.edgeGuardPct - edgeGuardBaselinePct)
+        : null,
+    edgeGuardBaselinePct: edgeGuardBaselinePct ?? null,
+  };
 }

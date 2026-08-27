@@ -224,13 +224,14 @@ export class MatchViewController {
   private viewModePipBtn: HTMLButtonElement;
   private viewModeVideoBtn: HTMLButtonElement;
   private viewModeCanvasBtn: HTMLButtonElement;
+  private viewModeCanvasMutedBtn: HTMLButtonElement;
   private nudgeMinus1sBtn: HTMLButtonElement;
   private nudgeMinus1fBtn: HTMLButtonElement;
   private nudgePlus1fBtn: HTMLButtonElement;
   private nudgePlus1sBtn: HTMLButtonElement;
   private pipCloseBtn: HTMLButtonElement;
   private pipVideoCatcher: HTMLDivElement;
-  private pipPrimary: "video" | "canvas" = "canvas";
+  private pipPrimary: "video" | "canvas" = "video";
 
   private vodLinkDisplayRow: HTMLDivElement;
   private vodEditLinkBtn: HTMLButtonElement;
@@ -553,6 +554,9 @@ export class MatchViewController {
     ) as HTMLButtonElement;
     this.viewModeCanvasBtn = document.getElementById(
       "viewModeCanvasBtn",
+    ) as HTMLButtonElement;
+    this.viewModeCanvasMutedBtn = document.getElementById(
+      "viewModeCanvasMutedBtn",
     ) as HTMLButtonElement;
     this.nudgeMinus1sBtn = document.getElementById(
       "nudgeMinus1sBtn",
@@ -907,6 +911,9 @@ export class MatchViewController {
     this.viewModeCanvasBtn.addEventListener("click", () => {
       this.youtubeSync.setViewMode("canvas");
     });
+    this.viewModeCanvasMutedBtn.addEventListener("click", () => {
+      this.youtubeSync.setViewMode("canvas-muted");
+    });
 
     this.nudgeMinus1sBtn.addEventListener("click", () => {
       this.youtubeSync.nudgeOffset(-1, this.playback?.currentIndex ?? 0);
@@ -1097,7 +1104,9 @@ export class MatchViewController {
             ? "video-only"
             : currentData.viewMode === "video-only"
               ? "canvas"
-              : "video-pip";
+              : currentData.viewMode === "canvas"
+                ? "canvas-muted"
+                : "video-pip";
         this.youtubeSync.setViewMode(nextMode);
       }
       return;
@@ -1250,6 +1259,8 @@ export class MatchViewController {
       this.viewModeVideoBtn.title = tr.youtubeViewModeVideoOnly;
     if (this.viewModeCanvasBtn)
       this.viewModeCanvasBtn.title = tr.youtubeViewModeCanvasOnly;
+    if (this.viewModeCanvasMutedBtn)
+      this.viewModeCanvasMutedBtn.title = tr.youtubeViewModeCanvasMuted;
     if (this.nudgeMinus1sBtn)
       this.nudgeMinus1sBtn.title = tr.youtubeNudgeMinus1s;
     if (this.nudgeMinus1fBtn)
@@ -3773,7 +3784,7 @@ export class MatchViewController {
       parsed.startSeconds > 0
         ? parsed.startSeconds
         : (currentData?.offsetSeconds ?? 0);
-    const viewMode = currentData?.viewMode ?? "video-only";
+    const viewMode = currentData?.viewMode ?? "canvas";
 
     const linkData: VideoLinkData = {
       videoId: parsed.videoId,
@@ -3852,13 +3863,14 @@ export class MatchViewController {
       resolvedMode === "video-pip" && this.currentVideoViewMode !== "video-pip";
     this.currentVideoViewMode = resolvedMode;
     if (enteringPip) {
-      this.pipPrimary = "canvas";
+      this.pipPrimary = "video";
     }
     this.stageWrap.classList.remove(
       "mode-video",
       "mode-video-only",
       "mode-video-pip",
       "mode-canvas",
+      "mode-canvas-muted",
     );
     this.stageWrap.classList.add(`mode-${resolvedMode}`);
 
@@ -3873,6 +3885,10 @@ export class MatchViewController {
     this.viewModeCanvasBtn.classList.toggle(
       "active",
       resolvedMode === "canvas",
+    );
+    this.viewModeCanvasMutedBtn.classList.toggle(
+      "active",
+      resolvedMode === "canvas-muted",
     );
 
     this.applyPipLayout();

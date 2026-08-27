@@ -150,6 +150,20 @@ describe("localStorage persistence", () => {
     deleteVideoLink(replayId);
     expect(loadVideoLink(replayId)).toBeNull();
   });
+
+  it("defaults to Replay 🔊 ('canvas') when stored data has no viewMode", () => {
+    const replayId = "test-replay-no-mode";
+    localStorage.setItem(
+      "rmgr_yt_link_" + replayId,
+      JSON.stringify({
+        videoId: "dQw4w9WgXcQ",
+        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        offsetSeconds: 0,
+      }),
+    );
+    expect(loadVideoLink(replayId)?.viewMode).toBe("canvas");
+    deleteVideoLink(replayId);
+  });
 });
 
 describe("YouTubeSyncController", () => {
@@ -194,6 +208,12 @@ describe("YouTubeSyncController", () => {
     controller.setViewMode("video-only");
     expect(controller.getLinkData()?.viewMode).toBe("video-only");
     expect(modeState).toBe("video-only");
+
+    // Replay 🔇: distinct from Replay 🔊 ("canvas"), no player crash without
+    // a real YT player attached in this test environment.
+    controller.setViewMode("canvas-muted");
+    expect(controller.getLinkData()?.viewMode).toBe("canvas-muted");
+    expect(modeState).toBe("canvas-muted");
 
     // Unload
     controller.unloadVideo();

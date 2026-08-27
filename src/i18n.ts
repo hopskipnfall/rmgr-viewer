@@ -207,6 +207,27 @@ export interface Translations {
   hitsPerStockUnit: (val: string) => string;
   hitsPerStockFraction: (hits: number, stocks: number) => string;
 
+  // Neutral Score panel
+  neutralScoreLabel: string;
+  neutralScoreFraction: (won: number, lost: number) => string;
+  perMinuteUnit: (val: string) => string;
+  conversionLabel: string;
+  conversionSummary: (dmgPerOpening: string, killPct: number) => string;
+  advantageRetentionLabel: string;
+  advantageRetentionSummary: (leakPerOpening: string) => string;
+  recoveryDeltaLabel: string;
+  edgeGuardDeltaLabel: string;
+  deltaVsBaseline: (baselinePct: number) => string;
+  deltaNoData: string;
+  neutralScoreNoData: string;
+  neutralFingerprintTitle: string;
+  fingerprintReasonCol: string;
+  fingerprintWonCol: string;
+  fingerprintLostCol: string;
+  fingerprintDiffCol: string;
+  experimentationToggleLabel: string;
+  experimentationCount: (n: number) => string;
+
   // About modal
   aboutTitle: string;
   aboutDescription: string;
@@ -320,6 +341,7 @@ export interface Translations {
   youtubeViewModeVideoPip: string;
   youtubeViewModeVideoOnly: string;
   youtubeViewModeCanvasOnly: string;
+  youtubeViewModeCanvasMuted: string;
   youtubeTogglePipBtnTitle: string;
   youtubeInvalidUrlError: string;
   videoAttachedBadge: string;
@@ -591,6 +613,29 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     hitsPerStockUnit: (val) => `${val} /st.`,
     hitsPerStockFraction: (hits, stocks) => `${hits} hits / ${stocks} st.`,
 
+    neutralScoreLabel: "Neutral Score",
+    neutralScoreFraction: (won, lost) => `${won} won / ${lost} lost`,
+    perMinuteUnit: (val) => `${val}/min`,
+    conversionLabel: "Conversion",
+    conversionSummary: (dmg, killPct) =>
+      `${dmg} dmg/opening · ${killPct}% → kill`,
+    advantageRetentionLabel: "Advantage Retention",
+    advantageRetentionSummary: (leak) => `${leak} leak/opening`,
+    recoveryDeltaLabel: "Recovery Δ",
+    edgeGuardDeltaLabel: "Edge Guard Δ",
+    deltaVsBaseline: (baseline) => `vs ${Math.round(baseline)}% baseline`,
+    deltaNoData: "Not enough data",
+    neutralScoreNoData: "Not enough data yet",
+    neutralFingerprintTitle: "Neutral Fingerprint",
+    fingerprintReasonCol: "Reason",
+    fingerprintWonCol: "Won %",
+    fingerprintLostCol: "Conceded %",
+    fingerprintDiffCol: "Diff",
+    experimentationToggleLabel:
+      "Include experimentation games (vs weaker opponents)",
+    experimentationCount: (n) =>
+      n === 1 ? "1 game excluded" : `${n} games excluded`,
+
     aboutTitle: "About rmgr-viewer",
     aboutDescription:
       "Real-time visual playback and analytics viewer for Super Smash Bros. 64 (.rmgr) replay files.",
@@ -694,7 +739,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     youtubeNudgePlus1s: "+1.0s",
     youtubeViewModeVideoPip: "Video + Mini 2D Overlay",
     youtubeViewModeVideoOnly: "Video Only",
-    youtubeViewModeCanvasOnly: "Replay Only",
+    youtubeViewModeCanvasOnly: "Replay Only (audio still plays)",
+    youtubeViewModeCanvasMuted: "Replay Only (no video audio)",
     youtubeTogglePipBtnTitle: "Toggle mini overlay (p)",
     youtubeInvalidUrlError: "Please enter a valid YouTube video URL or ID.",
     videoAttachedBadge: "YouTube video linked",
@@ -960,6 +1006,27 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     hitsPerStockUnit: (val) => `${val} /スト`,
     hitsPerStockFraction: (hits, stocks) => `${hits}ヒット / ${stocks}スト`,
 
+    neutralScoreLabel: "ニュートラルスコア",
+    neutralScoreFraction: (won, lost) => `${won}勝 / ${lost}敗`,
+    perMinuteUnit: (val) => `${val}/分`,
+    conversionLabel: "コンバージョン",
+    conversionSummary: (dmg, killPct) =>
+      `${dmg} ダメージ/機会 · ${killPct}% → 撃墜`,
+    advantageRetentionLabel: "アドバンテージ保持",
+    advantageRetentionSummary: (leak) => `${leak} 被弾/機会`,
+    recoveryDeltaLabel: "復帰 Δ",
+    edgeGuardDeltaLabel: "復帰阻止 Δ",
+    deltaVsBaseline: (baseline) => `基準値 ${Math.round(baseline)}% との差`,
+    deltaNoData: "データ不足",
+    neutralScoreNoData: "まだデータが十分ではありません",
+    neutralFingerprintTitle: "ニュートラル傾向",
+    fingerprintReasonCol: "要因",
+    fingerprintWonCol: "獲得率",
+    fingerprintLostCol: "被弾率",
+    fingerprintDiffCol: "差分",
+    experimentationToggleLabel: "実験的な試合を含める (格下相手)",
+    experimentationCount: (n) => `${n}試合を除外`,
+
     aboutTitle: "rmgr-viewer について",
     aboutDescription:
       "ニンテンドウオールスター! 大乱闘スマッシュブラザーズ（スマブラ64）の .rmgr リプレイファイル用リアルタイム再生・分析ビューアーです。",
@@ -1062,7 +1129,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     youtubeNudgePlus1s: "+1.0秒",
     youtubeViewModeVideoPip: "動画 + ミニ2D画面",
     youtubeViewModeVideoOnly: "動画のみ",
-    youtubeViewModeCanvasOnly: "リプレイのみ",
+    youtubeViewModeCanvasOnly: "リプレイのみ (音声あり)",
+    youtubeViewModeCanvasMuted: "リプレイのみ (音声なし)",
     youtubeTogglePipBtnTitle: "ミニ画面の切り替え (p)",
     youtubeInvalidUrlError:
       "有効なYouTubeのURLまたは動画IDを入力してください。",

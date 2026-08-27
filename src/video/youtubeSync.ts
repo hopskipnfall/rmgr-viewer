@@ -1,4 +1,7 @@
-export type VideoViewMode = "video-pip" | "video-only" | "canvas";
+// "canvas" = Replay with background YouTube audio still playing ("Replay 🔊").
+// "canvas-muted" = Replay only, YouTube playback fully stopped, no audio ("Replay 🔇").
+export type VideoViewMode =
+  "video-pip" | "video-only" | "canvas" | "canvas-muted";
 
 export interface VideoLinkData {
   videoId: string;
@@ -172,7 +175,7 @@ export function loadVideoLink(replayId: string): VideoLinkData | null {
         url: parsed.url || `https://www.youtube.com/watch?v=${parsed.videoId}`,
         offsetSeconds:
           typeof parsed.offsetSeconds === "number" ? parsed.offsetSeconds : 0,
-        viewMode: parsed.viewMode || "video-only",
+        viewMode: parsed.viewMode || "canvas",
       };
     }
   } catch {
@@ -455,6 +458,15 @@ export class YouTubeSyncController {
     if (this.currentReplayId) {
       saveVideoLink(this.currentReplayId, this.linkData);
     }
+    if (mode === "canvas-muted" && this.player && this.isPlayerReady) {
+      // Entering Replay 🔇: stop playback immediately rather than waiting
+      // for the next replay tick to notice the mode change.
+      try {
+        this.player.pauseVideo();
+      } catch {
+        // Ignore
+      }
+    }
     this.onViewModeChange(mode);
     this.onLinkDataChange(this.linkData);
   }
@@ -523,11 +535,16 @@ export class YouTubeSyncController {
     if (reason === "jump") {
       this.isSyncingFromReplay = true;
       try {
-        this.player.seekTo(targetTime, true);
-        if (playing) {
-          this.player.playVideo();
-        } else {
+        if (this.linkData.viewMode === "canvas-muted") {
+          // Replay 🔇: keep the video fully stopped, no background audio.
           this.player.pauseVideo();
+        } else {
+          this.player.seekTo(targetTime, true);
+          if (playing) {
+            this.player.playVideo();
+          } else {
+            this.player.pauseVideo();
+          }
         }
       } catch {
         // Player not ready
@@ -558,7 +575,10 @@ export class YouTubeSyncController {
 
     this.isSyncingFromReplay = true;
     try {
-      if (playing) {
+      if (this.linkData.viewMode === "canvas-muted") {
+        // Replay 🔇: keep the video fully stopped, no background audio.
+        this.player.pauseVideo();
+      } else if (playing) {
         const targetTime = frameToVideoTime(
           currentFrame,
           this.linkData.offsetSeconds,
