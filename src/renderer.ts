@@ -1,4 +1,4 @@
-import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
+import type { Frame, ItemUpdate, PortIndex, Replay } from "@rmg-k/rmgr";
 import { Camera } from "./camera.js";
 import {
   getPlayerColor,
@@ -1604,6 +1604,7 @@ export class StageRenderer {
           frameIndex,
         );
       }
+      this.drawItemObjects(camera, frame.items ?? []);
       this.drawDeathDirectionFlashes(frame);
 
       // Draw Directional Influence (DI) shift vector and overhead badge during hitlag and early hitstun
@@ -1732,6 +1733,49 @@ export class StageRenderer {
     ctx.fillRect(rectX, rectY + rectH - gradDepth, rectW, gradDepth);
 
     ctx.restore();
+  }
+
+  /**
+   * Draws a generic placeholder marker for every object live on the shared
+   * item/hazard/projectile list this frame (`Frame.items`, recorder schema
+   * v2+ — see docs/RMGR_SPEC.md §4.6). There's no per-`typeId` shape yet:
+   * this format's own spec admits there's no ID→name lookup table for this
+   * game (§7.6), so every object gets the same neutral diamond marker,
+   * labeled with its raw `typeId` in hex so it's at least possible to
+   * eyeball which ID corresponds to which move empirically. Once specific
+   * IDs are identified, this is the place to branch on `item.typeId` and
+   * draw a real shape instead.
+   */
+  private drawItemObjects(camera: Camera, items: readonly ItemUpdate[]): void {
+    if (items.length === 0) return;
+    const { ctx } = this;
+
+    for (const item of items) {
+      const { x, y } = camera.worldToScreen(item.positionX, item.positionY);
+      const r = 6;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r, y);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(232, 121, 249, 0.85)"; // magenta - distinct from every character's own palette
+      ctx.shadowColor = "rgba(232, 121, 249, 0.6)";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.font = "10px monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#f5d0fe";
+      ctx.fillText(`0x${item.typeId.toString(16)}`, x, y - r - 4);
+      ctx.restore();
+    }
   }
 
   /**
