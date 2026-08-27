@@ -287,16 +287,24 @@
       .back-btn {
         font-size: 12px;
         font-weight: 600;
-        padding: 4px 10px;
-        border-radius: 4px;
-        border: 1px solid var(--panel-border);
-        background: #22252f;
-        color: var(--text);
+        padding: 5px 12px;
+        border-radius: 6px;
+        border: 1px solid #3b82f6;
+        background: #2563eb;
+        color: #ffffff;
         cursor: pointer;
-        transition: background 0.1s;
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease,
+          box-shadow 0.15s ease,
+          transform 0.1s ease;
       }
       .back-btn:hover {
-        background: #2c3040;
+        background: #1d4ed8;
+        border-color: #60a5fa;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5);
+        transform: translateY(-1px);
       }
       .import-container {
         position: relative;
@@ -542,6 +550,61 @@
         letter-spacing: 0.06em;
         color: var(--text-dim);
         margin: 0;
+      }
+      .library-filter-bar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        background: rgba(20, 23, 33, 0.65);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 8px 12px;
+      }
+      .library-filter-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .library-filter-item label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-dim);
+        white-space: nowrap;
+      }
+      .library-filter-item select {
+        background: #10121a;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 12px;
+        padding: 4px 8px;
+        outline: none;
+        cursor: pointer;
+        transition: border-color 0.15s;
+        max-width: 170px;
+      }
+      .library-filter-item select:hover,
+      .library-filter-item select:focus {
+        border-color: var(--accent);
+      }
+      .library-filter-reset-btn {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        color: #f87171;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+        margin-left: auto;
+      }
+      .library-filter-reset-btn:hover {
+        background: rgba(239, 68, 68, 0.25);
+        border-color: #f87171;
       }
 
       /* Stat Cards Grid */
@@ -822,6 +885,19 @@
         border: 1px solid rgba(56, 189, 248, 0.35);
         color: #7dd3fc;
         font-weight: 600;
+      }
+      .uneven-stocks-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: rgba(245, 158, 11, 0.15);
+        border: 1px solid rgba(245, 158, 11, 0.4);
+        color: #fbbf24;
+        letter-spacing: 0.04em;
       }
       .session-body {
         padding: 8px 10px 10px;
@@ -2066,23 +2142,27 @@
         margin: 0;
       }
       .sidebar-collapse-toggle-btn {
-        background: transparent;
-        border: 1px solid transparent;
-        color: var(--text-dim);
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: var(--text);
         cursor: pointer;
-        font-size: 10px;
-        padding: 3px 6px;
-        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 6px;
         line-height: 1;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
         transition:
-          background 0.1s,
-          color 0.1s,
-          border-color 0.1s;
+          background 0.15s,
+          color 0.15s,
+          border-color 0.15s,
+          transform 0.1s;
       }
       .sidebar-collapse-toggle-btn:hover {
-        color: var(--text);
-        background: var(--panel-border);
-        border-color: rgba(255, 255, 255, 0.15);
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.22);
+        border-color: rgba(56, 189, 248, 0.6);
+        transform: scale(1.05);
       }
       .stage-sidebar-tab {
         position: absolute;
@@ -2128,42 +2208,43 @@
         bottom: 14px;
         right: 14px;
         z-index: 25;
-        background: rgba(18, 20, 26, 0.8);
-        backdrop-filter: blur(4px);
-        border: 1px solid var(--panel-border);
-        color: var(--text-dim);
-        font-size: 14px;
+        background: rgba(18, 20, 26, 0.85);
+        backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        font-size: 17px;
         line-height: 1;
-        padding: 6px 9px;
-        border-radius: 6px;
+        padding: 7px 12px;
+        border-radius: 8px;
         cursor: pointer;
-        opacity: 0;
-        pointer-events: none;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        opacity: 0.75;
+        pointer-events: auto;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
         transition:
           opacity 0.2s ease,
           background 0.15s ease,
           color 0.15s ease,
           border-color 0.15s ease,
-          transform 0.15s ease;
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
       }
       #stageWrap:hover .stage-expand-btn {
         opacity: 1;
-        pointer-events: auto;
       }
       .stage-expand-btn:hover {
-        background: #2a2e3d;
-        border-color: rgba(56, 189, 248, 0.5);
-        color: var(--text);
-        transform: scale(1.05);
+        background: #2563eb;
+        border-color: #60a5fa;
+        color: #fff;
+        transform: scale(1.08);
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
       }
       .stage-expand-btn.active {
-        background: rgba(56, 189, 248, 0.25);
+        background: rgba(56, 189, 248, 0.35);
         color: #38bdf8;
-        border-color: rgba(56, 189, 248, 0.6);
+        border-color: rgba(56, 189, 248, 0.8);
       }
       #players {
         flex-shrink: 0;

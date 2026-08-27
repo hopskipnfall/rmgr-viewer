@@ -339,6 +339,22 @@ export interface Translations {
   sessionVideoAttached: string;
   sessionSoloGame: string;
   sessionVs: (opponent: string) => string;
+
+  // Filters & Uneven Start
+  filterOpponentLabel: string;
+  filterAllOpponents: string;
+  filterMyCharLabel: string;
+  filterAllMyCharacters: string;
+  filterOppCharLabel: string;
+  filterAllOppCharacters: string;
+  filterReset: string;
+  unevenStocksBadge: string;
+  unevenStocksTooltip: (yourStart: number, oppStart: number) => string;
+  overallFilteredHeader: (
+    filtered: number,
+    total: number,
+    dreamLand: number,
+  ) => string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -678,6 +694,20 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sessionVideoAttached: "YouTube Video Attached",
     sessionSoloGame: "Practice / Solo Match",
     sessionVs: (opponent: string) => `vs ${opponent}`,
+
+    // Filters & Uneven Start
+    filterOpponentLabel: "Opponent:",
+    filterAllOpponents: "All Opponents",
+    filterMyCharLabel: "My Character:",
+    filterAllMyCharacters: "All Characters",
+    filterOppCharLabel: "Opponent Character:",
+    filterAllOppCharacters: "All Characters",
+    filterReset: "Clear filters",
+    unevenStocksBadge: "Uneven Start",
+    unevenStocksTooltip: (yourStart, oppStart) =>
+      `Uneven starting stocks: ${yourStart} vs ${oppStart}`,
+    overallFilteredHeader: (filtered, total, dreamLand) =>
+      `OVERALL STATISTICS (${filtered}/${total} games · ${dreamLand} on Dream Land)`,
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -907,7 +937,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     expandRightSidebarTitle: "戦績・状況分析サイドバーを表示",
 
     recoveryWidgetTitle: "復帰",
-    edgeGuardWidgetTitle: "崖外",
+    edgeGuardWidgetTitle: "復帰阻止",
     ledgeGetupWidgetTitle: "崖上がり",
     ledgeTrapWidgetTitle: "崖狩り",
     situationSuccessBadge: "✓",
@@ -1003,6 +1033,20 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sessionVideoAttached: "YouTube動画連携済み",
     sessionSoloGame: "練習 / 単独マッチ",
     sessionVs: (opponent: string) => `vs ${opponent}`,
+
+    // Filters & Uneven Start
+    filterOpponentLabel: "対戦相手:",
+    filterAllOpponents: "すべての対戦相手",
+    filterMyCharLabel: "使用キャラ:",
+    filterAllMyCharacters: "すべてのキャラ",
+    filterOppCharLabel: "相手キャラ:",
+    filterAllOppCharacters: "すべてのキャラ",
+    filterReset: "フィルター解除",
+    unevenStocksBadge: "変則スタート",
+    unevenStocksTooltip: (yourStart, oppStart) =>
+      `変則開始ストック: ${yourStart} vs ${oppStart}`,
+    overallFilteredHeader: (filtered, total, dreamLand) =>
+      `総合戦績 (${filtered}/${total}試合 · プププランド${dreamLand}試合)`,
   },
 };
 

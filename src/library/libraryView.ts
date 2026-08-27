@@ -1,13 +1,19 @@
 import { t } from "../i18n.js";
+import { characterName } from "../lookups.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import {
   type Identity,
   loadIdentity,
   createDefaultIdentity,
+  resolvePerspectivePort,
+  resolveOpponentPort,
 } from "../data/identity.js";
 import {
+  type FilterCriteria,
+  hasActiveFilters,
   filterGameSummaries,
   aggregateFilteredGames,
+  computeRateDeltas,
   computeOpponentCharacterBreakdown,
 } from "../data/aggregate.js";
 import { IdentityPanel } from "./identityPanel.js";
@@ -15,11 +21,75 @@ import { StatCards } from "./statCards.js";
 import { BreakdownTable } from "./breakdownTable.js";
 import { GameList } from "./gameList.js";
 
+function matchesFilters(
+  summary: GameSummary,
+  identity: Identity,
+  filters: FilterCriteria,
+): boolean {
+  if (!hasActiveFilters(filters)) return true;
+
+  const yourPort = resolvePerspectivePort(summary, identity);
+  if (yourPort !== null) {
+    const oppPort = resolveOpponentPort(summary, yourPort);
+    const yourP = summary.ports.find((p) => p.port === yourPort);
+    const oppP =
+      oppPort !== null ? summary.ports.find((p) => p.port === oppPort) : null;
+
+    if (
+      filters.yourCharacterId !== undefined &&
+      filters.yourCharacterId !== "all"
+    ) {
+      if (!yourP || yourP.characterId !== filters.yourCharacterId) return false;
+    }
+    if (
+      filters.oppCharacterId !== undefined &&
+      filters.oppCharacterId !== "all"
+    ) {
+      if (!oppP || oppP.characterId !== filters.oppCharacterId) return false;
+    }
+    if (filters.opponentName !== undefined && filters.opponentName !== "all") {
+      if (!oppP || oppP.playerName.trim() !== filters.opponentName.trim())
+        return false;
+    }
+    return true;
+  }
+
+  // Ambiguous games: match if any port satisfies the criteria
+  if (filters.opponentName !== undefined && filters.opponentName !== "all") {
+    if (
+      !summary.ports.some(
+        (p) => p.playerName.trim() === filters.opponentName!.trim(),
+      )
+    )
+      return false;
+  }
+  if (
+    filters.yourCharacterId !== undefined &&
+    filters.yourCharacterId !== "all"
+  ) {
+    if (!summary.ports.some((p) => p.characterId === filters.yourCharacterId))
+      return false;
+  }
+  if (
+    filters.oppCharacterId !== undefined &&
+    filters.oppCharacterId !== "all"
+  ) {
+    if (!summary.ports.some((p) => p.characterId === filters.oppCharacterId))
+      return false;
+  }
+  return true;
+}
+
 export class LibraryViewController {
   private container: HTMLElement;
   private summaries: GameSummary[] = [];
   private identity: Identity;
   private sortOrder: "newest" | "oldest" = "newest";
+  private filters: FilterCriteria = {
+    opponentName: "all",
+    yourCharacterId: "all",
+    oppCharacterId: "all",
+  };
 
   private identityPanel: IdentityPanel;
   private statCards: StatCards;
@@ -55,6 +125,7 @@ export class LibraryViewController {
         </div>
       </div>
       <div id="libraryMain" class="library-main">
+        <div id="libraryFilterBar" class="library-filter-bar"></div>
         <div id="overallHeader" class="overall-header"></div>
         <div id="statCardsWrap" class="stat-cards-wrap"></div>
         <div id="breakdownWrap" class="breakdown-wrap"></div>
@@ -261,16 +332,180 @@ export class LibraryViewController {
       }
     }
 
-    // 2. Aggregation for all resolved games
-    const resolvedGames = filterGameSummaries(
+    // 2. Filter Bar
+    const filterBarEl = this.container.querySelector(
+      "#libraryFilterBar",
+    ) as HTMLElement;
+    const isFiltered = hasActiveFilters(this.filters);
+
+    if (filterBarEl) {
+      const opponentNamesSet = new Set<string>();
+      const myCharsSet = new Set<number>();
+      const oppCharsSet = new Set<number>();
+
+      for (const summary of this.summaries) {
+        const yourPort = resolvePerspectivePort(summary, this.identity);
+        if (yourPort !== null) {
+          const oppPort = resolveOpponentPort(summary, yourPort);
+          const yourP = summary.ports.find((p) => p.port === yourPort);
+          const oppP =
+            oppPort !== null
+              ? summary.ports.find((p) => p.port === oppPort)
+              : null;
+          if (yourP) myCharsSet.add(yourP.characterId);
+          if (oppP) {
+            oppCharsSet.add(oppP.characterId);
+            if (oppP.playerName.trim())
+              opponentNamesSet.add(oppP.playerName.trim());
+          }
+        } else {
+          for (const p of summary.ports) {
+            if (
+              p.playerName.trim() &&
+              !this.identity.aliases.has(p.playerName.trim())
+            ) {
+              opponentNamesSet.add(p.playerName.trim());
+            }
+            oppCharsSet.add(p.characterId);
+          }
+        }
+      }
+
+      const opponentNames = Array.from(opponentNamesSet).sort((a, b) =>
+        a.localeCompare(b),
+      );
+      const myChars = Array.from(myCharsSet).sort((a, b) =>
+        (characterName(a) || "").localeCompare(characterName(b) || ""),
+      );
+      const oppChars = Array.from(oppCharsSet).sort((a, b) =>
+        (characterName(a) || "").localeCompare(characterName(b) || ""),
+      );
+
+      if (this.summaries.length === 0) {
+        filterBarEl.hidden = true;
+      } else {
+        filterBarEl.hidden = false;
+        filterBarEl.innerHTML = `
+          <div class="library-filter-item">
+            <label for="filterOpponentSelect">${escapeHtml(tr.filterOpponentLabel)}</label>
+            <select id="filterOpponentSelect">
+              <option value="all" ${this.filters.opponentName === "all" ? "selected" : ""}>
+                ${escapeHtml(tr.filterAllOpponents)}
+              </option>
+              ${opponentNames
+                .map(
+                  (name) => `
+                <option value="${escapeHtml(name)}" ${this.filters.opponentName === name ? "selected" : ""}>
+                  ${escapeHtml(name)}
+                </option>
+              `,
+                )
+                .join("")}
+            </select>
+          </div>
+
+          <div class="library-filter-item">
+            <label for="filterMyCharSelect">${escapeHtml(tr.filterMyCharLabel)}</label>
+            <select id="filterMyCharSelect">
+              <option value="all" ${this.filters.yourCharacterId === "all" ? "selected" : ""}>
+                ${escapeHtml(tr.filterAllMyCharacters)}
+              </option>
+              ${myChars
+                .map(
+                  (charId) => `
+                <option value="${charId}" ${this.filters.yourCharacterId === charId ? "selected" : ""}>
+                  ${escapeHtml(characterName(charId))}
+                </option>
+              `,
+                )
+                .join("")}
+            </select>
+          </div>
+
+          <div class="library-filter-item">
+            <label for="filterOppCharSelect">${escapeHtml(tr.filterOppCharLabel)}</label>
+            <select id="filterOppCharSelect">
+              <option value="all" ${this.filters.oppCharacterId === "all" ? "selected" : ""}>
+                ${escapeHtml(tr.filterAllOppCharacters)}
+              </option>
+              ${oppChars
+                .map(
+                  (charId) => `
+                <option value="${charId}" ${this.filters.oppCharacterId === charId ? "selected" : ""}>
+                  ${escapeHtml(characterName(charId))}
+                </option>
+              `,
+                )
+                .join("")}
+            </select>
+          </div>
+
+          ${
+            isFiltered
+              ? `<button id="filterResetBtn" class="library-filter-reset-btn">${escapeHtml(tr.filterReset)}</button>`
+              : ""
+          }
+        `;
+
+        const oppSelect = filterBarEl.querySelector(
+          "#filterOpponentSelect",
+        ) as HTMLSelectElement;
+        oppSelect?.addEventListener("change", () => {
+          this.filters.opponentName =
+            oppSelect.value === "all" ? "all" : oppSelect.value;
+          this.render();
+        });
+
+        const myCharSelect = filterBarEl.querySelector(
+          "#filterMyCharSelect",
+        ) as HTMLSelectElement;
+        myCharSelect?.addEventListener("change", () => {
+          this.filters.yourCharacterId =
+            myCharSelect.value === "all" ? "all" : Number(myCharSelect.value);
+          this.render();
+        });
+
+        const oppCharSelect = filterBarEl.querySelector(
+          "#filterOppCharSelect",
+        ) as HTMLSelectElement;
+        oppCharSelect?.addEventListener("change", () => {
+          this.filters.oppCharacterId =
+            oppCharSelect.value === "all" ? "all" : Number(oppCharSelect.value);
+          this.render();
+        });
+
+        const resetBtn = filterBarEl.querySelector(
+          "#filterResetBtn",
+        ) as HTMLButtonElement;
+        resetBtn?.addEventListener("click", () => {
+          this.filters = {
+            opponentName: "all",
+            yourCharacterId: "all",
+            oppCharacterId: "all",
+          };
+          this.render();
+        });
+      }
+    }
+
+    // 3. Aggregation for all resolved games & filtered resolved games
+    const allResolvedGames = filterGameSummaries(
       this.summaries,
       this.identity,
       {},
     );
-    const aggregateRates = aggregateFilteredGames(resolvedGames);
+    const filteredResolvedGames = filterGameSummaries(
+      this.summaries,
+      this.identity,
+      this.filters,
+    );
 
-    // 3. Overall Statistics (collapsed unless at least 2 games have a resolved identity)
-    const hasSufficientGames = resolvedGames.length >= 2;
+    const baselineRates = aggregateFilteredGames(allResolvedGames);
+    const filteredRates = aggregateFilteredGames(filteredResolvedGames);
+    const deltas = computeRateDeltas(filteredRates, baselineRates);
+
+    // 4. Overall Statistics (collapsed unless at least 2 games have a resolved identity)
+    const hasSufficientGames = allResolvedGames.length >= 2;
     const overallHeaderEl = this.container.querySelector(
       "#overallHeader",
     ) as HTMLElement;
@@ -288,24 +523,41 @@ export class LibraryViewController {
     } else {
       if (overallHeaderEl) {
         overallHeaderEl.hidden = false;
-        overallHeaderEl.innerHTML = `
-          <h2>${escapeHtml(tr.overallHeader(aggregateRates.totalGames, aggregateRates.dreamLandGames))}</h2>
-        `;
+        const headerText = isFiltered
+          ? tr.overallFilteredHeader(
+              filteredRates.totalGames,
+              baselineRates.totalGames,
+              filteredRates.dreamLandGames,
+            )
+          : tr.overallHeader(
+              baselineRates.totalGames,
+              baselineRates.dreamLandGames,
+            );
+        overallHeaderEl.innerHTML = `<h2>${escapeHtml(headerText)}</h2>`;
       }
       if (statCardsWrapEl) statCardsWrapEl.hidden = false;
       if (breakdownWrapEl) breakdownWrapEl.hidden = false;
 
-      // 4. Stat Cards
-      this.statCards.render(aggregateRates, null, false);
+      // 5. Stat Cards with comparative deltas when filtered
+      this.statCards.render(filteredRates, deltas, isFiltered);
 
-      // 5. Breakdown Table
-      const breakdownRows = computeOpponentCharacterBreakdown(resolvedGames);
+      // 6. Breakdown Table
+      const breakdownRows = computeOpponentCharacterBreakdown(
+        filteredResolvedGames,
+      );
       this.breakdownTable.render(breakdownRows);
     }
 
-    // 6. Game List - displays all games with interactive player perspective choice
+    // 7. Game List - displays filtered games with interactive player perspective choice
+    const displayedSummaries = this.summaries.filter((s) =>
+      matchesFilters(s, this.identity, this.filters),
+    );
     this.gameList.setSortOrder(this.sortOrder);
-    this.gameList.render(this.summaries, this.identity, this.summaries.length);
+    this.gameList.render(
+      displayedSummaries,
+      this.identity,
+      displayedSummaries.length,
+    );
   }
 }
 
