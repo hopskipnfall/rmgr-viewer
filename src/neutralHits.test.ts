@@ -1304,4 +1304,440 @@ describe("classifyNeutralOpening", () => {
     expect(ev.outcome).toBe("ko");
     expect(ev.killFrameIndex).toBe(40);
   });
+
+  it("never resets neutral interaction while a player is in offstage recovery or disadvantage", () => {
+    const frames: Frame[] = [];
+    const p0 = 0 as PortIndex;
+    const p1 = 1 as PortIndex;
+
+    // F0-F5: Neutral setup
+    for (let f = 0; f < 5; f++) {
+      frames.push({
+        frame: f,
+        ports: [
+          {
+            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p0,
+              characterId: 0,
+              actionStateId: 0x0a, // Idle
+              positionX: -500,
+              positionY: 0,
+              facingDirection: 1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 0,
+              stocksRemaining: 4,
+              jumpsUsed: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: 0,
+              actionFrameCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+            },
+          },
+          {
+            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p1,
+              characterId: 1,
+              actionStateId: 0x0a, // Idle
+              positionX: 500,
+              positionY: 0,
+              facingDirection: -1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 0,
+              stocksRemaining: 4,
+              jumpsUsed: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: 0,
+              actionFrameCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+            },
+          },
+        ],
+      });
+    }
+
+    // F5: P0 hits P1
+    frames.push({
+      frame: 5,
+      ports: [
+        {
+          pre: { frame: 5, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+          post: {
+            frame: 5,
+            port: p0,
+            characterId: 0,
+            actionStateId: 0x42, // Attack
+            positionX: 400,
+            positionY: 0,
+            facingDirection: 1,
+            velocityX: 0,
+            velocityY: 0,
+            damagePercent: 0,
+            stocksRemaining: 4,
+            jumpsUsed: 0,
+            grounded: true,
+            hurtboxState: 0,
+            hitstunCounter: 0,
+            actionFrameCounter: 0,
+            comboHitCount: 0,
+            comboDamage: 0,
+          },
+        },
+        {
+          pre: { frame: 5, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+          post: {
+            frame: 5,
+            port: p1,
+            characterId: 1,
+            actionStateId: 0x33, // DamageFlyRoll
+            positionX: 500,
+            positionY: 0,
+            facingDirection: -1,
+            velocityX: 0,
+            velocityY: 0,
+            damagePercent: 12,
+            stocksRemaining: 4,
+            jumpsUsed: 0,
+            grounded: false,
+            hurtboxState: 0,
+            hitstunCounter: 20,
+            actionFrameCounter: 0,
+            comboHitCount: 1,
+            comboDamage: 12,
+          },
+        },
+      ],
+    });
+
+    // F6-F80: P1 is launched offstage in recovery (x = 3500, actionable after hitstun)
+    // 75 frames pass while P1 is offstage (more than 60 frames!). Neutral must NOT reset here!
+    for (let f = 6; f <= 80; f++) {
+      const inHitstun = f < 25;
+      frames.push({
+        frame: f,
+        ports: [
+          {
+            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p0,
+              characterId: 0,
+              actionStateId: 0x0a, // Idle on stage
+              positionX: 0,
+              positionY: 0,
+              facingDirection: 1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 0,
+              stocksRemaining: 4,
+              jumpsUsed: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: 0,
+              actionFrameCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+            },
+          },
+          {
+            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p1,
+              characterId: 1,
+              actionStateId: inHitstun ? 0x33 : 0x16, // DamageFlyRoll then JumpF offstage
+              positionX: 3500,
+              positionY: -200,
+              facingDirection: -1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 12,
+              stocksRemaining: 4,
+              jumpsUsed: 0,
+              grounded: false,
+              hurtboxState: 0,
+              hitstunCounter: inHitstun ? 25 - f : 0,
+              actionFrameCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+            },
+          },
+        ],
+      });
+    }
+
+    // F81-F90: P1 recovers back onto stage (x = 1000, y = 0, grounded)
+    for (let f = 81; f <= 90; f++) {
+      frames.push({
+        frame: f,
+        ports: [
+          {
+            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p0,
+              characterId: 0,
+              actionStateId: 0x0a,
+              positionX: -500,
+              positionY: 0,
+              facingDirection: 1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 0,
+              stocksRemaining: 4,
+              jumpsUsed: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: 0,
+              actionFrameCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+            },
+          },
+          {
+            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p1,
+              characterId: 1,
+              actionStateId: 0x0a, // Landing on stage
+              positionX: 1000,
+              positionY: 0,
+              facingDirection: -1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 12,
+              stocksRemaining: 4,
+              jumpsUsed: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: 0,
+              actionFrameCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+            },
+          },
+        ],
+      });
+    }
+
+    // F91-F200: Both players remain actionable on stage for 110 frames (30f to end recovery + 60f to reset neutral)
+    for (let f = 91; f <= 200; f++) {
+      frames.push({
+        frame: f,
+        ports: [
+          {
+            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p0,
+              characterId: 0,
+              actionStateId: 0x0a,
+              positionX: -500,
+              positionY: 0,
+              facingDirection: 1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 0,
+              stocksRemaining: 4,
+              jumpsUsed: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: 0,
+              actionFrameCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+            },
+          },
+          {
+            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p1,
+              characterId: 1,
+              actionStateId: 0x0a,
+              positionX: 500,
+              positionY: 0,
+              facingDirection: -1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 12,
+              stocksRemaining: 4,
+              jumpsUsed: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: 0,
+              actionFrameCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+            },
+          },
+        ],
+      });
+    }
+
+    const replay = {
+      header: {
+        version: 3,
+        streamLength: frames.length,
+        goodName: "Super Smash Bros. (U) (V1.0) [!]",
+        recorderSchemaVersion: 1,
+        recordedAtEpochSeconds: 1724300000,
+      },
+      gameStart: {
+        stageId: DREAM_LAND_STAGE_ID,
+        randomSeed: 0,
+        ports: [{ characterId: 0 }, { characterId: 1 }],
+      },
+      frames,
+    } as unknown as Replay;
+
+    const events = computeNeutralHitEvents(replay);
+    expect(events.length).toBe(1);
+    const ev = events[0]!;
+    expect(ev.outcome).toBe("reset");
+    expect(ev.convertedToKill).toBe(false);
+    expect(ev.convertedToEdgeGuard).toBe(true);
+    // Neutral reset must have happened AFTER P1 was back on stage (>= frame 140), not during offstage F6-F80
+    expect(ev.endFrameIndex).toBeGreaterThanOrEqual(140);
+  });
+
+  it("splits sequential disadvantage reversals into distinct advantage phases", () => {
+    const frames: Frame[] = [];
+    const p0 = 0 as PortIndex;
+    const p1 = 1 as PortIndex;
+
+    // Helper to push frame
+    const pushF = (
+      f: number,
+      p0Action: number,
+      p0Hitstun: number,
+      p0Combo: number,
+      p1Action: number,
+      p1Hitstun: number,
+      p1Combo: number,
+      p0Stocks = 4,
+      p1Stocks = 4,
+    ) => {
+      frames.push({
+        frame: f,
+        ports: [
+          {
+            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p0,
+              characterId: 0,
+              actionStateId: p0Action,
+              positionX: -500,
+              positionY: 0,
+              facingDirection: 1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 0,
+              stocksRemaining: p0Stocks,
+              jumpsUsed: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: p0Hitstun,
+              actionFrameCounter: 0,
+              comboHitCount: p0Combo,
+              comboDamage: 0,
+            },
+          },
+          {
+            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            post: {
+              frame: f,
+              port: p1,
+              characterId: 1,
+              actionStateId: p1Action,
+              positionX: 500,
+              positionY: 0,
+              facingDirection: -1,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 0,
+              stocksRemaining: p1Stocks,
+              jumpsUsed: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: p1Hitstun,
+              actionFrameCounter: 0,
+              comboHitCount: p1Combo,
+              comboDamage: 0,
+            },
+          },
+        ],
+      });
+    };
+
+    // F0-F9: Neutral
+    for (let f = 0; f < 10; f++) pushF(f, 0x0a, 0, 0, 0x0a, 0, 0);
+
+    // F10: P0 hits P1
+    pushF(10, 0x42, 0, 0, 0x33, 20, 1);
+    for (let f = 11; f < 25; f++) pushF(f, 0x0a, 0, 0, 0x33, 25 - f, 1);
+    for (let f = 25; f < 40; f++) pushF(f, 0x0a, 0, 0, 0x16, 0, 0);
+
+    // F40: P1 reverses and hits P0!
+    pushF(40, 0x33, 20, 1, 0x42, 0, 0);
+    for (let f = 41; f < 55; f++) pushF(f, 0x33, 55 - f, 1, 0x0a, 0, 0);
+    for (let f = 55; f < 70; f++) pushF(f, 0x16, 0, 0, 0x0a, 0, 0);
+
+    // F70: P0 reverses back and hits P1!
+    pushF(70, 0x42, 0, 0, 0x33, 30, 1);
+    for (let f = 71; f < 90; f++) pushF(f, 0x0a, 0, 0, 0x33, 90 - f, 1);
+
+    // F90: P1 dies (KO)
+    pushF(90, 0x0a, 0, 0, 0x00, 0, 0, 4, 3);
+
+    const replay = {
+      header: {
+        version: 3,
+        streamLength: frames.length,
+        goodName: "Super Smash Bros. (U) (V1.0) [!]",
+        recorderSchemaVersion: 1,
+        recordedAtEpochSeconds: 1724300000,
+      },
+      gameStart: {
+        stageId: DREAM_LAND_STAGE_ID,
+        randomSeed: 0,
+        ports: [{ characterId: 0 }, { characterId: 1 }],
+      },
+      frames,
+    } as unknown as Replay;
+
+    const events = computeNeutralHitEvents(replay);
+    expect(events.length).toBe(3);
+
+    // Event 1: P0 opening on P1, ended in Reversal at F40
+    expect(events[0]!.attackerPort).toBe(p0);
+    expect(events[0]!.victimPort).toBe(p1);
+    expect(events[0]!.outcome).toBe("reversal");
+    expect(events[0]!.endFrameIndex).toBe(40);
+
+    // Event 2: P1 reversal on P0, ended in Reversal at F70
+    expect(events[1]!.attackerPort).toBe(p1);
+    expect(events[1]!.victimPort).toBe(p0);
+    expect(events[1]!.reason).toBe("reversal");
+    expect(events[1]!.outcome).toBe("reversal");
+    expect(events[1]!.endFrameIndex).toBe(70);
+
+    // Event 3: P0 second reversal on P1, ended in KO at F90
+    expect(events[2]!.attackerPort).toBe(p0);
+    expect(events[2]!.victimPort).toBe(p1);
+    expect(events[2]!.reason).toBe("reversal");
+    expect(events[2]!.outcome).toBe("ko");
+    expect(events[2]!.convertedToKill).toBe(true);
+  });
 });

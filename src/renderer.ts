@@ -709,6 +709,17 @@ export function isQuickAttackState(actionStateId: number): boolean {
   return QUICK_ATTACK_STATES.has(actionStateId);
 }
 
+export function isJumpActionState(actionStateId: number): boolean {
+  return (
+    actionStateId === 0x014 || // JumpSquat
+    actionStateId === 0x015 || // ShieldJumpSquat
+    actionStateId === 0x016 || // JumpF
+    actionStateId === 0x017 || // JumpB
+    actionStateId === 0x018 || // JumpAerialF
+    actionStateId === 0x019 // JumpAerialB
+  );
+}
+
 export interface QuickAttackPath {
   readonly index: number;
   readonly port: PortIndex;
@@ -716,6 +727,13 @@ export interface QuickAttackPath {
   readonly startFrameIndex: number;
   readonly endFrame: number;
   readonly endFrameIndex: number;
+  readonly recoveryStartFrame?: number;
+  readonly recoveryStartFrameIndex?: number;
+  readonly jumpFrame?: number;
+  readonly jumpFrameIndex?: number;
+  readonly preJumpPoints?: Array<{ x: number; y: number }>;
+  readonly jumpPoints?: Array<{ x: number; y: number }>;
+  readonly preUpBPoints?: Array<{ x: number; y: number }>;
   readonly points: Array<{ x: number; y: number }>;
   readonly zipCount: number;
 }
@@ -756,6 +774,8 @@ function getRecoveryWindowsForPort(
 
 /**
  * Extracts Quick Attack (Up-B) trajectories for a Pikachu player across a replay.
+ * Traces the player's movement from the start of the recovery situation up to and through the Up-B.
+ * Splits pre-Up-B trajectory into a grey pre-jump segment and a white jump segment.
  * By default (`recoveryOnly: true`), filters to only those executed during classified recovery situations.
  */
 export function extractAllQuickAttackPaths(
@@ -767,9 +787,7 @@ export function extractAllQuickAttackPaths(
   const charId = replay.gameStart.ports[port]?.characterId ?? 0x09;
   if (!isPikachuCharacter(charId)) return paths;
 
-  const recoveryWindows = recoveryOnly
-    ? getRecoveryWindowsForPort(replay, port)
-    : null;
+  const recoveryWindows = getRecoveryWindowsForPort(replay, port);
 
   const size = characterSize(charId);
   const halfHeight = size.height * 0.5;
@@ -782,12 +800,97 @@ export function extractAllQuickAttackPaths(
 
   const addPathIfEligible = (endFrame: number, endFrameIndex: number) => {
     if (currentPoints.length < 2) return;
-    if (recoveryWindows !== null) {
-      const inRecovery = recoveryWindows.some(
-        (w) => startFrameIndex >= w.start - 10 && startFrameIndex <= w.end + 10,
-      );
-      if (!inRecovery) return;
+    const matchingWindow = recoveryWindows.find(
+      (w) => startFrameIndex >= w.start - 10 && startFrameIndex <= w.end + 10,
+    );
+    if (recoveryOnly && !matchingWindow) return;
+
+    let preUpBPoints: Array<{ x: number; y: number }> | undefined;
+    let preJumpPoints: Array<{ x: number; y: number }> | undefined;
+    let jumpPoints: Array<{ x: number; y: number }> | undefined;
+    let recoveryStartFrame: number | undefined;
+    let recoveryStartFrameIndex: number | undefined;
+    let jumpFrame: number | undefined;
+    let jumpFrameIndex: number | undefined;
+
+    if (matchingWindow) {
+      recoveryStartFrameIndex = matchingWindow.start;
+      recoveryStartFrame =
+        replay.frames[matchingWindow.start]?.frame ?? matchingWindow.start;
+
+      // Find first jump frame during the recovery approach
+      let firstJumpIdx = -1;
+      for (let k = matchingWindow.start; k <= startFrameIndex; k++) {
+        const pData = replay.frames[k]?.ports[port]?.post;
+        if (pData && isJumpActionState(pData.actionStateId)) {
+          firstJumpIdx = k;
+          break;
+        }
+      }
+
+      if (firstJumpIdx !== -1) {
+        jumpFrameIndex = firstJumpIdx;
+        jumpFrame = replay.frames[firstJumpIdx]?.frame ?? firstJumpIdx;
+
+        const preJumpPts: Array<{ x: number; y: number }> = [];
+        for (let k = matchingWindow.start; k <= firstJumpIdx; k++) {
+          const pData = replay.frames[k]?.ports[port]?.post;
+          if (pData) {
+            preJumpPts.push({
+              x: pData.positionX,
+              y: pData.positionY + halfHeight,
+            });
+          }
+        }
+        if (preJumpPts.length >= 1) {
+          preJumpPoints = preJumpPts;
+        }
+
+        const jmpPts: Array<{ x: number; y: number }> = [];
+        for (let k = firstJumpIdx; k <= startFrameIndex; k++) {
+          const pData = replay.frames[k]?.ports[port]?.post;
+          if (pData) {
+            jmpPts.push({
+              x: pData.positionX,
+              y: pData.positionY + halfHeight,
+            });
+          }
+        }
+        if (jmpPts.length >= 1) {
+          jumpPoints = jmpPts;
+        }
+      } else {
+        const prePts: Array<{ x: number; y: number }> = [];
+        for (let k = matchingWindow.start; k <= startFrameIndex; k++) {
+          const pData = replay.frames[k]?.ports[port]?.post;
+          if (pData) {
+            prePts.push({
+              x: pData.positionX,
+              y: pData.positionY + halfHeight,
+            });
+          }
+        }
+        if (prePts.length >= 1) {
+          preJumpPoints = prePts;
+        }
+      }
+
+      // Populate preUpBPoints for compatibility
+      const allPrePts: Array<{ x: number; y: number }> = [];
+      for (let k = matchingWindow.start; k <= startFrameIndex; k++) {
+        const pData = replay.frames[k]?.ports[port]?.post;
+        if (pData) {
+          allPrePts.push({
+            x: pData.positionX,
+            y: pData.positionY + halfHeight,
+          });
+        }
+      }
+      if (allPrePts.length >= 1) {
+        preUpBPoints = allPrePts;
+      }
     }
+
     paths.push({
       index: paths.length + 1,
       port,
@@ -795,6 +898,13 @@ export function extractAllQuickAttackPaths(
       startFrameIndex,
       endFrame,
       endFrameIndex,
+      recoveryStartFrame,
+      recoveryStartFrameIndex,
+      jumpFrame,
+      jumpFrameIndex,
+      preJumpPoints,
+      jumpPoints,
+      preUpBPoints,
       points: currentPoints,
       zipCount: Math.max(1, zipCount),
     });
@@ -1927,94 +2037,12 @@ export class StageRenderer {
     // Default label vertical position is generously above the character model
     let labelY = topY - 18;
 
-    // Draw shield bubble/oval if character is in a shield state
+    // Check shield state for label vertical offset
     const shielding = isShieldState(post.actionStateId);
-
+    const shieldStun = isShieldStunState(post.actionStateId);
     if (shielding) {
-      const shieldStun = isShieldStunState(post.actionStateId);
-      const radiusX = halfWidth * 1.35;
-      const radiusY = heightPx * 0.65;
-      labelY = Math.min(labelY, centerY - radiusY - 14);
-
-      if (shieldStun) {
-        // High-energy vibrating shield stun impact effect
-        const jitterX = post.actionFrameCounter % 2 === 0 ? 1.5 : -1.5;
-        const shieldCenterX = x + jitterX;
-
-        // 1. High-opacity impact fill
-        ctx.beginPath();
-        ctx.ellipse(
-          shieldCenterX,
-          centerY,
-          radiusX,
-          radiusY,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fillStyle = hexToRgba(color, 0.48);
-        ctx.fill();
-
-        // 2. Glowing heavy perimeter
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(
-          shieldCenterX,
-          centerY,
-          radiusX,
-          radiusY,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 4;
-        ctx.shadowColor = "rgba(255, 255, 255, 0.9)";
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-        ctx.restore();
-
-        // 3. Bright white electric flash core
-        ctx.beginPath();
-        ctx.ellipse(
-          shieldCenterX,
-          centerY,
-          radiusX,
-          radiusY,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // 4. Outer dashed electric shockwave ring
-        ctx.beginPath();
-        ctx.ellipse(
-          shieldCenterX,
-          centerY,
-          radiusX * 1.18,
-          radiusY * 1.18,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.strokeStyle = "rgba(255, 230, 80, 0.85)";
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([4, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      } else {
-        // Normal shield bubble
-        ctx.beginPath();
-        ctx.ellipse(x, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
-        ctx.fillStyle = hexToRgba(color, 0.28);
-        ctx.fill();
-        ctx.strokeStyle = hexToRgba(color, 0.85);
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
+      const shieldRadius = Math.max(halfWidth * 1.35, heightPx * 0.58) + 3;
+      labelY = Math.min(labelY, centerY - shieldRadius - 16);
     }
 
     // Draw capture lock brackets if character is trapped in a grab
@@ -2676,6 +2704,18 @@ export class StageRenderer {
     }
     ctx.restore(); // Closes the character sway/bob/tumble/prone transform
 
+    if (shielding) {
+      this.drawShieldBubble(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        color,
+        shieldStun,
+        post.actionFrameCounter,
+      );
+    }
+
     if (isDizzy) {
       // 3 glowing golden stars orbiting in 3D ellipse above character's head
       this.drawDizzyStars(x, topY - 6, post.actionFrameCounter, isOpponent);
@@ -2862,6 +2902,153 @@ export class StageRenderer {
     ctx.shadowBlur = 2;
     ctx.fillText(name, x, pillY + pillHeight / 2);
     ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+
+  /**
+   * Renders a Super Smash Bros. forcefield energy bubble surrounding the character.
+   * - Normal Shield: Translucent 3D spherical glass forcefield with spherical radial gradient,
+   *   glossy specular highlight arcs, glowing outer rim, and player-color energy aura.
+   * - Shield Stun: Energized kinetic impact state featuring tight micro-vibration,
+   *   a bright impact flash core, energized white rim, and an electric stress highlight arc.
+   */
+  private drawShieldBubble(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    color: string,
+    isShieldStun: boolean,
+    frameCounter: number,
+  ): void {
+    const { ctx } = this;
+    const baseRadius = Math.max(halfWidth * 1.35, heightPx * 0.58) + 3;
+
+    ctx.save();
+
+    if (isShieldStun) {
+      // Subtle kinetic micro-vibration under impact
+      const jitterX = (((frameCounter * 7) % 3) - 1) * 0.8;
+      const jitterY = (((frameCounter * 11) % 3) - 1) * 0.6;
+      const cx = x + jitterX;
+      const cy = centerY + jitterY;
+
+      // Gentle radius pulse
+      const pulse = Math.sin(frameCounter * 0.8) * 1.2;
+      const radius = baseRadius + pulse;
+
+      // 1. Energized impact flash fill (brighter, more saturated than normal shield)
+      const grad = ctx.createRadialGradient(
+        cx - radius * 0.2,
+        cy - radius * 0.2,
+        radius * 0.1,
+        cx,
+        cy,
+        radius,
+      );
+      grad.addColorStop(0, "rgba(255, 255, 255, 0.45)");
+      grad.addColorStop(0.5, hexToRgba(color, 0.55));
+      grad.addColorStop(0.85, hexToRgba(color, 0.8));
+      grad.addColorStop(1, "rgba(255, 255, 255, 0.95)");
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // 2. High-energy glowing perimeter
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. Electric stress highlight arc
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.85, -Math.PI * 0.9, -Math.PI * 0.3, false);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#ffffff";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+      ctx.restore();
+
+      // 4. Tight outer compression ring
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 1.08, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(color, 0.4);
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    } else {
+      // Normal protective spherical energy bubble
+      const cx = x;
+      const cy = centerY;
+      const radius = baseRadius;
+
+      // 1. Spherical 3D energy fill with radial gradient (translucent core, luminous rim)
+      const grad = ctx.createRadialGradient(
+        cx - radius * 0.25,
+        cy - radius * 0.25,
+        radius * 0.1,
+        cx,
+        cy,
+        radius,
+      );
+      grad.addColorStop(0, hexToRgba(color, 0.28));
+      grad.addColorStop(0.65, hexToRgba(color, 0.45));
+      grad.addColorStop(0.88, hexToRgba(color, 0.72));
+      grad.addColorStop(1, hexToRgba(color, 0.95));
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // 2. Luminous glowing forcefield rim
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(color, 0.95);
+      ctx.lineWidth = 3;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. Inner concentric forcefield ring shimmer
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.76, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // 4. Glossy glass specular reflection arc on upper-left rim
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.85, -Math.PI * 0.85, -Math.PI * 0.35, false);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#ffffff";
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+
+      // Secondary smaller specular glint at bottom-right rim
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.85, Math.PI * 0.25, Math.PI * 0.45, false);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = "round";
+      ctx.stroke();
+      ctx.restore();
+    }
 
     ctx.restore();
   }
@@ -8212,6 +8399,8 @@ export class StageRenderer {
 
   /**
    * Draws all Pikachu Quick Attack trajectories overlayed simultaneously on the stage.
+   * Renders a grey line tracing Pikachu's position from the start of the recovery situation,
+   * continuing with the vibrant yellow lightning trajectory representing the Up-B (Quick Attack).
    */
   private drawQuickAttackOverlay(
     camera: Camera,
@@ -8231,6 +8420,102 @@ export class StageRenderer {
       if (hoveredIndex !== null && !isHovered) {
         // Dim other paths when a specific path is hovered
         ctx.globalAlpha = 0.35;
+      }
+
+      // 0a. Draw grey pre-jump recovery approach trajectory leading into jump/Up-B
+      const preJump =
+        path.preJumpPoints ?? (path.jumpPoints ? undefined : path.preUpBPoints);
+      if (preJump && preJump.length >= 2) {
+        const preScreenPts = preJump.map((pt) =>
+          camera.worldToScreen(pt.x, pt.y),
+        );
+
+        // Subtle dark backdrop contrast stroke for the grey recovery line
+        ctx.beginPath();
+        ctx.moveTo(preScreenPts[0]!.x, preScreenPts[0]!.y);
+        for (let i = 1; i < preScreenPts.length; i++) {
+          ctx.lineTo(preScreenPts[i]!.x, preScreenPts[i]!.y);
+        }
+        ctx.strokeStyle = isHovered
+          ? "rgba(0, 0, 0, 0.75)"
+          : "rgba(0, 0, 0, 0.45)";
+        ctx.lineWidth = isHovered ? 6 : 4;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // Main grey trajectory stroke
+        ctx.beginPath();
+        ctx.moveTo(preScreenPts[0]!.x, preScreenPts[0]!.y);
+        for (let i = 1; i < preScreenPts.length; i++) {
+          ctx.lineTo(preScreenPts[i]!.x, preScreenPts[i]!.y);
+        }
+        ctx.strokeStyle = isHovered
+          ? "rgba(226, 232, 240, 0.95)"
+          : "rgba(148, 163, 184, 0.75)";
+        ctx.lineWidth = isHovered ? 3.5 : 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        if (isHovered) {
+          ctx.shadowColor = "#cbd5e1";
+          ctx.shadowBlur = 8;
+        }
+        ctx.stroke();
+
+        // Recovery entry origin marker dot
+        const recStart = preScreenPts[0]!;
+        ctx.beginPath();
+        ctx.arc(recStart.x, recStart.y, isHovered ? 4.5 : 3, 0, Math.PI * 2);
+        ctx.fillStyle = isHovered ? "#ffffff" : "#94a3b8";
+        ctx.fill();
+      }
+
+      // 0b. Draw white jump trajectory segment (when jumping in the air until Up-B)
+      if (path.jumpPoints && path.jumpPoints.length >= 2) {
+        const jumpScreenPts = path.jumpPoints.map((pt) =>
+          camera.worldToScreen(pt.x, pt.y),
+        );
+
+        // Dark backdrop contrast stroke for the white jump line
+        ctx.beginPath();
+        ctx.moveTo(jumpScreenPts[0]!.x, jumpScreenPts[0]!.y);
+        for (let i = 1; i < jumpScreenPts.length; i++) {
+          ctx.lineTo(jumpScreenPts[i]!.x, jumpScreenPts[i]!.y);
+        }
+        ctx.strokeStyle = isHovered
+          ? "rgba(0, 0, 0, 0.85)"
+          : "rgba(0, 0, 0, 0.6)";
+        ctx.lineWidth = isHovered ? 7 : 4.5;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // Crisp white jump trajectory stroke
+        ctx.beginPath();
+        ctx.moveTo(jumpScreenPts[0]!.x, jumpScreenPts[0]!.y);
+        for (let i = 1; i < jumpScreenPts.length; i++) {
+          ctx.lineTo(jumpScreenPts[i]!.x, jumpScreenPts[i]!.y);
+        }
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = isHovered ? 4 : 2.5;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        if (isHovered) {
+          ctx.shadowColor = "#ffffff";
+          ctx.shadowBlur = 10;
+        }
+        ctx.stroke();
+
+        // Jump start origin marker dot
+        const jumpStart = jumpScreenPts[0]!;
+        ctx.beginPath();
+        ctx.arc(jumpStart.x, jumpStart.y, isHovered ? 5 : 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        if (isHovered) {
+          ctx.shadowColor = "#ffffff";
+          ctx.shadowBlur = 8;
+        }
+        ctx.fill();
       }
 
       // 1. Wide outer electric golden-yellow aura glow

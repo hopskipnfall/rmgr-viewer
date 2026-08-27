@@ -9,7 +9,7 @@ This document defines the mathematical models, action state taxonomies, state ma
 1. [Core Engine Principles & Coordinate System](#1-core-engine-principles--coordinate-system)
 2. [Edge Guarding & Offstage Recovery](#2-edge-guarding--offstage-recovery)
 3. [Ledge Trapping & Ledge Getup](#3-ledge-trapping--ledge-getup)
-4. [Neutral Game & Opening Classification](#4-neutral-game--opening-classification)
+4. [Neutral Analysis & Opening Classification](#4-neutral-analysis--opening-classification)
 5. [Directional Influence (DI) Measurement & Physics](#5-directional-influence-di-measurement--physics)
 6. [Kill Combos Engine](#6-kill-combos-engine)
 7. [Angel Invincibility (Respawn Platform)](#7-angel-invincibility-respawn-platform)
@@ -106,7 +106,7 @@ Initiated when a player enters:
 
 ---
 
-## 4. Neutral Game & Opening Classification
+## 4. Neutral Analysis & Opening Classification
 
 Implemented in [`src/neutralHits.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/neutralHits.ts).
 
@@ -193,7 +193,16 @@ When a fresh hit (`comboHitCount` increments from 0) or fresh grab (`0x0ab`–`0
 3. **`whiff-punish` ("Whiff Punish")**: Victim initiated an attack or grab that ended without landing a hit within 30 frames prior to being hit.
 4. **`jump-punish` ("Jump Punish")**: Victim initiated jump squat (`0x014`, `0x015`) or airborne jump (`0x016`–`0x019`) without executing an aerial attack within 30 frames prior to being hit.
 5. **`standing-hit` / `standing-grab` ("Standing Hit" / "Standing Grab")**: Victim was grounded in neutral stand/walk/run/crouch when hit or grabbed.
-6. **`unknown` ("Neutral Hit")**: Airborne neutral hit outside of above conditions.
+6. **`reversal` ("Reversal")**: The defender was in a disadvantaged state (such as ledge trap or recovery) and landed a counter-hit or grab, turning the tables and seizing advantage.
+7. **`unknown` ("Neutral Hit")**: Airborne neutral hit outside of above conditions.
+
+### 4.5 Lifecycle Resolution & Terminal Outcome
+
+Every neutral or advantage interaction lifecycle concludes with one of three terminal outcomes:
+
+- **`KO`**: The interaction converts to a stock loss for the victim (`convertedToKill: true`, `outcome: "ko"`).
+- **`Reset`**: Disadvantage ends and both players safely return to a mutual actionable on-stage neutral state for 60 consecutive frames ($1.0\text{ s}$) without hits (`convertedToKill: false`, `outcome: "reset"`).
+- **`Reversal`**: The defender lands a counter-hit during the interaction, closing the current attacker's advantage as a reversal (`outcome: "reversal"`) and starting a new advantage phase for the defender.
 
 ---
 

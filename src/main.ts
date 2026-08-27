@@ -92,6 +92,53 @@ const aboutModalBackdrop = document.getElementById(
   "aboutModalBackdrop",
 ) as HTMLDivElement;
 
+// Shortcuts modal elements
+const shortcutsModal = document.getElementById(
+  "shortcutsModal",
+) as HTMLDivElement;
+const shortcutsModalTitle = document.getElementById(
+  "shortcutsModalTitle",
+) as HTMLHeadingElement;
+const shortcutsModalCloseBtn = document.getElementById(
+  "shortcutsModalCloseBtn",
+) as HTMLButtonElement;
+const shortcutsModalFooterCloseBtn = document.getElementById(
+  "shortcutsModalFooterCloseBtn",
+) as HTMLButtonElement;
+const shortcutsModalBackdrop = document.getElementById(
+  "shortcutsModalBackdrop",
+) as HTMLDivElement;
+const shortcutsPlaybackHeader = document.getElementById(
+  "shortcutsPlaybackHeader",
+) as HTMLDivElement;
+const shortcutsPlayPause = document.getElementById(
+  "shortcutsPlayPause",
+) as HTMLSpanElement;
+const shortcutsJumpBackward = document.getElementById(
+  "shortcutsJumpBackward",
+) as HTMLSpanElement;
+const shortcutsJumpForward = document.getElementById(
+  "shortcutsJumpForward",
+) as HTMLSpanElement;
+const shortcutsStepBackward = document.getElementById(
+  "shortcutsStepBackward",
+) as HTMLSpanElement;
+const shortcutsStepForward = document.getElementById(
+  "shortcutsStepForward",
+) as HTMLSpanElement;
+const shortcutsToggleSidebars = document.getElementById(
+  "shortcutsToggleSidebars",
+) as HTMLSpanElement;
+const shortcutsGeneralHeader = document.getElementById(
+  "shortcutsGeneralHeader",
+) as HTMLDivElement;
+const shortcutsHelp = document.getElementById(
+  "shortcutsHelp",
+) as HTMLSpanElement;
+const shortcutsClose = document.getElementById(
+  "shortcutsClose",
+) as HTMLSpanElement;
+
 // Controllers
 let matchController: MatchViewController;
 let libraryController: LibraryViewController;
@@ -118,6 +165,20 @@ function updateHeaderTranslations(): void {
   aboutTwitterLabel.textContent = tr.twitterLabel;
   aboutGithubLabel.textContent = tr.githubLabel;
   aboutModalFooterCloseBtn.textContent = tr.close;
+
+  // Shortcuts modal labels
+  shortcutsModalTitle.textContent = tr.shortcutsTitle;
+  shortcutsPlaybackHeader.textContent = tr.shortcutsPlaybackHeader;
+  shortcutsPlayPause.textContent = tr.shortcutsPlayPause;
+  shortcutsJumpBackward.textContent = tr.shortcutsJumpBackward;
+  shortcutsJumpForward.textContent = tr.shortcutsJumpForward;
+  shortcutsStepBackward.textContent = tr.shortcutsStepBackward;
+  shortcutsStepForward.textContent = tr.shortcutsStepForward;
+  shortcutsToggleSidebars.textContent = tr.shortcutsToggleSidebars;
+  shortcutsGeneralHeader.textContent = tr.shortcutsGeneralHeader;
+  shortcutsHelp.textContent = tr.shortcutsHelp;
+  shortcutsClose.textContent = tr.shortcutsClose;
+  shortcutsModalFooterCloseBtn.textContent = tr.close;
 }
 
 function applyLanguage(lang: Language): void {
@@ -269,6 +330,7 @@ async function handleRouteChange(route: Route): Promise<void> {
         initialPort,
       );
 
+      matchController.setSessionSummaries(libraryController.getSummaries());
       matchController.loadMatch(loaded, initialPort, matchupBaseline);
       matchController.activate();
       loadStatus.textContent = "";
@@ -374,8 +436,36 @@ async function init(): Promise<void> {
   aboutModalCloseBtn.addEventListener("click", closeAboutModal);
   aboutModalFooterCloseBtn.addEventListener("click", closeAboutModal);
   aboutModalBackdrop.addEventListener("click", closeAboutModal);
+
+  // Shortcuts modal
+  const openShortcutsModal = (): void => {
+    shortcutsModal.hidden = false;
+  };
+  const closeShortcutsModal = (): void => {
+    shortcutsModal.hidden = true;
+  };
+  shortcutsModalCloseBtn.addEventListener("click", closeShortcutsModal);
+  shortcutsModalFooterCloseBtn.addEventListener("click", closeShortcutsModal);
+  shortcutsModalBackdrop.addEventListener("click", closeShortcutsModal);
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !aboutModal.hidden) closeAboutModal();
+    if (
+      e.target instanceof HTMLTextAreaElement ||
+      (e.target instanceof HTMLInputElement && e.target.type !== "range")
+    ) {
+      return;
+    }
+    if (e.key === "?" || (e.code === "Slash" && e.shiftKey)) {
+      e.preventDefault();
+      if (shortcutsModal.hidden) {
+        openShortcutsModal();
+      } else {
+        closeShortcutsModal();
+      }
+    } else if (e.key === "Escape") {
+      if (!shortcutsModal.hidden) closeShortcutsModal();
+      if (!aboutModal.hidden) closeAboutModal();
+    }
   });
 
   // 3. Seed Demo Replays
