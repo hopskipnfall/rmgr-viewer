@@ -306,6 +306,46 @@ describe("aggregate module", () => {
     expect(agg.winRatePct).toBe(50);
   });
 
+  it("excludes uneven start games from wins, losses, and win rate calculation", () => {
+    const winGame = makeSummary({
+      id: "w1",
+      yourFinalStocks: 3,
+      oppFinalStocks: 0,
+      yourStats: {},
+    });
+    const unevenWinGame = makeSummary({
+      id: "uw1",
+      yourFinalStocks: 2,
+      oppFinalStocks: 0,
+      yourStats: {},
+    });
+    unevenWinGame.isUnevenStockStart = true;
+
+    const unevenLossGame = makeSummary({
+      id: "ul1",
+      yourFinalStocks: 0,
+      oppFinalStocks: 1,
+      yourStats: {},
+    });
+    unevenLossGame.isUnevenStockStart = true;
+
+    const filtered = filterGameSummaries(
+      [winGame, unevenWinGame, unevenLossGame],
+      identity,
+    );
+    const agg = aggregateFilteredGames(filtered);
+
+    expect(agg.totalGames).toBe(3);
+    expect(agg.wins).toBe(1);
+    expect(agg.losses).toBe(0);
+    expect(agg.winRatePct).toBe(100);
+
+    const breakdown = computeOpponentCharacterBreakdown(filtered);
+    expect(breakdown[0]?.games).toBe(3);
+    expect(breakdown[0]?.wins).toBe(1);
+    expect(breakdown[0]?.losses).toBe(0);
+  });
+
   it("computes grouped opponent character breakdown by NA, JP, and Remix categories", () => {
     const naGame = makeSummary({
       id: "na1",
