@@ -920,26 +920,63 @@
         letter-spacing: 0.02em;
         white-space: nowrap;
       }
-      .twelve-cb-banner {
+      .twelve-cb-section {
+        background: rgba(168, 85, 247, 0.035);
+        border: 1px solid rgba(168, 85, 247, 0.18);
+        border-radius: 8px;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 2px;
+      }
+      .twelve-cb-section-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 6px 12px;
-        margin: 4px 0 2px;
-        background: linear-gradient(
-          90deg,
-          rgba(168, 85, 247, 0.14) 0%,
-          rgba(99, 102, 241, 0.06) 100%
-        );
-        border-left: 3px solid #a855f7;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 600;
+        padding: 2px 4px 6px;
+        border-bottom: 1px solid rgba(168, 85, 247, 0.12);
+      }
+      .twelve-cb-section-left {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 700;
         color: #e2e8f0;
       }
-      .twelve-cb-banner .outcome-tag {
-        font-weight: 500;
+      .twelve-cb-section-title {
         color: #c084fc;
+        letter-spacing: 0.02em;
+      }
+      .twelve-cb-games-count {
+        font-size: 11px;
+        color: var(--text-dim);
+        font-weight: 500;
+      }
+      .twelve-cb-outcome-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: rgba(168, 85, 247, 0.14);
+        color: #c084fc;
+        border: 1px solid rgba(168, 85, 247, 0.3);
+      }
+      .twelve-cb-outcome-pill.outcome-win {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+        border-color: rgba(59, 130, 246, 0.35);
+      }
+      .twelve-cb-outcome-pill.outcome-loss {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border-color: rgba(239, 68, 68, 0.35);
+      }
+      .twelve-cb-games-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
       }
       .session-body {
         padding: 8px 10px 10px;
@@ -1087,9 +1124,33 @@
         border-radius: 2px;
         letter-spacing: 0.02em;
       }
-      .you-player {
+      .player-entry {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 5px;
+      }
+      .player-name,
+      .char-name {
         color: #fff;
+        font-weight: 600;
+      }
+      .player-entry.winner .player-name,
+      .player-entry.winner .char-name {
+        color: #60a5fa;
         font-weight: 700;
+      }
+      .player-entry.winner .char-label {
+        color: #93c5fd;
+      }
+      .player-entry.loser .player-name,
+      .player-entry.loser .char-name {
+        color: #f87171;
+        font-weight: 600;
+        opacity: 0.9;
+      }
+      .player-entry.loser .char-label {
+        color: #fca5a5;
+        opacity: 0.85;
       }
       .char-label {
         color: var(--text-dim);
@@ -1100,29 +1161,13 @@
         font-size: 11px;
         text-transform: uppercase;
         margin: 0 4px;
+        opacity: 0.6;
       }
       .game-row.row-won {
-        border-left: 3px solid #4fbf6a;
+        border-left: 3px solid #3b82f6;
       }
       .game-row.row-lost {
-        border-left: 3px solid rgba(224, 71, 63, 0.4);
-      }
-      .result-badge {
-        font-size: 11px;
-        font-weight: 700;
-        padding: 2px 6px;
-        border-radius: 4px;
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-      }
-      .result-badge.win {
-        color: #4fbf6a;
-        background: rgba(79, 191, 106, 0.15);
-      }
-      .result-badge.loss {
-        color: #e0473f;
-        background: rgba(224, 71, 63, 0.15);
+        border-left: 3px solid rgba(239, 68, 68, 0.45);
       }
       .game-video-badge {
         display: inline-flex;

@@ -71,9 +71,12 @@ describe("GameList rendering", () => {
 
     // Check header contents
     expect(html).toContain("Dream Land");
-    expect(html).toContain("Isai");
+    expect(html).not.toContain("Isai");
+    expect(html).toContain("Pikachu");
     expect(html).toContain("Mew2King");
-    expect(html).toContain('<span class="result-badge win">WIN</span>');
+    expect(html).toContain("Fox");
+    expect(html).toContain('class="player-entry winner"');
+    expect(html).toContain('class="player-entry loser"');
 
     // Check supplementary body contents
     expect(html).toContain("Stocks Remaining: 3");
@@ -326,9 +329,11 @@ describe("GameList rendering", () => {
     const html = mockContainer.innerHTML;
     expect(html).toContain('class="session-stat-pill session-12cb-pill"');
     expect(html).toContain("12CB");
-    expect(html).toContain('class="twelve-cb-banner"');
-    expect(html).toContain('class="twelve-cb-badge"');
-    expect(html).toContain("12CB Match 1/2");
-    expect(html).toContain("12CB Match 2/2");
+    expect(html).toContain('class="twelve-cb-section"');
+    expect(html).toContain('class="twelve-cb-outcome-pill');
+    expect(html).toContain("Match 1/2");
+    expect(html).toContain("Match 2/2");
+    expect(html).toContain('class="player-entry winner"');
+    expect(html).toContain('class="player-entry loser"');
   });
 });

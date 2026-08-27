@@ -176,6 +176,7 @@ export interface Translations {
   angelCol: string;
   nhPerStockCol: string;
   gamesListHeader: (count: number) => string;
+  sessionsListHeader: (count: number) => string;
   sortNewestFirst: string;
   sortOldestFirst: string;
   ambiguousIdentity: string;
@@ -360,7 +361,6 @@ export interface Translations {
   twelveCharacterBattleTitle: string;
   twelveCharacterBattleShort: string;
   session12CbRecord: (wins: number, losses: number) => string;
-  twelveCbBanner: (setNum: number, outcomeText: string) => string;
   twelveCbWon: (remainingChars: number, remainingStocks: number) => string;
   twelveCbLost: (remainingChars: number, remainingStocks: number) => string;
   twelveCbMatchIndex: (idx: number, total: number) => string;
@@ -544,6 +544,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     angelCol: "Angel",
     nhPerStockCol: "NH/St",
     gamesListHeader: (c) => `GAMES (${c})`,
+    sessionsListHeader: (c) => `SESSIONS (${c})`,
     sortNewestFirst: "newest first",
     sortOldestFirst: "oldest first",
     ambiguousIdentity: "Ambiguous identity",
@@ -722,13 +723,11 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     twelveCharacterBattleTitle: "12 Character Battle",
     twelveCharacterBattleShort: "12CB",
     session12CbRecord: (wins, losses) => `12CB: ${wins}W – ${losses}L`,
-    twelveCbBanner: (setNum, outcomeText) =>
-      `12 Character Battle #${setNum} — ${outcomeText}`,
     twelveCbWon: (remainingChars, remainingStocks) =>
       `Won (Remaining: ${remainingChars} chars, ${remainingStocks} stocks)`,
     twelveCbLost: (remainingChars, remainingStocks) =>
-      `Lost (Opponent had ${remainingChars} chars, ${remainingStocks} stocks left)`,
-    twelveCbMatchIndex: (idx, total) => `12CB Match ${idx}/${total}`,
+      `Lost (Opponent: ${remainingChars} chars, ${remainingStocks} stocks)`,
+    twelveCbMatchIndex: (idx, total) => `Match ${idx}/${total}`,
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -897,6 +896,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     angelCol: "無敵",
     nhPerStockCol: "ヒット/撃墜",
     gamesListHeader: (c) => `試合一覧 (${c})`,
+    sessionsListHeader: (c) => `セッション (${c})`,
     sortNewestFirst: "新しい順",
     sortOldestFirst: "古い順",
     ambiguousIdentity: "プレイヤー特定不可",
@@ -1073,13 +1073,11 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     twelveCharacterBattleTitle: "12キャラ戦",
     twelveCharacterBattleShort: "12キャラ",
     session12CbRecord: (wins, losses) => `12キャラ: ${wins}勝 – ${losses}敗`,
-    twelveCbBanner: (setNum, outcomeText) =>
-      `12キャラ戦 第${setNum}セット — ${outcomeText}`,
     twelveCbWon: (remainingChars, remainingStocks) =>
       `勝利 (残り${remainingChars}キャラ・${remainingStocks}ストック)`,
     twelveCbLost: (remainingChars, remainingStocks) =>
       `敗北 (相手残り${remainingChars}キャラ・${remainingStocks}ストック)`,
-    twelveCbMatchIndex: (idx, total) => `12キャラ 第${idx}/${total}戦`,
+    twelveCbMatchIndex: (idx, total) => `第${idx}/${total}戦`,
   },
 };
 
