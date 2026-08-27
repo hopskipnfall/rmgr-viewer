@@ -6,6 +6,10 @@ import {
   resolveOpponentPort,
 } from "./identity.js";
 import { loadVideoLink, type VideoLinkData } from "../video/youtubeSync.js";
+import {
+  detect12CharacterBattles,
+  type TwelveCharacterBattle,
+} from "./twelveCharacterBattle.js";
 
 export interface SessionGroup {
   readonly id: string;
@@ -21,6 +25,7 @@ export interface SessionGroup {
   readonly hasVideo: boolean;
   readonly videoId?: string;
   readonly videoLinkData?: VideoLinkData | null;
+  readonly twelveCharacterBattles?: readonly TwelveCharacterBattle[];
 }
 
 /**
@@ -185,6 +190,8 @@ export function groupGamesIntoSessions(
       return sortOrder === "newest" ? -diff : diff;
     });
 
+    const twelveCharacterBattles = detect12CharacterBattles(cluster, identity);
+
     return {
       id: `session_${firstGame.id}`,
       opponentName: primaryOpponentName,
@@ -199,6 +206,8 @@ export function groupGamesIntoSessions(
       hasVideo: Boolean(sessionVideoLink),
       videoId: sessionVideoLink?.videoId,
       videoLinkData: sessionVideoLink,
+      twelveCharacterBattles:
+        twelveCharacterBattles.length > 0 ? twelveCharacterBattles : undefined,
     };
   });
 

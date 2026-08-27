@@ -193,5 +193,6 @@ describe("groupGamesIntoSessions", () => {
     expect(sessions[0]!.games.length).toBe(3);
     expect(sessions[0]!.wins).toBe(1);
     expect(sessions[0]!.losses).toBe(0);
+    expect(sessions[0]!.twelveCharacterBattles?.length).toBe(1);
   });
 });

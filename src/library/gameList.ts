@@ -95,9 +95,13 @@ export class GameList {
         .join("");
     }
 
+    const listHeader = this.groupBySession
+      ? tr.sessionsListHeader(sessions.length)
+      : tr.gamesListHeader(filteredCount);
+
     this.container.innerHTML = `
       <div class="game-list-header">
-        <h3>${escapeHtml(tr.gamesListHeader(filteredCount))}</h3>
+        <h3>${escapeHtml(listHeader)}</h3>
         <div class="game-list-controls">
           <select id="gameGroupSelect" aria-label="${escapeHtml(tr.groupBySession)}">
             <option value="session" ${this.groupBySession ? "selected" : ""}>
@@ -220,13 +224,110 @@ export class GameList {
       ? `<span class="session-stat-pill ${recordClass}">${escapeHtml(tr.sessionRecord(session.wins, session.losses))}</span>`
       : "";
 
+    const battles = session.twelveCharacterBattles || [];
+    let twelveCbPill = "";
+    if (battles.length > 0) {
+      const cbWins = battles.filter((b) => b.winner === "you").length;
+      const cbLosses = battles.filter((b) => b.winner === "opponent").length;
+      const label =
+        cbWins > 0 || cbLosses > 0
+          ? tr.session12CbRecord(cbWins, cbLosses)
+          : `${tr.twelveCharacterBattleShort} (${battles.length})`;
+      twelveCbPill = `<span class="session-stat-pill session-12cb-pill" title="${escapeHtml(tr.twelveCharacterBattleTitle)}">⚔️ ${escapeHtml(label)}</span>`;
+    }
+
     const videoBadge = session.hasVideo
       ? `<span class="session-video-badge" title="${escapeHtml(tr.sessionVideoAttached)}">🎬 ${escapeHtml(tr.youtubeVideoTitle)}</span>`
       : "";
 
-    const rowsHtml = session.games
-      .map((g) => this.renderGameRow(g, identity, isSingleGame))
-      .join("");
+    let bodyHtml: string;
+
+    if (battles.length > 0) {
+      const cbGameIds = new Set<string>();
+      battles.forEach((b) => b.games.forEach((g) => cbGameIds.add(g.id)));
+
+      // Sort battles according to session sortOrder (by battle startTime)
+      const sortedBattles = [...battles].sort((a, b) => {
+        const diff = a.startTime.getTime() - b.startTime.getTime();
+        return this.sortOrder === "newest" ? -diff : diff;
+      });
+
+      const sectionParts: string[] = [];
+
+      for (const b of sortedBattles) {
+        // Games within a 12CB are ALWAYS listed in chronological order
+        const battleGames = [...b.games].sort(
+          (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime(),
+        );
+
+        let outcomeText: string;
+        if (b.winner === "you") {
+          outcomeText = tr.twelveCbWon(
+            b.winnerRemainingCharacters,
+            b.winnerRemainingStocks,
+          );
+        } else if (b.winner === "opponent") {
+          outcomeText = tr.twelveCbLost(
+            b.winnerRemainingCharacters,
+            b.winnerRemainingStocks,
+          );
+        } else {
+          outcomeText = b.winnerName;
+        }
+
+        const outcomeClass =
+          b.winner === "you"
+            ? "outcome-win"
+            : b.winner === "opponent"
+              ? "outcome-loss"
+              : "";
+
+        const battleRowsHtml = battleGames
+          .map((bg, gIdx) =>
+            this.renderGameRow(
+              bg,
+              identity,
+              isSingleGame,
+              tr.twelveCbMatchIndex(gIdx + 1, battleGames.length),
+            ),
+          )
+          .join("");
+
+        sectionParts.push(`
+          <div class="twelve-cb-section">
+            <div class="twelve-cb-section-header">
+              <div class="twelve-cb-section-left">
+                <span class="twelve-cb-section-icon">⚔️</span>
+                <span class="twelve-cb-section-title">${escapeHtml(tr.twelveCharacterBattleTitle)}</span>
+                <span class="meta-dot">·</span>
+                <span class="twelve-cb-games-count">${escapeHtml(tr.sessionGamesCount(b.games.length))}</span>
+              </div>
+              <div class="twelve-cb-section-right">
+                <span class="twelve-cb-outcome-pill ${outcomeClass}">${escapeHtml(outcomeText)}</span>
+              </div>
+            </div>
+            <div class="twelve-cb-games-list">
+              ${battleRowsHtml}
+            </div>
+          </div>
+        `);
+      }
+
+      // Standalone games not in a 12CB (if any)
+      const standaloneGames = session.games.filter((g) => !cbGameIds.has(g.id));
+      if (standaloneGames.length > 0) {
+        const standaloneRowsHtml = standaloneGames
+          .map((g) => this.renderGameRow(g, identity, isSingleGame))
+          .join("");
+        sectionParts.push(standaloneRowsHtml);
+      }
+
+      bodyHtml = sectionParts.join("");
+    } else {
+      bodyHtml = session.games
+        .map((g) => this.renderGameRow(g, identity, isSingleGame))
+        .join("");
+    }
 
     return `
       <div class="session-group${isCollapsed ? " collapsed" : ""}" data-session-id="${escapeHtml(session.id)}">
@@ -242,12 +343,13 @@ export class GameList {
           <div class="session-header-right">
             <span class="session-stat-pill">${escapeHtml(tr.sessionGamesCount(session.games.length))}</span>
             ${recordPill}
+            ${twelveCbPill}
             <span class="session-duration">⏱ ${duration}</span>
             ${videoBadge}
           </div>
         </div>
         <div class="session-body">
-          ${rowsHtml}
+          ${bodyHtml}
         </div>
       </div>
     `;
@@ -257,6 +359,7 @@ export class GameList {
     summary: GameSummary,
     identity: Identity,
     isSingleGame: boolean = false,
+    extraBadge: string = "",
   ): string {
     const tr = t();
     const is2Player = summary.ports.length === 2;
@@ -318,11 +421,11 @@ export class GameList {
             </div>
             <div class="game-row-players">
               <button class="inline-perspective-btn choose-btn" data-port="${port0.port}">
-                ${escapeHtml(tr.imPlayer(label0))} <span class="char-label">(${escapeHtml(characterName(port0.characterId))})</span>
+                ${escapeHtml(tr.imPlayer(label0))} <span class="char-label">${escapeHtml(characterName(port0.characterId))}</span>
               </button>
               <span class="vs-label">vs</span>
               <button class="inline-perspective-btn choose-btn" data-port="${port1.port}">
-                ${escapeHtml(tr.imPlayer(label1))} <span class="char-label">(${escapeHtml(characterName(port1.characterId))})</span>
+                ${escapeHtml(tr.imPlayer(label1))} <span class="char-label">${escapeHtml(characterName(port1.characterId))}</span>
               </button>
             </div>
             <div class="game-row-actions">
@@ -338,17 +441,13 @@ export class GameList {
     const yourP = summary.ports.find((p) => p.port === yourPort)!;
     const oppP = summary.ports.find((p) => p.port === oppPort)!;
 
-    const yourName = yourP.playerName || `P${yourP.port + 1}`;
     const oppName = oppP.playerName || `P${oppP.port + 1}`;
 
-    let resultBadge = "";
-    if (yourP.finalStocks >= 0 && oppP.finalStocks >= 0) {
-      if (yourP.finalStocks > oppP.finalStocks) {
-        resultBadge = `<span class="result-badge win">${escapeHtml(tr.win)}</span>`;
-      } else if (oppP.finalStocks > yourP.finalStocks) {
-        resultBadge = `<span class="result-badge loss">${escapeHtml(tr.loss)}</span>`;
-      }
-    }
+    const hasStocks = yourP.finalStocks >= 0 && oppP.finalStocks >= 0;
+    const yourWon = hasStocks && yourP.finalStocks > oppP.finalStocks;
+    const yourLost = hasStocks && oppP.finalStocks > yourP.finalStocks;
+    const oppWon = yourLost;
+    const oppLost = yourWon;
 
     const stats = summary.statsByPort[yourPort];
     const statChips: string[] = [];
@@ -414,7 +513,7 @@ export class GameList {
       : "";
 
     return `
-      <div class="game-row ${pulseClass} ${yourP.finalStocks > oppP.finalStocks ? "row-won" : yourP.finalStocks < oppP.finalStocks ? "row-lost" : ""}" data-id="${summary.id}">
+      <div class="game-row ${pulseClass} ${yourWon ? "row-won" : yourLost ? "row-lost" : ""}" data-id="${summary.id}">
         <div class="game-row-header">
           <div class="game-row-meta">
             <span class="game-date">${escapeHtml(dateStr)}</span>
@@ -422,18 +521,21 @@ export class GameList {
             <span class="game-stage">${escapeHtml(stage)}</span>
             <span class="meta-dot">·</span>
             <span class="game-duration">${duration}</span>
+            ${extraBadge ? `<span class="meta-dot">·</span>${extraBadge}` : ""}
             ${videoBadge ? `<span class="meta-dot">·</span>${videoBadge}` : ""}
             ${unevenTag ? `<span class="meta-dot">·</span>${unevenTag}` : ""}
           </div>
           <div class="game-row-players">
-            <strong class="you-player">${escapeHtml(yourName)}</strong>
-            <span class="char-label">(${escapeHtml(characterName(yourP.characterId))})</span>
+            <span class="player-entry ${yourWon ? "winner" : yourLost ? "loser" : ""}">
+              <strong class="char-name">${escapeHtml(characterName(yourP.characterId))}</strong>
+            </span>
             <span class="vs-label">vs</span>
-            <span class="opp-player">${escapeHtml(oppName)}</span>
-            <span class="char-label">(${escapeHtml(characterName(oppP.characterId))})</span>
+            <span class="player-entry ${oppWon ? "winner" : oppLost ? "loser" : ""}">
+              <strong class="player-name">${escapeHtml(oppName)}</strong>
+              <span class="char-label">${escapeHtml(characterName(oppP.characterId))}</span>
+            </span>
           </div>
           <div class="game-row-actions">
-            ${resultBadge}
             <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
             <span class="drill-in-arrow">›</span>
           </div>
