@@ -34,6 +34,12 @@ const modalContainerEl = document.getElementById(
 const backToLibraryBtn = document.getElementById(
   "backToLibraryBtn",
 ) as HTMLButtonElement;
+const twelveCbPrevMatchBtn = document.getElementById(
+  "twelveCbPrevMatchBtn",
+) as HTMLButtonElement;
+const twelveCbNextMatchBtn = document.getElementById(
+  "twelveCbNextMatchBtn",
+) as HTMLButtonElement;
 const importContainer = document.getElementById(
   "importContainer",
 ) as HTMLDivElement;
@@ -330,6 +336,8 @@ async function handleRouteChange(route: Route): Promise<void> {
         initialPort,
       );
 
+      matchController.setIdentity(identity);
+      matchController.setCurrentReplayId(summary.id);
       matchController.setSessionSummaries(libraryController.getSummaries());
       matchController.loadMatch(loaded, initialPort, matchupBaseline);
       matchController.activate();
@@ -366,6 +374,16 @@ async function init(): Promise<void> {
   // 2. Wire Header controls
   backToLibraryBtn.addEventListener("click", () => {
     navigateToLibrary();
+  });
+
+  twelveCbPrevMatchBtn.addEventListener("click", () => {
+    const id = twelveCbPrevMatchBtn.dataset.gameId;
+    if (id) navigateToMatch(id);
+  });
+
+  twelveCbNextMatchBtn.addEventListener("click", () => {
+    const id = twelveCbNextMatchBtn.dataset.gameId;
+    if (id) navigateToMatch(id);
   });
 
   importBtn.addEventListener("click", (e) => {

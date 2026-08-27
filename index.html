@@ -676,7 +676,7 @@
         font-weight: 600;
       }
       .stat-card-delta.delta-pos {
-        color: #4fbf6a;
+        color: #60a5fa;
         font-weight: 600;
       }
       .stat-card-delta.delta-neg {
@@ -862,8 +862,8 @@
         font-variant-numeric: tabular-nums;
       }
       .session-stat-pill.record-positive {
-        background: rgba(79, 191, 106, 0.16);
-        color: #4fbf6a;
+        background: rgba(59, 130, 246, 0.16);
+        color: #60a5fa;
       }
       .session-stat-pill.record-negative {
         background: rgba(224, 71, 63, 0.16);
@@ -912,30 +912,33 @@
         gap: 3px;
         font-size: 10px;
         font-weight: 600;
-        padding: 1px 5px;
+        padding: 1px 6px;
         border-radius: 3px;
-        background: rgba(168, 85, 247, 0.12);
-        border: 1px solid rgba(168, 85, 247, 0.28);
-        color: #c084fc;
+        background: rgba(168, 85, 247, 0.22);
+        border: 1px solid rgba(192, 132, 252, 0.45);
+        color: #e9d5ff;
         letter-spacing: 0.02em;
         white-space: nowrap;
       }
       .twelve-cb-section {
-        background: rgba(168, 85, 247, 0.035);
-        border: 1px solid rgba(168, 85, 247, 0.18);
+        background: rgba(147, 51, 234, 0.09);
+        border: 1px solid rgba(192, 132, 252, 0.35);
         border-radius: 8px;
         padding: 10px;
         display: flex;
         flex-direction: column;
         gap: 8px;
         margin-top: 2px;
+        box-shadow: 0 2px 10px rgba(147, 51, 234, 0.08);
       }
       .twelve-cb-section-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 2px 4px 6px;
-        border-bottom: 1px solid rgba(168, 85, 247, 0.12);
+        padding: 4px 8px 6px;
+        background: rgba(147, 51, 234, 0.14);
+        border-bottom: 1px solid rgba(192, 132, 252, 0.25);
+        border-radius: 6px 6px 0 0;
       }
       .twelve-cb-section-left {
         display: flex;
@@ -943,15 +946,16 @@
         gap: 6px;
         font-size: 12px;
         font-weight: 700;
-        color: #e2e8f0;
+        color: #ffffff;
       }
       .twelve-cb-section-title {
-        color: #c084fc;
+        color: #e9d5ff;
+        font-weight: 700;
         letter-spacing: 0.02em;
       }
       .twelve-cb-games-count {
         font-size: 11px;
-        color: var(--text-dim);
+        color: #d8b4fe;
         font-weight: 500;
       }
       .twelve-cb-outcome-pill {
@@ -959,19 +963,19 @@
         font-weight: 600;
         padding: 2px 8px;
         border-radius: 10px;
-        background: rgba(168, 85, 247, 0.14);
-        color: #c084fc;
-        border: 1px solid rgba(168, 85, 247, 0.3);
+        background: rgba(168, 85, 247, 0.25);
+        color: #f3e8ff;
+        border: 1px solid rgba(216, 180, 254, 0.5);
       }
       .twelve-cb-outcome-pill.outcome-win {
-        background: rgba(59, 130, 246, 0.15);
-        color: #60a5fa;
-        border-color: rgba(59, 130, 246, 0.35);
+        background: rgba(59, 130, 246, 0.25);
+        color: #bfdbfe;
+        border-color: rgba(96, 165, 250, 0.6);
       }
       .twelve-cb-outcome-pill.outcome-loss {
-        background: rgba(239, 68, 68, 0.15);
-        color: #f87171;
-        border-color: rgba(239, 68, 68, 0.35);
+        background: rgba(239, 68, 68, 0.25);
+        color: #fecaca;
+        border-color: rgba(248, 113, 113, 0.6);
       }
       .twelve-cb-games-list {
         display: flex;
@@ -1887,9 +1891,9 @@
         color: #fcd34d;
       }
       .form-notice.success {
-        background: rgba(34, 197, 94, 0.12);
-        border-color: rgba(34, 197, 94, 0.4);
-        color: #86efac;
+        background: rgba(59, 130, 246, 0.12);
+        border-color: rgba(59, 130, 246, 0.4);
+        color: #bfdbfe;
       }
       .form-notice[hidden] {
         display: none !important;
@@ -2032,7 +2036,7 @@
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
       }
       .overlay-entry.kind-success {
-        border-left-color: #4fbf6a;
+        border-left-color: #60a5fa;
       }
       .overlay-entry.kind-failure {
         border-left-color: #e0473f;
@@ -2573,8 +2577,8 @@
         flex-shrink: 0;
       }
       .situation-badge.success {
-        background: rgba(79, 191, 106, 0.18);
-        color: #4fbf6a;
+        background: rgba(59, 130, 246, 0.18);
+        color: #60a5fa;
       }
       .situation-badge.failure {
         background: rgba(224, 71, 63, 0.18);
@@ -2837,9 +2841,9 @@
         font-weight: 700;
         padding: 1px 6px;
         border-radius: 3px;
-        background: rgba(34, 197, 94, 0.18);
-        color: #4ade80;
-        border: 1px solid rgba(34, 197, 94, 0.35);
+        background: rgba(59, 130, 246, 0.18);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.35);
         font-family: monospace, system-ui, sans-serif;
         flex-shrink: 0;
       }
@@ -2999,9 +3003,9 @@
         color: var(--text);
       }
       .neutral-filter-btn.filter-openings.active {
-        background: rgba(79, 191, 106, 0.18);
-        border-color: #4fbf6a;
-        color: #4ade80;
+        background: rgba(59, 130, 246, 0.18);
+        border-color: #60a5fa;
+        color: #60a5fa;
       }
       .neutral-filter-btn.filter-punishes.active {
         background: rgba(224, 71, 63, 0.18);
@@ -3009,11 +3013,11 @@
         color: #f87171;
       }
       .situation-row.neutral-row-opening {
-        border-left: 3px solid #4fbf6a;
-        background: rgba(79, 191, 106, 0.08);
+        border-left: 3px solid #60a5fa;
+        background: rgba(59, 130, 246, 0.08);
       }
       .situation-row.neutral-row-opening:hover {
-        background: rgba(79, 191, 106, 0.16);
+        background: rgba(59, 130, 246, 0.16);
       }
       .situation-row.neutral-row-punish {
         border-left: 3px solid #e0473f;
@@ -3023,8 +3027,8 @@
         background: rgba(224, 71, 63, 0.16);
       }
       .situation-row.neutral-row-opening.active {
-        background: rgba(79, 191, 106, 0.24);
-        box-shadow: inset 0 0 0 1px rgba(79, 191, 106, 0.8);
+        background: rgba(59, 130, 246, 0.24);
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.8);
       }
       .situation-row.neutral-row-punish.active {
         background: rgba(224, 71, 63, 0.24);
@@ -3214,6 +3218,211 @@
         word-break: break-all;
         line-height: 1.4;
       }
+      #twelveCbMatchWidget {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        background: var(--panel);
+        border: 1px solid rgba(192, 132, 252, 0.35);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      #twelveCbMatchWidget[hidden] {
+        display: none !important;
+      }
+      #twelveCbWidgetHeader {
+        display: flex;
+        align-items: center;
+        background: rgba(147, 51, 234, 0.12);
+        border-bottom: 1px solid rgba(192, 132, 252, 0.2);
+        flex-shrink: 0;
+      }
+      #twelveCbWidgetHeader button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 8px 12px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        text-align: left;
+        color: inherit;
+      }
+      #twelveCbWidgetHeader h2 {
+        font-size: 12px;
+        font-weight: 700;
+        color: #e9d5ff;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0;
+        flex: 1;
+      }
+      #twelveCbWidgetHeader .collapse-icon {
+        font-size: 10px;
+        color: #c084fc;
+        transition: transform 0.15s ease;
+      }
+      #twelveCbMatchWidget.collapsed #twelveCbWidgetHeader .collapse-icon {
+        transform: rotate(-90deg);
+      }
+      #twelveCbMatchWidget.collapsed #twelveCbWidgetBody {
+        display: none !important;
+      }
+      #twelveCbWidgetBody {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .twelve-cb-sidebar-progress {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #d8b4fe;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .twelve-cb-sidebar-players {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .twelve-cb-player-card {
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .twelve-cb-player-card.is-you {
+        border-color: rgba(96, 165, 250, 0.3);
+      }
+      .twelve-cb-player-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .twelve-cb-player-card-name {
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .twelve-cb-player-card.is-you .twelve-cb-player-card-name {
+        color: #60a5fa;
+      }
+      .twelve-cb-player-card-remaining {
+        font-size: 10.5px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 10px;
+        background: rgba(168, 85, 247, 0.2);
+        color: #e9d5ff;
+        border: 1px solid rgba(192, 132, 252, 0.3);
+      }
+      .twelve-cb-match-nav {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .twelve-cb-nav-btn {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        padding: 5px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        font-family: inherit;
+        border-radius: 5px;
+        cursor: pointer;
+        background: rgba(147, 51, 234, 0.16);
+        border: 1px solid rgba(192, 132, 252, 0.32);
+        color: #e9d5ff;
+        transition:
+          background 0.12s ease,
+          border-color 0.12s ease;
+      }
+      .twelve-cb-nav-btn:hover:not(:disabled) {
+        background: rgba(147, 51, 234, 0.3);
+        border-color: rgba(216, 180, 254, 0.55);
+      }
+      .twelve-cb-nav-btn:disabled {
+        opacity: 0.32;
+        cursor: default;
+        color: var(--text-dim);
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .twelve-cb-char-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 4px;
+      }
+      .twelve-cb-char-slot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3px 2px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #cbd5e1;
+        transition: all 0.12s ease;
+        position: relative;
+        overflow: hidden;
+      }
+      .twelve-cb-char-slot.active {
+        background: rgba(168, 85, 247, 0.3);
+        border-color: #c084fc;
+        color: #ffffff;
+        font-weight: 700;
+        box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+      }
+      .twelve-cb-char-slot.active .slot-stocks {
+        font-size: 8.5px;
+        color: #f3e8ff;
+        background: rgba(147, 51, 234, 0.6);
+        padding: 0 3px;
+        border-radius: 2px;
+        margin-top: 1px;
+      }
+      .twelve-cb-char-slot.available {
+        background: rgba(255, 255, 255, 0.035);
+        border-color: rgba(255, 255, 255, 0.07);
+        color: #cbd5e1;
+      }
+      .twelve-cb-char-slot.eliminated {
+        background: rgba(239, 68, 68, 0.04);
+        border-color: rgba(239, 68, 68, 0.16);
+        color: #64748b;
+        opacity: 0.38;
+        text-decoration: line-through;
+        text-decoration-color: #ef4444;
+      }
+      .twelve-cb-char-slot.eliminated::after {
+        content: "✕";
+        position: absolute;
+        top: 1px;
+        right: 2px;
+        font-size: 7.5px;
+        color: #ef4444;
+        font-weight: 900;
+        text-decoration: none;
+      }
       #perspectiveWidget {
         flex-shrink: 0;
         display: flex;
@@ -3322,7 +3531,7 @@
         font-size: 15px;
       }
       .stat-pct.pct-success {
-        color: #4fbf6a;
+        color: #60a5fa;
       }
       .stat-pct.pct-failure {
         color: #e0473f;
@@ -3334,7 +3543,7 @@
         font-variant-numeric: tabular-nums;
       }
       .stat-match-delta.pct-delta-pos {
-        color: #4fbf6a;
+        color: #60a5fa;
       }
       .stat-match-delta.pct-delta-neg {
         color: #e0473f;
@@ -3982,6 +4191,45 @@
               ▶
             </button>
           </div>
+          <section id="twelveCbMatchWidget" hidden>
+            <div id="twelveCbWidgetHeader">
+              <button
+                id="twelveCbCollapseBtn"
+                title="Collapse / expand 12 Character Battle"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2 id="twelveCbHeaderTitle">12 Character Battle</h2>
+              </button>
+            </div>
+            <div id="twelveCbWidgetBody">
+              <div
+                id="twelveCbMatchProgress"
+                class="twelve-cb-sidebar-progress"
+              ></div>
+              <div class="twelve-cb-match-nav">
+                <button
+                  id="twelveCbPrevMatchBtn"
+                  class="twelve-cb-nav-btn"
+                  type="button"
+                >
+                  <span aria-hidden="true">←</span>
+                  <span id="twelveCbPrevMatchLabel">Prev</span>
+                </button>
+                <button
+                  id="twelveCbNextMatchBtn"
+                  class="twelve-cb-nav-btn"
+                  type="button"
+                >
+                  <span id="twelveCbNextMatchLabel">Next</span>
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+              <div
+                id="twelveCbPlayersContainer"
+                class="twelve-cb-sidebar-players"
+              ></div>
+            </div>
+          </section>
           <section id="perspectiveWidget">
             <div id="perspectiveWidgetHeader">
               <h2 id="perspectiveHeaderTitle">Perspective</h2>
