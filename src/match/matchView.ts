@@ -62,6 +62,16 @@ import {
 } from "../characterMeta.js";
 import type { LoadedReplay } from "../replaySource.js";
 import type { DerivedRates } from "../data/aggregate.js";
+import { summarizeReplay, type GameSummary } from "../data/gameSummary.js";
+import {
+  YouTubeSyncController,
+  type VideoLinkData,
+  type VideoViewMode,
+  parseYouTubeUrl,
+  parseYouTubeTimestamp,
+  formatVideoTime,
+  propagateVideoLinkToSession,
+} from "../video/youtubeSync.js";
 
 export type MatchEvent =
   | EdgeGuardEvent
@@ -143,13 +153,24 @@ export class MatchViewController {
   private ledgeTrapCollapseBtn: HTMLButtonElement;
   private ledgeTrapWidgetTitleEl: HTMLHeadingElement;
   private ledgeTrapList: HTMLDivElement;
+  private neutralSidebar: HTMLElement;
   private neutralHitsWidget: HTMLElement;
-  private neutralHitsCollapseBtn: HTMLButtonElement;
+  private sidebar: HTMLElement;
+  private collapseLeftSidebarBtn: HTMLButtonElement;
+  private expandLeftSidebarBtn: HTMLButtonElement;
+  private expandLeftSidebarLabel: HTMLSpanElement;
+  private collapseRightSidebarBtn: HTMLButtonElement;
+  private expandRightSidebarBtn: HTMLButtonElement;
+  private expandRightSidebarLabel: HTMLSpanElement;
+  private statsSidebarHeaderTitle: HTMLHeadingElement;
+  private stageExpandBtn: HTMLButtonElement;
   private neutralHitsWidgetTitleEl: HTMLHeadingElement;
   private neutralHitsList: HTMLDivElement;
-  private neutralHitsCollapsed = false;
   private neutralHitEvents: NeutralHitEvent[] = [];
   private neutralHitFilter: "all" | "openings" | "punishes" = "all";
+  private leftSidebarCollapsed = false;
+  private rightSidebarCollapsed = false;
+  private lastScrolledNeutralRow: HTMLElement | null = null;
   private combosWidget: HTMLElement;
   private combosCollapseBtn: HTMLButtonElement;
   private combosWidgetTitleEl: HTMLHeadingElement;
@@ -174,7 +195,42 @@ export class MatchViewController {
   private replayInfoFileName: HTMLSpanElement;
   private replayInfoDateLabel: HTMLSpanElement;
   private replayInfoDateLocal: HTMLSpanElement;
+  private replayInfoVideoLabel: HTMLSpanElement;
+  private replayInfoVideoValue: HTMLSpanElement;
   private replayInfoCollapsed = false;
+
+  private youtubeSync: YouTubeSyncController;
+  private youtubePlayerWrap: HTMLDivElement;
+  private videoSyncBar: HTMLDivElement;
+  private viewModePipBtn: HTMLButtonElement;
+  private viewModeVideoBtn: HTMLButtonElement;
+  private viewModeCanvasBtn: HTMLButtonElement;
+  private videoOffsetBadge: HTMLSpanElement;
+  private nudgeMinus1sBtn: HTMLButtonElement;
+  private nudgeMinus1fBtn: HTMLButtonElement;
+  private nudgePlus1fBtn: HTMLButtonElement;
+  private nudgePlus1sBtn: HTMLButtonElement;
+  private videoSettingsBtn: HTMLButtonElement;
+
+  private videoLinkModal: HTMLDivElement;
+  private videoLinkModalBackdrop: HTMLDivElement;
+  private videoLinkModalCloseBtn: HTMLButtonElement;
+  private videoLinkModalTitle: HTMLHeadingElement;
+  private videoLinkForm: HTMLFormElement;
+  private videoUrlLabel: HTMLLabelElement;
+  private videoUrlInput: HTMLInputElement;
+  private videoOffsetLabel: HTMLLabelElement;
+  private videoOffsetInput: HTMLInputElement;
+  private videoOffsetHelp: HTMLParagraphElement;
+  private videoLinkError: HTMLDivElement;
+  private videoLinkSessionNotice: HTMLDivElement;
+  private videoUnlinkBtn: HTMLButtonElement;
+  private syncSessionVideosBtn: HTMLButtonElement;
+  private videoLinkCancelBtn: HTMLButtonElement;
+  private videoLinkSaveBtn: HTMLButtonElement;
+  private currentVideoViewMode: VideoViewMode = "canvas";
+  private sessionSummaries: GameSummary[] = [];
+  private currentReplayId: string | null = null;
 
   private stageRenderer: StageRenderer;
   private camera!: Camera;
@@ -336,11 +392,36 @@ export class MatchViewController {
       "ledgeTrapList",
     ) as HTMLDivElement;
 
+    this.neutralSidebar = document.getElementById(
+      "neutralSidebar",
+    ) as HTMLElement;
     this.neutralHitsWidget = document.getElementById(
       "neutralHitsWidget",
     ) as HTMLElement;
-    this.neutralHitsCollapseBtn = document.getElementById(
-      "neutralHitsCollapseBtn",
+    this.sidebar = document.getElementById("sidebar") as HTMLElement;
+    this.collapseLeftSidebarBtn = document.getElementById(
+      "collapseLeftSidebarBtn",
+    ) as HTMLButtonElement;
+    this.expandLeftSidebarBtn = document.getElementById(
+      "expandLeftSidebarBtn",
+    ) as HTMLButtonElement;
+    this.expandLeftSidebarLabel = document.getElementById(
+      "expandLeftSidebarLabel",
+    ) as HTMLSpanElement;
+    this.collapseRightSidebarBtn = document.getElementById(
+      "collapseRightSidebarBtn",
+    ) as HTMLButtonElement;
+    this.expandRightSidebarBtn = document.getElementById(
+      "expandRightSidebarBtn",
+    ) as HTMLButtonElement;
+    this.expandRightSidebarLabel = document.getElementById(
+      "expandRightSidebarLabel",
+    ) as HTMLSpanElement;
+    this.statsSidebarHeaderTitle = document.getElementById(
+      "statsSidebarHeaderTitle",
+    ) as HTMLHeadingElement;
+    this.stageExpandBtn = document.getElementById(
+      "stageExpandBtn",
     ) as HTMLButtonElement;
     this.neutralHitsWidgetTitleEl = document.getElementById(
       "neutralHitsWidgetTitle",
@@ -391,6 +472,119 @@ export class MatchViewController {
     this.replayInfoDateLocal = document.getElementById(
       "replayInfoDateLocal",
     ) as HTMLSpanElement;
+    this.replayInfoVideoLabel = document.getElementById(
+      "replayInfoVideoLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoVideoValue = document.getElementById(
+      "replayInfoVideoValue",
+    ) as HTMLSpanElement;
+
+    this.youtubePlayerWrap = document.getElementById(
+      "youtubePlayerWrap",
+    ) as HTMLDivElement;
+    this.videoSyncBar = document.getElementById(
+      "videoSyncBar",
+    ) as HTMLDivElement;
+    this.viewModePipBtn = document.getElementById(
+      "viewModePipBtn",
+    ) as HTMLButtonElement;
+    this.viewModeVideoBtn = document.getElementById(
+      "viewModeVideoBtn",
+    ) as HTMLButtonElement;
+    this.viewModeCanvasBtn = document.getElementById(
+      "viewModeCanvasBtn",
+    ) as HTMLButtonElement;
+    this.videoOffsetBadge = document.getElementById(
+      "videoOffsetBadge",
+    ) as HTMLSpanElement;
+    this.nudgeMinus1sBtn = document.getElementById(
+      "nudgeMinus1sBtn",
+    ) as HTMLButtonElement;
+    this.nudgeMinus1fBtn = document.getElementById(
+      "nudgeMinus1fBtn",
+    ) as HTMLButtonElement;
+    this.nudgePlus1fBtn = document.getElementById(
+      "nudgePlus1fBtn",
+    ) as HTMLButtonElement;
+    this.nudgePlus1sBtn = document.getElementById(
+      "nudgePlus1sBtn",
+    ) as HTMLButtonElement;
+    this.videoSettingsBtn = document.getElementById(
+      "videoSettingsBtn",
+    ) as HTMLButtonElement;
+
+    this.videoLinkModal = document.getElementById(
+      "videoLinkModal",
+    ) as HTMLDivElement;
+    this.videoLinkModalBackdrop = document.getElementById(
+      "videoLinkModalBackdrop",
+    ) as HTMLDivElement;
+    this.videoLinkModalCloseBtn = document.getElementById(
+      "videoLinkModalCloseBtn",
+    ) as HTMLButtonElement;
+    this.videoLinkModalTitle = document.getElementById(
+      "videoLinkModalTitle",
+    ) as HTMLHeadingElement;
+    this.videoLinkForm = document.getElementById(
+      "videoLinkForm",
+    ) as HTMLFormElement;
+    this.videoUrlLabel = document.getElementById(
+      "videoUrlLabel",
+    ) as HTMLLabelElement;
+    this.videoUrlInput = document.getElementById(
+      "videoUrlInput",
+    ) as HTMLInputElement;
+    this.videoOffsetLabel = document.getElementById(
+      "videoOffsetLabel",
+    ) as HTMLLabelElement;
+    this.videoOffsetInput = document.getElementById(
+      "videoOffsetInput",
+    ) as HTMLInputElement;
+    this.videoOffsetHelp = document.getElementById(
+      "videoOffsetHelp",
+    ) as HTMLParagraphElement;
+    this.videoLinkError = document.getElementById(
+      "videoLinkError",
+    ) as HTMLDivElement;
+    this.videoLinkSessionNotice = document.getElementById(
+      "videoLinkSessionNotice",
+    ) as HTMLDivElement;
+    this.videoUnlinkBtn = document.getElementById(
+      "videoUnlinkBtn",
+    ) as HTMLButtonElement;
+    this.syncSessionVideosBtn = document.getElementById(
+      "syncSessionVideosBtn",
+    ) as HTMLButtonElement;
+    this.videoLinkCancelBtn = document.getElementById(
+      "videoLinkCancelBtn",
+    ) as HTMLButtonElement;
+    this.videoLinkSaveBtn = document.getElementById(
+      "videoLinkSaveBtn",
+    ) as HTMLButtonElement;
+
+    this.youtubeSync = new YouTubeSyncController(
+      "youtubePlayerContainer",
+      () => this.playback?.currentIndex ?? 0,
+      (targetFrame) => {
+        if (this.playback) {
+          this.playback.seek(targetFrame);
+        }
+      },
+      (playing) => {
+        if (!this.playback) return;
+        if (playing && !this.playback.isPlaying) {
+          this.playback.play();
+        } else if (!playing && this.playback.isPlaying) {
+          this.playback.pause();
+        }
+      },
+      (mode) => {
+        this.applyVideoViewMode(mode);
+      },
+      (data) => {
+        this.updateVideoSyncUI(data);
+      },
+    );
 
     this.stageRenderer = new StageRenderer(this.stageCanvas);
 
@@ -473,15 +667,6 @@ export class MatchViewController {
       );
     });
 
-    this.neutralHitsCollapseBtn.addEventListener("click", () => {
-      this.neutralHitsCollapsed = !this.neutralHitsCollapsed;
-      this.neutralHitsList.hidden = this.neutralHitsCollapsed;
-      this.neutralHitsCollapseBtn.classList.toggle(
-        "collapsed",
-        this.neutralHitsCollapsed,
-      );
-    });
-
     this.combosCollapseBtn.addEventListener("click", () => {
       this.combosCollapsed = !this.combosCollapsed;
       this.combosList.hidden = this.combosCollapsed;
@@ -550,20 +735,40 @@ export class MatchViewController {
       this.playback?.stepForward();
     });
 
+    let speedCloseTimer: number | null = null;
+
+    const cancelSpeedClose = () => {
+      if (speedCloseTimer !== null) {
+        clearTimeout(speedCloseTimer);
+        speedCloseTimer = null;
+      }
+    };
+
+    const scheduleSpeedClose = () => {
+      cancelSpeedClose();
+      speedCloseTimer = window.setTimeout(() => {
+        this.closeSpeedMenu();
+        speedCloseTimer = null;
+      }, 250);
+    };
+
     this.speedToggleBtn.addEventListener("click", (e) => {
       e.stopPropagation();
+      cancelSpeedClose();
       this.toggleSpeedMenu();
     });
 
     this.speedMenuContainer.addEventListener("mouseenter", () => {
+      cancelSpeedClose();
       this.openSpeedMenu();
     });
     this.speedMenuContainer.addEventListener("mouseleave", () => {
-      this.closeSpeedMenu();
+      scheduleSpeedClose();
     });
 
     document.addEventListener("click", (e) => {
       if (!this.speedMenuContainer.contains(e.target as Node)) {
+        cancelSpeedClose();
         this.closeSpeedMenu();
       }
     });
@@ -571,10 +776,27 @@ export class MatchViewController {
     this.speedOptionButtons.forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
+        cancelSpeedClose();
         const speed = parseFloat(btn.dataset.speed || "1");
         this.setPlaybackSpeed(speed);
         this.closeSpeedMenu();
       });
+    });
+
+    this.collapseLeftSidebarBtn.addEventListener("click", () => {
+      this.setLeftSidebarCollapsed(true);
+    });
+    this.expandLeftSidebarBtn.addEventListener("click", () => {
+      this.setLeftSidebarCollapsed(false);
+    });
+    this.collapseRightSidebarBtn.addEventListener("click", () => {
+      this.setRightSidebarCollapsed(true);
+    });
+    this.expandRightSidebarBtn.addEventListener("click", () => {
+      this.setRightSidebarCollapsed(false);
+    });
+    this.stageExpandBtn.addEventListener("click", () => {
+      this.toggleBothSidebars();
     });
 
     this.scrubber.addEventListener("input", () => {
@@ -610,6 +832,58 @@ export class MatchViewController {
         this.perspectivePort,
       );
     });
+
+    this.viewModePipBtn.addEventListener("click", () => {
+      this.youtubeSync.setViewMode("video-pip");
+    });
+    this.viewModeVideoBtn.addEventListener("click", () => {
+      this.youtubeSync.setViewMode("video-only");
+    });
+    this.viewModeCanvasBtn.addEventListener("click", () => {
+      this.youtubeSync.setViewMode("canvas");
+    });
+
+    this.nudgeMinus1sBtn.addEventListener("click", () => {
+      this.youtubeSync.nudgeOffset(-1, this.playback?.currentIndex ?? 0);
+    });
+    this.nudgeMinus1fBtn.addEventListener("click", () => {
+      this.youtubeSync.nudgeOffset(-1 / 60, this.playback?.currentIndex ?? 0);
+    });
+    this.nudgePlus1fBtn.addEventListener("click", () => {
+      this.youtubeSync.nudgeOffset(1 / 60, this.playback?.currentIndex ?? 0);
+    });
+    this.nudgePlus1sBtn.addEventListener("click", () => {
+      this.youtubeSync.nudgeOffset(1, this.playback?.currentIndex ?? 0);
+    });
+    this.videoSettingsBtn.addEventListener("click", () => {
+      this.openVideoLinkModal();
+    });
+
+    this.videoLinkModalCloseBtn.addEventListener("click", () => {
+      this.closeVideoLinkModal();
+    });
+    this.videoLinkModalBackdrop.addEventListener("click", () => {
+      this.closeVideoLinkModal();
+    });
+    this.videoLinkCancelBtn.addEventListener("click", () => {
+      this.closeVideoLinkModal();
+    });
+    this.videoUnlinkBtn.addEventListener("click", () => {
+      this.youtubeSync.setLinkData(null);
+      this.closeVideoLinkModal();
+    });
+    this.syncSessionVideosBtn.addEventListener("click", () => {
+      this.handleSyncSessionVideos();
+    });
+    this.videoLinkForm.addEventListener("submit", (e) => {
+      this.handleVideoFormSubmit(e);
+    });
+
+    this.stageCanvas.addEventListener("click", () => {
+      if (this.currentVideoViewMode === "video-pip") {
+        this.youtubeSync.setViewMode("canvas");
+      }
+    });
   }
 
   public activate(): void {
@@ -620,8 +894,77 @@ export class MatchViewController {
 
   public deactivate(): void {
     this.playback?.pause();
+    this.youtubeSync.onReplayPlayStateChange(
+      false,
+      this.playback?.currentIndex ?? 0,
+    );
     window.removeEventListener("keydown", this.boundOnKeyDown);
     window.removeEventListener("resize", this.boundOnResize);
+  }
+
+  public setLeftSidebarCollapsed(collapsed: boolean): void {
+    this.leftSidebarCollapsed = collapsed;
+    this.updateSidebarVisibility();
+  }
+
+  public setRightSidebarCollapsed(collapsed: boolean): void {
+    this.rightSidebarCollapsed = collapsed;
+    this.updateSidebarVisibility();
+  }
+
+  public toggleBothSidebars(): void {
+    if (this.leftSidebarCollapsed && this.rightSidebarCollapsed) {
+      this.leftSidebarCollapsed = false;
+      this.rightSidebarCollapsed = false;
+    } else {
+      this.leftSidebarCollapsed = true;
+      this.rightSidebarCollapsed = true;
+    }
+    this.updateSidebarVisibility();
+  }
+
+  private updateSidebarVisibility(): void {
+    const hasNeutralHits =
+      Boolean(this.currentReplay) &&
+      (this.currentReplay?.frames.length ?? 0) > 0 &&
+      this.neutralHitEvents.length > 0;
+
+    if (this.neutralHitsWidget) {
+      this.neutralHitsWidget.hidden = !hasNeutralHits;
+    }
+    if (this.neutralSidebar) {
+      this.neutralSidebar.hidden = !hasNeutralHits || this.leftSidebarCollapsed;
+    }
+    if (this.expandLeftSidebarBtn) {
+      this.expandLeftSidebarBtn.hidden =
+        !hasNeutralHits || !this.leftSidebarCollapsed;
+    }
+    if (this.sidebar) {
+      this.sidebar.hidden = this.rightSidebarCollapsed;
+    }
+    if (this.expandRightSidebarBtn) {
+      this.expandRightSidebarBtn.hidden = !this.rightSidebarCollapsed;
+    }
+    if (this.stageExpandBtn) {
+      const isExpanded =
+        this.leftSidebarCollapsed && this.rightSidebarCollapsed;
+      this.stageExpandBtn.classList.toggle("active", isExpanded);
+      const tr = t();
+      this.stageExpandBtn.title = isExpanded
+        ? tr.showSidebarsTooltip
+        : tr.hideSidebarsTooltip;
+    }
+
+    window.requestAnimationFrame(() => {
+      this.resizeStageCanvas();
+      if (this.lastFrame && this.currentReplay) {
+        this.renderFrame(
+          this.lastFrame,
+          this.playback?.currentIndex ?? 0,
+          true,
+        );
+      }
+    });
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
@@ -631,13 +974,62 @@ export class MatchViewController {
     ) {
       return;
     }
-    if (e.code === "Space") {
+    const shortcutsModal = document.getElementById("shortcutsModal");
+    const aboutModal = document.getElementById("aboutModal");
+    const modalContainer = document.getElementById("modalContainer");
+    const videoLinkModal = this.videoLinkModal;
+    if (
+      (shortcutsModal && !shortcutsModal.hidden) ||
+      (aboutModal && !aboutModal.hidden) ||
+      (modalContainer && !modalContainer.hidden) ||
+      (videoLinkModal && !videoLinkModal.hidden)
+    ) {
+      if (e.code === "Escape" && videoLinkModal && !videoLinkModal.hidden) {
+        e.preventDefault();
+        this.closeVideoLinkModal();
+      }
+      return;
+    }
+    if (e.code === "KeyT") {
+      e.preventDefault();
+      this.toggleBothSidebars();
+      return;
+    }
+    if (e.code === "KeyP") {
+      e.preventDefault();
+      const currentData = this.youtubeSync.getLinkData();
+      if (currentData) {
+        const nextMode: VideoViewMode =
+          currentData.viewMode === "video-pip"
+            ? "video-only"
+            : currentData.viewMode === "video-only"
+              ? "canvas"
+              : "video-pip";
+        this.youtubeSync.setViewMode(nextMode);
+      }
+      return;
+    }
+    if (
+      e.code === "Escape" &&
+      (this.leftSidebarCollapsed || this.rightSidebarCollapsed)
+    ) {
+      e.preventDefault();
+      this.toggleBothSidebars();
+      return;
+    }
+    if (e.code === "Space" || e.code === "KeyK") {
       e.preventDefault();
       this.playback?.toggle();
-    } else if (e.code === "ArrowLeft") {
+    } else if (e.code === "ArrowLeft" || e.code === "KeyJ") {
+      e.preventDefault();
+      this.playback?.jumpBackward(60);
+    } else if (e.code === "ArrowRight" || e.code === "KeyL") {
+      e.preventDefault();
+      this.playback?.jumpForward(60);
+    } else if (e.code === "Comma" || e.key === ",") {
       e.preventDefault();
       this.playback?.stepBackward();
-    } else if (e.code === "ArrowRight") {
+    } else if (e.code === "Period" || e.key === ".") {
       e.preventDefault();
       this.playback?.stepForward();
     }
@@ -679,12 +1071,23 @@ export class MatchViewController {
       this.ledgeTrapCollapseBtn.title = tr.situationCollapseTitle(
         tr.ledgeTrapWidgetTitle,
       );
+    if (this.collapseLeftSidebarBtn)
+      this.collapseLeftSidebarBtn.title = tr.collapseLeftSidebarTitle;
+    if (this.expandLeftSidebarBtn)
+      this.expandLeftSidebarBtn.title = tr.expandLeftSidebarTitle;
+    if (this.expandLeftSidebarLabel)
+      this.expandLeftSidebarLabel.textContent = tr.expandLeftSidebarLabel;
+    if (this.collapseRightSidebarBtn)
+      this.collapseRightSidebarBtn.title = tr.collapseRightSidebarTitle;
+    if (this.expandRightSidebarBtn)
+      this.expandRightSidebarBtn.title = tr.expandRightSidebarTitle;
+    if (this.expandRightSidebarLabel)
+      this.expandRightSidebarLabel.textContent = tr.expandRightSidebarLabel;
+    if (this.statsSidebarHeaderTitle)
+      this.statsSidebarHeaderTitle.textContent = tr.statsSidebarHeaderTitle;
+
     if (this.neutralHitsWidgetTitleEl)
       this.neutralHitsWidgetTitleEl.textContent = tr.neutralHitsWidgetTitle;
-    if (this.neutralHitsCollapseBtn)
-      this.neutralHitsCollapseBtn.title = tr.situationCollapseTitle(
-        tr.neutralHitsWidgetTitle,
-      );
     if (this.combosWidgetTitleEl)
       this.combosWidgetTitleEl.textContent = tr.combosWidgetTitle;
     if (this.combosCollapseBtn)
@@ -712,9 +1115,51 @@ export class MatchViewController {
       this.replayInfoFileLabel.textContent = tr.replayInfoFileLabel;
     if (this.replayInfoDateLabel)
       this.replayInfoDateLabel.textContent = tr.replayInfoRecordedLabel;
+    if (this.replayInfoVideoLabel)
+      this.replayInfoVideoLabel.textContent = tr.youtubeVideoTitle;
+    if (this.videoLinkModalTitle)
+      this.videoLinkModalTitle.textContent = tr.linkYouTubeVideoModalTitle;
+    if (this.videoUrlLabel)
+      this.videoUrlLabel.textContent = tr.youtubeVideoUrlLabel;
+    if (this.videoUrlInput)
+      this.videoUrlInput.placeholder = tr.youtubeVideoUrlPlaceholder;
+    if (this.videoOffsetLabel)
+      this.videoOffsetLabel.textContent = tr.youtubeOffsetLabel;
+    if (this.videoOffsetHelp)
+      this.videoOffsetHelp.textContent = tr.youtubeOffsetHelp;
+    if (this.videoLinkSaveBtn)
+      this.videoLinkSaveBtn.textContent = tr.youtubeSaveLinkBtn;
+    if (this.videoUnlinkBtn)
+      this.videoUnlinkBtn.textContent = tr.youtubeUnlinkBtn;
+    if (this.videoLinkCancelBtn) this.videoLinkCancelBtn.textContent = tr.close;
+    if (this.viewModePipBtn)
+      this.viewModePipBtn.title = tr.youtubeViewModeVideoPip;
+    if (this.viewModeVideoBtn)
+      this.viewModeVideoBtn.title = tr.youtubeViewModeVideoOnly;
+    if (this.viewModeCanvasBtn)
+      this.viewModeCanvasBtn.title = tr.youtubeViewModeCanvasOnly;
+    if (this.nudgeMinus1sBtn)
+      this.nudgeMinus1sBtn.title = tr.youtubeNudgeMinus1s;
+    if (this.nudgeMinus1fBtn)
+      this.nudgeMinus1fBtn.title = tr.youtubeNudgeMinus1f;
+    if (this.nudgePlus1fBtn) this.nudgePlus1fBtn.title = tr.youtubeNudgePlus1f;
+    if (this.nudgePlus1sBtn) this.nudgePlus1sBtn.title = tr.youtubeNudgePlus1s;
+    if (this.videoSettingsBtn)
+      this.videoSettingsBtn.title = tr.youtubeSettingsBtnTitle;
+    const shortcutsTogglePipEl = document.getElementById("shortcutsTogglePip");
+    if (shortcutsTogglePipEl)
+      shortcutsTogglePipEl.textContent = tr.shortcutsTogglePip;
+
     if (this.stepBackBtn) this.stepBackBtn.title = tr.prevFrameTooltip;
     if (this.playPauseBtn) this.playPauseBtn.title = tr.playPauseTooltip;
     if (this.stepForwardBtn) this.stepForwardBtn.title = tr.nextFrameTooltip;
+    if (this.stageExpandBtn) {
+      const isExpanded =
+        this.leftSidebarCollapsed && this.rightSidebarCollapsed;
+      this.stageExpandBtn.title = isExpanded
+        ? tr.showSidebarsTooltip
+        : tr.hideSidebarsTooltip;
+    }
 
     if (this.currentReplay && this.currentLoaded) {
       this.buildPlayerPanels(this.currentReplay);
@@ -1869,8 +2314,8 @@ export class MatchViewController {
 
         row.addEventListener("click", () => {
           this.dismissQuickAttackOverlay();
-          // Seek 1.5 seconds (90 frames at 60fps) before the situation began and play automatically
-          const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
+          // Seek 1.0 second (60 frames at 60fps) before the situation began and play automatically
+          const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 60);
           this.playback?.seek(targetFrameIndex);
           this.playback?.play();
         });
@@ -1906,11 +2351,11 @@ export class MatchViewController {
     this.neutralHitsList.innerHTML = "";
 
     if (replay.frames.length === 0 || this.neutralHitEvents.length === 0) {
-      this.neutralHitsWidget.hidden = true;
+      this.updateSidebarVisibility();
       return;
     }
 
-    this.neutralHitsWidget.hidden = false;
+    this.updateSidebarVisibility();
 
     const createRow = (e: NeutralHitEvent): HTMLElement => {
       const row = document.createElement("div");
@@ -1967,6 +2412,10 @@ export class MatchViewController {
             e.hitType === "grab"
               ? tr.neutralReasonStandingGrab
               : tr.neutralReasonStandingHit;
+          break;
+        case "reversal":
+          badgeEl.className = "neutral-badge-reversal";
+          badgeEl.textContent = tr.neutralReasonReversal;
           break;
         default:
           badgeEl.className = "neutral-badge-unknown";
@@ -2030,14 +2479,36 @@ export class MatchViewController {
         );
         koBadge.textContent = tr.neutralConversionKO;
         chipsWrap.appendChild(koBadge);
+      } else if (e.outcome === "reversal") {
+        const reversalBadge = document.createElement("span");
+        reversalBadge.className = "neutral-badge-reversal-outcome";
+        reversalBadge.dataset.chip = "reversal";
+        const endFrame = e.endFrameIndex ?? e.frameIndex + 30;
+        reversalBadge.dataset.startFrame = String(
+          Math.max(e.frameIndex, endFrame - 30),
+        );
+        reversalBadge.dataset.endFrame = String(endFrame);
+        reversalBadge.textContent = tr.neutralConversionReversal;
+        chipsWrap.appendChild(reversalBadge);
+      } else {
+        const resetBadge = document.createElement("span");
+        resetBadge.className = "neutral-badge-reset";
+        resetBadge.dataset.chip = "reset";
+        const endFrame = e.endFrameIndex ?? e.frameIndex + 60;
+        resetBadge.dataset.startFrame = String(
+          Math.max(e.frameIndex, endFrame - 60),
+        );
+        resetBadge.dataset.endFrame = String(endFrame);
+        resetBadge.textContent = tr.neutralConversionReset;
+        chipsWrap.appendChild(resetBadge);
       }
 
       row.appendChild(chipsWrap);
 
       row.addEventListener("click", () => {
         this.dismissQuickAttackOverlay();
-        // Seek 1.5 seconds (90 frames) before the neutral opening happened
-        const seekTarget = Math.max(0, e.frameIndex - 90);
+        // Seek 1.0 second (60 frames) before the neutral opening happened
+        const seekTarget = Math.max(0, e.frameIndex - 60);
         this.playback?.seek(seekTarget);
         this.playback?.play();
       });
@@ -2129,7 +2600,8 @@ export class MatchViewController {
     const rows = this.neutralHitsList.querySelectorAll<HTMLElement>(
       ".situation-row[data-frame-index]",
     );
-    rows.forEach((row) => {
+    let activeRow: HTMLElement | null = null;
+    for (const row of rows) {
       const startFrame = Number(row.dataset.frameIndex);
       const endFrame = Number(
         row.dataset.endFrameIndex ?? String(startFrame + 60),
@@ -2137,17 +2609,31 @@ export class MatchViewController {
       const isActive =
         currentFrameIndex >= startFrame && currentFrameIndex <= endFrame;
       row.classList.toggle("active", isActive);
+      if (isActive && !activeRow) {
+        activeRow = row;
+      }
 
       // Highlight individual chips when their exact phase occurs
       const chips = row.querySelectorAll<HTMLElement>("[data-start-frame]");
-      chips.forEach((chip) => {
+      for (const chip of chips) {
         const chipStart = Number(chip.dataset.startFrame);
         const chipEnd = Number(chip.dataset.endFrame);
         const isChipActive =
           currentFrameIndex >= chipStart && currentFrameIndex <= chipEnd;
         chip.classList.toggle("active-chip", isChipActive);
-      });
-    });
+      }
+    }
+
+    // Auto-scroll to keep active neutral interaction in view (desktop only)
+    if (activeRow && activeRow !== this.lastScrolledNeutralRow) {
+      this.lastScrolledNeutralRow = activeRow;
+      const isDesktop = window.innerWidth >= 1100;
+      if (isDesktop && !this.leftSidebarCollapsed) {
+        activeRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    } else if (!activeRow) {
+      this.lastScrolledNeutralRow = null;
+    }
   }
 
   private renderCombosPanel(replay: Replay): void {
@@ -2559,7 +3045,7 @@ export class MatchViewController {
 
           const timeEl = document.createElement("span");
           timeEl.className = "situation-time";
-          timeEl.textContent = `${formatElapsed(sit.enteredFrameIndex)} (${sit.enteredFrameIndex}F)`;
+          timeEl.textContent = `${formatElapsed(sit.enteredFrameIndex)} (${sit.enteredFrame}F)`;
 
           const badgeEl = document.createElement("span");
           if (sit.outcome === "success") {
@@ -2579,7 +3065,7 @@ export class MatchViewController {
 
           itemRow.addEventListener("click", () => {
             this.dismissQuickAttackOverlay();
-            const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
+            const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 60);
             this.playback?.seek(targetFrameIndex);
             this.playback?.play();
           });
@@ -2665,7 +3151,7 @@ export class MatchViewController {
 
           const timeEl = document.createElement("span");
           timeEl.className = "situation-time";
-          timeEl.textContent = `${formatElapsed(sit.enteredFrameIndex)} (${sit.enteredFrameIndex}F)`;
+          timeEl.textContent = `${formatElapsed(sit.enteredFrameIndex)} (${sit.enteredFrame}F)`;
 
           const hitsEl = document.createElement("span");
           hitsEl.className = "situation-bracket bracket-under100";
@@ -2693,7 +3179,7 @@ export class MatchViewController {
 
           itemRow.addEventListener("click", () => {
             this.dismissQuickAttackOverlay();
-            const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 90);
+            const targetFrameIndex = Math.max(0, sit.enteredFrameIndex - 60);
             this.playback?.seek(targetFrameIndex);
             this.playback?.play();
           });
@@ -2792,7 +3278,7 @@ export class MatchViewController {
 
           itemRow.addEventListener("click", () => {
             this.dismissQuickAttackOverlay();
-            const targetFrameIndex = Math.max(0, path.startFrameIndex - 30);
+            const targetFrameIndex = Math.max(0, path.startFrameIndex - 60);
             this.playback?.seek(targetFrameIndex);
             this.playback?.play();
           });
@@ -2824,12 +3310,20 @@ export class MatchViewController {
     this.updateEventLogHighlight(index);
     this.updateDILiveMonitor(index);
     this.updateNeutralHitsHighlight(index);
+    this.youtubeSync.onReplayFrameChange(index, isPlaying, reason);
   }
 
   public resizeStageCanvas(): void {
-    const rect = this.stageWrap.getBoundingClientRect();
-    const width = Math.max(200, Math.floor(rect.width));
-    const height = Math.max(150, Math.floor(rect.height));
+    let width: number;
+    let height: number;
+    if (this.currentVideoViewMode === "video-pip") {
+      width = 280;
+      height = 158;
+    } else {
+      const rect = this.stageWrap.getBoundingClientRect();
+      width = Math.max(200, Math.floor(rect.width));
+      height = Math.max(150, Math.floor(rect.height));
+    }
     this.stageRenderer.resize(width, height);
     if (this.currentReplay) {
       this.camera.resize(width, height);
@@ -2908,6 +3402,9 @@ export class MatchViewController {
     this.buildEventLog();
     this.loadStatus.textContent = "";
 
+    const replayId = this.getReplayIdentifier(replay, loaded);
+    this.youtubeSync.setReplay(replayId);
+
     this.scrubber.max = String(Math.max(0, replay.frames.length - 1));
     this.scrubber.value = "0";
 
@@ -2940,6 +3437,7 @@ export class MatchViewController {
   public setPlaybackSpeed(speed: number): void {
     this.currentPlaybackSpeed = speed;
     this.playback?.setPlaybackSpeed(speed);
+    this.youtubeSync.onPlaybackSpeedChange(speed);
     this.speedToggleBtn.textContent = `${speed}x`;
     this.speedToggleBtn.classList.toggle("has-modified-speed", speed !== 1);
     this.speedOptionButtons.forEach((btn) => {
@@ -2967,6 +3465,8 @@ export class MatchViewController {
     const localStr = `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
     this.replayInfoDateLocal.textContent = localStr;
     this.replayInfoDateLocal.title = `UTC: ${d.toISOString().replace(".000Z", "Z").replace("T", " ")}`;
+
+    this.updateVideoSyncUI(this.youtubeSync.getLinkData());
   }
 
   public setOnPerspectiveChanged(cb: (port: PortIndex) => void): void {
@@ -2978,5 +3478,177 @@ export class MatchViewController {
     if (this.currentReplay) {
       this.renderStatsPanel(this.currentReplay);
     }
+  }
+
+  public setSessionSummaries(summaries: GameSummary[]): void {
+    this.sessionSummaries = summaries;
+  }
+
+  private openVideoLinkModal(): void {
+    const data = this.youtubeSync.getLinkData();
+    if (data) {
+      this.videoUrlInput.value = data.url;
+      this.videoOffsetInput.value = formatVideoTime(data.offsetSeconds);
+      this.videoUnlinkBtn.hidden = false;
+    } else {
+      this.videoUrlInput.value = "";
+      this.videoOffsetInput.value = "0:00.00";
+      this.videoUnlinkBtn.hidden = true;
+    }
+    this.videoLinkError.hidden = true;
+    this.videoLinkSessionNotice.hidden = true;
+    this.syncSessionVideosBtn.hidden = this.sessionSummaries.length <= 1;
+    this.syncSessionVideosBtn.textContent = t().syncSessionVideosBtn;
+    this.videoLinkModal.hidden = false;
+    this.videoUrlInput.focus();
+  }
+
+  private closeVideoLinkModal(): void {
+    this.videoLinkModal.hidden = true;
+  }
+
+  private handleVideoFormSubmit(e: Event): void {
+    e.preventDefault();
+    const urlValue = this.videoUrlInput.value.trim();
+    const parsed = parseYouTubeUrl(urlValue);
+    if (!parsed) {
+      this.videoLinkError.textContent = t().youtubeInvalidUrlError;
+      this.videoLinkError.hidden = false;
+      return;
+    }
+    this.videoLinkError.hidden = true;
+
+    let offsetSec = parseYouTubeTimestamp(this.videoOffsetInput.value.trim());
+    if (offsetSec === 0 && parsed.startSeconds > 0) {
+      offsetSec = parsed.startSeconds;
+    }
+
+    const currentData = this.youtubeSync.getLinkData();
+    const viewMode = currentData?.viewMode ?? "video-pip";
+
+    const linkData: VideoLinkData = {
+      videoId: parsed.videoId,
+      url: urlValue,
+      offsetSeconds: offsetSec,
+      viewMode,
+    };
+
+    this.youtubeSync.setLinkData(linkData);
+
+    if (this.currentReplayId && this.sessionSummaries.length > 1) {
+      propagateVideoLinkToSession(
+        this.currentReplayId,
+        linkData,
+        this.sessionSummaries,
+      );
+    }
+
+    this.closeVideoLinkModal();
+  }
+
+  private handleSyncSessionVideos(): void {
+    const urlValue = this.videoUrlInput.value.trim();
+    const parsed = parseYouTubeUrl(urlValue);
+    if (!parsed) {
+      this.videoLinkError.textContent = t().youtubeInvalidUrlError;
+      this.videoLinkError.hidden = false;
+      return;
+    }
+    this.videoLinkError.hidden = true;
+
+    let offsetSec = parseYouTubeTimestamp(this.videoOffsetInput.value.trim());
+    if (offsetSec === 0 && parsed.startSeconds > 0) {
+      offsetSec = parsed.startSeconds;
+    }
+
+    const currentData = this.youtubeSync.getLinkData();
+    const viewMode = currentData?.viewMode ?? "video-pip";
+
+    const linkData: VideoLinkData = {
+      videoId: parsed.videoId,
+      url: urlValue,
+      offsetSeconds: offsetSec,
+      viewMode,
+    };
+
+    this.youtubeSync.setLinkData(linkData);
+
+    const tr = t();
+    if (this.currentReplayId && this.sessionSummaries.length > 1) {
+      const result = propagateVideoLinkToSession(
+        this.currentReplayId,
+        linkData,
+        this.sessionSummaries,
+        true,
+      );
+      this.videoLinkSessionNotice.hidden = false;
+      if (result.isRealtime) {
+        this.videoLinkSessionNotice.className = "form-notice success";
+        this.videoLinkSessionNotice.textContent = tr.sessionSyncedSuccess(
+          result.updatedCount,
+        );
+      } else {
+        this.videoLinkSessionNotice.className = "form-notice warning";
+        this.videoLinkSessionNotice.textContent = tr.sessionNotRealtimeWarning;
+      }
+    }
+  }
+
+  private applyVideoViewMode(mode: VideoViewMode): void {
+    this.currentVideoViewMode = mode;
+    this.stageWrap.classList.remove(
+      "mode-video",
+      "mode-video-only",
+      "mode-video-pip",
+      "mode-canvas",
+    );
+    this.stageWrap.classList.add(`mode-${mode}`);
+
+    this.viewModePipBtn.classList.toggle("active", mode === "video-pip");
+    this.viewModeVideoBtn.classList.toggle("active", mode === "video-only");
+    this.viewModeCanvasBtn.classList.toggle("active", mode === "canvas");
+
+    this.resizeStageCanvas();
+  }
+
+  private updateVideoSyncUI(data: VideoLinkData | null): void {
+    const tr = t();
+    if (data) {
+      this.videoSyncBar.hidden = false;
+      this.videoOffsetBadge.textContent = `⏱ ${formatVideoTime(data.offsetSeconds)}`;
+      this.videoUnlinkBtn.hidden = false;
+      this.replayInfoVideoValue.innerHTML = `
+        <span class="video-linked-status">
+          🎬 Linked
+          <button id="replayInfoEditVideoBtn" class="btn-xs" title="${escapeHtml(tr.youtubeSettingsBtnTitle)}">⚙</button>
+        </span>
+      `;
+      const editBtn = document.getElementById("replayInfoEditVideoBtn");
+      if (editBtn) {
+        editBtn.addEventListener("click", () => this.openVideoLinkModal());
+      }
+    } else {
+      this.videoSyncBar.hidden = true;
+      this.videoUnlinkBtn.hidden = true;
+      this.replayInfoVideoValue.innerHTML = `
+        <button id="replayInfoLinkVideoBtn" class="link-video-btn">+ ${escapeHtml(tr.linkYouTubeVideoBtn)}</button>
+      `;
+      const linkBtn = document.getElementById("replayInfoLinkVideoBtn");
+      if (linkBtn) {
+        linkBtn.addEventListener("click", () => this.openVideoLinkModal());
+      }
+    }
+  }
+
+  private getReplayIdentifier(
+    replay: Replay,
+    loaded?: LoadedReplay | null,
+  ): string {
+    if (loaded) {
+      return summarizeReplay(loaded).id;
+    }
+    const epoch = replay.header.recordedAtEpochSeconds;
+    const stageId = replay.gameStart.stageId;
+    return `replay_${stageId}_${epoch}_${replay.frames.length}`;
   }
 }

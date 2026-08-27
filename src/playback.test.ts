@@ -33,5 +33,11 @@ describe("PlaybackController", () => {
 
     controller.stepBackward();
     expect(controller.currentIndex).toBe(50);
+
+    controller.jumpForward(60);
+    expect(controller.currentIndex).toBe(99); // clamped to frameCount - 1 (100 - 1 = 99)
+
+    controller.jumpBackward(60);
+    expect(controller.currentIndex).toBe(39);
   });
 });

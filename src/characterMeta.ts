@@ -188,6 +188,7 @@ export function computeJigglypuffFThrowStats(
 }
 
 export interface JigglypuffFThrowSituation {
+  readonly enteredFrame: number;
   readonly enteredFrameIndex: number;
   readonly outcomeFrameIndex: number;
   readonly puffPort: PortIndex;
@@ -209,6 +210,7 @@ export function getJigglypuffFThrowSituations(
     if (ev.kind === "fthrow-entered") {
       if (currentEntered) {
         situations.push({
+          enteredFrame: currentEntered.frame,
           enteredFrameIndex: currentEntered.frameIndex,
           outcomeFrameIndex: ev.frameIndex,
           puffPort: currentEntered.puffPort,
@@ -221,6 +223,7 @@ export function getJigglypuffFThrowSituations(
     } else if (ev.kind === "fthrow-success" || ev.kind === "fthrow-failure") {
       if (currentEntered) {
         situations.push({
+          enteredFrame: currentEntered.frame,
           enteredFrameIndex: currentEntered.frameIndex,
           outcomeFrameIndex: ev.frameIndex,
           puffPort: currentEntered.puffPort,
@@ -235,6 +238,7 @@ export function getJigglypuffFThrowSituations(
 
   if (currentEntered) {
     situations.push({
+      enteredFrame: currentEntered.frame,
       enteredFrameIndex: currentEntered.frameIndex,
       outcomeFrameIndex: currentEntered.frameIndex,
       puffPort: currentEntered.puffPort,
@@ -251,6 +255,7 @@ export type ShieldPressureEventKind =
   "shield-pressure-entered" | "shield-break" | "shield-grab" | "shield-escape";
 
 export interface ShieldPressureSituation {
+  readonly enteredFrame: number;
   readonly enteredFrameIndex: number;
   readonly outcomeFrameIndex: number;
   readonly attackerPort: PortIndex;
@@ -272,6 +277,7 @@ export function getShieldPressureSituations(
     if (ev.kind === "shield-pressure-entered") {
       if (currentEntered) {
         situations.push({
+          enteredFrame: currentEntered.frame,
           enteredFrameIndex: currentEntered.frameIndex,
           outcomeFrameIndex: ev.frameIndex,
           attackerPort: currentEntered.attackerPort,
@@ -288,6 +294,7 @@ export function getShieldPressureSituations(
     ) {
       if (currentEntered) {
         situations.push({
+          enteredFrame: currentEntered.frame,
           enteredFrameIndex: currentEntered.frameIndex,
           outcomeFrameIndex: ev.frameIndex,
           attackerPort: currentEntered.attackerPort,
@@ -302,6 +309,7 @@ export function getShieldPressureSituations(
 
   if (currentEntered) {
     situations.push({
+      enteredFrame: currentEntered.frame,
       enteredFrameIndex: currentEntered.frameIndex,
       outcomeFrameIndex: currentEntered.frameIndex,
       attackerPort: currentEntered.attackerPort,

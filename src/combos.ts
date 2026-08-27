@@ -23,8 +23,8 @@ const DEAD_OR_RESPAWNING_STATES = new Set([
   0x000, 0x001, 0x002, 0x003, 0x004, 0x005, 0x007, 0x008, 0x009,
 ]);
 
-/** Number of frames (1.5 seconds at 60fps) to lead in before combo start. */
-export const COMBO_JUMP_LEAD_IN_FRAMES = 90;
+/** Frames before combo start to seek to when jumping to a combo (1.0 s). */
+export const COMBO_JUMP_LEAD_IN_FRAMES = 60;
 
 export interface KillCombo {
   readonly id: string;

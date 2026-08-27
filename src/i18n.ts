@@ -135,6 +135,8 @@ export interface Translations {
   prevFrameTooltip: string;
   playPauseTooltip: string;
   nextFrameTooltip: string;
+  hideSidebarsTooltip: string;
+  showSidebarsTooltip: string;
   hudOverlay: string;
   hudOverlayShow: string;
   hudOverlayHide: string;
@@ -212,6 +214,29 @@ export interface Translations {
   githubLabel: string;
   close: string;
 
+  // Keyboard Shortcuts modal
+  shortcutsTitle: string;
+  shortcutsPlaybackHeader: string;
+  shortcutsPlayPause: string;
+  shortcutsJumpBackward: string;
+  shortcutsJumpForward: string;
+  shortcutsStepBackward: string;
+  shortcutsStepForward: string;
+  shortcutsToggleSidebars: string;
+  shortcutsTogglePip: string;
+  shortcutsGeneralHeader: string;
+  shortcutsHelp: string;
+  shortcutsClose: string;
+
+  // Match View Sidebars
+  statsSidebarHeaderTitle: string;
+  collapseLeftSidebarTitle: string;
+  collapseRightSidebarTitle: string;
+  expandLeftSidebarLabel: string;
+  expandRightSidebarLabel: string;
+  expandLeftSidebarTitle: string;
+  expandRightSidebarTitle: string;
+
   // Situation widgets (Recovery / Edge Guard / Ledge Getup / Ledge Trap)
   recoveryWidgetTitle: string;
   edgeGuardWidgetTitle: string;
@@ -240,6 +265,7 @@ export interface Translations {
   neutralReasonStandingHit: string;
   neutralReasonStandingGrab: string;
   neutralReasonUnknown: string;
+  neutralReasonReversal: string;
   neutralHitsBadge: (count: number) => string;
   neutralConversionEdgeGuard: string;
   neutralConversionLedgeTrap: string;
@@ -276,7 +302,43 @@ export interface Translations {
   replayInfoWidgetTitle: string;
   replayInfoFileLabel: string;
   replayInfoRecordedLabel: string;
-  finalStocksDetail: (yourStocks: number, oppStocks: number) => string;
+  finalStocksDetail: (stocks: number) => string;
+
+  // YouTube Video Sync
+  youtubeVideoTitle: string;
+  linkYouTubeVideoBtn: string;
+  linkYouTubeVideoModalTitle: string;
+  youtubeVideoUrlLabel: string;
+  youtubeVideoUrlPlaceholder: string;
+  youtubeOffsetLabel: string;
+  youtubeOffsetHelp: string;
+  youtubeSaveLinkBtn: string;
+  youtubeUnlinkBtn: string;
+  youtubeSyncCurrentFrameBtn: string;
+  youtubeNudgeMinus1s: string;
+  youtubeNudgeMinus1f: string;
+  youtubeNudgePlus1f: string;
+  youtubeNudgePlus1s: string;
+  youtubeViewModeVideoPip: string;
+  youtubeViewModeVideoOnly: string;
+  youtubeViewModeCanvasOnly: string;
+  youtubeSettingsBtnTitle: string;
+  youtubeTogglePipBtnTitle: string;
+  youtubeInvalidUrlError: string;
+  videoAttachedBadge: string;
+  syncSessionVideosBtn: string;
+  sessionSyncedSuccess: (count: number) => string;
+  sessionNotRealtimeWarning: string;
+
+  // Session Grouping
+  groupBySession: string;
+  flatList: string;
+  sessionGamesCount: (count: number) => string;
+  sessionRecord: (wins: number, losses: number) => string;
+  sessionTotalDuration: (dur: string) => string;
+  sessionVideoAttached: string;
+  sessionSoloGame: string;
+  sessionVs: (opponent: string) => string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -417,9 +479,11 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     playerShieldPressureEscaped: (p) =>
       `${p} shield pressure: neither (escaped)`,
 
-    prevFrameTooltip: "Previous frame",
-    playPauseTooltip: "Play / pause",
-    nextFrameTooltip: "Next frame",
+    prevFrameTooltip: "Previous frame (,)",
+    playPauseTooltip: "Play / Pause (Space)",
+    nextFrameTooltip: "Next frame (.)",
+    hideSidebarsTooltip: "Hide sidebars (t)",
+    showSidebarsTooltip: "Show sidebars (t)",
 
     importReplays: "Import replays",
     importFiles: "Select files (.rmgr)",
@@ -494,6 +558,27 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     githubLabel: "GitHub Repository",
     close: "Close",
 
+    shortcutsTitle: "Keyboard Shortcuts",
+    shortcutsPlaybackHeader: "Playback",
+    shortcutsPlayPause: "Play / Pause",
+    shortcutsJumpBackward: "Jump 1 second backward",
+    shortcutsJumpForward: "Jump 1 second forward",
+    shortcutsStepBackward: "Previous frame",
+    shortcutsStepForward: "Next frame",
+    shortcutsToggleSidebars: "Toggle sidebars",
+    shortcutsTogglePip: "Toggle video / 2D mini overlay",
+    shortcutsGeneralHeader: "General",
+    shortcutsHelp: "Show keyboard shortcuts",
+    shortcutsClose: "Close dialog",
+
+    statsSidebarHeaderTitle: "Stats & Situations",
+    collapseLeftSidebarTitle: "Collapse Neutral Analysis sidebar",
+    collapseRightSidebarTitle: "Collapse Stats sidebar",
+    expandLeftSidebarLabel: "Neutral",
+    expandRightSidebarLabel: "Stats",
+    expandLeftSidebarTitle: "Show Neutral Analysis sidebar",
+    expandRightSidebarTitle: "Show Stats & Situations sidebar",
+
     recoveryWidgetTitle: "Recovery",
     edgeGuardWidgetTitle: "Edge Guard",
     ledgeGetupWidgetTitle: "Ledge Getup",
@@ -504,7 +589,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noSituations: "None in this replay.",
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
 
-    neutralHitsWidgetTitle: "Neutral Game",
+    neutralHitsWidgetTitle: "Neutral Analysis",
     neutralFilterAll: (count) => `All (${count})`,
     neutralFilterOpenings: (count) => `Openings (${count})`,
     neutralFilterPunishes: (count) => `Punishes (${count})`,
@@ -520,6 +605,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralReasonStandingHit: "Standing Hit",
     neutralReasonStandingGrab: "Standing Grab",
     neutralReasonUnknown: "Neutral Hit",
+    neutralReasonReversal: "Reversal",
     neutralHitsBadge: (count) => `${count} ${count === 1 ? "hit" : "hits"}`,
     neutralConversionEdgeGuard: "Edge Guard",
     neutralConversionLedgeTrap: "Ledge Trap",
@@ -550,8 +636,48 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoWidgetTitle: "Replay Info",
     replayInfoFileLabel: "File",
     replayInfoRecordedLabel: "Recorded",
-    finalStocksDetail: (yourStocks, oppStocks) =>
-      `Stocks: ${yourStocks} – ${oppStocks}`,
+    finalStocksDetail: (stocks) => `Stocks Remaining: ${stocks}`,
+
+    // YouTube Video Sync
+    youtubeVideoTitle: "YouTube Video",
+    linkYouTubeVideoBtn: "Link Video",
+    linkYouTubeVideoModalTitle: "Link YouTube Video to Match",
+    youtubeVideoUrlLabel: "YouTube URL or Video ID",
+    youtubeVideoUrlPlaceholder:
+      "https://www.youtube.com/watch?v=... or youtu.be/...",
+    youtubeOffsetLabel: "Start Offset (seconds or mm:ss)",
+    youtubeOffsetHelp:
+      "Replay frame 0 corresponds to this timestamp in the video.",
+    youtubeSaveLinkBtn: "Save & Sync",
+    youtubeUnlinkBtn: "Unlink Video",
+    youtubeSyncCurrentFrameBtn: "Sync to Current Frame",
+    youtubeNudgeMinus1s: "-1.0s",
+    youtubeNudgeMinus1f: "-1f",
+    youtubeNudgePlus1f: "+1f",
+    youtubeNudgePlus1s: "+1.0s",
+    youtubeViewModeVideoPip: "Video + Mini 2D Overlay",
+    youtubeViewModeVideoOnly: "Video Only",
+    youtubeViewModeCanvasOnly: "2D Canvas Only",
+    youtubeSettingsBtnTitle: "Video sync settings",
+    youtubeTogglePipBtnTitle: "Toggle mini overlay (p)",
+    youtubeInvalidUrlError: "Please enter a valid YouTube video URL or ID.",
+    videoAttachedBadge: "YouTube video linked",
+    syncSessionVideosBtn: "Auto-Sync Session Timestamps",
+    sessionSyncedSuccess: (count: number) =>
+      `Successfully synchronized video timestamps for ${count} games in session.`,
+    sessionNotRealtimeWarning:
+      "These recordings were exported faster than real-time; relative timestamps could not be automatically calculated from file headers.",
+
+    // Session Grouping
+    groupBySession: "Group by Session",
+    flatList: "Flat List",
+    sessionGamesCount: (count: number) =>
+      count === 1 ? "1 game" : `${count} games`,
+    sessionRecord: (wins: number, losses: number) => `${wins}W – ${losses}L`,
+    sessionTotalDuration: (dur: string) => `Total: ${dur}`,
+    sessionVideoAttached: "YouTube Video Attached",
+    sessionSoloGame: "Practice / Solo Match",
+    sessionVs: (opponent: string) => `vs ${opponent}`,
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -681,9 +807,11 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     playerShieldPressureGrab: (p) => `${p} ガード固めからつかみ成功`,
     playerShieldPressureEscaped: (p) => `${p} ガード固め: 抜け`,
 
-    prevFrameTooltip: "前のフレーム",
-    playPauseTooltip: "再生 / 一時停止",
-    nextFrameTooltip: "次のフレーム",
+    prevFrameTooltip: "前のフレーム (,)",
+    playPauseTooltip: "再生 / 一時停止 (Space)",
+    nextFrameTooltip: "次のフレーム (.)",
+    hideSidebarsTooltip: "サイドバーを非表示 (t)",
+    showSidebarsTooltip: "サイドバーを表示 (t)",
 
     importReplays: "リプレイの読み込み",
     importFiles: "ファイルを選択 (.rmgr)",
@@ -757,6 +885,27 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     githubLabel: "GitHub リポジトリ",
     close: "閉じる",
 
+    shortcutsTitle: "キーボード ショートカット",
+    shortcutsPlaybackHeader: "再生",
+    shortcutsPlayPause: "再生 / 一時停止",
+    shortcutsJumpBackward: "1秒戻る",
+    shortcutsJumpForward: "1秒進む",
+    shortcutsStepBackward: "前のフレーム",
+    shortcutsStepForward: "次のフレーム",
+    shortcutsToggleSidebars: "サイドバーの表示切替",
+    shortcutsTogglePip: "動画 / 2Dミニ画面の表示切替",
+    shortcutsGeneralHeader: "全般",
+    shortcutsHelp: "ショートカット一覧を表示",
+    shortcutsClose: "ダイアログを閉じる",
+
+    statsSidebarHeaderTitle: "戦績・状況分析",
+    collapseLeftSidebarTitle: "立ち回り分析サイドバーを閉じる",
+    collapseRightSidebarTitle: "戦績サイドバーを閉じる",
+    expandLeftSidebarLabel: "立ち回り",
+    expandRightSidebarLabel: "戦績",
+    expandLeftSidebarTitle: "立ち回り分析サイドバーを表示",
+    expandRightSidebarTitle: "戦績・状況分析サイドバーを表示",
+
     recoveryWidgetTitle: "復帰",
     edgeGuardWidgetTitle: "崖外",
     ledgeGetupWidgetTitle: "崖上がり",
@@ -767,7 +916,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     noSituations: "このリプレイには該当なし。",
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
 
-    neutralHitsWidgetTitle: "立ち回りの攻防",
+    neutralHitsWidgetTitle: "立ち回り分析",
     neutralFilterAll: (count) => `すべて (${count})`,
     neutralFilterOpenings: (count) => `差し込み (${count})`,
     neutralFilterPunishes: (count) => `被弾 (${count})`,
@@ -783,6 +932,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralReasonStandingHit: "地上ヒット",
     neutralReasonStandingGrab: "地上掴み",
     neutralReasonUnknown: "立ち回りヒット",
+    neutralReasonReversal: "反撃",
     neutralHitsBadge: (count) => `${count}ヒット`,
     neutralConversionEdgeGuard: "復帰阻止",
     neutralConversionLedgeTrap: "崖狩り",
@@ -812,8 +962,47 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoWidgetTitle: "リプレイ情報",
     replayInfoFileLabel: "ファイル",
     replayInfoRecordedLabel: "録画日時",
-    finalStocksDetail: (yourStocks, oppStocks) =>
-      `残ストック: ${yourStocks} – ${oppStocks}`,
+    finalStocksDetail: (stocks) => `残ストック: ${stocks}`,
+
+    // YouTube Video Sync
+    youtubeVideoTitle: "YouTube 動画",
+    linkYouTubeVideoBtn: "動画を連携",
+    linkYouTubeVideoModalTitle: "YouTube 動画をリプレイに連携",
+    youtubeVideoUrlLabel: "YouTube URL または 動画ID",
+    youtubeVideoUrlPlaceholder:
+      "https://www.youtube.com/watch?v=... または youtu.be/...",
+    youtubeOffsetLabel: "開始オフセット (秒 または 分:秒)",
+    youtubeOffsetHelp: "リプレイのフレーム0に対応する動画の再生位置です。",
+    youtubeSaveLinkBtn: "保存して同期",
+    youtubeUnlinkBtn: "連携を解除",
+    youtubeSyncCurrentFrameBtn: "現在のフレームに同期",
+    youtubeNudgeMinus1s: "-1.0秒",
+    youtubeNudgeMinus1f: "-1F",
+    youtubeNudgePlus1f: "+1F",
+    youtubeNudgePlus1s: "+1.0秒",
+    youtubeViewModeVideoPip: "動画 + ミニ2D画面",
+    youtubeViewModeVideoOnly: "動画のみ",
+    youtubeViewModeCanvasOnly: "2Dキャンバスのみ",
+    youtubeSettingsBtnTitle: "動画同期設定",
+    youtubeTogglePipBtnTitle: "ミニ画面の切り替え (p)",
+    youtubeInvalidUrlError:
+      "有効なYouTubeのURLまたは動画IDを入力してください。",
+    videoAttachedBadge: "YouTube動画リンク済み",
+    syncSessionVideosBtn: "セッション動画タイムスタンプ自動同期",
+    sessionSyncedSuccess: (count: number) =>
+      `セッション内の${count}試合の動画タイムスタンプを自動同期しました。`,
+    sessionNotRealtimeWarning:
+      "これらのリプレイは実時間より高速に出力されたため、相対タイムスタンプを自動計算できませんでした。",
+
+    // Session Grouping
+    groupBySession: "セッションごとにグループ化",
+    flatList: "全試合一覧",
+    sessionGamesCount: (count: number) => `${count} 試合`,
+    sessionRecord: (wins: number, losses: number) => `${wins}勝 – ${losses}敗`,
+    sessionTotalDuration: (dur: string) => `合計時間: ${dur}`,
+    sessionVideoAttached: "YouTube動画連携済み",
+    sessionSoloGame: "練習 / 単独マッチ",
+    sessionVs: (opponent: string) => `vs ${opponent}`,
   },
 };
 

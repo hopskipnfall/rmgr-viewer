@@ -423,6 +423,97 @@ describe("extractAllQuickAttackPaths", () => {
     const paths = extractAllQuickAttackPaths(replay, 0);
     expect(paths.length).toBe(1);
     expect(paths[0]?.startFrame).toBe(1);
+    expect(paths[0]?.recoveryStartFrame).toBe(0);
+    expect(paths[0]?.recoveryStartFrameIndex).toBe(0);
+    expect(paths[0]?.preUpBPoints).toBeDefined();
+    expect(paths[0]?.preUpBPoints?.length).toBe(2);
+    expect(paths[0]?.preUpBPoints?.[0]?.x).toBe(-3500);
+  });
+
+  it("breaks out white jump segment between jump in air and Up-B start", () => {
+    const replay = {
+      gameStart: {
+        stageId: DREAM_LAND_STAGE_ID,
+        ports: [{ characterId: 0x09 }, { characterId: 0x01 }],
+      },
+      frames: [
+        // Frame 0: Offstage falling (starts recovery)
+        {
+          frame: 0,
+          ports: [
+            { post: { actionStateId: 0x1a, positionX: -3600, positionY: 300 } }, // Fall
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        // Frame 1: Still falling
+        {
+          frame: 1,
+          ports: [
+            { post: { actionStateId: 0x1a, positionX: -3500, positionY: 200 } }, // Fall
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        // Frame 2: Mid-air jump
+        {
+          frame: 2,
+          ports: [
+            { post: { actionStateId: 0x18, positionX: -3400, positionY: 350 } }, // JumpAerialF
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        // Frame 3: Mid-air jump rising
+        {
+          frame: 3,
+          ports: [
+            { post: { actionStateId: 0x18, positionX: -3300, positionY: 500 } }, // JumpAerialF
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        // Frame 4-5: Up-B
+        {
+          frame: 4,
+          ports: [
+            {
+              post: { actionStateId: 0x0e8, positionX: -3300, positionY: 500 },
+            },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+        {
+          frame: 5,
+          ports: [
+            {
+              post: { actionStateId: 0x0ec, positionX: -1500, positionY: 500 },
+            },
+            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+          ],
+        },
+      ],
+    } as unknown as Replay;
+
+    const paths = extractAllQuickAttackPaths(replay, 0);
+    expect(paths.length).toBe(1);
+
+    const path = paths[0]!;
+    expect(path.recoveryStartFrameIndex).toBe(0);
+    expect(path.jumpFrameIndex).toBe(2);
+    expect(path.jumpFrame).toBe(2);
+
+    // Pre-jump segment (frames 0 to 2)
+    expect(path.preJumpPoints).toBeDefined();
+    expect(path.preJumpPoints?.length).toBe(3);
+    expect(path.preJumpPoints?.[0]?.x).toBe(-3600);
+    expect(path.preJumpPoints?.[2]?.x).toBe(-3400);
+
+    // Jump segment (frames 2 to 4)
+    expect(path.jumpPoints).toBeDefined();
+    expect(path.jumpPoints?.length).toBe(3);
+    expect(path.jumpPoints?.[0]?.x).toBe(-3400); // Matches end of pre-jump
+    expect(path.jumpPoints?.[2]?.x).toBe(-3300); // Matches start of Up-B
+
+    // Quick Attack points (frames 4 to 5)
+    expect(path.points.length).toBe(2);
+    expect(path.points[0]?.x).toBe(-3300);
   });
 
   it("returns empty array for non-Pikachu characters", () => {

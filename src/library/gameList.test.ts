@@ -76,10 +76,12 @@ describe("GameList rendering", () => {
     expect(html).toContain('<span class="result-badge win">WIN</span>');
 
     // Check supplementary body contents
-    expect(html).toContain("3 – 0");
+    expect(html).toContain("Stocks Remaining: 3");
     expect(html).toContain("Rec</span> 75% (3/4)");
     expect(html).toContain("EG</span> 67% (2/3)");
     expect(html).toContain("Getup</span> 100% (2/2)");
+    expect(html).toContain('class="session-group"');
+    expect(html).toContain('class="session-header"');
 
     // Check itemized kill combo chips
     expect(html).toContain("Kill Combos:");
@@ -89,5 +91,101 @@ describe("GameList rendering", () => {
     expect(html).toContain(
       '<span class="chip-label">6 hits</span> 21% → 75% <span class="chip-ko">KO</span>',
     );
+  });
+
+  it("renders game-video-badge when a video is linked", async () => {
+    const store = new Map<string, string>();
+    const mockStorage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+      removeItem: (key: string) => store.delete(key),
+      clear: () => store.clear(),
+    };
+    (
+      globalThis as unknown as { localStorage: typeof mockStorage }
+    ).localStorage = mockStorage;
+
+    const { saveVideoLink, deleteVideoLink } =
+      await import("../video/youtubeSync.js");
+    const mockContainer = {
+      innerHTML: "",
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    } as unknown as HTMLElement;
+
+    const gameList = new GameList(
+      mockContainer,
+      () => {},
+      () => {},
+      () => {},
+      () => {},
+    );
+
+    const identity = createDefaultIdentity();
+    const summary: GameSummary = {
+      id: "game-with-video",
+      sourceName: "match.rmgr",
+      recordedAt: new Date("2026-08-23T17:11:17"),
+      stageId: DREAM_LAND_STAGE_ID,
+      frameCount: 3600,
+      isComplete: true,
+      fileRef: null,
+      ports: [
+        { port: 0, playerName: "Player 1", characterId: 0x09, finalStocks: 3 },
+        { port: 1, playerName: "Player 2", characterId: 0x01, finalStocks: 0 },
+      ],
+      statsByPort: {},
+    };
+
+    saveVideoLink("game-with-video", {
+      videoId: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      offsetSeconds: 0,
+      viewMode: "video-pip",
+    });
+
+    gameList.render([summary], identity, 1);
+    expect(mockContainer.innerHTML).toContain('class="game-video-badge"');
+    expect(mockContainer.innerHTML).toContain("🎬");
+
+    deleteVideoLink("game-with-video");
+  });
+
+  it("renders flat list without session groups when groupBySession is false", () => {
+    const mockContainer = {
+      innerHTML: "",
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    } as unknown as HTMLElement;
+
+    const gameList = new GameList(
+      mockContainer,
+      () => {},
+      () => {},
+      () => {},
+      () => {},
+    );
+
+    const identity = createDefaultIdentity();
+    const summary: GameSummary = {
+      id: "flat-game",
+      sourceName: "flat.rmgr",
+      recordedAt: new Date("2026-08-23T17:11:17"),
+      stageId: DREAM_LAND_STAGE_ID,
+      frameCount: 3600,
+      isComplete: true,
+      fileRef: null,
+      ports: [
+        { port: 0, playerName: "Player 1", characterId: 0x09, finalStocks: 3 },
+        { port: 1, playerName: "Player 2", characterId: 0x01, finalStocks: 0 },
+      ],
+      statsByPort: {},
+    };
+
+    gameList.setGroupBySession(false);
+    gameList.render([summary], identity, 1);
+
+    expect(mockContainer.innerHTML).not.toContain('class="session-group"');
+    expect(mockContainer.innerHTML).toContain('class="game-row');
   });
 });

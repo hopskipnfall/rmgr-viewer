@@ -6,6 +6,8 @@ import {
   resolvePerspectivePort,
   resolveOpponentPort,
 } from "../data/identity.js";
+import { hasVideoLink } from "../video/youtubeSync.js";
+import { groupGamesIntoSessions, type SessionGroup } from "../data/session.js";
 
 function formatDuration(frames: number): string {
   const totalSecs = Math.floor(frames / 60);
@@ -25,6 +27,9 @@ function formatDate(date: Date): string {
 export class GameList {
   private container: HTMLElement;
   private sortOrder: "newest" | "oldest" = "newest";
+  private groupBySession = true;
+  private collapsedSessionIds = new Set<string>();
+
   private onSortChanged: (sort: "newest" | "oldest") => void;
   private onSelectGame: (summary: GameSummary) => void;
   private onManualPerspectiveSet: (
@@ -51,6 +56,10 @@ export class GameList {
     this.sortOrder = sort;
   }
 
+  public setGroupBySession(group: boolean): void {
+    this.groupBySession = group;
+  }
+
   public render(
     summaries: GameSummary[],
     identity: Identity,
@@ -65,11 +74,40 @@ export class GameList {
       return this.sortOrder === "newest" ? timeB - timeA : timeA - timeB;
     });
 
+    const sessions = this.groupBySession
+      ? groupGamesIntoSessions(summaries, identity, this.sortOrder)
+      : [];
+
+    let rowsHtml: string;
+    if (sorted.length === 0) {
+      rowsHtml = `<div class="game-list-empty">${escapeHtml(tr.noGamesMatched)}</div>`;
+    } else if (this.groupBySession) {
+      rowsHtml = sessions
+        .map((session) =>
+          this.renderSessionGroup(session, identity, summaries.length === 1),
+        )
+        .join("");
+    } else {
+      rowsHtml = sorted
+        .map((summary) =>
+          this.renderGameRow(summary, identity, sorted.length === 1),
+        )
+        .join("");
+    }
+
     this.container.innerHTML = `
       <div class="game-list-header">
         <h3>${escapeHtml(tr.gamesListHeader(filteredCount))}</h3>
-        <div class="game-list-sort">
-          <select id="gameSortSelect">
+        <div class="game-list-controls">
+          <select id="gameGroupSelect" aria-label="${escapeHtml(tr.groupBySession)}">
+            <option value="session" ${this.groupBySession ? "selected" : ""}>
+              ${escapeHtml(tr.groupBySession)}
+            </option>
+            <option value="flat" ${!this.groupBySession ? "selected" : ""}>
+              ${escapeHtml(tr.flatList)}
+            </option>
+          </select>
+          <select id="gameSortSelect" aria-label="${escapeHtml(tr.sortNewestFirst)}">
             <option value="newest" ${this.sortOrder === "newest" ? "selected" : ""}>
               ${escapeHtml(tr.sortNewestFirst)}
             </option>
@@ -81,17 +119,17 @@ export class GameList {
       </div>
 
       <div class="game-list-rows">
-        ${
-          sorted.length === 0
-            ? `<div class="game-list-empty">${escapeHtml(tr.noGamesMatched)}</div>`
-            : sorted
-                .map((summary) =>
-                  this.renderGameRow(summary, identity, sorted.length === 1),
-                )
-                .join("")
-        }
+        ${rowsHtml}
       </div>
     `;
+
+    const groupSelect = this.container.querySelector(
+      "#gameGroupSelect",
+    ) as HTMLSelectElement;
+    groupSelect?.addEventListener("change", () => {
+      this.groupBySession = groupSelect.value === "session";
+      this.render(summaries, identity, filteredCount);
+    });
 
     const sortSelect = this.container.querySelector(
       "#gameSortSelect",
@@ -99,6 +137,28 @@ export class GameList {
     sortSelect?.addEventListener("change", () => {
       this.sortOrder = sortSelect.value as "newest" | "oldest";
       this.onSortChanged(this.sortOrder);
+    });
+
+    // Session accordion headers
+    const sessionHeaders =
+      this.container.querySelectorAll<HTMLElement>(".session-header");
+    sessionHeaders.forEach((header) => {
+      header.addEventListener("click", () => {
+        const groupEl = header.closest<HTMLElement>(".session-group");
+        if (!groupEl) return;
+        const sessionId = groupEl.dataset.sessionId;
+        if (!sessionId) return;
+
+        if (this.collapsedSessionIds.has(sessionId)) {
+          this.collapsedSessionIds.delete(sessionId);
+          groupEl.classList.remove("collapsed");
+          header.setAttribute("aria-expanded", "true");
+        } else {
+          this.collapsedSessionIds.add(sessionId);
+          groupEl.classList.add("collapsed");
+          header.setAttribute("aria-expanded", "false");
+        }
+      });
     });
 
     // Attach row click, inline button, and remove button event listeners
@@ -134,6 +194,65 @@ export class GameList {
     });
   }
 
+  private renderSessionGroup(
+    session: SessionGroup,
+    identity: Identity,
+    isSingleGame: boolean = false,
+  ): string {
+    const tr = t();
+    const isCollapsed = this.collapsedSessionIds.has(session.id);
+    const dateStr = formatDate(session.startTime);
+    const duration = formatDuration(session.totalDurationFrames);
+
+    const sessionTitle = session.opponentName
+      ? tr.sessionVs(session.opponentName)
+      : tr.sessionSoloGame;
+
+    const recordClass =
+      session.wins > session.losses
+        ? "record-positive"
+        : session.losses > session.wins
+          ? "record-negative"
+          : "";
+
+    const hasRecord = session.wins > 0 || session.losses > 0;
+    const recordPill = hasRecord
+      ? `<span class="session-stat-pill ${recordClass}">${escapeHtml(tr.sessionRecord(session.wins, session.losses))}</span>`
+      : "";
+
+    const videoBadge = session.hasVideo
+      ? `<span class="session-video-badge" title="${escapeHtml(tr.sessionVideoAttached)}">🎬 ${escapeHtml(tr.youtubeVideoTitle)}</span>`
+      : "";
+
+    const rowsHtml = session.games
+      .map((g) => this.renderGameRow(g, identity, isSingleGame))
+      .join("");
+
+    return `
+      <div class="session-group${isCollapsed ? " collapsed" : ""}" data-session-id="${escapeHtml(session.id)}">
+        <div class="session-header" role="button" tabindex="0" aria-expanded="${!isCollapsed}">
+          <div class="session-header-left">
+            <span class="session-chevron">▾</span>
+            <div class="session-title">
+              ${escapeHtml(sessionTitle)}
+            </div>
+            <span class="meta-dot">·</span>
+            <span class="session-date">${escapeHtml(dateStr)}</span>
+          </div>
+          <div class="session-header-right">
+            <span class="session-stat-pill">${escapeHtml(tr.sessionGamesCount(session.games.length))}</span>
+            ${recordPill}
+            <span class="session-duration">⏱ ${duration}</span>
+            ${videoBadge}
+          </div>
+        </div>
+        <div class="session-body">
+          ${rowsHtml}
+        </div>
+      </div>
+    `;
+  }
+
   private renderGameRow(
     summary: GameSummary,
     identity: Identity,
@@ -145,6 +264,10 @@ export class GameList {
     const dateStr = formatDate(summary.recordedAt);
     const duration = formatDuration(summary.frameCount);
     const pulseClass = isSingleGame ? "single-game-pulse" : "";
+    const hasVideo = hasVideoLink(summary.id);
+    const videoBadge = hasVideo
+      ? `<span class="game-video-badge" title="${escapeHtml(tr.videoAttachedBadge)}">🎬</span>`
+      : "";
 
     if (!is2Player) {
       return `
@@ -156,6 +279,7 @@ export class GameList {
               <span class="game-stage">${escapeHtml(stage)}</span>
               <span class="meta-dot">·</span>
               <span class="game-duration">${duration}</span>
+              ${videoBadge ? `<span class="meta-dot">·</span>${videoBadge}` : ""}
               <span class="unsupported-badge">${escapeHtml(tr.notSupportedPlayers)}</span>
             </div>
             <div class="game-row-players">
@@ -184,6 +308,7 @@ export class GameList {
         <div class="game-row ambiguous ${pulseClass}" data-id="${summary.id}">
           <div class="game-row-header">
             <div class="game-row-meta">
+              ${videoBadge}
               <span class="ambiguous-badge">⚠</span>
               <span class="game-date">${escapeHtml(dateStr)}</span>
               <span class="meta-dot">·</span>
@@ -275,9 +400,10 @@ export class GameList {
       }
     }
 
+    const winnerStocks = Math.max(yourP.finalStocks, oppP.finalStocks);
     const stocksDetail =
       yourP.finalStocks >= 0 && oppP.finalStocks >= 0
-        ? `<span class="detail-stocks">${escapeHtml(tr.finalStocksDetail(yourP.finalStocks, oppP.finalStocks))}</span>`
+        ? `<span class="detail-stocks">${escapeHtml(tr.finalStocksDetail(winnerStocks))}</span>`
         : "";
 
     const hasSupplementary =
@@ -292,6 +418,7 @@ export class GameList {
             <span class="game-stage">${escapeHtml(stage)}</span>
             <span class="meta-dot">·</span>
             <span class="game-duration">${duration}</span>
+            ${videoBadge ? `<span class="meta-dot">·</span>${videoBadge}` : ""}
           </div>
           <div class="game-row-players">
             <strong class="you-player">${escapeHtml(yourName)}</strong>

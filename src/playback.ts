@@ -69,6 +69,14 @@ export class PlaybackController {
     this.seek(this.index - 1);
   }
 
+  jumpForward(frames = 60): void {
+    this.seek(this.index + frames);
+  }
+
+  jumpBackward(frames = 60): void {
+    this.seek(this.index - frames);
+  }
+
   play(): void {
     if (this.playing || this.frameCount === 0) return;
     if (this.index >= this.frameCount - 1) {

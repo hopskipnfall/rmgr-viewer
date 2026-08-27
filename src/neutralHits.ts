@@ -68,6 +68,7 @@ export type NeutralOpeningReason =
   | "whiff-punish"
   | "jump-punish"
   | "standing-hit"
+  | "reversal"
   | "unknown";
 
 export type NeutralInteractionOutcome =
@@ -526,8 +527,8 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
       }
     } else {
       // Active interaction ongoing
-      const att = active.attackerPort;
-      const vic = active.victimPort;
+      const att: PortIndex = active.attackerPort;
+      const vic: PortIndex = active.victimPort;
       const attPost = att === portA ? postA : postB;
       const vicPost = vic === portA ? postA : postB;
       const attEntryStocks =
@@ -609,8 +610,8 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
             att === portA ? totalDamageB : totalDamageA,
           convertedToEdgeGuard: active.convertedToEdgeGuard,
           convertedToLedgeTrap: active.convertedToLedgeTrap,
-          convertedToKill: false,
-          outcome: "reversal",
+          convertedToKill: true,
+          outcome: "ko",
           openingEndFrameIndex: active.openingEndFrameIndex,
           lastHitFrameIndex: active.lastHitFrameIndex,
           edgeGuardStartFrameIndex: active.edgeGuardStartFrameIndex,
@@ -628,10 +629,43 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
             active.edgeGuardStartFrameIndex = i;
           }
           active.edgeGuardEndFrameIndex = i;
-          if (active.winnerPort === null) active.winnerPort = att;
-        } else if (recoveryMap[i] === att || ledgeMap[i] === att) {
-          // Attacker got reversed and is now offstage / in disadvantage!
-          // Conclude the attacker's interaction as a reversal
+          active.winnerPort = att;
+        } else if (recoveryMap[i] === att) {
+          active.winnerPort = vic;
+        }
+
+        if (ledgeMap[i] === vic) {
+          active.convertedToLedgeTrap = true;
+          if (active.ledgeTrapStartFrameIndex === undefined) {
+            active.ledgeTrapStartFrameIndex = i;
+          }
+          active.ledgeTrapEndFrameIndex = i;
+          active.winnerPort = att;
+        } else if (ledgeMap[i] === att) {
+          active.winnerPort = vic;
+        }
+
+        // 3. Check follow-up hits, trades, or reversals
+        const attHitVic =
+          att === portA ? aHitB || aGrabbedB : bHitA || bGrabbedA;
+        const vicHitAtt =
+          vic === portA ? aHitB || aGrabbedB : bHitA || bGrabbedA;
+
+        if (attHitVic && !vicHitAtt) {
+          // Attacker lands another hit/grab
+          if (att === portA) active.totalHitsA++;
+          else active.totalHitsB++;
+          active.lastHitFrameIndex = i;
+          active.consecutiveActionableFrames = 0;
+        } else if (attHitVic && vicHitAtt) {
+          // Trade!
+          active.totalHitsA++;
+          active.totalHitsB++;
+          active.lastHitFrameIndex = i;
+          active.consecutiveActionableFrames = 0;
+        } else if (!attHitVic && vicHitAtt) {
+          // Defender landed a counter-hit / reversal!
+          // 1. Conclude the attacker's active interaction as a reversal
           const totalDamageA = Math.max(
             0,
             postB.damagePercent - active.damageAtEntryB,
@@ -670,29 +704,42 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
             ledgeTrapEndFrameIndex: active.ledgeTrapEndFrameIndex,
             killFrameIndex: active.killFrameIndex,
           });
-          active = null;
+
+          // 2. Open a new interaction starting from this reversal
+          const isGrab: boolean = vic === portA ? aGrabbedB : bGrabbedA;
+          const prevPostA = replay.frames[i - 1]?.ports[portA]?.post;
+          const prevPostB = replay.frames[i - 1]?.ports[portB]?.post;
+          const damageBeforeHitA = prevPostA
+            ? prevPostA.damagePercent
+            : postA.damagePercent;
+          const damageBeforeHitB = prevPostB
+            ? prevPostB.damagePercent
+            : postB.damagePercent;
+
+          active = {
+            frame: frameNumber,
+            frameIndex: i,
+            attackerPort: vic,
+            victimPort: att,
+            hitType: isGrab ? "grab" : "attack",
+            reason: "reversal",
+            reasonDetail: "Reversal counter-hit from disadvantage",
+            firstContactPort: vic,
+            winnerPort: vic,
+            totalHitsA: vic === portA ? 1 : 0,
+            totalHitsB: vic === portB ? 1 : 0,
+            damageAtEntryA: damageBeforeHitA,
+            damageAtEntryB: damageBeforeHitB,
+            stocksAtEntryA: postA.stocksRemaining,
+            stocksAtEntryB: postB.stocksRemaining,
+            convertedToEdgeGuard: false,
+            convertedToLedgeTrap: false,
+            convertedToKill: false,
+            consecutiveActionableFrames: 0,
+            openingEndFrameIndex: i + 30,
+            lastHitFrameIndex: i,
+          };
           continue;
-        }
-
-        if (ledgeMap[i] === vic) {
-          active.convertedToLedgeTrap = true;
-          if (active.ledgeTrapStartFrameIndex === undefined) {
-            active.ledgeTrapStartFrameIndex = i;
-          }
-          active.ledgeTrapEndFrameIndex = i;
-          if (active.winnerPort === null) active.winnerPort = att;
-        }
-
-        // 3. Check follow-up hits or trades
-        if (aHitB || aGrabbedB) {
-          active.totalHitsA++;
-          active.lastHitFrameIndex = i;
-          active.consecutiveActionableFrames = 0;
-        }
-        if (bHitA || bGrabbedA) {
-          active.totalHitsB++;
-          active.lastHitFrameIndex = i;
-          active.consecutiveActionableFrames = 0;
         }
 
         // 4. Check neutral reset (60 consecutive mutual actionable frames)
@@ -726,9 +773,9 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
                 att === portA ? totalDamageB : totalDamageA;
 
               if (active.winnerPort === null) {
-                if (damageAttDealt > damageVicDealt + 5) {
+                if (damageAttDealt > damageVicDealt) {
                   active.winnerPort = att;
-                } else if (damageVicDealt > damageAttDealt + 5) {
+                } else if (damageVicDealt > damageAttDealt) {
                   active.winnerPort = vic;
                 } else {
                   active.winnerPort = att;
@@ -803,6 +850,22 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
       replay.gameEnd.placements?.[vic] === -1,
     );
 
+    if (active.winnerPort === null) {
+      if (damageAttDealt > damageVicDealt) {
+        active.winnerPort = att;
+      } else if (damageVicDealt > damageAttDealt) {
+        active.winnerPort = vic;
+      } else {
+        active.winnerPort = att;
+      }
+    }
+
+    const outcome = isKO
+      ? "ko"
+      : active.winnerPort === att
+        ? "reset"
+        : "reversal";
+
     events.push({
       frame: active.frame,
       frameIndex: active.frameIndex,
@@ -821,7 +884,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
       convertedToEdgeGuard: active.convertedToEdgeGuard,
       convertedToLedgeTrap: active.convertedToLedgeTrap,
       convertedToKill: isKO,
-      outcome: isKO ? "ko" : "incomplete",
+      outcome,
       openingEndFrameIndex: active.openingEndFrameIndex,
       lastHitFrameIndex: active.lastHitFrameIndex,
       edgeGuardStartFrameIndex: active.edgeGuardStartFrameIndex,
