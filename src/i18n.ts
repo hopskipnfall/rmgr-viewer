@@ -364,6 +364,16 @@ export interface Translations {
   twelveCbWon: (remainingChars: number, remainingStocks: number) => string;
   twelveCbLost: (remainingChars: number, remainingStocks: number) => string;
   twelveCbMatchIndex: (idx: number, total: number) => string;
+  twelveCbMatchProgress: (current: number, total: number) => string;
+  twelveCbRemainingCount: (remaining: number, total: number) => string;
+  twelveCbActiveLabel: string;
+  twelveCbAvailableLabel: string;
+  twelveCbEliminatedLabel: string;
+  twelveCbStocksLabel: (stocks: number) => string;
+  twelveCbPrevMatch: string;
+  twelveCbNextMatch: string;
+  twelveCbPrevMatchTitle: string;
+  twelveCbNextMatchTitle: string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -728,6 +738,18 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     twelveCbLost: (remainingChars, remainingStocks) =>
       `Lost (Opponent: ${remainingChars} chars, ${remainingStocks} stocks)`,
     twelveCbMatchIndex: (idx, total) => `Match ${idx}/${total}`,
+    twelveCbMatchProgress: (current, total) => `Match ${current} of ${total}`,
+    twelveCbRemainingCount: (remaining, total) =>
+      `${remaining}/${total} remaining`,
+    twelveCbActiveLabel: "Active",
+    twelveCbAvailableLabel: "Available",
+    twelveCbEliminatedLabel: "Eliminated",
+    twelveCbStocksLabel: (stocks) =>
+      `${stocks} stock${stocks === 1 ? "" : "s"}`,
+    twelveCbPrevMatch: "Prev",
+    twelveCbNextMatch: "Next",
+    twelveCbPrevMatchTitle: "Previous match in this 12 Character Battle",
+    twelveCbNextMatchTitle: "Next match in this 12 Character Battle",
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -1078,6 +1100,17 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     twelveCbLost: (remainingChars, remainingStocks) =>
       `敗北 (相手残り${remainingChars}キャラ・${remainingStocks}ストック)`,
     twelveCbMatchIndex: (idx, total) => `第${idx}/${total}戦`,
+    twelveCbMatchProgress: (current, total) => `第${current}/${total}戦`,
+    twelveCbRemainingCount: (remaining, total) =>
+      `残り ${remaining}/${total} キャラ`,
+    twelveCbActiveLabel: "使用中",
+    twelveCbAvailableLabel: "使用可",
+    twelveCbEliminatedLabel: "使用不可",
+    twelveCbStocksLabel: (stocks) => `${stocks}ストック`,
+    twelveCbPrevMatch: "前の試合",
+    twelveCbNextMatch: "次の試合",
+    twelveCbPrevMatchTitle: "この12キャラ戦の前の試合",
+    twelveCbNextMatchTitle: "この12キャラ戦の次の試合",
   },
 };
 

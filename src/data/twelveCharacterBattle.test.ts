@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { detect12CharacterBattles } from "./twelveCharacterBattle.js";
+import {
+  detect12CharacterBattles,
+  compute12CbMatchState,
+} from "./twelveCharacterBattle.js";
 import type { GameSummary } from "./gameSummary.js";
 import { createDefaultIdentity } from "./identity.js";
 
@@ -167,5 +170,91 @@ describe("detect12CharacterBattles", () => {
 
     const battles = detect12CharacterBattles(games, identity);
     expect(battles.length).toBe(0);
+  });
+
+  it("computes accurate 12CB match state including eliminated and active characters", () => {
+    const baseTime = new Date("2026-08-27T17:00:00Z");
+    const games = [
+      createGame({
+        id: "g1",
+        time: baseTime,
+        p0Char: 43, // Luigi (JP)
+        p1Char: 39, // Link (JP)
+        p0Start: 4,
+        p1Start: 4,
+        p0Final: 2,
+        p1Final: 0, // Link eliminated
+      }),
+      createGame({
+        id: "g2",
+        time: new Date(baseTime.getTime() + 3 * 60 * 1000),
+        p0Char: 43, // Luigi (JP)
+        p1Char: 40, // Falcon (JP)
+        p0Start: 2,
+        p1Start: 4,
+        p0Final: 0, // Luigi eliminated
+        p1Final: 3,
+      }),
+      createGame({
+        id: "g3",
+        time: new Date(baseTime.getTime() + 6 * 60 * 1000),
+        p0Char: 41, // Fox (JP)
+        p1Char: 40, // Falcon (JP)
+        p0Start: 4,
+        p1Start: 3,
+        p0Final: 2,
+        p1Final: 0, // Falcon eliminated
+      }),
+    ];
+
+    // State at Game 1
+    const state1 = compute12CbMatchState("g1", games, identity);
+    expect(state1).not.toBeNull();
+    expect(state1?.matchIndex).toBe(1);
+    expect(state1?.totalMatches).toBe(3);
+    const [p0_1, p1_1] = state1!.players;
+    expect(p0_1.remainingCharacterCount).toBe(12);
+    expect(p0_1.activeCharacterKey).toBe("luigi");
+    expect(p0_1.characterSlots.find((s) => s.key === "luigi")?.status).toBe(
+      "active",
+    );
+    expect(p1_1.remainingCharacterCount).toBe(12);
+    expect(p1_1.activeCharacterKey).toBe("link");
+
+    // State at Game 2: P1's Link should be eliminated
+    const state2 = compute12CbMatchState("g2", games, identity);
+    expect(state2).not.toBeNull();
+    expect(state2?.matchIndex).toBe(2);
+    const [p0_2, p1_2] = state2!.players;
+    expect(p0_2.remainingCharacterCount).toBe(12);
+    expect(p0_2.activeCharacterStocks).toBe(2);
+    expect(p1_2.remainingCharacterCount).toBe(11);
+    expect(p1_2.characterSlots.find((s) => s.key === "link")?.status).toBe(
+      "eliminated",
+    );
+    expect(p1_2.characterSlots.find((s) => s.key === "falcon")?.status).toBe(
+      "active",
+    );
+    expect(p1_2.characterSlots.find((s) => s.key === "mario")?.status).toBe(
+      "available",
+    );
+
+    // State at Game 3: P0's Luigi and P1's Link are eliminated
+    const state3 = compute12CbMatchState("g3", games, identity);
+    expect(state3).not.toBeNull();
+    const [p0_3, p1_3] = state3!.players;
+    expect(p0_3.remainingCharacterCount).toBe(11);
+    expect(p0_3.characterSlots.find((s) => s.key === "luigi")?.status).toBe(
+      "eliminated",
+    );
+    expect(p0_3.characterSlots.find((s) => s.key === "fox")?.status).toBe(
+      "active",
+    );
+    expect(p1_3.characterSlots.find((s) => s.key === "link")?.status).toBe(
+      "eliminated",
+    );
+    expect(p1_3.characterSlots.find((s) => s.key === "falcon")?.status).toBe(
+      "active",
+    );
   });
 });

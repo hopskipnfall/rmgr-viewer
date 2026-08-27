@@ -288,3 +288,322 @@ function processCluster(
     isComplete,
   });
 }
+
+export interface Standard12Character {
+  readonly key: string;
+  readonly nameEn: string;
+  readonly nameJa: string;
+  readonly shortName: string;
+  readonly shortNameJa: string;
+  readonly representativeId: number;
+}
+
+export const STANDARD_12_CHARACTERS: readonly Standard12Character[] = [
+  {
+    key: "mario",
+    nameEn: "Mario",
+    nameJa: "マリオ",
+    shortName: "MA",
+    shortNameJa: "MA",
+    representativeId: 0,
+  },
+  {
+    key: "fox",
+    nameEn: "Fox",
+    nameJa: "フォックス",
+    shortName: "FO",
+    shortNameJa: "FO",
+    representativeId: 1,
+  },
+  {
+    key: "dk",
+    nameEn: "DK",
+    nameJa: "DK",
+    shortName: "DK",
+    shortNameJa: "DK",
+    representativeId: 2,
+  },
+  {
+    key: "samus",
+    nameEn: "Samus",
+    nameJa: "サムス",
+    shortName: "SA",
+    shortNameJa: "SA",
+    representativeId: 3,
+  },
+  {
+    key: "luigi",
+    nameEn: "Luigi",
+    nameJa: "ルイージ",
+    shortName: "LU",
+    shortNameJa: "LU",
+    representativeId: 4,
+  },
+  {
+    key: "link",
+    nameEn: "Link",
+    nameJa: "リンク",
+    shortName: "LI",
+    shortNameJa: "LI",
+    representativeId: 5,
+  },
+  {
+    key: "yoshi",
+    nameEn: "Yoshi",
+    nameJa: "ヨッシー",
+    shortName: "YO",
+    shortNameJa: "YO",
+    representativeId: 6,
+  },
+  {
+    key: "falcon",
+    nameEn: "C. Falcon",
+    nameJa: "C.ファルコン",
+    shortName: "FA",
+    shortNameJa: "FA",
+    representativeId: 7,
+  },
+  {
+    key: "kirby",
+    nameEn: "Kirby",
+    nameJa: "カービィ",
+    shortName: "KA",
+    shortNameJa: "KA",
+    representativeId: 8,
+  },
+  {
+    key: "pikachu",
+    nameEn: "Pikachu",
+    nameJa: "ピカチュウ",
+    shortName: "PI",
+    shortNameJa: "PI",
+    representativeId: 9,
+  },
+  {
+    key: "jigglypuff",
+    nameEn: "Jigglypuff",
+    nameJa: "プリン",
+    shortName: "PU",
+    shortNameJa: "PU",
+    representativeId: 10,
+  },
+  {
+    key: "ness",
+    nameEn: "Ness",
+    nameJa: "ネス",
+    shortName: "NE",
+    shortNameJa: "NE",
+    representativeId: 11,
+  },
+];
+
+export function getCanonicalCharacterKey(characterId: number): string {
+  switch (characterId) {
+    case 0:
+    case 42:
+      return "mario";
+    case 1:
+    case 41:
+      return "fox";
+    case 2:
+    case 44:
+      return "dk";
+    case 3:
+    case 36:
+      return "samus";
+    case 4:
+    case 43:
+      return "luigi";
+    case 5:
+    case 39:
+      return "link";
+    case 6:
+    case 49:
+      return "yoshi";
+    case 7:
+    case 40:
+      return "falcon";
+    case 8:
+    case 48:
+      return "kirby";
+    case 9:
+    case 50:
+      return "pikachu";
+    case 10:
+    case 46:
+      return "jigglypuff";
+    case 11:
+    case 37:
+      return "ness";
+    default:
+      return `char_${characterId}`;
+  }
+}
+
+export interface TwelveCbCharacterSlot {
+  readonly key: string;
+  readonly nameEn: string;
+  readonly nameJa: string;
+  readonly shortName: string;
+  readonly shortNameJa: string;
+  readonly status: "active" | "available" | "eliminated";
+  readonly stocksRemaining?: number;
+}
+
+export interface TwelveCbPlayerMatchState {
+  readonly port: number;
+  readonly name: string;
+  readonly isYou: boolean;
+  readonly activeCharacterKey: string;
+  readonly activeCharacterStocks: number;
+  readonly remainingCharacterCount: number;
+  readonly eliminatedCharacterCount: number;
+  readonly characterSlots: readonly TwelveCbCharacterSlot[];
+}
+
+export interface TwelveCbMatchState {
+  readonly battleId: string;
+  readonly matchIndex: number;
+  readonly totalMatches: number;
+  readonly players: readonly [
+    TwelveCbPlayerMatchState,
+    TwelveCbPlayerMatchState,
+  ];
+  /**
+   * Id of the chronologically preceding game in this same battle, or null if
+   * this is the first match. Drives the widget's "previous match" link.
+   */
+  readonly previousGameId: string | null;
+  /** Id of the chronologically following game, or null if this is the last. */
+  readonly nextGameId: string | null;
+}
+
+/**
+ * Computes the 12 Character Battle match state (remaining and eliminated characters per player)
+ * for a specific game within a 12CB series.
+ */
+export function compute12CbMatchState(
+  gameId: string,
+  allGames: readonly GameSummary[],
+  identity: Identity,
+  currentPerspectivePort?: number | null,
+): TwelveCbMatchState | null {
+  const battles = detect12CharacterBattles(allGames, identity);
+  const battle = battles.find((b) => b.games.some((g) => g.id === gameId));
+  if (!battle) return null;
+
+  // Chronologically sorted games in this battle
+  const sortedGames = [...battle.games].sort(
+    (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime(),
+  );
+  const gameIndex = sortedGames.findIndex((g) => g.id === gameId);
+  if (gameIndex === -1) return null;
+
+  const currentGame = sortedGames[gameIndex]!;
+  if (currentGame.ports.length !== 2) return null;
+
+  const firstGame = sortedGames[0]!;
+  const p0Port = firstGame.ports[0]!.port;
+  const p1Port = firstGame.ports[1]!.port;
+
+  // Track eliminated character keys up to match gameIndex (0..gameIndex - 1)
+  const eliminatedKeys0 = new Set<string>();
+  const eliminatedKeys1 = new Set<string>();
+
+  for (let i = 0; i < gameIndex; i++) {
+    const g = sortedGames[i]!;
+    const gP0 = g.ports.find((p) => p.port === p0Port);
+    const gP1 = g.ports.find((p) => p.port === p1Port);
+    if (gP0 && gP1) {
+      if (gP0.finalStocks === 0 && gP1.finalStocks > 0) {
+        eliminatedKeys0.add(getCanonicalCharacterKey(gP0.characterId));
+      } else if (gP1.finalStocks === 0 && gP0.finalStocks > 0) {
+        eliminatedKeys1.add(getCanonicalCharacterKey(gP1.characterId));
+      }
+    }
+  }
+
+  const currP0 =
+    currentGame.ports.find((p) => p.port === p0Port) ?? currentGame.ports[0]!;
+  const currP1 =
+    currentGame.ports.find((p) => p.port === p1Port) ?? currentGame.ports[1]!;
+
+  const activeKey0 = getCanonicalCharacterKey(currP0.characterId);
+  const activeKey1 = getCanonicalCharacterKey(currP1.characterId);
+
+  const yourPort =
+    currentPerspectivePort !== undefined && currentPerspectivePort !== null
+      ? currentPerspectivePort
+      : resolvePerspectivePort(currentGame, identity);
+
+  const makePlayerState = (
+    portInfo: typeof currP0,
+    eliminatedKeys: Set<string>,
+    activeKey: string,
+  ): TwelveCbPlayerMatchState => {
+    const isYou = yourPort !== null && portInfo.port === yourPort;
+    const name = portInfo.playerName || `P${portInfo.port + 1}`;
+    const activeStocks = portInfo.startStocks ?? 4;
+
+    const slots: TwelveCbCharacterSlot[] = STANDARD_12_CHARACTERS.map(
+      (char) => {
+        let status: "active" | "available" | "eliminated";
+        let stocksRemaining: number | undefined;
+
+        if (char.key === activeKey) {
+          status = "active";
+          stocksRemaining = activeStocks;
+        } else if (eliminatedKeys.has(char.key)) {
+          status = "eliminated";
+        } else {
+          status = "available";
+        }
+
+        return {
+          key: char.key,
+          nameEn: char.nameEn,
+          nameJa: char.nameJa,
+          shortName: char.shortName,
+          shortNameJa: char.shortNameJa,
+          status,
+          stocksRemaining,
+        };
+      },
+    );
+
+    return {
+      port: portInfo.port,
+      name,
+      isYou,
+      activeCharacterKey: activeKey,
+      activeCharacterStocks: activeStocks,
+      remainingCharacterCount: Math.max(
+        0,
+        STANDARD_12CB_ROSTER_SIZE - eliminatedKeys.size,
+      ),
+      eliminatedCharacterCount: eliminatedKeys.size,
+      characterSlots: slots,
+    };
+  };
+
+  const p0State = makePlayerState(currP0, eliminatedKeys0, activeKey0);
+  const p1State = makePlayerState(currP1, eliminatedKeys1, activeKey1);
+
+  // If yourPort is p1Port, order players as [p1, p0] so 'You' is first
+  const orderedPlayers =
+    yourPort === p1Port
+      ? ([p1State, p0State] as const)
+      : ([p0State, p1State] as const);
+
+  return {
+    battleId: battle.id,
+    matchIndex: gameIndex + 1,
+    totalMatches: sortedGames.length,
+    players: orderedPlayers,
+    previousGameId: gameIndex > 0 ? sortedGames[gameIndex - 1]!.id : null,
+    nextGameId:
+      gameIndex < sortedGames.length - 1
+        ? sortedGames[gameIndex + 1]!.id
+        : null,
+  };
+}

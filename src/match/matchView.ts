@@ -18,7 +18,7 @@ import {
 import { characterSize } from "../characterSizes.js";
 import { actionStateName, characterName } from "../lookups.js";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
-import { t } from "../i18n.js";
+import { t, getLanguage } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
 import {
   DI_ARROW_GLYPHS,
@@ -63,6 +63,11 @@ import {
 import type { LoadedReplay } from "../replaySource.js";
 import type { DerivedRates } from "../data/aggregate.js";
 import { summarizeReplay, type GameSummary } from "../data/gameSummary.js";
+import {
+  compute12CbMatchState,
+  STANDARD_12CB_ROSTER_SIZE,
+} from "../data/twelveCharacterBattle.js";
+import { createDefaultIdentity, type Identity } from "../data/identity.js";
 import {
   YouTubeSyncController,
   type VideoLinkData,
@@ -119,6 +124,17 @@ export class MatchViewController {
   private speedDropdown: HTMLElement;
   private speedOptionButtons: HTMLButtonElement[] = [];
   private currentPlaybackSpeed = 1;
+  private twelveCbMatchWidget: HTMLElement;
+  private twelveCbWidgetHeaderTitle: HTMLHeadingElement;
+  private twelveCbCollapseBtn: HTMLButtonElement;
+  private twelveCbMatchProgressEl: HTMLDivElement;
+  private twelveCbPlayersContainerEl: HTMLDivElement;
+  private twelveCbPrevMatchBtn: HTMLButtonElement;
+  private twelveCbNextMatchBtn: HTMLButtonElement;
+  private twelveCbPrevMatchLabel: HTMLSpanElement;
+  private twelveCbNextMatchLabel: HTMLSpanElement;
+  private twelveCbCollapsed = false;
+  private identity: Identity | null = null;
   private matchStatsHeaderTitle: HTMLHeadingElement;
   private perspectiveToggleEl: HTMLDivElement;
   private statsCollapseBtn: HTMLButtonElement;
@@ -284,6 +300,42 @@ export class MatchViewController {
         "#speedDropdown .speed-option-btn",
       ),
     );
+    this.twelveCbMatchWidget = document.getElementById(
+      "twelveCbMatchWidget",
+    ) as HTMLElement;
+    this.twelveCbWidgetHeaderTitle = document.getElementById(
+      "twelveCbHeaderTitle",
+    ) as HTMLHeadingElement;
+    this.twelveCbCollapseBtn = document.getElementById(
+      "twelveCbCollapseBtn",
+    ) as HTMLButtonElement;
+    this.twelveCbMatchProgressEl = document.getElementById(
+      "twelveCbMatchProgress",
+    ) as HTMLDivElement;
+    this.twelveCbPlayersContainerEl = document.getElementById(
+      "twelveCbPlayersContainer",
+    ) as HTMLDivElement;
+    this.twelveCbPrevMatchBtn = document.getElementById(
+      "twelveCbPrevMatchBtn",
+    ) as HTMLButtonElement;
+    this.twelveCbNextMatchBtn = document.getElementById(
+      "twelveCbNextMatchBtn",
+    ) as HTMLButtonElement;
+    this.twelveCbPrevMatchLabel = document.getElementById(
+      "twelveCbPrevMatchLabel",
+    ) as HTMLSpanElement;
+    this.twelveCbNextMatchLabel = document.getElementById(
+      "twelveCbNextMatchLabel",
+    ) as HTMLSpanElement;
+
+    this.twelveCbCollapseBtn.addEventListener("click", () => {
+      this.twelveCbCollapsed = !this.twelveCbCollapsed;
+      this.twelveCbMatchWidget.classList.toggle(
+        "collapsed",
+        this.twelveCbCollapsed,
+      );
+    });
+
     this.matchStatsHeaderTitle = document.querySelector(
       "#matchStatsHeader h2",
     ) as HTMLHeadingElement;
@@ -1037,6 +1089,27 @@ export class MatchViewController {
 
   public updateStaticTranslations(): void {
     const tr = t();
+    if (this.twelveCbWidgetHeaderTitle) {
+      this.twelveCbWidgetHeaderTitle.textContent =
+        tr.twelveCharacterBattleTitle;
+    }
+    if (this.twelveCbCollapseBtn) {
+      this.twelveCbCollapseBtn.title = tr.situationCollapseTitle(
+        tr.twelveCharacterBattleTitle,
+      );
+    }
+    if (this.twelveCbPrevMatchLabel) {
+      this.twelveCbPrevMatchLabel.textContent = tr.twelveCbPrevMatch;
+    }
+    if (this.twelveCbNextMatchLabel) {
+      this.twelveCbNextMatchLabel.textContent = tr.twelveCbNextMatch;
+    }
+    if (this.twelveCbPrevMatchBtn) {
+      this.twelveCbPrevMatchBtn.title = tr.twelveCbPrevMatchTitle;
+    }
+    if (this.twelveCbNextMatchBtn) {
+      this.twelveCbNextMatchBtn.title = tr.twelveCbNextMatchTitle;
+    }
     const perspectiveTitleEl = document.getElementById(
       "perspectiveHeaderTitle",
     );
@@ -1687,6 +1760,7 @@ export class MatchViewController {
         this.updatePlayerPanelColors();
         this.renderStatsPanel(replay);
         this.renderCharacterMetaPanel(replay);
+        this.render12CbMatchWidget();
         this.buildEventLog();
         this.updateEventLogHighlight(this.playback?.currentIndex ?? 0);
         this.onFrameChange(
@@ -2722,6 +2796,131 @@ export class MatchViewController {
     });
   }
 
+  /** Disables and clears stale dataset.gameId off the prev/next nav buttons. */
+  private clear12CbNavButtons(): void {
+    if (this.twelveCbPrevMatchBtn) {
+      this.twelveCbPrevMatchBtn.disabled = true;
+      delete this.twelveCbPrevMatchBtn.dataset.gameId;
+    }
+    if (this.twelveCbNextMatchBtn) {
+      this.twelveCbNextMatchBtn.disabled = true;
+      delete this.twelveCbNextMatchBtn.dataset.gameId;
+    }
+  }
+
+  private render12CbMatchWidget(): void {
+    const tr = t();
+    const lang = getLanguage();
+    if (this.twelveCbWidgetHeaderTitle) {
+      this.twelveCbWidgetHeaderTitle.textContent =
+        tr.twelveCharacterBattleTitle;
+    }
+    if (this.twelveCbCollapseBtn) {
+      this.twelveCbCollapseBtn.title = tr.situationCollapseTitle(
+        tr.twelveCharacterBattleTitle,
+      );
+    }
+
+    if (!this.currentReplayId || this.sessionSummaries.length === 0) {
+      if (this.twelveCbMatchWidget) {
+        this.twelveCbMatchWidget.hidden = true;
+      }
+      this.clear12CbNavButtons();
+      return;
+    }
+
+    const state = compute12CbMatchState(
+      this.currentReplayId,
+      this.sessionSummaries,
+      this.identity ?? createDefaultIdentity(""),
+      this.perspectivePort,
+    );
+
+    if (!state) {
+      if (this.twelveCbMatchWidget) {
+        this.twelveCbMatchWidget.hidden = true;
+      }
+      this.clear12CbNavButtons();
+      return;
+    }
+
+    if (this.twelveCbMatchWidget) {
+      this.twelveCbMatchWidget.hidden = false;
+    }
+
+    if (this.twelveCbMatchProgressEl) {
+      this.twelveCbMatchProgressEl.innerHTML = `
+        <span>⚔️ ${escapeHtml(tr.twelveCbMatchProgress(state.matchIndex, state.totalMatches))}</span>
+        <span>${escapeHtml(tr.twelveCharacterBattleShort)}</span>
+      `;
+    }
+
+    if (this.twelveCbPrevMatchBtn) {
+      this.twelveCbPrevMatchBtn.disabled = state.previousGameId === null;
+      if (state.previousGameId) {
+        this.twelveCbPrevMatchBtn.dataset.gameId = state.previousGameId;
+      } else {
+        delete this.twelveCbPrevMatchBtn.dataset.gameId;
+      }
+    }
+    if (this.twelveCbNextMatchBtn) {
+      this.twelveCbNextMatchBtn.disabled = state.nextGameId === null;
+      if (state.nextGameId) {
+        this.twelveCbNextMatchBtn.dataset.gameId = state.nextGameId;
+      } else {
+        delete this.twelveCbNextMatchBtn.dataset.gameId;
+      }
+    }
+
+    if (this.twelveCbPlayersContainerEl) {
+      this.twelveCbPlayersContainerEl.innerHTML = state.players
+        .map((player) => {
+          const slotsHtml = player.characterSlots
+            .map((slot) => {
+              const charName = lang === "ja" ? slot.nameJa : slot.nameEn;
+              const shortName =
+                lang === "ja" ? slot.shortNameJa : slot.shortName;
+              let statusText: string;
+              let stocksPill = "";
+
+              if (slot.status === "active") {
+                statusText = `${charName} · ${tr.twelveCbActiveLabel} (${slot.stocksRemaining} ${tr.twelveCbStocksLabel(slot.stocksRemaining ?? 0)})`;
+                stocksPill = `<span class="slot-stocks">⚡ ${slot.stocksRemaining}st</span>`;
+              } else if (slot.status === "available") {
+                statusText = `${charName} · ${tr.twelveCbAvailableLabel}`;
+              } else {
+                statusText = `${charName} · ${tr.twelveCbEliminatedLabel}`;
+              }
+
+              return `
+                <div class="twelve-cb-char-slot ${slot.status}" title="${escapeHtml(statusText)}">
+                  <span class="slot-name">${escapeHtml(shortName)}</span>
+                  ${stocksPill}
+                </div>
+              `;
+            })
+            .join("");
+
+          return `
+            <div class="twelve-cb-player-card ${player.isYou ? "is-you" : ""}">
+              <div class="twelve-cb-player-card-header">
+                <span class="twelve-cb-player-card-name">
+                  ${player.isYou ? "★ " : ""}${escapeHtml(player.name)}
+                </span>
+                <span class="twelve-cb-player-card-remaining">
+                  ${escapeHtml(tr.twelveCbRemainingCount(player.remainingCharacterCount, STANDARD_12CB_ROSTER_SIZE))}
+                </span>
+              </div>
+              <div class="twelve-cb-char-grid">
+                ${slotsHtml}
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+  }
+
   private renderDIPanel(replay: Replay): void {
     const tr = t();
     this.diList.innerHTML = "";
@@ -3397,6 +3596,7 @@ export class MatchViewController {
     this.renderStatsPanel(replay);
     this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
+    this.render12CbMatchWidget();
     this.renderLogFilterWidget();
     this.renderReplayInfo(loaded);
     this.buildEventLog();
@@ -3482,6 +3682,17 @@ export class MatchViewController {
 
   public setSessionSummaries(summaries: GameSummary[]): void {
     this.sessionSummaries = summaries;
+    this.render12CbMatchWidget();
+  }
+
+  public setIdentity(identity: Identity): void {
+    this.identity = identity;
+    this.render12CbMatchWidget();
+  }
+
+  public setCurrentReplayId(id: string | null): void {
+    this.currentReplayId = id;
+    this.render12CbMatchWidget();
   }
 
   private openVideoLinkModal(): void {
