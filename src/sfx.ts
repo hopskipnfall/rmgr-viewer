@@ -70,6 +70,8 @@ const GRAB_SFX_FILE = `${SFX_BASE_URL}player_voice/got1.wav`;
 
 const MATCH_START_SFX_FILE = `${SFX_BASE_URL}cue/spawn_countdown.wav`;
 
+const TOBLO1_SFX_FILE = `${SFX_BASE_URL}ui/toblo1.wav`;
+
 /**
  * Toblo's own announcer lines are capture-the-flag/score themed (flag
  * captured, score updated) - reused here purely for the "a stock was just
@@ -129,4 +131,17 @@ export function playStockTakenSfx(): void {
 export function playMatchStartSfx(): void {
   if (!isTobloSfxEnabled()) return;
   playSfxFile(MATCH_START_SFX_FILE);
+}
+
+/**
+ * Played once, right when the "Toblo sfx" checkbox is checked - a little
+ * self-announcing confirmation that the feature is now on. Relies on the
+ * caller having already called setTobloSfxEnabled(true) before this: the
+ * isTobloSfxEnabled() guard above means this is a no-op if the checkbox was
+ * instead being unchecked, so callers don't need their own checked/unchecked
+ * branch.
+ */
+export function playTobloEnabledSfx(): void {
+  if (!isTobloSfxEnabled()) return;
+  playSfxFile(TOBLO1_SFX_FILE);
 }
