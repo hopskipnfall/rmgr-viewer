@@ -1,4 +1,11 @@
-import type { Frame, ItemUpdate, PortIndex, Replay } from "@rmg-k/rmgr";
+import {
+  ItemLinkId,
+  getItemKindName,
+  type Frame,
+  type ItemUpdate,
+  type PortIndex,
+  type Replay,
+} from "@rmg-k/rmgr";
 import { Camera } from "./camera.js";
 import {
   getPlayerColor,
@@ -1736,15 +1743,15 @@ export class StageRenderer {
   }
 
   /**
-   * Draws a generic placeholder marker for every object live on the shared
-   * item/hazard/projectile list this frame (`Frame.items`, recorder schema
-   * v2+ — see docs/RMGR_SPEC.md §4.6). There's no per-`typeId` shape yet:
-   * this format's own spec admits there's no ID→name lookup table for this
-   * game (§7.6), so every object gets the same neutral diamond marker,
-   * labeled with its raw `typeId` in hex so it's at least possible to
-   * eyeball which ID corresponds to which move empirically. Once specific
-   * IDs are identified, this is the place to branch on `item.typeId` and
-   * draw a real shape instead.
+   * Draws a generic placeholder marker for every Item/Weapon object live
+   * this frame (`Frame.items`, recorder schema v3+ — see
+   * docs/RMGR_SPEC.md §4.6). Still a generic shape, not a real per-move
+   * icon — that's future work — but the label is now the real resolved
+   * name (`getItemKindName`), not a bare hex ID, now that schema v3
+   * correctly derives `linkId`/`kind`. Weapons (free-flying projectiles)
+   * and Items (thrown/spawned items, held things like Link's bomb) get
+   * different marker colors so they're visually distinguishable even
+   * before real shapes exist.
    */
   private drawItemObjects(camera: Camera, items: readonly ItemUpdate[]): void {
     if (items.length === 0) return;
@@ -1753,6 +1760,11 @@ export class StageRenderer {
     for (const item of items) {
       const { x, y } = camera.worldToScreen(item.positionX, item.positionY);
       const r = 6;
+      const isWeapon = item.linkId === ItemLinkId.Weapon;
+      const color = isWeapon
+        ? "rgba(232, 121, 249, 0.85)" // magenta - Weapon (free-flying projectile)
+        : "rgba(96, 165, 250, 0.85)"; // blue - Item (thrown/spawned/held)
+      const labelColor = isWeapon ? "#f5d0fe" : "#bfdbfe";
 
       ctx.save();
       ctx.beginPath();
@@ -1761,8 +1773,8 @@ export class StageRenderer {
       ctx.lineTo(x, y + r);
       ctx.lineTo(x - r, y);
       ctx.closePath();
-      ctx.fillStyle = "rgba(232, 121, 249, 0.85)"; // magenta - distinct from every character's own palette
-      ctx.shadowColor = "rgba(232, 121, 249, 0.6)";
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
       ctx.shadowBlur = 8;
       ctx.fill();
       ctx.strokeStyle = "#ffffff";
@@ -1772,8 +1784,8 @@ export class StageRenderer {
       ctx.shadowBlur = 0;
       ctx.font = "10px monospace";
       ctx.textAlign = "center";
-      ctx.fillStyle = "#f5d0fe";
-      ctx.fillText(`0x${item.typeId.toString(16)}`, x, y - r - 4);
+      ctx.fillStyle = labelColor;
+      ctx.fillText(getItemKindName(item.linkId, item.kind), x, y - r - 4);
       ctx.restore();
     }
   }
