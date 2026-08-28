@@ -29,10 +29,17 @@ export function setTobloSfxEnabled(enabled: boolean): void {
   cachedEnabled = enabled;
 }
 
+// import.meta.env.BASE_URL, not a bare leading slash - this app is served
+// from a subpath on GitHub Pages (see vite.config.ts's `base`), so a
+// hardcoded "/sfx/..." 404s there even though it resolves fine in local
+// dev where the app happens to sit at the domain root. Same fix already
+// applied to the demo replay/summary URLs in main.ts.
+const SFX_BASE_URL = `${import.meta.env.BASE_URL}sfx/`;
+
 const JUMP_SFX_FILES = [
-  "/sfx/player_voice/jump1.wav",
-  "/sfx/player_voice/jump2.wav",
-  "/sfx/player_voice/jump4.wav",
+  `${SFX_BASE_URL}player_voice/jump1.wav`,
+  `${SFX_BASE_URL}player_voice/jump2.wav`,
+  `${SFX_BASE_URL}player_voice/jump4.wav`,
 ];
 
 /**
@@ -44,24 +51,24 @@ const JUMP_SFX_FILES = [
  * for now.
  */
 const ATTACK_SFX_FILES = [
-  "/sfx/player_voice/boom4.wav",
-  "/sfx/player_voice/eep2.wav",
-  "/sfx/player_voice/kaboom1.wav",
-  "/sfx/player_voice/ohno2.wav",
-  "/sfx/player_voice/ow2.wav",
-  "/sfx/player_voice/shucks1.wav",
-  "/sfx/player_voice/tt2.wav",
-  "/sfx/player_voice/woohoo1.wav",
-  "/sfx/player_voice/yay1.wav",
-  "/sfx/player_voice/yess1.wav",
+  `${SFX_BASE_URL}player_voice/boom4.wav`,
+  `${SFX_BASE_URL}player_voice/eep2.wav`,
+  `${SFX_BASE_URL}player_voice/kaboom1.wav`,
+  `${SFX_BASE_URL}player_voice/ohno2.wav`,
+  `${SFX_BASE_URL}player_voice/ow2.wav`,
+  `${SFX_BASE_URL}player_voice/shucks1.wav`,
+  `${SFX_BASE_URL}player_voice/tt2.wav`,
+  `${SFX_BASE_URL}player_voice/woohoo1.wav`,
+  `${SFX_BASE_URL}player_voice/yay1.wav`,
+  `${SFX_BASE_URL}player_voice/yess1.wav`,
 ];
 
 /** haha1 is also in this folder but reserved for taunts (playTauntSfx). */
-const TAUNT_SFX_FILE = "/sfx/player_voice/haha1.wav";
+const TAUNT_SFX_FILE = `${SFX_BASE_URL}player_voice/haha1.wav`;
 
-const GRAB_SFX_FILE = "/sfx/player_voice/got1.wav";
+const GRAB_SFX_FILE = `${SFX_BASE_URL}player_voice/got1.wav`;
 
-const MATCH_START_SFX_FILE = "/sfx/cue/spawn_countdown.wav";
+const MATCH_START_SFX_FILE = `${SFX_BASE_URL}cue/spawn_countdown.wav`;
 
 /**
  * Toblo's own announcer lines are capture-the-flag/score themed (flag
@@ -69,10 +76,10 @@ const MATCH_START_SFX_FILE = "/sfx/cue/spawn_countdown.wav";
  * taken" vibe, not because their actual content matches.
  */
 const STOCK_TAKEN_SFX_FILES = [
-  "/sfx/announcements/aFlagTaken2.wav",
-  "/sfx/announcements/aScore2.wav",
-  "/sfx/announcements/dFlagTaken3.wav",
-  "/sfx/announcements/dScore3.wav",
+  `${SFX_BASE_URL}announcements/aFlagTaken2.wav`,
+  `${SFX_BASE_URL}announcements/aScore2.wav`,
+  `${SFX_BASE_URL}announcements/dFlagTaken3.wav`,
+  `${SFX_BASE_URL}announcements/dScore3.wav`,
 ];
 
 /** Plays one randomly-chosen file from `files` at `volume` (0-1). Never throws - a rejected play() (no user gesture yet, backgrounded tab, ...) is just silently swallowed, since this is a for-fun extra, not core functionality. */
