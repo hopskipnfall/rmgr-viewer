@@ -91,10 +91,28 @@ function playRandomSfx(files: readonly string[], volume = 0.5): void {
   playSfxFile(file, volume);
 }
 
+/**
+ * Holds a strong reference to every currently-playing sfx `Audio` element
+ * until it finishes. Without this, `playSfxFile()`'s local `audio` variable
+ * is the only reference to it - nothing else in the page holds one - so a
+ * GC pass mid-playback can collect it and cut the clip off early. Landing
+ * on the ground is when renderFrame()'s per-frame work is busiest (position/
+ * state updates for both ports), which made that the most common moment to
+ * observe a jump sfx getting cut short, but the underlying bug could strike
+ * any sfx at any time.
+ */
+const playingAudio = new Set<HTMLAudioElement>();
+
 function playSfxFile(file: string, volume = 0.5): void {
   const audio = new Audio(file);
   audio.volume = volume;
-  void audio.play().catch(() => {});
+  playingAudio.add(audio);
+  const release = (): void => {
+    playingAudio.delete(audio);
+  };
+  audio.addEventListener("ended", release);
+  audio.addEventListener("error", release);
+  audio.play().catch(release);
 }
 
 /** A seated port just jumped - detected via `jumpsRemaining` decreasing, see the call site in matchView.ts. */
