@@ -147,7 +147,7 @@ export interface Translations {
   importFiles: string;
   importFolder: string;
   importingProgress: (loaded: number, total: number) => string;
-  loadingDemoReplaysProgress: (loaded: number, total: number) => string;
+  loadingDemoReplays: string;
   backToLibrary: string;
   you: string;
   aliasesCount: (n: number) => string;
@@ -550,8 +550,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     importFiles: "Select files (.rmgr)",
     importFolder: "Select folder",
     importingProgress: (l, tot) => `Importing replays (${l}/${tot})...`,
-    loadingDemoReplaysProgress: (l, tot) =>
-      `Loading demo replays (${l}/${tot})...`,
+    loadingDemoReplays: "Loading demo replays...",
     backToLibrary: "← Library",
     you: "YOU",
     aliasesCount: (n) => `${n} alias${n !== 1 ? "es" : ""}`,
@@ -944,8 +943,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     importFiles: "ファイルを選択 (.rmgr)",
     importFolder: "フォルダを選択",
     importingProgress: (l, tot) => `読み込み中 (${l}/${tot})...`,
-    loadingDemoReplaysProgress: (l, tot) =>
-      `デモリプレイを読み込み中 (${l}/${tot})...`,
+    loadingDemoReplays: "デモリプレイを読み込み中...",
     backToLibrary: "← ライブラリに戻る",
     you: "プレイヤー",
     aliasesCount: (n) => `別名: ${n}件`,

@@ -11,7 +11,12 @@ import {
   loadReplayFromUrl,
   type LoadedReplay,
 } from "./replaySource.js";
-import { summarizeReplay, type GameSummary } from "./data/gameSummary.js";
+import {
+  deserializeGameSummary,
+  type GameSummary,
+  type SerializedGameSummary,
+} from "./data/gameSummary.js";
+import { DEMO_REPLAY_FILENAMES } from "./data/demoReplayFiles.js";
 import { importReplayFiles } from "./data/importer.js";
 import { MatchViewController } from "./match/matchView.js";
 import { LibraryViewController } from "./library/libraryView.js";
@@ -167,32 +172,18 @@ let matchController: MatchViewController;
 let libraryController: LibraryViewController;
 let previewController: CharacterPreviewController;
 
-const DEMO_REPLAY_URLS = [
-  `${import.meta.env.BASE_URL}replays/20260822-222803-George-Harold-6.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260822-222803-Harold-George-23.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260822-222803-Harold-George-37.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260825-105731-George-Harold.rmgr`,
-  // Full 12 Character Battle session, George vs Harold.
-  `${import.meta.env.BASE_URL}replays/20260820-175726-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-180010-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-180146-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-180229-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-180657-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-181042-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-181157-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-181413-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-181511-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-181820-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-181916-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-182308-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-182538-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-182632-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-182926-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-183112-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-183150-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-183423-George-Harold.rmgr`,
-  `${import.meta.env.BASE_URL}replays/20260820-183646-George-Harold.rmgr`,
-];
+const DEMO_REPLAY_URLS = DEMO_REPLAY_FILENAMES.map(
+  (filename) => `${import.meta.env.BASE_URL}replays/${filename}`,
+);
+
+/**
+ * Precomputed `GameSummary` data for the bundled demo replays (see
+ * `scripts/generateDemoSummaries.ts`), so startup only needs one small JSON
+ * fetch instead of downloading and parsing every demo `.rmgr` file. The
+ * full `Replay` (frame-by-frame data) for a given demo game is only
+ * fetched+parsed lazily, when the user opens that game (§4 below).
+ */
+const DEMO_SUMMARIES_URL = `${import.meta.env.BASE_URL}replays/demo-summaries.json`;
 
 function updateHeaderTranslations(): void {
   const tr = t();
@@ -542,27 +533,41 @@ async function init(): Promise<void> {
   const initialLang = initLanguage();
   applyLanguage(initialLang);
 
-  // 4. Seed Demo Replays
+  // 4. Seed Demo Replays: fetch the precomputed summaries JSON (one small
+  // request) rather than downloading and parsing every demo .rmgr file
+  // up front. Each summary's `url` is set from DEMO_REPLAY_FILENAMES so
+  // the full Replay is only fetched+parsed later, on demand, when the
+  // user actually opens that game (see the "match" branch of
+  // handleRouteChange, which already loads lazily from `summary.url`).
   const demoSummaries: GameSummary[] = [];
-  let demoLoadedCount = 0;
-  for (const url of DEMO_REPLAY_URLS) {
-    try {
-      const sampleLoaded = await loadReplayFromUrl(url);
-      const summary = summarizeReplay(sampleLoaded, null);
+  appLoadingProgressBar.style.setProperty("--progress-pct", "50%");
+  appLoadingText.textContent = t().loadingDemoReplays;
+  try {
+    const response = await fetch(DEMO_SUMMARIES_URL);
+    if (!response.ok) {
+      throw new Error(
+        `failed to fetch ${DEMO_SUMMARIES_URL}: ${response.status} ${response.statusText}`,
+      );
+    }
+    const serialized = (await response.json()) as SerializedGameSummary[];
+    for (const s of serialized) {
+      const summary = deserializeGameSummary(s);
+      const url = DEMO_REPLAY_URLS[DEMO_REPLAY_FILENAMES.indexOf(s.sourceName)];
+      if (!url) {
+        console.warn(
+          "No demo URL found for precomputed summary:",
+          s.sourceName,
+        );
+        continue;
+      }
       summary.isBundledSample = true;
       summary.url = url;
       demoSummaries.push(summary);
-    } catch (err) {
-      console.warn("Could not load demo sample:", url, err);
-    } finally {
-      demoLoadedCount++;
-      const pct = Math.round((demoLoadedCount / DEMO_REPLAY_URLS.length) * 100);
-      appLoadingProgressBar.style.setProperty("--progress-pct", `${pct}%`);
-      appLoadingText.textContent = t().loadingDemoReplaysProgress(
-        demoLoadedCount,
-        DEMO_REPLAY_URLS.length,
-      );
     }
+  } catch (err) {
+    console.warn("Could not load precomputed demo summaries:", err);
+  } finally {
+    appLoadingProgressBar.style.setProperty("--progress-pct", "100%");
   }
 
   if (demoSummaries.length > 0) {

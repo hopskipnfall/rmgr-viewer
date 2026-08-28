@@ -1,0 +1,2155 @@
+[
+  {
+    "id": "g_541e003f",
+    "sourceName": "20260822-222803-George-Harold-6.rmgr",
+    "recordedAt": "2026-08-26T06:50:11.000Z",
+    "stageId": 6,
+    "frameCount": 6225,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 37,
+        "finalStocks": 2,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 44,
+        "finalStocks": 0,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 2,
+        "recoverySuccesses": 0,
+        "edgeGuardSituations": 1,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 3,
+        "neutralHitsLanded": 8,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 8,
+        "openingsLost": 6,
+        "openingsWonByReason": {
+          "whiff-punish": 4,
+          "landing-lag": 2,
+          "reversal": 2
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 3,
+          "reversal": 1,
+          "unknown": 1,
+          "landing-lag": 1
+        },
+        "damageDealtOnOpenings": 411,
+        "damageLeakOnOpenings": 0,
+        "openingsConvertedToKill": 5
+      },
+      "1": {
+        "recoverySituations": 1,
+        "recoverySuccesses": 0,
+        "edgeGuardSituations": 2,
+        "edgeGuardSuccesses": 2,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 6,
+        "stocksTaken": 2,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 6,
+        "openingsLost": 8,
+        "openingsWonByReason": {
+          "whiff-punish": 3,
+          "reversal": 1,
+          "unknown": 1,
+          "landing-lag": 1
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 4,
+          "landing-lag": 2,
+          "reversal": 2
+        },
+        "damageDealtOnOpenings": 127,
+        "damageLeakOnOpenings": 30,
+        "openingsConvertedToKill": 1
+      }
+    },
+    "isUnevenStockStart": false
+  },
+  {
+    "id": "g_da53aa1a",
+    "sourceName": "20260822-222803-Harold-George-23.rmgr",
+    "recordedAt": "2026-08-26T06:53:22.000Z",
+    "stageId": 6,
+    "frameCount": 10255,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "Harold",
+        "characterId": 50,
+        "finalStocks": 0,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "George",
+        "characterId": 49,
+        "finalStocks": 2,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 5,
+        "recoverySuccesses": 5,
+        "edgeGuardSituations": 6,
+        "edgeGuardSuccesses": 2,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 1,
+        "neutralHitsLanded": 13,
+        "stocksTaken": 2,
+        "killCombos": 1,
+        "combosList": [
+          {
+            "hitCount": 3,
+            "startDamage": 105,
+            "endDamage": 114
+          }
+        ],
+        "openingsWon": 13,
+        "openingsLost": 17,
+        "openingsWonByReason": {
+          "landing-lag": 2,
+          "whiff-punish": 6,
+          "jump-punish": 2,
+          "reversal": 3
+        },
+        "openingsLostByReason": {
+          "landing-lag": 2,
+          "whiff-punish": 4,
+          "jump-punish": 2,
+          "reversal": 6,
+          "standing-hit": 3
+        },
+        "damageDealtOnOpenings": 289,
+        "damageLeakOnOpenings": 74,
+        "openingsConvertedToKill": 1
+      },
+      "1": {
+        "recoverySituations": 6,
+        "recoverySuccesses": 4,
+        "edgeGuardSituations": 5,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 3,
+        "neutralHitsLanded": 17,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 17,
+        "openingsLost": 13,
+        "openingsWonByReason": {
+          "landing-lag": 2,
+          "whiff-punish": 4,
+          "jump-punish": 2,
+          "reversal": 6,
+          "standing-hit": 3
+        },
+        "openingsLostByReason": {
+          "landing-lag": 2,
+          "whiff-punish": 6,
+          "jump-punish": 2,
+          "reversal": 3
+        },
+        "damageDealtOnOpenings": 454,
+        "damageLeakOnOpenings": 24,
+        "openingsConvertedToKill": 4
+      }
+    },
+    "isUnevenStockStart": false
+  },
+  {
+    "id": "g_df8bfa20",
+    "sourceName": "20260822-222803-Harold-George-37.rmgr",
+    "recordedAt": "2026-08-26T06:55:25.000Z",
+    "stageId": 6,
+    "frameCount": 10597,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "Harold",
+        "characterId": 50,
+        "finalStocks": 0,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "George",
+        "characterId": 41,
+        "finalStocks": 1,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 11,
+        "recoverySuccesses": 10,
+        "edgeGuardSituations": 7,
+        "edgeGuardSuccesses": 3,
+        "ledgeGetupSituations": 8,
+        "ledgeGetupSuccesses": 6,
+        "ledgeTrapSituations": 4,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 12,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 12,
+        "openingsLost": 15,
+        "openingsWonByReason": {
+          "jump-punish": 1,
+          "reversal": 7,
+          "whiff-punish": 4
+        },
+        "openingsLostByReason": {
+          "reversal": 7,
+          "shield-pressure": 1,
+          "landing-lag": 4,
+          "whiff-punish": 3
+        },
+        "damageDealtOnOpenings": 270,
+        "damageLeakOnOpenings": 56,
+        "openingsConvertedToKill": 3
+      },
+      "1": {
+        "recoverySituations": 7,
+        "recoverySuccesses": 4,
+        "edgeGuardSituations": 11,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 4,
+        "ledgeGetupSuccesses": 4,
+        "ledgeTrapSituations": 8,
+        "ledgeTrapSuccesses": 2,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 15,
+        "stocksTaken": 3,
+        "killCombos": 2,
+        "combosList": [
+          {
+            "hitCount": 6,
+            "startDamage": 21,
+            "endDamage": 75
+          },
+          {
+            "hitCount": 3,
+            "startDamage": 100,
+            "endDamage": 124
+          }
+        ],
+        "openingsWon": 15,
+        "openingsLost": 12,
+        "openingsWonByReason": {
+          "reversal": 7,
+          "shield-pressure": 1,
+          "landing-lag": 4,
+          "whiff-punish": 3
+        },
+        "openingsLostByReason": {
+          "jump-punish": 1,
+          "reversal": 7,
+          "whiff-punish": 4
+        },
+        "damageDealtOnOpenings": 426,
+        "damageLeakOnOpenings": 61,
+        "openingsConvertedToKill": 4
+      }
+    },
+    "isUnevenStockStart": false
+  },
+  {
+    "id": "g_28033ea7",
+    "sourceName": "20260825-105731-George-Harold.rmgr",
+    "recordedAt": "2026-08-25T01:57:31.000Z",
+    "stageId": 6,
+    "frameCount": 9513,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 7,
+        "finalStocks": 0,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 9,
+        "finalStocks": 2,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 5,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 9,
+        "edgeGuardSuccesses": 2,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 4,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 8,
+        "stocksTaken": 2,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 8,
+        "openingsLost": 11,
+        "openingsWonByReason": {
+          "whiff-punish": 5,
+          "reversal": 1,
+          "jump-punish": 1,
+          "landing-lag": 1
+        },
+        "openingsLostByReason": {
+          "reversal": 3,
+          "whiff-punish": 3,
+          "landing-lag": 2,
+          "jump-punish": 2,
+          "unknown": 1
+        },
+        "damageDealtOnOpenings": 330,
+        "damageLeakOnOpenings": 42,
+        "openingsConvertedToKill": 2
+      },
+      "1": {
+        "recoverySituations": 9,
+        "recoverySuccesses": 7,
+        "edgeGuardSituations": 5,
+        "edgeGuardSuccesses": 3,
+        "ledgeGetupSituations": 4,
+        "ledgeGetupSuccesses": 4,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 1,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 3,
+        "neutralHitsLanded": 11,
+        "stocksTaken": 3,
+        "killCombos": 1,
+        "combosList": [
+          {
+            "hitCount": 4,
+            "startDamage": 0,
+            "endDamage": 49
+          }
+        ],
+        "openingsWon": 11,
+        "openingsLost": 8,
+        "openingsWonByReason": {
+          "reversal": 3,
+          "whiff-punish": 3,
+          "landing-lag": 2,
+          "jump-punish": 2,
+          "unknown": 1
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 5,
+          "reversal": 1,
+          "jump-punish": 1,
+          "landing-lag": 1
+        },
+        "damageDealtOnOpenings": 322,
+        "damageLeakOnOpenings": 33,
+        "openingsConvertedToKill": 4
+      }
+    },
+    "isUnevenStockStart": false
+  },
+  {
+    "id": "g_0f2fa52b",
+    "sourceName": "20260820-175726-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T08:57:26.000Z",
+    "stageId": 6,
+    "frameCount": 8985,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 39,
+        "finalStocks": 1,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 39,
+        "finalStocks": 0,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 7,
+        "recoverySuccesses": 4,
+        "edgeGuardSituations": 4,
+        "edgeGuardSuccesses": 3,
+        "ledgeGetupSituations": 3,
+        "ledgeGetupSuccesses": 3,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 15,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 15,
+        "openingsLost": 10,
+        "openingsWonByReason": {
+          "whiff-punish": 8,
+          "standing-hit": 1,
+          "reversal": 3,
+          "landing-lag": 1,
+          "unknown": 2
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 4,
+          "reversal": 2,
+          "unknown": 1,
+          "jump-punish": 2,
+          "landing-lag": 1
+        },
+        "damageDealtOnOpenings": 358,
+        "damageLeakOnOpenings": 28,
+        "openingsConvertedToKill": 4
+      },
+      "1": {
+        "recoverySituations": 4,
+        "recoverySuccesses": 1,
+        "edgeGuardSituations": 7,
+        "edgeGuardSuccesses": 3,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 3,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 10,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 10,
+        "openingsLost": 15,
+        "openingsWonByReason": {
+          "whiff-punish": 4,
+          "reversal": 2,
+          "unknown": 1,
+          "jump-punish": 2,
+          "landing-lag": 1
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 8,
+          "standing-hit": 1,
+          "reversal": 3,
+          "landing-lag": 1,
+          "unknown": 2
+        },
+        "damageDealtOnOpenings": 260,
+        "damageLeakOnOpenings": 43,
+        "openingsConvertedToKill": 3
+      }
+    },
+    "isUnevenStockStart": false
+  },
+  {
+    "id": "g_749e36de",
+    "sourceName": "20260820-180010-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:00:10.000Z",
+    "stageId": 6,
+    "frameCount": 4806,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 39,
+        "finalStocks": 0,
+        "startStocks": 1
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 44,
+        "finalStocks": 2,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 6,
+        "recoverySuccesses": 5,
+        "edgeGuardSituations": 2,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 3,
+        "ledgeGetupSuccesses": 3,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 1,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 10,
+        "stocksTaken": 2,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 10,
+        "openingsLost": 5,
+        "openingsWonByReason": {
+          "landing-lag": 2,
+          "reversal": 2,
+          "whiff-punish": 3,
+          "standing-hit": 2,
+          "unknown": 1
+        },
+        "openingsLostByReason": {
+          "reversal": 2,
+          "whiff-punish": 2,
+          "landing-lag": 1
+        },
+        "damageDealtOnOpenings": 187,
+        "damageLeakOnOpenings": 10,
+        "openingsConvertedToKill": 2
+      },
+      "1": {
+        "recoverySituations": 2,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 6,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 3,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 5,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 5,
+        "openingsLost": 10,
+        "openingsWonByReason": {
+          "reversal": 2,
+          "whiff-punish": 2,
+          "landing-lag": 1
+        },
+        "openingsLostByReason": {
+          "landing-lag": 2,
+          "reversal": 2,
+          "whiff-punish": 3,
+          "standing-hit": 2,
+          "unknown": 1
+        },
+        "damageDealtOnOpenings": 85,
+        "damageLeakOnOpenings": 23,
+        "openingsConvertedToKill": 1
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_3fcdf6f7",
+    "sourceName": "20260820-180146-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:01:46.000Z",
+    "stageId": 6,
+    "frameCount": 1821,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 43,
+        "finalStocks": 4,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 44,
+        "finalStocks": 0,
+        "startStocks": 2
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 1,
+        "recoverySuccesses": 1,
+        "edgeGuardSituations": 2,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 1,
+        "angelAvoidSuccesses": 1,
+        "neutralHitsLanded": 4,
+        "stocksTaken": 1,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 4,
+        "openingsLost": 3,
+        "openingsWonByReason": {
+          "reversal": 3,
+          "whiff-punish": 1
+        },
+        "openingsLostByReason": {
+          "landing-lag": 1,
+          "reversal": 2
+        },
+        "damageDealtOnOpenings": 140,
+        "damageLeakOnOpenings": 14,
+        "openingsConvertedToKill": 1
+      },
+      "1": {
+        "recoverySituations": 2,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 1,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 3,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 3,
+        "openingsLost": 4,
+        "openingsWonByReason": {
+          "landing-lag": 1,
+          "reversal": 2
+        },
+        "openingsLostByReason": {
+          "reversal": 3,
+          "whiff-punish": 1
+        },
+        "damageDealtOnOpenings": 32,
+        "damageLeakOnOpenings": 32,
+        "openingsConvertedToKill": 0
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_5281fce9",
+    "sourceName": "20260820-180229-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:02:29.000Z",
+    "stageId": 6,
+    "frameCount": 14344,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 43,
+        "finalStocks": 1,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 43,
+        "finalStocks": 0,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 9,
+        "recoverySuccesses": 8,
+        "edgeGuardSituations": 9,
+        "edgeGuardSuccesses": 2,
+        "ledgeGetupSituations": 8,
+        "ledgeGetupSuccesses": 8,
+        "ledgeTrapSituations": 2,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 3,
+        "neutralHitsLanded": 25,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 25,
+        "openingsLost": 17,
+        "openingsWonByReason": {
+          "reversal": 10,
+          "landing-lag": 6,
+          "whiff-punish": 6,
+          "jump-punish": 1,
+          "unknown": 1,
+          "standing-hit": 1
+        },
+        "openingsLostByReason": {
+          "jump-punish": 1,
+          "whiff-punish": 6,
+          "reversal": 7,
+          "landing-lag": 3
+        },
+        "damageDealtOnOpenings": 412,
+        "damageLeakOnOpenings": 105,
+        "openingsConvertedToKill": 5
+      },
+      "1": {
+        "recoverySituations": 9,
+        "recoverySuccesses": 7,
+        "edgeGuardSituations": 9,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 2,
+        "ledgeGetupSuccesses": 2,
+        "ledgeTrapSituations": 8,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 17,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 17,
+        "openingsLost": 25,
+        "openingsWonByReason": {
+          "jump-punish": 1,
+          "whiff-punish": 6,
+          "reversal": 7,
+          "landing-lag": 3
+        },
+        "openingsLostByReason": {
+          "reversal": 10,
+          "landing-lag": 6,
+          "whiff-punish": 6,
+          "jump-punish": 1,
+          "unknown": 1,
+          "standing-hit": 1
+        },
+        "damageDealtOnOpenings": 260,
+        "damageLeakOnOpenings": 92,
+        "openingsConvertedToKill": 2
+      }
+    },
+    "isUnevenStockStart": false
+  },
+  {
+    "id": "g_a966dd02",
+    "sourceName": "20260820-180657-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:06:57.000Z",
+    "stageId": 6,
+    "frameCount": 5355,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 43,
+        "finalStocks": 0,
+        "startStocks": 1
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 49,
+        "finalStocks": 2,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 3,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 4,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 3,
+        "ledgeGetupSuccesses": 3,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 13,
+        "stocksTaken": 2,
+        "killCombos": 1,
+        "combosList": [
+          {
+            "hitCount": 4,
+            "startDamage": 100,
+            "endDamage": 132
+          }
+        ],
+        "openingsWon": 13,
+        "openingsLost": 8,
+        "openingsWonByReason": {
+          "reversal": 6,
+          "landing-lag": 1,
+          "whiff-punish": 3,
+          "shield-pressure": 3
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 1,
+          "reversal": 5,
+          "unknown": 1,
+          "landing-lag": 1
+        },
+        "damageDealtOnOpenings": 240,
+        "damageLeakOnOpenings": 49,
+        "openingsConvertedToKill": 2
+      },
+      "1": {
+        "recoverySituations": 4,
+        "recoverySuccesses": 4,
+        "edgeGuardSituations": 3,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 3,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 8,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 8,
+        "openingsLost": 13,
+        "openingsWonByReason": {
+          "whiff-punish": 1,
+          "reversal": 5,
+          "unknown": 1,
+          "landing-lag": 1
+        },
+        "openingsLostByReason": {
+          "reversal": 6,
+          "landing-lag": 1,
+          "whiff-punish": 3,
+          "shield-pressure": 3
+        },
+        "damageDealtOnOpenings": 131,
+        "damageLeakOnOpenings": 46,
+        "openingsConvertedToKill": 1
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_3a1d0b97",
+    "sourceName": "20260820-181042-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:10:42.000Z",
+    "stageId": 6,
+    "frameCount": 3687,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 37,
+        "finalStocks": 2,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 49,
+        "finalStocks": 0,
+        "startStocks": 2
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 3,
+        "recoverySuccesses": 1,
+        "edgeGuardSituations": 1,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 1,
+        "angelAvoidSituations": 1,
+        "angelAvoidSuccesses": 1,
+        "neutralHitsLanded": 4,
+        "stocksTaken": 1,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 4,
+        "openingsLost": 4,
+        "openingsWonByReason": {
+          "standing-hit": 1,
+          "whiff-punish": 2,
+          "landing-lag": 1
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 1,
+          "landing-lag": 2,
+          "reversal": 1
+        },
+        "damageDealtOnOpenings": 163,
+        "damageLeakOnOpenings": 11,
+        "openingsConvertedToKill": 2
+      },
+      "1": {
+        "recoverySituations": 1,
+        "recoverySuccesses": 1,
+        "edgeGuardSituations": 3,
+        "edgeGuardSuccesses": 2,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 4,
+        "stocksTaken": 2,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 4,
+        "openingsLost": 4,
+        "openingsWonByReason": {
+          "whiff-punish": 1,
+          "landing-lag": 2,
+          "reversal": 1
+        },
+        "openingsLostByReason": {
+          "standing-hit": 1,
+          "whiff-punish": 2,
+          "landing-lag": 1
+        },
+        "damageDealtOnOpenings": 92,
+        "damageLeakOnOpenings": 0,
+        "openingsConvertedToKill": 1
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_e20b3c3e",
+    "sourceName": "20260820-181157-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:11:57.000Z",
+    "stageId": 6,
+    "frameCount": 7069,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 37,
+        "finalStocks": 0,
+        "startStocks": 2
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 46,
+        "finalStocks": 1,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 2,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 3,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 11,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 11,
+        "openingsLost": 12,
+        "openingsWonByReason": {
+          "reversal": 5,
+          "whiff-punish": 5,
+          "standing-hit": 1
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 3,
+          "unknown": 2,
+          "jump-punish": 3,
+          "reversal": 3,
+          "landing-lag": 1
+        },
+        "damageDealtOnOpenings": 319,
+        "damageLeakOnOpenings": 3,
+        "openingsConvertedToKill": 3
+      },
+      "1": {
+        "recoverySituations": 3,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 2,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 1,
+        "angelAvoidSuccesses": 1,
+        "neutralHitsLanded": 12,
+        "stocksTaken": 1,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 12,
+        "openingsLost": 11,
+        "openingsWonByReason": {
+          "whiff-punish": 3,
+          "unknown": 2,
+          "jump-punish": 3,
+          "reversal": 3,
+          "landing-lag": 1
+        },
+        "openingsLostByReason": {
+          "reversal": 5,
+          "whiff-punish": 5,
+          "standing-hit": 1
+        },
+        "damageDealtOnOpenings": 238,
+        "damageLeakOnOpenings": 54,
+        "openingsConvertedToKill": 2
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_ecee3e00",
+    "sourceName": "20260820-181413-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:14:13.000Z",
+    "stageId": 6,
+    "frameCount": 2124,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 36,
+        "finalStocks": 4,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 46,
+        "finalStocks": 0,
+        "startStocks": 1
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 2,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 1,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 5,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 5,
+        "openingsLost": 3,
+        "openingsWonByReason": {
+          "landing-lag": 1,
+          "reversal": 3,
+          "whiff-punish": 1
+        },
+        "openingsLostByReason": {
+          "reversal": 2,
+          "whiff-punish": 1
+        },
+        "damageDealtOnOpenings": 104,
+        "damageLeakOnOpenings": 27,
+        "openingsConvertedToKill": 1
+      },
+      "1": {
+        "recoverySituations": 1,
+        "recoverySuccesses": 1,
+        "edgeGuardSituations": 2,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 3,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 3,
+        "openingsLost": 5,
+        "openingsWonByReason": {
+          "reversal": 2,
+          "whiff-punish": 1
+        },
+        "openingsLostByReason": {
+          "landing-lag": 1,
+          "reversal": 3,
+          "whiff-punish": 1
+        },
+        "damageDealtOnOpenings": 55,
+        "damageLeakOnOpenings": 27,
+        "openingsConvertedToKill": 0
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_817e800b",
+    "sourceName": "20260820-181511-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:15:11.000Z",
+    "stageId": 6,
+    "frameCount": 9915,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 36,
+        "finalStocks": 0,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 37,
+        "finalStocks": 1,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 6,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 6,
+        "edgeGuardSuccesses": 2,
+        "ledgeGetupSituations": 2,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 2,
+        "ledgeTrapSuccesses": 1,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 3,
+        "neutralHitsLanded": 16,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 16,
+        "openingsLost": 10,
+        "openingsWonByReason": {
+          "shield-pressure": 2,
+          "reversal": 4,
+          "standing-hit": 1,
+          "whiff-punish": 6,
+          "landing-lag": 3
+        },
+        "openingsLostByReason": {
+          "reversal": 5,
+          "unknown": 2,
+          "jump-punish": 1,
+          "standing-hit": 1,
+          "whiff-punish": 1
+        },
+        "damageDealtOnOpenings": 285,
+        "damageLeakOnOpenings": 74,
+        "openingsConvertedToKill": 2
+      },
+      "1": {
+        "recoverySituations": 6,
+        "recoverySuccesses": 4,
+        "edgeGuardSituations": 6,
+        "edgeGuardSuccesses": 4,
+        "ledgeGetupSituations": 2,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 2,
+        "ledgeTrapSuccesses": 1,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 10,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 10,
+        "openingsLost": 16,
+        "openingsWonByReason": {
+          "reversal": 5,
+          "unknown": 2,
+          "jump-punish": 1,
+          "standing-hit": 1,
+          "whiff-punish": 1
+        },
+        "openingsLostByReason": {
+          "shield-pressure": 2,
+          "reversal": 4,
+          "standing-hit": 1,
+          "whiff-punish": 6,
+          "landing-lag": 3
+        },
+        "damageDealtOnOpenings": 242,
+        "damageLeakOnOpenings": 42,
+        "openingsConvertedToKill": 4
+      }
+    },
+    "isUnevenStockStart": false
+  },
+  {
+    "id": "g_adacdcbe",
+    "sourceName": "20260820-181820-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:18:20.000Z",
+    "stageId": 6,
+    "frameCount": 2210,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 46,
+        "finalStocks": 4,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 37,
+        "finalStocks": 0,
+        "startStocks": 1
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 2,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 1,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 2,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 2,
+        "openingsLost": 1,
+        "openingsWonByReason": {
+          "whiff-punish": 1,
+          "reversal": 1
+        },
+        "openingsLostByReason": {
+          "landing-lag": 1
+        },
+        "damageDealtOnOpenings": 99,
+        "damageLeakOnOpenings": 0,
+        "openingsConvertedToKill": 1
+      },
+      "1": {
+        "recoverySituations": 1,
+        "recoverySuccesses": 0,
+        "edgeGuardSituations": 2,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 1,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 1,
+        "openingsLost": 2,
+        "openingsWonByReason": {
+          "landing-lag": 1
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 1,
+          "reversal": 1
+        },
+        "damageDealtOnOpenings": 65,
+        "damageLeakOnOpenings": 9,
+        "openingsConvertedToKill": 0
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_edca141a",
+    "sourceName": "20260820-181916-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:19:16.000Z",
+    "stageId": 6,
+    "frameCount": 10152,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 46,
+        "finalStocks": 3,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 36,
+        "finalStocks": 0,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 4,
+        "recoverySuccesses": 3,
+        "edgeGuardSituations": 9,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 5,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 3,
+        "neutralHitsLanded": 19,
+        "stocksTaken": 3,
+        "killCombos": 1,
+        "combosList": [
+          {
+            "hitCount": 4,
+            "startDamage": 74,
+            "endDamage": 86
+          }
+        ],
+        "openingsWon": 19,
+        "openingsLost": 9,
+        "openingsWonByReason": {
+          "unknown": 1,
+          "whiff-punish": 10,
+          "landing-lag": 6,
+          "reversal": 2
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 3,
+          "landing-lag": 1,
+          "reversal": 5
+        },
+        "damageDealtOnOpenings": 501,
+        "damageLeakOnOpenings": 28,
+        "openingsConvertedToKill": 4
+      },
+      "1": {
+        "recoverySituations": 9,
+        "recoverySuccesses": 8,
+        "edgeGuardSituations": 4,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 5,
+        "ledgeGetupSuccesses": 5,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 1,
+        "angelAvoidSuccesses": 1,
+        "neutralHitsLanded": 9,
+        "stocksTaken": 1,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 9,
+        "openingsLost": 19,
+        "openingsWonByReason": {
+          "whiff-punish": 3,
+          "landing-lag": 1,
+          "reversal": 5
+        },
+        "openingsLostByReason": {
+          "unknown": 1,
+          "whiff-punish": 10,
+          "landing-lag": 6,
+          "reversal": 2
+        },
+        "damageDealtOnOpenings": 181,
+        "damageLeakOnOpenings": 14,
+        "openingsConvertedToKill": 1
+      }
+    },
+    "isUnevenStockStart": false
+  },
+  {
+    "id": "g_5b1eb97b",
+    "sourceName": "20260820-182308-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:23:08.000Z",
+    "stageId": 6,
+    "frameCount": 7903,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 46,
+        "finalStocks": 1,
+        "startStocks": 3
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 41,
+        "finalStocks": 0,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 5,
+        "recoverySuccesses": 4,
+        "edgeGuardSituations": 3,
+        "edgeGuardSuccesses": 2,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 3,
+        "neutralHitsLanded": 12,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 12,
+        "openingsLost": 7,
+        "openingsWonByReason": {
+          "reversal": 2,
+          "whiff-punish": 8,
+          "landing-lag": 1,
+          "standing-hit": 1
+        },
+        "openingsLostByReason": {
+          "landing-lag": 2,
+          "whiff-punish": 1,
+          "reversal": 4
+        },
+        "damageDealtOnOpenings": 408,
+        "damageLeakOnOpenings": 18,
+        "openingsConvertedToKill": 3
+      },
+      "1": {
+        "recoverySituations": 3,
+        "recoverySuccesses": 1,
+        "edgeGuardSituations": 5,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 7,
+        "stocksTaken": 2,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 7,
+        "openingsLost": 12,
+        "openingsWonByReason": {
+          "landing-lag": 2,
+          "whiff-punish": 1,
+          "reversal": 4
+        },
+        "openingsLostByReason": {
+          "reversal": 2,
+          "whiff-punish": 8,
+          "landing-lag": 1,
+          "standing-hit": 1
+        },
+        "damageDealtOnOpenings": 206,
+        "damageLeakOnOpenings": 6,
+        "openingsConvertedToKill": 2
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_c44ce0a2",
+    "sourceName": "20260820-182538-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:25:38.000Z",
+    "stageId": 6,
+    "frameCount": 2369,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 46,
+        "finalStocks": 0,
+        "startStocks": 1
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 50,
+        "finalStocks": 4,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 3,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 2,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 2,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 2,
+        "openingsLost": 3,
+        "openingsWonByReason": {
+          "unknown": 1,
+          "reversal": 1
+        },
+        "openingsLostByReason": {
+          "reversal": 2,
+          "landing-lag": 1
+        },
+        "damageDealtOnOpenings": 105,
+        "damageLeakOnOpenings": 21,
+        "openingsConvertedToKill": 0
+      },
+      "1": {
+        "recoverySituations": 2,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 3,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 3,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 3,
+        "openingsLost": 2,
+        "openingsWonByReason": {
+          "reversal": 2,
+          "landing-lag": 1
+        },
+        "openingsLostByReason": {
+          "unknown": 1,
+          "reversal": 1
+        },
+        "damageDealtOnOpenings": 60,
+        "damageLeakOnOpenings": 9,
+        "openingsConvertedToKill": 1
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_75a0ba56",
+    "sourceName": "20260820-182632-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:26:32.000Z",
+    "stageId": 6,
+    "frameCount": 9313,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 49,
+        "finalStocks": 1,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 50,
+        "finalStocks": 0,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 12,
+        "recoverySuccesses": 9,
+        "edgeGuardSituations": 2,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 2,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 2,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 15,
+        "stocksTaken": 3,
+        "killCombos": 2,
+        "combosList": [
+          {
+            "hitCount": 5,
+            "startDamage": 85,
+            "endDamage": 122
+          },
+          {
+            "hitCount": 3,
+            "startDamage": 41,
+            "endDamage": 83
+          }
+        ],
+        "openingsWon": 15,
+        "openingsLost": 15,
+        "openingsWonByReason": {
+          "whiff-punish": 4,
+          "reversal": 7,
+          "shield-pressure": 1,
+          "landing-lag": 2,
+          "standing-hit": 1
+        },
+        "openingsLostByReason": {
+          "unknown": 2,
+          "reversal": 5,
+          "standing-hit": 1,
+          "whiff-punish": 2,
+          "landing-lag": 2,
+          "shield-pressure": 2,
+          "jump-punish": 1
+        },
+        "damageDealtOnOpenings": 415,
+        "damageLeakOnOpenings": 17,
+        "openingsConvertedToKill": 5
+      },
+      "1": {
+        "recoverySituations": 2,
+        "recoverySuccesses": 1,
+        "edgeGuardSituations": 12,
+        "edgeGuardSuccesses": 3,
+        "ledgeGetupSituations": 2,
+        "ledgeGetupSuccesses": 2,
+        "ledgeTrapSituations": 2,
+        "ledgeTrapSuccesses": 1,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 15,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 15,
+        "openingsLost": 15,
+        "openingsWonByReason": {
+          "unknown": 2,
+          "reversal": 5,
+          "standing-hit": 1,
+          "whiff-punish": 2,
+          "landing-lag": 2,
+          "shield-pressure": 2,
+          "jump-punish": 1
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 4,
+          "reversal": 7,
+          "shield-pressure": 1,
+          "landing-lag": 2,
+          "standing-hit": 1
+        },
+        "damageDealtOnOpenings": 309,
+        "damageLeakOnOpenings": 59,
+        "openingsConvertedToKill": 2
+      }
+    },
+    "isUnevenStockStart": false
+  },
+  {
+    "id": "g_75776a0e",
+    "sourceName": "20260820-182926-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:29:26.000Z",
+    "stageId": 6,
+    "frameCount": 5224,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 49,
+        "finalStocks": 1,
+        "startStocks": 1
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 42,
+        "finalStocks": 0,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 2,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 5,
+        "edgeGuardSuccesses": 3,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 3,
+        "angelAvoidSuccesses": 3,
+        "neutralHitsLanded": 8,
+        "stocksTaken": 3,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 8,
+        "openingsLost": 4,
+        "openingsWonByReason": {
+          "reversal": 3,
+          "unknown": 1,
+          "whiff-punish": 3,
+          "standing-hit": 1
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 2,
+          "reversal": 2
+        },
+        "damageDealtOnOpenings": 357,
+        "damageLeakOnOpenings": 25,
+        "openingsConvertedToKill": 4
+      },
+      "1": {
+        "recoverySituations": 5,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 2,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 4,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 4,
+        "openingsLost": 8,
+        "openingsWonByReason": {
+          "whiff-punish": 2,
+          "reversal": 2
+        },
+        "openingsLostByReason": {
+          "reversal": 3,
+          "unknown": 1,
+          "whiff-punish": 3,
+          "standing-hit": 1
+        },
+        "damageDealtOnOpenings": 84,
+        "damageLeakOnOpenings": 48,
+        "openingsConvertedToKill": 0
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_13ca4077",
+    "sourceName": "20260820-183112-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:31:12.000Z",
+    "stageId": 6,
+    "frameCount": 1487,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 49,
+        "finalStocks": 0,
+        "startStocks": 1
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 40,
+        "finalStocks": 3,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 1,
+        "recoverySuccesses": 0,
+        "edgeGuardSituations": 0,
+        "edgeGuardSuccesses": 0,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 1,
+        "angelAvoidSuccesses": 1,
+        "neutralHitsLanded": 2,
+        "stocksTaken": 1,
+        "killCombos": 1,
+        "combosList": [
+          {
+            "hitCount": 3,
+            "startDamage": 53,
+            "endDamage": 93
+          }
+        ],
+        "openingsWon": 2,
+        "openingsLost": 2,
+        "openingsWonByReason": {
+          "landing-lag": 1,
+          "reversal": 1
+        },
+        "openingsLostByReason": {
+          "unknown": 1,
+          "shield-pressure": 1
+        },
+        "damageDealtOnOpenings": 125,
+        "damageLeakOnOpenings": 0,
+        "openingsConvertedToKill": 1
+      },
+      "1": {
+        "recoverySituations": 0,
+        "recoverySuccesses": 0,
+        "edgeGuardSituations": 1,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 0,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 2,
+        "stocksTaken": 0,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 2,
+        "openingsLost": 2,
+        "openingsWonByReason": {
+          "unknown": 1,
+          "shield-pressure": 1
+        },
+        "openingsLostByReason": {
+          "landing-lag": 1,
+          "reversal": 1
+        },
+        "damageDealtOnOpenings": 66,
+        "damageLeakOnOpenings": 4,
+        "openingsConvertedToKill": 1
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_96bdd596",
+    "sourceName": "20260820-183150-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:31:50.000Z",
+    "stageId": 6,
+    "frameCount": 8362,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 42,
+        "finalStocks": 2,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 40,
+        "finalStocks": 0,
+        "startStocks": 3
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 9,
+        "recoverySuccesses": 8,
+        "edgeGuardSituations": 4,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 7,
+        "ledgeGetupSuccesses": 7,
+        "ledgeTrapSituations": 2,
+        "ledgeTrapSuccesses": 1,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 17,
+        "stocksTaken": 2,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 17,
+        "openingsLost": 15,
+        "openingsWonByReason": {
+          "reversal": 13,
+          "whiff-punish": 2,
+          "standing-hit": 1,
+          "unknown": 1
+        },
+        "openingsLostByReason": {
+          "unknown": 1,
+          "reversal": 11,
+          "whiff-punish": 3
+        },
+        "damageDealtOnOpenings": 320,
+        "damageLeakOnOpenings": 61,
+        "openingsConvertedToKill": 3
+      },
+      "1": {
+        "recoverySituations": 4,
+        "recoverySuccesses": 3,
+        "edgeGuardSituations": 9,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 2,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 7,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 15,
+        "stocksTaken": 2,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 15,
+        "openingsLost": 17,
+        "openingsWonByReason": {
+          "unknown": 1,
+          "reversal": 11,
+          "whiff-punish": 3
+        },
+        "openingsLostByReason": {
+          "reversal": 13,
+          "whiff-punish": 2,
+          "standing-hit": 1,
+          "unknown": 1
+        },
+        "damageDealtOnOpenings": 347,
+        "damageLeakOnOpenings": 82,
+        "openingsConvertedToKill": 2
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_b1b01142",
+    "sourceName": "20260820-183423-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:34:23.000Z",
+    "stageId": 6,
+    "frameCount": 7822,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 42,
+        "finalStocks": 0,
+        "startStocks": 2
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 48,
+        "finalStocks": 2,
+        "startStocks": 4
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 8,
+        "recoverySuccesses": 6,
+        "edgeGuardSituations": 4,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 4,
+        "ledgeGetupSuccesses": 3,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 1,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 2,
+        "neutralHitsLanded": 14,
+        "stocksTaken": 2,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 14,
+        "openingsLost": 11,
+        "openingsWonByReason": {
+          "whiff-punish": 8,
+          "reversal": 5,
+          "unknown": 1
+        },
+        "openingsLostByReason": {
+          "unknown": 1,
+          "whiff-punish": 3,
+          "reversal": 4,
+          "jump-punish": 1,
+          "landing-lag": 2
+        },
+        "damageDealtOnOpenings": 279,
+        "damageLeakOnOpenings": 33,
+        "openingsConvertedToKill": 2
+      },
+      "1": {
+        "recoverySituations": 4,
+        "recoverySuccesses": 3,
+        "edgeGuardSituations": 8,
+        "edgeGuardSuccesses": 2,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 4,
+        "ledgeTrapSuccesses": 1,
+        "angelAvoidSituations": 1,
+        "angelAvoidSuccesses": 1,
+        "neutralHitsLanded": 11,
+        "stocksTaken": 1,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 11,
+        "openingsLost": 14,
+        "openingsWonByReason": {
+          "unknown": 1,
+          "whiff-punish": 3,
+          "reversal": 4,
+          "jump-punish": 1,
+          "landing-lag": 2
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 8,
+          "reversal": 5,
+          "unknown": 1
+        },
+        "damageDealtOnOpenings": 199,
+        "damageLeakOnOpenings": 12,
+        "openingsConvertedToKill": 2
+      }
+    },
+    "isUnevenStockStart": true
+  },
+  {
+    "id": "g_1bfea411",
+    "sourceName": "20260820-183646-George-Harold.rmgr",
+    "recordedAt": "2026-08-20T09:36:46.000Z",
+    "stageId": 6,
+    "frameCount": 6578,
+    "isComplete": true,
+    "ports": [
+      {
+        "port": 0,
+        "playerName": "George",
+        "characterId": 44,
+        "finalStocks": 2,
+        "startStocks": 4
+      },
+      {
+        "port": 1,
+        "playerName": "Harold",
+        "characterId": 48,
+        "finalStocks": 0,
+        "startStocks": 2
+      }
+    ],
+    "statsByPort": {
+      "0": {
+        "recoverySituations": 5,
+        "recoverySuccesses": 3,
+        "edgeGuardSituations": 3,
+        "edgeGuardSuccesses": 1,
+        "ledgeGetupSituations": 1,
+        "ledgeGetupSuccesses": 1,
+        "ledgeTrapSituations": 0,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 1,
+        "angelAvoidSuccesses": 1,
+        "neutralHitsLanded": 8,
+        "stocksTaken": 1,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 8,
+        "openingsLost": 9,
+        "openingsWonByReason": {
+          "whiff-punish": 6,
+          "reversal": 2
+        },
+        "openingsLostByReason": {
+          "unknown": 1,
+          "reversal": 3,
+          "shield-pressure": 2,
+          "whiff-punish": 3
+        },
+        "damageDealtOnOpenings": 154,
+        "damageLeakOnOpenings": 35,
+        "openingsConvertedToKill": 2
+      },
+      "1": {
+        "recoverySituations": 3,
+        "recoverySuccesses": 2,
+        "edgeGuardSituations": 5,
+        "edgeGuardSuccesses": 2,
+        "ledgeGetupSituations": 0,
+        "ledgeGetupSuccesses": 0,
+        "ledgeTrapSituations": 1,
+        "ledgeTrapSuccesses": 0,
+        "angelAvoidSituations": 2,
+        "angelAvoidSuccesses": 0,
+        "neutralHitsLanded": 9,
+        "stocksTaken": 2,
+        "killCombos": 0,
+        "combosList": [],
+        "openingsWon": 9,
+        "openingsLost": 8,
+        "openingsWonByReason": {
+          "unknown": 1,
+          "reversal": 3,
+          "shield-pressure": 2,
+          "whiff-punish": 3
+        },
+        "openingsLostByReason": {
+          "whiff-punish": 6,
+          "reversal": 2
+        },
+        "damageDealtOnOpenings": 245,
+        "damageLeakOnOpenings": 34,
+        "openingsConvertedToKill": 2
+      }
+    },
+    "isUnevenStockStart": true
+  }
+]

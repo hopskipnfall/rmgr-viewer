@@ -208,6 +208,64 @@ export function generateGameId(
 }
 
 /**
+ * JSON-serializable form of the fields `summarizeReplay()` computes (i.e.
+ * everything except `recordedAt`, which becomes an ISO string, and
+ * `fileRef`/`url`/`isBundledSample`/`manualPerspectivePort`, which are
+ * either not applicable or assigned by the caller afterward).
+ *
+ * Written by `scripts/generateDemoSummaries.ts` to
+ * `public/replays/demo-summaries.json` and read back by `main.ts` at
+ * startup, so the app can populate the library list from one small JSON
+ * fetch instead of downloading and parsing every bundled demo `.rmgr` file.
+ */
+export type SerializedGameSummary = Pick<
+  GameSummary,
+  | "id"
+  | "sourceName"
+  | "stageId"
+  | "frameCount"
+  | "isComplete"
+  | "ports"
+  | "statsByPort"
+  | "isUnevenStockStart"
+> & {
+  recordedAt: string;
+};
+
+export function serializeGameSummary(
+  summary: GameSummary,
+): SerializedGameSummary {
+  return {
+    id: summary.id,
+    sourceName: summary.sourceName,
+    recordedAt: summary.recordedAt.toISOString(),
+    stageId: summary.stageId,
+    frameCount: summary.frameCount,
+    isComplete: summary.isComplete,
+    ports: summary.ports,
+    statsByPort: summary.statsByPort,
+    isUnevenStockStart: summary.isUnevenStockStart,
+  };
+}
+
+export function deserializeGameSummary(
+  serialized: SerializedGameSummary,
+): GameSummary {
+  return {
+    id: serialized.id,
+    sourceName: serialized.sourceName,
+    recordedAt: new Date(serialized.recordedAt),
+    stageId: serialized.stageId,
+    frameCount: serialized.frameCount,
+    isComplete: serialized.isComplete,
+    ports: serialized.ports,
+    statsByPort: serialized.statsByPort,
+    fileRef: null,
+    isUnevenStockStart: serialized.isUnevenStockStart,
+  };
+}
+
+/**
  * Converts a parsed Replay into a compact GameSummary (~1KB) and allows
  * discarding the large Replay instance from memory.
  */
