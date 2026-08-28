@@ -53,7 +53,7 @@ export async function importReplayFiles(
       const loaded: LoadedReplay = {
         replay,
         sourceName: file.name,
-        recordedAt: new Date(replay.header.recordedAtEpochSeconds * 1000),
+        recordedAt: new Date(replay.header.recordedAtEpochMillis),
       };
 
       const summary = summarizeReplay(loaded, file);

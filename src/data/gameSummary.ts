@@ -195,7 +195,7 @@ function hashString(str: string): string {
 
 export function generateGameId(
   sourceName: string,
-  recordedAtEpochSeconds: number,
+  recordedAtEpochMillis: number,
   stageId: number,
   frameCount: number,
   ports: { port: PortIndex; characterId: number; name: string }[],
@@ -203,7 +203,7 @@ export function generateGameId(
   const portKey = ports
     .map((p) => `${p.port}:${p.characterId}:${p.name}`)
     .join(",");
-  const rawKey = `${sourceName}|${recordedAtEpochSeconds}|${stageId}|${frameCount}|${portKey}`;
+  const rawKey = `${sourceName}|${recordedAtEpochMillis}|${stageId}|${frameCount}|${portKey}`;
   return `g_${hashString(rawKey)}`;
 }
 
@@ -329,7 +329,7 @@ export function summarizeReplay(
 
   const id = generateGameId(
     sourceName,
-    replay.header.recordedAtEpochSeconds,
+    replay.header.recordedAtEpochMillis,
     replay.gameStart.stageId,
     replay.frames.length,
     ports.map((p) => ({
