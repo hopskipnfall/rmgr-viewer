@@ -35,7 +35,11 @@ import {
   saveVideoLink,
   type VideoLinkData,
 } from "./video/youtubeSync.js";
-import { isTobloSfxEnabled, setTobloSfxEnabled } from "./sfx.js";
+import {
+  isTobloSfxEnabled,
+  playTobloEnabledSfx,
+  setTobloSfxEnabled,
+} from "./sfx.js";
 
 // DOM Elements
 const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
@@ -506,6 +510,7 @@ async function init(): Promise<void> {
   aboutModalBackdrop.addEventListener("click", closeAboutModal);
   aboutTobloSfxCheckbox.addEventListener("change", () => {
     setTobloSfxEnabled(aboutTobloSfxCheckbox.checked);
+    playTobloEnabledSfx();
   });
 
   // Shortcuts modal
