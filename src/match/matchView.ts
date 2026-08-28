@@ -4067,7 +4067,7 @@ export class MatchViewController {
     if (loaded) {
       return summarizeReplay(loaded).id;
     }
-    const epoch = replay.header.recordedAtEpochSeconds;
+    const epoch = replay.header.recordedAtEpochMillis;
     const stageId = replay.gameStart.stageId;
     return `replay_${stageId}_${epoch}_${replay.frames.length}`;
   }

@@ -6,11 +6,12 @@ import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 function makeMockReplay(frames: Frame[]): Replay {
   return {
     header: {
-      version: 3,
+      version: 4,
       streamLength: 1000,
       goodName: "Super Smash Bros. (U) (V1.0) [!]",
       recorderSchemaVersion: 1,
-      recordedAtEpochSeconds: 1724300000,
+      recordedAtEpochMillis: 1724300000000,
+      recordedAtNanosOffset: 0,
     },
     gameStart: {
       stageId: DREAM_LAND_STAGE_ID,
