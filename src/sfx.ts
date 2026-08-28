@@ -95,16 +95,7 @@ function playSfxFile(file: string, volume = 0.5): void {
   void audio.play().catch(() => {});
 }
 
-/**
- * A seated port just jumped. Really should be jumpsUsed increasing
- * (grounded or aerial, unambiguous) - but a real capture shows that field
- * constant at 0 for an entire match, both ports, never once incrementing.
- * TODO(RMG-K): likely a wrong offset for PostFrameUpdate.jumpsUsed in
- * ReplayMemory.cpp (PS_JUMPS_USED) - fix the actual export (ideally as the
- * number of jumps *remaining*, which is what a reader actually wants) and
- * then switch callers back to that instead of the `grounded` workaround
- * they're currently using.
- */
+/** A seated port just jumped - detected via `jumpsRemaining` decreasing, see the call site in matchView.ts. */
 export function playJumpSfx(): void {
   if (!isTobloSfxEnabled()) return;
   playRandomSfx(JUMP_SFX_FILES);
