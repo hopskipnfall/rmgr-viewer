@@ -99,6 +99,7 @@ interface PlayerPanel {
   pad: ControllerPad;
   damageEl: HTMLElement;
   stocksEl: HTMLElement;
+  jumpsEl: HTMLElement;
   stateEl: HTMLElement;
   positionEl: HTMLElement;
   comboHitsEl: HTMLElement;
@@ -1360,6 +1361,7 @@ export class MatchViewController {
         <div class="player-stats">
           <div>${escapeHtml(tr.damage)} <strong class="stat-damage">—</strong></div>
           <div>${escapeHtml(tr.stocks)} <strong class="stat-stocks">—</strong></div>
+          <div>${escapeHtml(tr.jumps)} <strong class="stat-jumps">—</strong></div>
           <div class="full-row">${escapeHtml(tr.state)} <strong class="stat-state">—</strong></div>
           <div class="full-row">${escapeHtml(tr.position)} <strong class="stat-position">—</strong></div>
           <div class="full-row">${escapeHtml(tr.comboHits)} <strong class="stat-combo-hits">0</strong></div>
@@ -1376,6 +1378,7 @@ export class MatchViewController {
         pad: new ControllerPad(padCanvas),
         damageEl: panel.querySelector(".stat-damage") as HTMLElement,
         stocksEl: panel.querySelector(".stat-stocks") as HTMLElement,
+        jumpsEl: panel.querySelector(".stat-jumps") as HTMLElement,
         stateEl: panel.querySelector(".stat-state") as HTMLElement,
         positionEl: panel.querySelector(".stat-position") as HTMLElement,
         comboHitsEl: panel.querySelector(".stat-combo-hits") as HTMLElement,
@@ -1448,6 +1451,7 @@ export class MatchViewController {
       if (!portData) {
         panel.damageEl.textContent = "—";
         panel.stocksEl.textContent = "—";
+        panel.jumpsEl.textContent = "—";
         panel.stateEl.textContent = tr.notOnScreen;
         panel.positionEl.textContent = "—";
         panel.comboHitsEl.textContent = "—";
@@ -1458,6 +1462,7 @@ export class MatchViewController {
       const { post, pre } = portData;
       panel.damageEl.textContent = `${post.damagePercent}%`;
       panel.stocksEl.textContent = String(post.stocksRemaining + 1);
+      panel.jumpsEl.textContent = String(post.jumpsRemaining);
       panel.stateEl.textContent = actionStateName(post.actionStateId);
       panel.positionEl.textContent = `(${post.positionX.toFixed(1)}, ${post.positionY.toFixed(1)})`;
 
@@ -3603,6 +3608,17 @@ export class MatchViewController {
       playMatchStartSfx();
     }
 
+    // jumpsRemaining is only meaningful from RMG-K schema v7 onward - every
+    // earlier schema exported it as jumpsUsed, read at the wrong width, so
+    // it's a constant 0 for the whole match (see docs/RMGR_SPEC.md §5's
+    // v6->v7 note). Files recorded before that fix - e.g. the bundled demo
+    // replays, not yet re-recorded - would otherwise never trigger the jump
+    // sfx at all, since a constant 0 never "decreases". Fall back to the
+    // pre-v7 `grounded` heuristic for those; only trust jumpsRemaining once
+    // the file's own schema says the field is real.
+    const hasReliableJumpsRemaining =
+      (this.currentReplay?.header.recorderSchemaVersion ?? 0) >= 7;
+
     for (const key of Object.keys(frame.ports)) {
       const port = Number(key) as PortIndex;
       const prevPost = previousFrame.ports[port]?.post;
@@ -3610,13 +3626,15 @@ export class MatchViewController {
       if (!prevPost || !post) continue;
 
       // jumpsRemaining decreasing is unambiguously "this port just
-      // jumped" (grounded or aerial) - fixed in RMG-K schema v7 (was
-      // previously exported as jumpsUsed, and read at the wrong width,
-      // reading a constant 0 for an entire match regardless of real jump
-      // activity - see docs/RMGR_SPEC.md §5's v6->v7 note). This replaces
-      // the earlier `grounded` workaround, which also fired for walking
-      // off a ledge or getting knocked airborne by a hit.
-      if (post.jumpsRemaining < prevPost.jumpsRemaining) {
+      // jumped" (grounded or aerial). Older files fall back to `grounded`
+      // flipping true -> false - imperfect (also fires for walking off a
+      // ledge or getting knocked airborne by a hit), but good enough for a
+      // for-fun cosmetic sound cue, and it's what schema v6 and earlier
+      // files are stuck with.
+      const jumped = hasReliableJumpsRemaining
+        ? post.jumpsRemaining < prevPost.jumpsRemaining
+        : prevPost.grounded && !post.grounded;
+      if (jumped) {
         playJumpSfx();
       }
 
