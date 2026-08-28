@@ -235,6 +235,7 @@ export interface Translations {
   authorName: string;
   twitterLabel: string;
   githubLabel: string;
+  tobloSfxLabel: string;
   close: string;
 
   // Keyboard Shortcuts modal
@@ -642,6 +643,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     authorName: "nue",
     twitterLabel: "Twitter / X",
     githubLabel: "GitHub Repository",
+    tobloSfxLabel: "Toblo sfx",
     close: "Close",
 
     shortcutsTitle: "Keyboard Shortcuts",
@@ -1032,6 +1034,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     authorName: "鵺",
     twitterLabel: "Twitter / X",
     githubLabel: "GitHub リポジトリ",
+    tobloSfxLabel: "Toblo sfx",
     close: "閉じる",
 
     shortcutsTitle: "キーボード ショートカット",

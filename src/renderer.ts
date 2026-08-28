@@ -1,5 +1,6 @@
 import {
   ItemLinkId,
+  WPKind,
   getItemKindName,
   type Frame,
   type ItemUpdate,
@@ -29,6 +30,29 @@ import {
   computeEdgeGuardEvents,
 } from "./edgeGuard.js";
 import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
+
+/**
+ * Weapon kinds that represent a hitbox attached to the attacker's own body
+ * during a normal move (e.g. Link's Spin Attack) rather than a detached,
+ * free-flying object - drawing a marker for these would just be a
+ * redundant, misplaced-looking diamond hovering near the attacker doing
+ * their ordinary animation. Add more kinds here as they're confirmed to be
+ * the same "attached, not detached" kind of weapon.
+ */
+const HIDDEN_WEAPON_KINDS = new Set<number>([WPKind.SpinAttack]);
+
+/**
+ * Item/weapon marker shapes (drawItemObjects and friends) are hand-tuned
+ * in fixed screen pixels against camera.worldLengthToScreen(1) at a
+ * typical non-PiP zoom, where 1 world unit renders as roughly this many
+ * screen pixels (derived from a Falcon-height character, ~145 world
+ * units, rendering ~55px tall in that same view). Dividing the *current*
+ * worldLengthToScreen(1) by this constant gives a scale factor that's
+ * ~1 at that reference zoom and shrinks/grows with the camera everywhere
+ * else (e.g. PiP mode's smaller canvas) - see its one call site for how
+ * it's applied.
+ */
+const MARKER_TUNING_PX_PER_WORLD_UNIT = 0.38;
 
 const SHIELD_ACTION_STATES = new Set([
   0x098, // ShieldOn
@@ -668,7 +692,7 @@ export function getSamusSpecialType(
   return null;
 }
 
-export type LinkSpecialType = "boomerang" | "spin_attack" | "bomb";
+export type LinkSpecialType = "spin_attack" | "bomb";
 
 export function getLinkSpecialType(
   characterId: number,
@@ -677,19 +701,15 @@ export function getLinkSpecialType(
   if (!isLinkCharacter(characterId)) return null;
   // Neutral-B: Boomerang throw (0x0dc - 0x0de: charge/wind-up, 0x0e5 and
   // 0x0e8: ground and air throw - same animation either way, confirmed
-  // empirically). 0x0e5/0x0e8 were previously misclassified as Up-B below.
+  // empirically). No synthetic animation drawn for this anymore - the
+  // recorded Weapon object (WPKind.Boomerang, drawn by drawItemObjects()
+  // in renderer.ts) is Link's real boomerang now, so drawing a second,
+  // fake one here would just visually double up with it.
+  // Up-B: Spin Attack. 0x0e2 is the grounded version, 0x0e4 the aerial
+  // version (both confirmed empirically, were previously unmapped).
+  // 0x0e6/0x0e7 unconfirmed but left as-is.
   if (
-    actionStateId === 0x0dc ||
-    actionStateId === 0x0dd ||
-    actionStateId === 0x0de ||
-    actionStateId === 0x0e5 ||
-    actionStateId === 0x0e8
-  ) {
-    return "boomerang";
-  }
-  // Up-B: Spin Attack. 0x0e4 is the aerial version (confirmed empirically,
-  // was previously unmapped). 0x0e6/0x0e7 unconfirmed but left as-is.
-  if (
+    actionStateId === 0x0e2 ||
     actionStateId === 0x0e4 ||
     actionStateId === 0x0e6 ||
     actionStateId === 0x0e7
@@ -1743,51 +1763,225 @@ export class StageRenderer {
   }
 
   /**
-   * Draws a generic placeholder marker for every Item/Weapon object live
-   * this frame (`Frame.items`, recorder schema v3+ — see
-   * docs/RMGR_SPEC.md §4.6). Still a generic shape, not a real per-move
-   * icon — that's future work — but the label is now the real resolved
-   * name (`getItemKindName`), not a bare hex ID, now that schema v3
-   * correctly derives `linkId`/`kind`. Weapons (free-flying projectiles)
-   * and Items (thrown/spawned items, held things like Link's bomb) get
-   * different marker colors so they're visually distinguishable even
-   * before real shapes exist.
+   * Draws a marker for every Item/Weapon object live this frame
+   * (`Frame.items`, recorder schema v3+ — see docs/RMGR_SPEC.md §4.6),
+   * labeled with its real resolved name (`getItemKindName`). A handful of
+   * commonly-seen Weapon kinds get a recognizable custom shape
+   * (`drawCustomWeaponShape` below); everything else still falls back to
+   * a generic colored diamond. `HIDDEN_WEAPON_KINDS` (e.g. Link's Spin
+   * Attack, a hitbox attached to the attacker's own animation rather than
+   * a detached object) are skipped entirely - see that constant's doc
+   * comment.
    */
   private drawItemObjects(camera: Camera, items: readonly ItemUpdate[]): void {
     if (items.length === 0) return;
     const { ctx } = this;
 
     for (const item of items) {
+      if (
+        item.linkId === ItemLinkId.Weapon &&
+        HIDDEN_WEAPON_KINDS.has(item.kind)
+      ) {
+        continue;
+      }
+
       const { x, y } = camera.worldToScreen(item.positionX, item.positionY);
-      const r = 6;
       const isWeapon = item.linkId === ItemLinkId.Weapon;
-      const color = isWeapon
-        ? "rgba(232, 121, 249, 0.85)" // magenta - Weapon (free-flying projectile)
-        : "rgba(96, 165, 250, 0.85)"; // blue - Item (thrown/spawned/held)
-      const labelColor = isWeapon ? "#f5d0fe" : "#bfdbfe";
+      // Every marker size below (diamond radius, flame/boomerang/etc.
+      // geometry) was tuned in fixed screen pixels against one particular
+      // zoom level - unlike character bodies, which go through
+      // camera.worldLengthToScreen() and so naturally shrink/grow with
+      // the camera (e.g. the smaller canvas in PiP mode). Scaling around
+      // the marker's own center point here makes markers track the same
+      // zoom characters already do, without having to rewrite every shape
+      // function in world units.
+      const markerScale =
+        camera.worldLengthToScreen(1) / MARKER_TUNING_PX_PER_WORLD_UNIT;
 
       ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(x, y - r);
-      ctx.lineTo(x + r, y);
-      ctx.lineTo(x, y + r);
-      ctx.lineTo(x - r, y);
-      ctx.closePath();
-      ctx.fillStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      ctx.fill();
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
+      ctx.translate(x, y);
+      ctx.scale(markerScale, markerScale);
+      ctx.translate(-x, -y);
+      const drewCustomShape =
+        isWeapon && this.drawCustomWeaponShape(ctx, item.kind, x, y);
+      if (!drewCustomShape) {
+        this.drawGenericItemDiamond(ctx, x, y, isWeapon);
+      }
+      ctx.restore();
 
-      ctx.shadowBlur = 0;
-      ctx.font = "10px monospace";
+      // The generic diamond and most custom shapes are small enough for a
+      // fixed label offset, but the (much bigger) boomerang needs more
+      // clearance so the label doesn't sit on top of its arc.
+      const labelOffset =
+        (isWeapon && item.kind === WPKind.Boomerang ? 18 : 14) * markerScale;
+
+      ctx.save();
+      ctx.font = `${10 * markerScale}px monospace`;
       ctx.textAlign = "center";
-      ctx.fillStyle = labelColor;
-      ctx.fillText(getItemKindName(item.linkId, item.kind), x, y - r - 4);
+      ctx.fillStyle = isWeapon ? "#f5d0fe" : "#bfdbfe";
+      ctx.fillText(getItemKindName(item.linkId, item.kind), x, y - labelOffset);
       ctx.restore();
     }
+  }
+
+  /** Generic fallback marker for any Item/Weapon kind without a custom shape - a colored diamond. */
+  private drawGenericItemDiamond(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    isWeapon: boolean,
+  ): void {
+    const r = 6;
+    const color = isWeapon
+      ? "rgba(232, 121, 249, 0.85)" // magenta - Weapon (free-flying projectile)
+      : "rgba(96, 165, 250, 0.85)"; // blue - Item (thrown/spawned/held)
+
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r, y);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  /**
+   * Draws a recognizable shape for select Weapon kinds instead of the
+   * generic diamond. Returns true if it drew something (caller should
+   * skip the diamond fallback), false for any kind not covered yet.
+   */
+  private drawCustomWeaponShape(
+    ctx: CanvasRenderingContext2D,
+    kind: number,
+    x: number,
+    y: number,
+  ): boolean {
+    switch (kind) {
+      case WPKind.PKFire: // Ness neutral B - yellow PSI flame, distinct from Mario's orange
+        this.drawFlameMarker(ctx, x, y, "#fbbf24", "#fef08a");
+        return true;
+      case WPKind.PKThunderHead:
+      case WPKind.PKThunderTrail:
+        this.drawLightningMarker(ctx, x, y, "#60a5fa");
+        return true;
+      case WPKind.ChargeShot: // Samus - pink/purple energy orb
+        this.drawOrbMarker(ctx, x, y, "#f472b6", "#fbcfe8");
+        return true;
+      case WPKind.Boomerang:
+        this.drawBoomerangMarker(ctx, x, y, "#eab308");
+        return true;
+      case WPKind.EggThrow: // same shell art as a character encased in an egg (drawYoshiEggShell)
+        this.drawYoshiEgg(x, y, 8, 6);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /** Teardrop flame silhouette with a brighter inner core, for PK Fire. */
+  private drawFlameMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    color: string,
+    coreColor: string,
+  ): void {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 9);
+    ctx.bezierCurveTo(x + 5, y - 4, x + 6, y + 2, x + 3, y + 6);
+    ctx.bezierCurveTo(x + 1, y + 8, x - 1, y + 8, x - 3, y + 6);
+    ctx.bezierCurveTo(x - 6, y + 2, x - 4, y - 5, x, y - 9);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 4);
+    ctx.bezierCurveTo(x + 2, y - 1, x + 2, y + 3, x, y + 5);
+    ctx.bezierCurveTo(x - 2, y + 3, x - 2, y - 1, x, y - 4);
+    ctx.closePath();
+    ctx.fillStyle = coreColor;
+    ctx.fill();
+  }
+
+  /** A hooked chevron curve, for Boomerang. ~1.5x the size of the other markers - the actual in-game boomerang reads a bit bigger than a bomb/fireball. */
+  private drawBoomerangMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    color: string,
+  ): void {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 7;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x - 10.5, y - 9);
+    ctx.quadraticCurveTo(x, y + 10.5, x + 10.5, y - 9);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+  }
+
+  /** Classic zigzag bolt silhouette, for PK Thunder. */
+  private drawLightningMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    color: string,
+  ): void {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(x + 2, y - 9);
+    ctx.lineTo(x - 4, y);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x - 2, y + 9);
+    ctx.lineTo(x + 4, y - 1);
+    ctx.lineTo(x, y - 1);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  /** Glowing orb with a brighter core, for Charge Shot. */
+  private drawOrbMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    color: string,
+    coreColor: string,
+  ): void {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = coreColor;
+    ctx.fill();
   }
 
   /**
@@ -5170,13 +5364,20 @@ export class StageRenderer {
     halfWidth: number,
     heightPx: number,
   ): void {
-    const { ctx } = this;
-    const eggW = halfWidth * 1.3;
-    const eggH = heightPx * 0.55;
+    this.drawYoshiEgg(x, centerY, halfWidth * 1.3, heightPx * 0.55);
+  }
 
+  /**
+   * The egg shape itself - cream shell with green spots - shared by the
+   * encased-in-egg overlay above (sized to cover a whole character) and
+   * the WPKind.EggThrow item marker in drawCustomWeaponShape (sized as a
+   * small in-flight egg).
+   */
+  private drawYoshiEgg(x: number, y: number, eggW: number, eggH: number): void {
+    const { ctx } = this;
     ctx.save();
     ctx.beginPath();
-    ctx.ellipse(x, centerY, eggW, eggH, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y, eggW, eggH, 0, 0, Math.PI * 2);
     ctx.fillStyle = "#fdf6e3";
     ctx.fill();
     ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
@@ -5192,7 +5393,7 @@ export class StageRenderer {
     ctx.fillStyle = "#4ade80";
     for (const [dx, dy, r] of spots) {
       ctx.beginPath();
-      ctx.ellipse(x + dx, centerY + dy, r, r * 0.75, 0.3, 0, Math.PI * 2);
+      ctx.ellipse(x + dx, y + dy, r, r * 0.75, 0.3, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -7760,9 +7961,13 @@ export class StageRenderer {
 
   /**
    * Visualizes Link's signature special moves:
-   * - Boomerang (Neutral-B): Spinning wooden four-pointed cross boomerang carving forward in flight arc.
    * - Spin Attack (Up-B): 360-degree hurricane sword slash ring with glowing cyan edge trails.
    * - Bomb (Down-B): Blue cartoon bomb with flickering burning fuse.
+   *
+   * Boomerang (Neutral-B) used to have a synthetic in-flight animation
+   * here too, but that's gone now that the real recorded Weapon object
+   * (WPKind.Boomerang) gets its own marker in drawItemObjects() - keeping
+   * both would just show two boomerangs at once.
    */
   private drawLinkSpecial(
     x: number,
@@ -7777,42 +7982,6 @@ export class StageRenderer {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
     const noseX = x + dir * halfWidth;
-
-    if (specialType === "boomerang") {
-      ctx.save();
-      // Spinning wooden boomerang in flight arc
-      const bProg = (frameCounter % 24) / 24;
-      const bDist = halfWidth * 2.8;
-      const bx = noseX + dir * (10 + Math.sin(bProg * Math.PI) * bDist);
-      const by = centerY - Math.sin(bProg * Math.PI * 2) * 6;
-      const bRot = frameCounter * 0.45;
-
-      ctx.translate(bx, by);
-      ctx.rotate(bRot);
-
-      // Four-pointed cross-boomerang
-      const armLen = 9;
-      const armThick = 2.4;
-      ctx.fillStyle = "#b45309"; // Wood brown
-      ctx.strokeStyle = "#fef08a"; // Gold tip
-      ctx.lineWidth = 1;
-
-      for (let i = 0; i < 4; i++) {
-        ctx.rotate(Math.PI / 2);
-        ctx.fillRect(-armThick / 2, 0, armThick, armLen);
-        ctx.strokeRect(-armThick / 2, 0, armThick, armLen);
-      }
-
-      // Wind trail ring
-      ctx.beginPath();
-      ctx.arc(0, 0, armLen * 1.1, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      ctx.restore();
-      return;
-    }
 
     if (specialType === "spin_attack") {
       ctx.save();

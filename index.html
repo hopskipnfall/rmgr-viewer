@@ -161,6 +161,20 @@
       .about-row-value a:hover {
         text-decoration: underline;
       }
+      .about-row-checkbox {
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+      }
+      .about-row-checkbox input[type="checkbox"] {
+        margin: 0;
+        cursor: pointer;
+      }
+      .about-row-checkbox label {
+        cursor: pointer;
+        color: var(--text);
+        font-size: 13px;
+      }
       #aboutModalFooter {
         display: flex;
         justify-content: flex-end;
@@ -4798,6 +4812,12 @@
               >hopskipnfall/rmgr-viewer</a
             >
           </span>
+        </div>
+        <div class="about-row about-row-checkbox">
+          <input type="checkbox" id="aboutTobloSfxCheckbox" />
+          <label for="aboutTobloSfxCheckbox" id="aboutTobloSfxLabel"
+            >Toblo sfx</label
+          >
         </div>
         <div id="aboutModalFooter">
           <button id="aboutModalFooterCloseBtn" class="btn-secondary">

@@ -35,6 +35,7 @@ import {
   saveVideoLink,
   type VideoLinkData,
 } from "./video/youtubeSync.js";
+import { isTobloSfxEnabled, setTobloSfxEnabled } from "./sfx.js";
 
 // DOM Elements
 const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
@@ -119,6 +120,12 @@ const aboutModalFooterCloseBtn = document.getElementById(
 const aboutModalBackdrop = document.getElementById(
   "aboutModalBackdrop",
 ) as HTMLDivElement;
+const aboutTobloSfxCheckbox = document.getElementById(
+  "aboutTobloSfxCheckbox",
+) as HTMLInputElement;
+const aboutTobloSfxLabel = document.getElementById(
+  "aboutTobloSfxLabel",
+) as HTMLLabelElement;
 
 // Shortcuts modal elements
 const shortcutsModal = document.getElementById(
@@ -198,6 +205,7 @@ function updateHeaderTranslations(): void {
   aboutAuthorLink.textContent = tr.authorName;
   aboutTwitterLabel.textContent = tr.twitterLabel;
   aboutGithubLabel.textContent = tr.githubLabel;
+  aboutTobloSfxLabel.textContent = tr.tobloSfxLabel;
   aboutModalFooterCloseBtn.textContent = tr.close;
 
   // Shortcuts modal labels
@@ -486,6 +494,7 @@ async function init(): Promise<void> {
 
   // About modal
   const openAboutModal = (): void => {
+    aboutTobloSfxCheckbox.checked = isTobloSfxEnabled();
     aboutModal.hidden = false;
   };
   const closeAboutModal = (): void => {
@@ -495,6 +504,9 @@ async function init(): Promise<void> {
   aboutModalCloseBtn.addEventListener("click", closeAboutModal);
   aboutModalFooterCloseBtn.addEventListener("click", closeAboutModal);
   aboutModalBackdrop.addEventListener("click", closeAboutModal);
+  aboutTobloSfxCheckbox.addEventListener("change", () => {
+    setTobloSfxEnabled(aboutTobloSfxCheckbox.checked);
+  });
 
   // Shortcuts modal
   const openShortcutsModal = (): void => {
