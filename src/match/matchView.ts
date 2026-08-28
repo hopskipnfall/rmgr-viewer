@@ -9,6 +9,14 @@ import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_LABELS, getPlayerColor } from "../players.js";
 import {
+  playAttackSfx,
+  playGrabSfx,
+  playJumpSfx,
+  playMatchStartSfx,
+  playStockTakenSfx,
+  playTauntSfx,
+} from "../sfx.js";
+import {
   StageRenderer,
   isCrouchState,
   isDeadState,
@@ -16,7 +24,7 @@ import {
   extractAllQuickAttackPaths,
 } from "../renderer.js";
 import { characterSize } from "../characterSizes.js";
-import { actionStateName, characterName } from "../lookups.js";
+import { ActionStateId, actionStateName, characterName } from "../lookups.js";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { t, getLanguage } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
@@ -3548,8 +3556,12 @@ export class MatchViewController {
     isPlaying: boolean,
     reason: FrameChangeReason,
   ): void {
+    const previousFrame = this.lastFrame;
     const frame = this.currentReplay?.frames[index];
     this.renderFrame(frame, index, reason === "jump");
+    if (reason === "tick") {
+      this.playSfxForFrameChange(previousFrame, frame, index);
+    }
     this.scrubber.value = String(index);
     this.playPauseBtn.textContent = isPlaying ? "⏸" : "▶";
 
@@ -3560,6 +3572,86 @@ export class MatchViewController {
     this.updateDILiveMonitor(index);
     this.updateNeutralHitsHighlight(index);
     this.youtubeSync.onReplayFrameChange(index, isPlaying, reason);
+  }
+
+  /**
+   * Toblo sound effects (see sfx.ts) triggered by state changes between
+   * consecutive frames. Only called for reason === "tick" (natural
+   * one-frame playback advance) - deliberately skipped on scrub/seek/step
+   * ("jump" per FrameChangeReason's own naming, unrelated to the character
+   * move) so rewinding/scrubbing through a jump doesn't replay its sound.
+   */
+  private playSfxForFrameChange(
+    previousFrame: Frame | undefined,
+    frame: Frame | undefined,
+    index: number,
+  ): void {
+    if (!previousFrame || !frame) return;
+
+    // A linked YouTube video with its own audio playing (any mode besides
+    // "canvas-muted") would double up with these sound effects - skip all
+    // of them entirely rather than fight for the user's ears.
+    const hasAudibleVideo =
+      this.youtubeSync.getLinkData() !== null &&
+      this.currentVideoViewMode !== "canvas-muted";
+    if (hasAudibleVideo) return;
+
+    // Tied to playback actually reaching frame 1, not to loadMatch() - the
+    // latter fires the instant a match is opened, before the user has even
+    // pressed play, which felt like a jump-scare rather than a countdown.
+    if (index === 1) {
+      playMatchStartSfx();
+    }
+
+    for (const key of Object.keys(frame.ports)) {
+      const port = Number(key) as PortIndex;
+      const prevPost = previousFrame.ports[port]?.post;
+      const post = frame.ports[port]?.post;
+      if (!prevPost || !post) continue;
+
+      // Ideally this would be jumpsUsed increasing (unambiguously "this
+      // port just jumped," grounded or aerial) - but a real capture shows
+      // it constant at 0 for the entire match, both ports, never once
+      // incrementing (likely a wrong offset in RMG-K's recorder, or the
+      // field means something other than assumed - needs its own
+      // investigation, see RMG-K's ReplayMemory.cpp PS_JUMPS_USED).
+      // Falling back to grounded flipping true -> false, confirmed to
+      // fluctuate realistically across a real match. Imperfect - also
+      // fires for walking off a ledge or getting knocked airborne by a
+      // hit, not just a voluntary jump - but good enough for a for-fun
+      // cosmetic sound cue.
+      if (prevPost.grounded && !post.grounded) {
+        playJumpSfx();
+      }
+
+      // Same "damagePercent increased" signal extractAllHitsWithDI() (see
+      // di.ts) uses to detect a hit landing - only changes once per real
+      // hit, not every frame of hitlag, so no extra de-duplication needed.
+      if (post.damagePercent > prevPost.damagePercent) {
+        playAttackSfx();
+      }
+
+      // CapturePulled is specifically the victim's "just got grabbed"
+      // state (isGrabState() in rmgr-ts covers Grab/GrabPull/GrabWait
+      // instead - that's the grabber's own side).
+      if (
+        post.actionStateId === ActionStateId.CapturePulled &&
+        prevPost.actionStateId !== ActionStateId.CapturePulled
+      ) {
+        playGrabSfx();
+      }
+
+      if (
+        post.actionStateId === ActionStateId.Taunt &&
+        prevPost.actionStateId !== ActionStateId.Taunt
+      ) {
+        playTauntSfx();
+      }
+
+      if (post.stocksRemaining < prevPost.stocksRemaining) {
+        playStockTakenSfx();
+      }
+    }
   }
 
   public resizeStageCanvas(): void {

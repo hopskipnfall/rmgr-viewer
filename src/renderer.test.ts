@@ -1409,7 +1409,9 @@ describe("getSamusSpecialType", () => {
 
 describe("getLinkSpecialType", () => {
   it("classifies Link special moves correctly", () => {
-    expect(getLinkSpecialType(0x05, 0x0dc)).toBe("boomerang");
+    // Boomerang charge/wind-up - no synthetic animation anymore, the real
+    // recorded Weapon object (WPKind.Boomerang) gets its own marker instead.
+    expect(getLinkSpecialType(0x05, 0x0dc)).toBeNull();
     expect(getLinkSpecialType(0x05, 0x0e6)).toBe("spin_attack");
     expect(getLinkSpecialType(0x05, 0x0e9)).toBe("bomb");
   });
@@ -1419,12 +1421,16 @@ describe("getLinkSpecialType", () => {
     expect(getLinkSpecialType(0x01, 0x0dc)).toBeNull(); // Fox
   });
 
-  it("classifies 0x0e5 and 0x0e8 as the boomerang throw, not spin attack (confirmed empirically - ground and air use the same animation)", () => {
-    expect(getLinkSpecialType(0x05, 0x0e5)).toBe("boomerang");
-    expect(getLinkSpecialType(0x05, 0x0e8)).toBe("boomerang");
+  it("classifies 0x0e5 and 0x0e8 (the boomerang throw, confirmed empirically - ground and air use the same animation) as no special move to draw here anymore, distinct from spin attack", () => {
+    // Both used to draw the boomerang animation here; now that the real
+    // Weapon marker handles it, they draw nothing in drawLinkSpecial - but
+    // they must still NOT fall through to spin_attack.
+    expect(getLinkSpecialType(0x05, 0x0e5)).toBeNull();
+    expect(getLinkSpecialType(0x05, 0x0e8)).toBeNull();
   });
 
-  it("classifies 0x0e4 as the aerial spin attack (confirmed empirically, previously unmapped)", () => {
+  it("classifies 0x0e2 as the grounded spin attack and 0x0e4 as the aerial spin attack (confirmed empirically, previously unmapped)", () => {
+    expect(getLinkSpecialType(0x05, 0x0e2)).toBe("spin_attack");
     expect(getLinkSpecialType(0x05, 0x0e4)).toBe("spin_attack");
   });
 
