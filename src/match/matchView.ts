@@ -3609,18 +3609,14 @@ export class MatchViewController {
       const post = frame.ports[port]?.post;
       if (!prevPost || !post) continue;
 
-      // Ideally this would be jumpsUsed increasing (unambiguously "this
-      // port just jumped," grounded or aerial) - but a real capture shows
-      // it constant at 0 for the entire match, both ports, never once
-      // incrementing (likely a wrong offset in RMG-K's recorder, or the
-      // field means something other than assumed - needs its own
-      // investigation, see RMG-K's ReplayMemory.cpp PS_JUMPS_USED).
-      // Falling back to grounded flipping true -> false, confirmed to
-      // fluctuate realistically across a real match. Imperfect - also
-      // fires for walking off a ledge or getting knocked airborne by a
-      // hit, not just a voluntary jump - but good enough for a for-fun
-      // cosmetic sound cue.
-      if (prevPost.grounded && !post.grounded) {
+      // jumpsRemaining decreasing is unambiguously "this port just
+      // jumped" (grounded or aerial) - fixed in RMG-K schema v7 (was
+      // previously exported as jumpsUsed, and read at the wrong width,
+      // reading a constant 0 for an entire match regardless of real jump
+      // activity - see docs/RMGR_SPEC.md §5's v6->v7 note). This replaces
+      // the earlier `grounded` workaround, which also fired for walking
+      // off a ledge or getting knocked airborne by a hit.
+      if (post.jumpsRemaining < prevPost.jumpsRemaining) {
         playJumpSfx();
       }
 
