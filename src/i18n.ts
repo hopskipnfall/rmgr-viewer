@@ -16,6 +16,7 @@ export interface Translations {
   // Player panel
   damage: string;
   stocks: string;
+  jumps: string;
   state: string;
   position: string;
   comboHits: string;
@@ -416,6 +417,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     damage: "Damage:",
     stocks: "Stocks:",
+    jumps: "Jumps:",
     state: "State:",
     position: "Position:",
     comboHits: "Combo hits:",
@@ -819,6 +821,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     damage: "ダメージ:",
     stocks: "ストック:",
+    jumps: "ジャンプ:",
     state: "状態:",
     position: "座標:",
     comboHits: "コンボヒット数:",
