@@ -1469,11 +1469,17 @@ describe("getKirbySpecialType", () => {
   it("classifies Kirby special moves correctly", () => {
     expect(getKirbySpecialType(0x08, 0x0dc)).toBe("inhale");
     expect(getKirbySpecialType(0x08, 0x0e5)).toBe("final_cutter");
+    expect(getKirbySpecialType(0x08, 0x101)).toBe("final_cutter");
+    expect(getKirbySpecialType(0x08, 0x102)).toBe("final_cutter");
+    expect(getKirbySpecialType(0x08, 0x103)).toBe("final_cutter");
     expect(getKirbySpecialType(0x08, 0x0e9)).toBe("stone");
   });
 
-  it("returns null for non-Kirby or non-special states", () => {
+  it("returns null for non-Kirby, non-special states, or Kirby midair jumps (0x0df - 0x0e4)", () => {
     expect(getKirbySpecialType(0x08, 0x00a)).toBeNull(); // Idle
+    expect(getKirbySpecialType(0x08, 0x0df)).toBeNull(); // Jump 2
+    expect(getKirbySpecialType(0x08, 0x0e0)).toBeNull(); // Jump 3
+    expect(getKirbySpecialType(0x08, 0x0e1)).toBeNull(); // Jump 4
     expect(getKirbySpecialType(0x07, 0x0dc)).toBeNull(); // Falcon
   });
 });
