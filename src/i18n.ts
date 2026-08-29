@@ -249,6 +249,7 @@ export interface Translations {
   shortcutsStepForward: string;
   shortcutsToggleSidebars: string;
   shortcutsTogglePip: string;
+  shortcutsToggleBackground: string;
   shortcutsGeneralHeader: string;
   shortcutsHelp: string;
   shortcutsClose: string;
@@ -661,6 +662,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     shortcutsStepForward: "Next frame",
     shortcutsToggleSidebars: "Toggle sidebars",
     shortcutsTogglePip: "Toggle video / 2D mini overlay",
+    shortcutsToggleBackground: "Toggle background scenery (Mountain / Grid)",
     shortcutsGeneralHeader: "General",
     shortcutsHelp: "Show keyboard shortcuts",
     shortcutsClose: "Close dialog",
@@ -1059,6 +1061,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     shortcutsStepForward: "次のフレーム",
     shortcutsToggleSidebars: "サイドバーの表示切替",
     shortcutsTogglePip: "動画 / 2Dミニ画面の表示切替",
+    shortcutsToggleBackground: "背景テーマの切替（雪山 / グリッド）",
     shortcutsGeneralHeader: "全般",
     shortcutsHelp: "ショートカット一覧を表示",
     shortcutsClose: "ダイアログを閉じる",

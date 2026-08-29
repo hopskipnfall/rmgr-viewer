@@ -18,6 +18,7 @@ import {
 } from "../sfx.js";
 import {
   StageRenderer,
+  type BackgroundTheme,
   isCrouchState,
   isDeadState,
   isPikachuCharacter,
@@ -194,6 +195,7 @@ export class MatchViewController {
   private expandRightSidebarLabel: HTMLSpanElement;
   private statsSidebarHeaderTitle: HTMLHeadingElement;
   private stageExpandBtn: HTMLButtonElement;
+  private stageBgBtn: HTMLButtonElement;
   private neutralHitsWidgetTitleEl: HTMLHeadingElement;
   private neutralHitsList: HTMLDivElement;
   private neutralHitEvents: NeutralHitEvent[] = [];
@@ -493,6 +495,9 @@ export class MatchViewController {
     this.stageExpandBtn = document.getElementById(
       "stageExpandBtn",
     ) as HTMLButtonElement;
+    this.stageBgBtn = document.getElementById(
+      "stageBgBtn",
+    ) as HTMLButtonElement;
     this.neutralHitsWidgetTitleEl = document.getElementById(
       "neutralHitsWidgetTitle",
     ) as HTMLHeadingElement;
@@ -673,6 +678,18 @@ export class MatchViewController {
     );
 
     this.stageRenderer = new StageRenderer(this.stageCanvas);
+
+    try {
+      const savedBg = localStorage.getItem(
+        "rmgr-viewer-bg",
+      ) as BackgroundTheme | null;
+      if (savedBg === "grid" || savedBg === "mountain") {
+        this.stageRenderer.setBackgroundTheme(savedBg);
+      }
+    } catch {
+      // Ignore localStorage read error
+    }
+    this.updateBackgroundBtnState();
 
     try {
       // Defaults OFF (only "true" turns it on) - this used to default ON
@@ -898,6 +915,11 @@ export class MatchViewController {
     this.stageExpandBtn.addEventListener("click", () => {
       this.toggleBothSidebars();
     });
+    if (this.stageBgBtn) {
+      this.stageBgBtn.addEventListener("click", () => {
+        this.toggleBackgroundTheme();
+      });
+    }
 
     this.scrubber.addEventListener("input", () => {
       this.dismissQuickAttackOverlay();
@@ -1114,6 +1136,32 @@ export class MatchViewController {
     });
   }
 
+  public toggleBackgroundTheme(): void {
+    const current = this.stageRenderer.getBackgroundTheme();
+    const next: BackgroundTheme = current === "mountain" ? "grid" : "mountain";
+    this.stageRenderer.setBackgroundTheme(next);
+    try {
+      localStorage.setItem("rmgr-viewer-bg", next);
+    } catch {
+      // Ignore
+    }
+    this.updateBackgroundBtnState();
+    if (this.lastFrame && this.currentReplay) {
+      this.renderFrame(this.lastFrame, this.playback?.currentIndex ?? 0, true);
+    }
+  }
+
+  private updateBackgroundBtnState(): void {
+    if (!this.stageBgBtn) return;
+    const theme = this.stageRenderer.getBackgroundTheme();
+    const isMountain = theme === "mountain";
+    this.stageBgBtn.classList.toggle("active", isMountain);
+    this.stageBgBtn.textContent = isMountain ? "🏔️" : "⊞";
+    this.stageBgBtn.title = isMountain
+      ? "Switch to Grid background (b)"
+      : "Switch to Mountain scenery background (b)";
+  }
+
   private handleKeyDown(e: KeyboardEvent): void {
     if (
       e.target instanceof HTMLTextAreaElement ||
@@ -1134,6 +1182,11 @@ export class MatchViewController {
     if (e.code === "KeyT") {
       e.preventDefault();
       this.toggleBothSidebars();
+      return;
+    }
+    if (e.code === "KeyB") {
+      e.preventDefault();
+      this.toggleBackgroundTheme();
       return;
     }
     if (e.code === "KeyP") {
@@ -1321,6 +1374,12 @@ export class MatchViewController {
     const shortcutsTogglePipEl = document.getElementById("shortcutsTogglePip");
     if (shortcutsTogglePipEl)
       shortcutsTogglePipEl.textContent = tr.shortcutsTogglePip;
+    const shortcutsToggleBgEl = document.getElementById(
+      "shortcutsToggleBackground",
+    );
+    if (shortcutsToggleBgEl)
+      shortcutsToggleBgEl.textContent = tr.shortcutsToggleBackground;
+    this.updateBackgroundBtnState();
 
     if (this.stepBackBtn) this.stepBackBtn.title = tr.prevFrameTooltip;
     if (this.playPauseBtn) this.playPauseBtn.title = tr.playPauseTooltip;

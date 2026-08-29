@@ -1707,11 +1707,26 @@ export interface CharacterAnimState {
   actionFrameCounter: number;
 }
 
+export type BackgroundTheme = "mountain" | "grid";
+
 export class StageRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private quickAttackOverlayPaths: QuickAttackPath[] | null = null;
   private hoveredQuickAttackIndex: number | null = null;
   private diEventsCache = new WeakMap<Replay, HitDIResult[]>();
+  private backgroundTheme: BackgroundTheme = "mountain";
+  private bgBufferCanvas: HTMLCanvasElement | null = null;
+  private bgBufferDirty = true;
+
+  public setBackgroundTheme(theme: BackgroundTheme): void {
+    if (this.backgroundTheme === theme) return;
+    this.backgroundTheme = theme;
+    this.bgBufferDirty = true;
+  }
+
+  public getBackgroundTheme(): BackgroundTheme {
+    return this.backgroundTheme;
+  }
 
   private getDIEvents(replay: Replay): HitDIResult[] {
     let events = this.diEventsCache.get(replay);
@@ -2837,6 +2852,14 @@ export class StageRenderer {
   }
 
   private drawBackground(): void {
+    if (this.backgroundTheme === "grid") {
+      this.drawGridBackground();
+    } else {
+      this.drawMountainBackground();
+    }
+  }
+
+  private drawGridBackground(): void {
     const { ctx, canvas } = this;
 
     ctx.fillStyle = "#12141c";
@@ -2860,6 +2883,650 @@ export class StageRenderer {
     }
   }
 
+  private drawMountainBackground(): void {
+    const { ctx, canvas } = this;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // Cache the drawn background into an offscreen canvas to guarantee maximum 60fps performance
+    if (
+      !this.bgBufferCanvas ||
+      this.bgBufferCanvas.width !== w ||
+      this.bgBufferCanvas.height !== h ||
+      this.bgBufferDirty
+    ) {
+      if (!this.bgBufferCanvas) {
+        this.bgBufferCanvas = document.createElement("canvas");
+      }
+      this.bgBufferCanvas.width = w;
+      this.bgBufferCanvas.height = h;
+      const bCtx = this.bgBufferCanvas.getContext("2d");
+      if (bCtx) {
+        this.renderMountainScenery(bCtx, w, h);
+      }
+      this.bgBufferDirty = false;
+    }
+
+    if (this.bgBufferCanvas) {
+      ctx.drawImage(this.bgBufferCanvas, 0, 0);
+    }
+  }
+
+  private renderMountainScenery(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ): void {
+    ctx.save();
+
+    // 0. Soft-focus lens blur for background depth of field
+    try {
+      ctx.filter = "blur(1.8px)";
+    } catch {
+      // ignore if unsupported in current environment
+    }
+
+    // 1. Fixed Aspect Ratio Coordinate Transform:
+    // Lock horizontal scaling to match the natural ~1.05 aspect ratio from the default
+    // sidebar-shown view. When sidebars are collapsed (wide canvas), the mountains, moon,
+    // and snow caps maintain their exact steepness and proportions without horizontal stretching!
+    const baseAspect = 1.05;
+    const refW = h * baseAspect;
+    const offsetX = (w - refW) * 0.5;
+    const toX = (relX: number) => offsetX + relX * refW;
+
+    // Helper to draw filled polygons with strict array bounds checks
+    const drawPoly = (pts: [number, number][], fill: string) => {
+      const first = pts[0];
+      if (!first) return;
+      ctx.beginPath();
+      ctx.moveTo(first[0], first[1]);
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i];
+        if (pt) {
+          ctx.lineTo(pt[0], pt[1]);
+        }
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+
+    // 2. Deep Midnight Twilight Sky Gradient (Purple to Indigo Blue) across full width
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+    skyGrad.addColorStop(0.0, "#080516"); // Deep cosmic black-violet
+    skyGrad.addColorStop(0.25, "#150b33"); // Deep royal purple
+    skyGrad.addColorStop(0.5, "#22134e"); // Luminous twilight amethyst
+    skyGrad.addColorStop(0.75, "#191f52"); // Indigo night
+    skyGrad.addColorStop(1.0, "#121b36"); // Horizon navy
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // 3. Translucent Atmospheric Aurora / Nebula Cloud Polygons
+    const nebulaBands: Array<{ points: [number, number][]; color: string }> = [
+      {
+        points: [
+          [Math.min(0, toX(-0.5)), h * 0.18],
+          [toX(0.25), h * 0.12],
+          [toX(0.55), h * 0.22],
+          [toX(0.85), h * 0.14],
+          [Math.max(w, toX(1.5)), h * 0.2],
+          [Math.max(w, toX(1.5)), h * 0.38],
+          [toX(0.7), h * 0.42],
+          [toX(0.35), h * 0.32],
+          [Math.min(0, toX(-0.5)), h * 0.4],
+        ],
+        color: "rgba(168, 85, 247, 0.07)",
+      },
+      {
+        points: [
+          [Math.min(0, toX(-0.5)), h * 0.32],
+          [toX(0.3), h * 0.26],
+          [toX(0.65), h * 0.35],
+          [Math.max(w, toX(1.5)), h * 0.28],
+          [Math.max(w, toX(1.5)), h * 0.5],
+          [toX(0.75), h * 0.56],
+          [toX(0.4), h * 0.46],
+          [Math.min(0, toX(-0.5)), h * 0.54],
+        ],
+        color: "rgba(99, 102, 241, 0.06)",
+      },
+      {
+        points: [
+          [Math.min(0, toX(-0.3)), h * 0.45],
+          [toX(0.45), h * 0.4],
+          [toX(0.8), h * 0.48],
+          [Math.max(w, toX(1.3)), h * 0.44],
+          [Math.max(w, toX(1.3)), h * 0.62],
+          [toX(0.6), h * 0.68],
+          [toX(0.2), h * 0.58],
+        ],
+        color: "rgba(56, 189, 248, 0.04)",
+      },
+    ];
+
+    for (const band of nebulaBands) {
+      drawPoly(band.points, band.color);
+    }
+
+    // 4. Celestial Starfield (Fixed deterministic star distribution)
+    const stars: Array<[number, number, number, number]> = [
+      [-0.4, 0.12, 1.3, 0.7],
+      [-0.3, 0.2, 1.0, 0.55],
+      [-0.2, 0.08, 1.5, 0.8],
+      [-0.1, 0.16, 1.1, 0.6],
+      [0.05, 0.08, 1.2, 0.75],
+      [0.12, 0.16, 1.0, 0.6],
+      [0.18, 0.05, 1.6, 0.9],
+      [0.22, 0.22, 1.1, 0.55],
+      [0.28, 0.11, 1.4, 0.8],
+      [0.34, 0.06, 1.0, 0.5],
+      [0.38, 0.19, 1.8, 0.95],
+      [0.44, 0.12, 1.1, 0.65],
+      [0.48, 0.04, 1.5, 0.85],
+      [0.52, 0.24, 0.9, 0.5],
+      [0.58, 0.09, 1.3, 0.7],
+      [0.62, 0.17, 1.7, 0.9],
+      [0.68, 0.07, 1.1, 0.6],
+      [0.82, 0.06, 1.5, 0.85],
+      [0.88, 0.14, 1.2, 0.7],
+      [0.92, 0.05, 1.8, 0.95],
+      [0.96, 0.2, 1.0, 0.6],
+      [1.1, 0.1, 1.3, 0.75],
+      [1.2, 0.18, 1.1, 0.6],
+      [1.3, 0.07, 1.6, 0.85],
+      [1.4, 0.15, 1.2, 0.7],
+      [0.08, 0.28, 1.1, 0.55],
+      [0.15, 0.35, 0.9, 0.45],
+      [0.26, 0.31, 1.3, 0.65],
+      [0.42, 0.33, 1.0, 0.5],
+      [0.55, 0.36, 1.2, 0.6],
+      [0.71, 0.32, 1.1, 0.55],
+      [0.85, 0.28, 1.4, 0.75],
+      [0.94, 0.34, 1.0, 0.5],
+    ];
+
+    for (const [sx, sy, sr, sa] of stars) {
+      const px = toX(sx);
+      if (px < -10 || px > w + 10) continue;
+      const py = sy * h;
+      ctx.beginPath();
+      ctx.arc(px, py, sr, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(240, 245, 255, ${sa})`;
+      ctx.fill();
+
+      // Diamond shimmer spark for brightest stars
+      if (sa > 0.8) {
+        ctx.beginPath();
+        ctx.moveTo(px - sr * 2.2, py);
+        ctx.lineTo(px, py - sr * 2.2);
+        ctx.lineTo(px + sr * 2.2, py);
+        ctx.lineTo(px, py + sr * 2.2);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255, 255, 255, ${sa * 0.4})`;
+        ctx.fill();
+      }
+    }
+
+    // 5. Luminous Full Moon (Anchored relative to scene proportion)
+    const moonX = toX(0.76);
+    const moonY = h * 0.2;
+    const moonR = Math.max(18, h * 0.065);
+
+    // Expanding soft atmospheric moonlight halos
+    const haloGradients = [
+      { r: moonR * 3.8, color: "rgba(192, 132, 252, 0.04)" },
+      { r: moonR * 2.4, color: "rgba(216, 180, 254, 0.09)" },
+      { r: moonR * 1.5, color: "rgba(243, 232, 255, 0.18)" },
+      { r: moonR * 1.18, color: "rgba(255, 255, 255, 0.28)" },
+    ];
+    for (const halo of haloGradients) {
+      ctx.beginPath();
+      ctx.arc(moonX, moonY, halo.r, 0, Math.PI * 2);
+      ctx.fillStyle = halo.color;
+      ctx.fill();
+    }
+
+    // Moon disc
+    const moonGrad = ctx.createLinearGradient(
+      moonX - moonR,
+      moonY - moonR,
+      moonX + moonR,
+      moonY + moonR,
+    );
+    moonGrad.addColorStop(0.0, "#ffffff");
+    moonGrad.addColorStop(0.65, "#f1f5f9");
+    moonGrad.addColorStop(1.0, "#cbd5e1");
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
+    ctx.fillStyle = moonGrad;
+    ctx.shadowColor = "#e9d5ff";
+    ctx.shadowBlur = 18;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Subtle low-poly lunar maria craters
+    const craters: Array<[number, number, number, number]> = [
+      [-0.32, -0.18, 0.26, 0.22],
+      [-0.1, 0.22, 0.3, 0.25],
+      [0.22, -0.28, 0.22, 0.2],
+      [0.28, 0.14, 0.28, 0.24],
+      [-0.2, -0.4, 0.18, 0.15],
+    ];
+    ctx.fillStyle = "rgba(148, 163, 184, 0.18)";
+    for (const [cx, cy, crx, cry] of craters) {
+      ctx.beginPath();
+      ctx.ellipse(
+        moonX + cx * moonR,
+        moonY + cy * moonR,
+        crx * moonR,
+        cry * moonR,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+
+    // 6. Far Mountain Silhouette Range (Layer 1: Deep Amethyst / Indigo)
+    const farRidgePoints: [number, number][] = [
+      [Math.min(0, toX(-0.8)), h * 0.78],
+      [Math.min(0, toX(-0.8)), h * 0.58],
+      [toX(-0.6), h * 0.48],
+      [toX(-0.4), h * 0.54],
+      [toX(-0.2), h * 0.46],
+      [toX(-0.05), h * 0.55],
+      [toX(0.06), h * 0.5],
+      [toX(0.15), h * 0.56],
+      [toX(0.24), h * 0.46],
+      [toX(0.35), h * 0.53],
+      [toX(0.48), h * 0.42],
+      [toX(0.58), h * 0.51],
+      [toX(0.68), h * 0.44],
+      [toX(0.79), h * 0.5],
+      [toX(0.9), h * 0.45],
+      [toX(1.05), h * 0.52],
+      [toX(1.22), h * 0.46],
+      [toX(1.4), h * 0.53],
+      [toX(1.6), h * 0.47],
+      [Math.max(w, toX(1.8)), h * 0.56],
+      [Math.max(w, toX(1.8)), h * 0.78],
+    ];
+    drawPoly(farRidgePoints, "#181333");
+
+    // Far mountain facet shading
+    const farFacets: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [toX(-0.6), h * 0.48],
+          [toX(-0.4), h * 0.54],
+          [toX(-0.5), h * 0.78],
+        ],
+        color: "#1e1840",
+      },
+      {
+        pts: [
+          [toX(-0.2), h * 0.46],
+          [toX(-0.05), h * 0.55],
+          [toX(-0.12), h * 0.78],
+        ],
+        color: "#221a47",
+      },
+      {
+        pts: [
+          [toX(0.06), h * 0.5],
+          [toX(0.15), h * 0.56],
+          [toX(0.1), h * 0.78],
+        ],
+        color: "#1e1840",
+      },
+      {
+        pts: [
+          [toX(0.24), h * 0.46],
+          [toX(0.35), h * 0.53],
+          [toX(0.3), h * 0.78],
+        ],
+        color: "#221a47",
+      },
+      {
+        pts: [
+          [toX(0.48), h * 0.42],
+          [toX(0.58), h * 0.51],
+          [toX(0.52), h * 0.78],
+        ],
+        color: "#251c4e",
+      },
+      {
+        pts: [
+          [toX(0.68), h * 0.44],
+          [toX(0.79), h * 0.5],
+          [toX(0.73), h * 0.78],
+        ],
+        color: "#2b2158",
+      },
+      {
+        pts: [
+          [toX(0.9), h * 0.45],
+          [toX(1.05), h * 0.52],
+          [toX(0.96), h * 0.78],
+        ],
+        color: "#241d4a",
+      },
+      {
+        pts: [
+          [toX(1.22), h * 0.46],
+          [toX(1.4), h * 0.53],
+          [toX(1.3), h * 0.78],
+        ],
+        color: "#221a47",
+      },
+      {
+        pts: [
+          [toX(1.6), h * 0.47],
+          [Math.max(w, toX(1.8)), h * 0.56],
+          [toX(1.7), h * 0.78],
+        ],
+        color: "#1e1840",
+      },
+    ];
+    for (const f of farFacets) drawPoly(f.pts, f.color);
+
+    // 7. Mid Mountain Range (Layer 2: Snow-Peaked Faceted Peaks)
+    interface MountainSpec {
+      apex: [number, number];
+      leftBase: [number, number];
+      rightBase: [number, number];
+      centerBase: [number, number];
+      snowLeftZig: [number, number];
+      snowMidZig: [number, number];
+      snowRightZig: [number, number];
+    }
+
+    const midMountains: MountainSpec[] = [
+      // Left flanking peak 2
+      {
+        apex: [toX(-0.46), h * 0.42],
+        leftBase: [toX(-0.68), h * 0.88],
+        rightBase: [toX(-0.24), h * 0.88],
+        centerBase: [toX(-0.45), h * 0.88],
+        snowLeftZig: [toX(-0.55), h * 0.57],
+        snowMidZig: [toX(-0.45), h * 0.61],
+        snowRightZig: [toX(-0.37), h * 0.56],
+      },
+      // Left flanking peak 1
+      {
+        apex: [toX(-0.24), h * 0.36],
+        leftBase: [toX(-0.44), h * 0.86],
+        rightBase: [toX(-0.02), h * 0.86],
+        centerBase: [toX(-0.22), h * 0.86],
+        snowLeftZig: [toX(-0.32), h * 0.52],
+        snowMidZig: [toX(-0.22), h * 0.56],
+        snowRightZig: [toX(-0.15), h * 0.51],
+      },
+      // Left mountain (from screenshot)
+      {
+        apex: [toX(0.16), h * 0.35],
+        leftBase: [toX(-0.06), h * 0.85],
+        rightBase: [toX(0.38), h * 0.85],
+        centerBase: [toX(0.18), h * 0.85],
+        snowLeftZig: [toX(0.08), h * 0.51],
+        snowMidZig: [toX(0.17), h * 0.55],
+        snowRightZig: [toX(0.24), h * 0.5],
+      },
+      // Left-mid mountain (from screenshot)
+      {
+        apex: [toX(0.36), h * 0.42],
+        leftBase: [toX(0.18), h * 0.86],
+        rightBase: [toX(0.54), h * 0.86],
+        centerBase: [toX(0.37), h * 0.86],
+        snowLeftZig: [toX(0.29), h * 0.56],
+        snowMidZig: [toX(0.37), h * 0.59],
+        snowRightZig: [toX(0.43), h * 0.55],
+      },
+      // Highest center-right mountain (from screenshot)
+      {
+        apex: [toX(0.58), h * 0.3],
+        leftBase: [toX(0.38), h * 0.88],
+        rightBase: [toX(0.78), h * 0.88],
+        centerBase: [toX(0.59), h * 0.88],
+        snowLeftZig: [toX(0.49), h * 0.49],
+        snowMidZig: [toX(0.59), h * 0.53],
+        snowRightZig: [toX(0.67), h * 0.48],
+      },
+      // Moonlit mountain beneath moon (from screenshot)
+      {
+        apex: [toX(0.82), h * 0.38],
+        leftBase: [toX(0.64), h * 0.88],
+        rightBase: [toX(1.02), h * 0.88],
+        centerBase: [toX(0.83), h * 0.88],
+        snowLeftZig: [toX(0.73), h * 0.56],
+        snowMidZig: [toX(0.83), h * 0.6],
+        snowRightZig: [toX(0.91), h * 0.54],
+      },
+      // Far right mountain (from screenshot)
+      {
+        apex: [toX(1.02), h * 0.44],
+        leftBase: [toX(0.84), h * 0.9],
+        rightBase: [toX(1.14), h * 0.9],
+        centerBase: [toX(1.02), h * 0.9],
+        snowLeftZig: [toX(0.95), h * 0.58],
+        snowMidZig: [toX(1.02), h * 0.62],
+        snowRightZig: [toX(1.07), h * 0.57],
+      },
+      // Far left mountain (from screenshot)
+      {
+        apex: [toX(-0.02), h * 0.42],
+        leftBase: [toX(-0.16), h * 0.88],
+        rightBase: [toX(0.14), h * 0.88],
+        centerBase: [toX(-0.01), h * 0.88],
+        snowLeftZig: [toX(-0.08), h * 0.56],
+        snowMidZig: [toX(-0.01), h * 0.6],
+        snowRightZig: [toX(0.06), h * 0.55],
+      },
+      // Right flanking peak 1
+      {
+        apex: [toX(1.24), h * 0.37],
+        leftBase: [toX(1.04), h * 0.88],
+        rightBase: [toX(1.44), h * 0.88],
+        centerBase: [toX(1.25), h * 0.88],
+        snowLeftZig: [toX(1.15), h * 0.52],
+        snowMidZig: [toX(1.25), h * 0.56],
+        snowRightZig: [toX(1.33), h * 0.51],
+      },
+      // Right flanking peak 2
+      {
+        apex: [toX(1.46), h * 0.43],
+        leftBase: [toX(1.26), h * 0.9],
+        rightBase: [toX(1.68), h * 0.9],
+        centerBase: [toX(1.46), h * 0.9],
+        snowLeftZig: [toX(1.38), h * 0.58],
+        snowMidZig: [toX(1.46), h * 0.62],
+        snowRightZig: [toX(1.53), h * 0.57],
+      },
+    ];
+
+    // Draw base mountain bodies and faceted shading
+    for (const m of midMountains) {
+      // 1. Left dark shadow face
+      drawPoly([m.apex, m.leftBase, m.centerBase], "#14172b");
+      // Inner shadow facet
+      drawPoly(
+        [
+          m.apex,
+          [m.leftBase[0] * 0.4 + m.centerBase[0] * 0.6, m.leftBase[1]],
+          m.centerBase,
+        ],
+        "#1a1e38",
+      );
+
+      // 2. Right moonlit face
+      drawPoly([m.apex, m.centerBase, m.rightBase], "#283454");
+      // Secondary moonlit highlight facet
+      drawPoly(
+        [
+          m.apex,
+          m.centerBase,
+          [m.centerBase[0] * 0.4 + m.rightBase[0] * 0.6, m.rightBase[1]],
+        ],
+        "#36456c",
+      );
+
+      // 3. Snow Cap (Shadow Side - Amethyst / Indigo Snow)
+      drawPoly(
+        [m.apex, m.snowLeftZig, m.snowMidZig],
+        "rgba(99, 102, 241, 0.75)",
+      );
+      // Secondary shadow snow facet
+      drawPoly(
+        [
+          m.apex,
+          [m.snowLeftZig[0] * 0.5 + m.snowMidZig[0] * 0.5, m.snowMidZig[1]],
+          m.snowMidZig,
+        ],
+        "rgba(129, 140, 248, 0.65)",
+      );
+
+      // 4. Snow Cap (Moonlit Side - Brilliant Icy White/Lavender Snow)
+      drawPoly([m.apex, m.snowMidZig, m.snowRightZig], "#f8fafc");
+      // Secondary moonlit snow facet
+      drawPoly(
+        [
+          m.apex,
+          m.snowMidZig,
+          [m.snowMidZig[0] * 0.4 + m.snowRightZig[0] * 0.6, m.snowRightZig[1]],
+        ],
+        "#e0e7ff",
+      );
+    }
+
+    // 8. Near Mountain Foothills & Rolling Ridges (Layer 3)
+    const foothills: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.8)), h * 0.76],
+          [toX(-0.4), h * 0.72],
+          [toX(-0.1), h * 0.78],
+          [toX(-0.3), h],
+          [Math.min(0, toX(-0.8)), h],
+        ],
+        color: "#0c101f",
+      },
+      {
+        pts: [
+          [toX(-0.2), h * 0.77],
+          [toX(0.18), h * 0.7],
+          [toX(0.38), h * 0.78],
+          [toX(0.2), h],
+          [toX(-0.2), h],
+        ],
+        color: "#0d1222",
+      },
+      {
+        pts: [
+          [toX(0.3), h * 0.78],
+          [toX(0.52), h * 0.68],
+          [toX(0.72), h * 0.76],
+          [toX(0.55), h],
+          [toX(0.25), h],
+        ],
+        color: "#10162a",
+      },
+      {
+        pts: [
+          [toX(0.64), h * 0.76],
+          [toX(0.85), h * 0.71],
+          [toX(1.15), h * 0.77],
+          [toX(0.9), h],
+          [toX(0.6), h],
+        ],
+        color: "#0f1528",
+      },
+      {
+        pts: [
+          [toX(1.05), h * 0.77],
+          [toX(1.35), h * 0.71],
+          [Math.max(w, toX(1.8)), h * 0.76],
+          [Math.max(w, toX(1.8)), h],
+          [toX(1.2), h],
+        ],
+        color: "#0c101f",
+      },
+    ];
+    for (const fh of foothills) drawPoly(fh.pts, fh.color);
+
+    // 9. Low-Poly Coniferous Pine Tree Silhouettes along the ridges
+    const treeClusters: Array<[number, number, number]> = [
+      // Left flanking trees
+      [-0.45, 0.73, 20],
+      [-0.42, 0.72, 25],
+      [-0.38, 0.73, 18],
+      [-0.15, 0.73, 19],
+      [-0.12, 0.72, 24],
+      [-0.09, 0.73, 17],
+      // Center range trees (from screenshot)
+      [0.08, 0.72, 18],
+      [0.1, 0.71, 22],
+      [0.12, 0.71, 16],
+      [0.15, 0.7, 24],
+      [0.17, 0.7, 20],
+      [0.19, 0.71, 15],
+      [0.44, 0.71, 20],
+      [0.46, 0.7, 26],
+      [0.48, 0.69, 22],
+      [0.5, 0.68, 28],
+      [0.52, 0.68, 24],
+      [0.54, 0.7, 18],
+      [0.78, 0.73, 20],
+      [0.8, 0.72, 26],
+      [0.82, 0.71, 22],
+      [0.84, 0.71, 27],
+      [0.86, 0.72, 21],
+      [0.88, 0.73, 16],
+      // Right flanking trees
+      [1.15, 0.73, 19],
+      [1.18, 0.72, 25],
+      [1.21, 0.73, 18],
+      [1.38, 0.72, 22],
+      [1.41, 0.71, 27],
+      [1.44, 0.72, 20],
+    ];
+
+    for (const [tx, ty, th] of treeClusters) {
+      const px = toX(tx);
+      if (px < -30 || px > w + 30) continue;
+      const py = ty * h;
+      const tw = th * 0.45;
+      // 3-tiered pine tree polygon
+      drawPoly(
+        [
+          [px, py - th],
+          [px - tw * 0.5, py - th * 0.6],
+          [px - tw * 0.25, py - th * 0.6],
+          [px - tw * 0.75, py - th * 0.25],
+          [px - tw * 0.4, py - th * 0.25],
+          [px - tw, py],
+          [px + tw, py],
+          [px + tw * 0.4, py - th * 0.25],
+          [px + tw * 0.75, py - th * 0.25],
+          [px + tw * 0.25, py - th * 0.6],
+          [px + tw * 0.5, py - th * 0.6],
+        ],
+        "#050812",
+      );
+    }
+
+    // 10. Soft Valley Mist & Moonlit Ground Fog across full canvas
+    const mistGrad = ctx.createLinearGradient(0, h * 0.75, 0, h);
+    mistGrad.addColorStop(0.0, "rgba(168, 85, 247, 0.0)");
+    mistGrad.addColorStop(0.3, "rgba(168, 85, 247, 0.06)");
+    mistGrad.addColorStop(0.6, "rgba(59, 130, 246, 0.08)");
+    mistGrad.addColorStop(1.0, "rgba(15, 23, 42, 0.25)");
+    ctx.fillStyle = mistGrad;
+    ctx.fillRect(0, h * 0.75, w, h * 0.25);
+
+    ctx.restore();
+  }
+
   /** Real platform/ground geometry for stages we've measured (see stageGeometry.ts); a plain Y=0 reference line otherwise. */
   private drawStage(camera: Camera, stageId: number | undefined): void {
     const platforms = stageGeometry(stageId);
@@ -2877,19 +3544,57 @@ export class StageRenderer {
     const left = camera.worldToScreen(platform.leftX, platform.y);
     const right = camera.worldToScreen(platform.rightX, platform.y);
 
-    ctx.strokeStyle =
-      platform.kind === "ground"
-        ? "rgba(210,215,225,0.9)"
-        : "rgba(160,195,255,0.8)";
-    ctx.lineWidth = platform.kind === "ground" ? 8 : 5;
-    ctx.lineCap = "round";
+    const isGround = platform.kind === "ground";
+    const lineSpacing = isGround ? 2.5 : 2.0;
+    const lineWidth = isGround ? 1.75 : 1.5;
+
+    // Linear gradient for the outer lines:
+    // - Inner third (1/3 to 2/3): solid #334ba3
+    // - Both outer thirds (0 to 1/3 and 2/3 to 1): gradient from #334ba3 to #8bcaf0
+    const outerGrad = ctx.createLinearGradient(
+      left.x,
+      left.y,
+      right.x,
+      right.y,
+    );
+    outerGrad.addColorStop(0.0, "#8bcaf0");
+    outerGrad.addColorStop(1 / 3, "#334ba3");
+    outerGrad.addColorStop(2 / 3, "#334ba3");
+    outerGrad.addColorStop(1.0, "#8bcaf0");
+
+    const purpleColor = "#a855f7";
+
+    ctx.save();
+    // lineCap = "butt" guarantees the line strictly ends at left.x and right.x without
+    // extending past the platform's terminating point by any rounding or cap radius.
+    ctx.lineCap = "butt";
+    ctx.lineWidth = lineWidth;
+
+    // 1. Top outer line (cyan-to-royal-blue-to-cyan gradient)
+    ctx.strokeStyle = outerGrad;
+    ctx.beginPath();
+    ctx.moveTo(left.x, left.y - lineSpacing);
+    ctx.lineTo(right.x, right.y - lineSpacing);
+    ctx.stroke();
+
+    // 2. Middle inner line (purple color from sky drawing)
+    ctx.strokeStyle = purpleColor;
     ctx.beginPath();
     ctx.moveTo(left.x, left.y);
     ctx.lineTo(right.x, right.y);
     ctx.stroke();
+
+    // 3. Bottom outer line (cyan-to-royal-blue-to-cyan gradient)
+    ctx.strokeStyle = outerGrad;
+    ctx.beginPath();
+    ctx.moveTo(left.x, left.y + lineSpacing);
+    ctx.lineTo(right.x, right.y + lineSpacing);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
-  /** Highlights the grabbable 800-unit ledge strip (see ledgeGrabRange.ts) in magenta for any edge a candidate is near. */
+  /** Highlights the grabbable 800-unit ledge strip (see ledgeGrabRange.ts) in luminous bright purple for any edge a candidate is near. */
   private drawLedgeGrabZoneHighlight(
     camera: Camera,
     stageId: number | undefined,
@@ -2921,9 +3626,10 @@ export class StageRenderer {
       const outer = camera.worldToScreen(ledge.x, ledge.y);
       const inner = camera.worldToScreen(innerX, ledge.y);
 
-      ctx.strokeStyle = `rgba(255,0,255,${0.95 * alpha})`;
+      // Bright luminous purple highlight harmonizing with the stage palette
+      ctx.strokeStyle = `rgba(216, 180, 254, ${0.95 * alpha})`;
       ctx.lineWidth = 10;
-      ctx.lineCap = "round";
+      ctx.lineCap = "butt";
       ctx.beginPath();
       ctx.moveTo(outer.x, outer.y);
       ctx.lineTo(inner.x, inner.y);
@@ -2931,7 +3637,7 @@ export class StageRenderer {
     }
   }
 
-  /** The magenta ledge-grab check-point dot(s) - see computeLedgeGrabCandidates(). Drawn on top of everything else so it's never hidden behind a player marker. */
+  /** The luminous bright purple ledge-grab check-point dot(s) - see computeLedgeGrabCandidates(). Drawn on top of everything else so it's never hidden behind a player marker. */
   private drawLedgeGrabDots(
     camera: Camera,
     candidates: readonly LedgeGrabCandidate[],
@@ -2953,7 +3659,7 @@ export class StageRenderer {
       ctx.globalAlpha = candidate.alpha;
       ctx.beginPath();
       ctx.arc(x, y, radiusPx, 0, Math.PI * 2);
-      ctx.fillStyle = "magenta";
+      ctx.fillStyle = "#d8b4fe";
       ctx.fill();
       ctx.lineWidth = strokeWidthPx;
       ctx.strokeStyle = "rgba(255,255,255,0.85)";
@@ -5553,13 +6259,28 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    // Face: Rosy Cheek, Blue Eyes, Open Smile
+    // Face: Rosy Cheeks (front & back), Two Blue Eyes, Open Smile
+    // Back cheek
     ctx.beginPath();
     ctx.ellipse(
-      posX + 0.36 * dir * w,
+      posX - 0.06 * dir * w,
       y - 0.44 * h,
-      Math.max(0.1, 0.18 * w),
-      Math.max(0.1, 0.12 * h),
+      Math.max(0.1, 0.14 * w),
+      Math.max(0.1, 0.09 * h),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = cheekColor;
+    ctx.fill();
+
+    // Front cheek
+    ctx.beginPath();
+    ctx.ellipse(
+      posX + 0.44 * dir * w,
+      y - 0.44 * h,
+      Math.max(0.1, 0.16 * w),
+      Math.max(0.1, 0.1 * h),
       0,
       0,
       Math.PI * 2,
@@ -5568,11 +6289,54 @@ export class StageRenderer {
     ctx.fill();
 
     if (Math.abs(dir) > 0.15) {
+      // 1. Back Eye
+      const backEyeX = posX + 0.08 * dir * w;
       ctx.beginPath();
       ctx.ellipse(
-        posX + 0.22 * dir * w,
+        backEyeX,
         y - 0.62 * h,
-        Math.max(0.1, 0.12 * w),
+        Math.max(0.1, 0.085 * w),
+        Math.max(0.1, 0.2 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#18181b", isOpponent);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.ellipse(
+        backEyeX,
+        y - 0.54 * h,
+        Math.max(0.1, 0.07 * w),
+        Math.max(0.1, 0.1 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = eyeBlue;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.ellipse(
+        backEyeX + 0.01 * dir * w,
+        y - 0.68 * h,
+        Math.max(0.1, 0.04 * w),
+        Math.max(0.1, 0.065 * h),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent);
+      ctx.fill();
+
+      // 2. Front Eye
+      const frontEyeX = posX + 0.3 * dir * w;
+      ctx.beginPath();
+      ctx.ellipse(
+        frontEyeX,
+        y - 0.62 * h,
+        Math.max(0.1, 0.095 * w),
         Math.max(0.1, 0.22 * h),
         0,
         0,
@@ -5583,10 +6347,10 @@ export class StageRenderer {
 
       ctx.beginPath();
       ctx.ellipse(
-        posX + 0.22 * dir * w,
+        frontEyeX,
         y - 0.54 * h,
-        Math.max(0.1, 0.1 * w),
-        Math.max(0.1, 0.12 * h),
+        Math.max(0.1, 0.08 * w),
+        Math.max(0.1, 0.11 * h),
         0,
         0,
         Math.PI * 2,
@@ -5596,10 +6360,10 @@ export class StageRenderer {
 
       ctx.beginPath();
       ctx.ellipse(
-        posX + (0.22 + 0.03 * dir) * w,
+        frontEyeX + 0.01 * dir * w,
         y - 0.68 * h,
-        Math.max(0.1, 0.05 * w),
-        Math.max(0.1, 0.08 * h),
+        Math.max(0.1, 0.045 * w),
+        Math.max(0.1, 0.07 * h),
         0,
         0,
         Math.PI * 2,
@@ -5607,11 +6371,12 @@ export class StageRenderer {
       ctx.fillStyle = resolveColor("#ffffff", isOpponent);
       ctx.fill();
 
+      // 3. Open smile / mouth between eyes
       ctx.beginPath();
       ctx.arc(
-        posX + 0.15 * dir * w,
+        posX + 0.18 * dir * w,
         y - 0.42 * h,
-        Math.max(0.1, 0.12 * w),
+        Math.max(0.1, 0.11 * w),
         0,
         Math.PI,
       );
@@ -5781,42 +6546,88 @@ export class StageRenderer {
     ctx.fill();
     ctx.stroke();
 
-    // Big Teal Eye & Cute Mouth
+    // Two Big Shiny Teal Eyes & Cute Smile
     if (Math.abs(dir) > 0.15) {
+      // 1. Back Eye
+      const backEyeX = posX + 0.04 * dir * w;
+      const backEyeY = y - 0.54 * h;
+      const backR = Math.max(0.1, 0.18 * w);
+
       ctx.beginPath();
-      ctx.ellipse(
-        posX + 0.32 * dir * w,
-        y - 0.52 * h,
-        Math.max(0.1, 0.24 * w),
-        Math.max(0.1, 0.24 * w),
-        0,
-        0,
-        Math.PI * 2,
-      );
+      ctx.arc(backEyeX, backEyeY, backR, 0, Math.PI * 2);
       ctx.fillStyle = tealEye;
       ctx.fill();
       ctx.strokeStyle = outlineColor;
       ctx.lineWidth = 1;
       ctx.stroke();
 
+      // Back Eye: Main top glint
       ctx.beginPath();
-      ctx.ellipse(
-        posX + (0.32 + 0.06 * dir) * w,
-        y - 0.58 * h,
-        Math.max(0.1, 0.09 * w),
-        Math.max(0.1, 0.09 * w),
-        0,
+      ctx.arc(
+        backEyeX + 0.03 * dir * w,
+        backEyeY - 0.04 * h,
+        Math.max(0.1, 0.07 * w),
         0,
         Math.PI * 2,
       );
       ctx.fillStyle = resolveColor("#ffffff", isOpponent);
       ctx.fill();
 
+      // Back Eye: Secondary bottom glint
       ctx.beginPath();
       ctx.arc(
-        posX + 0.45 * dir * w,
-        y - 0.36 * h,
+        backEyeX - 0.02 * dir * w,
+        backEyeY + 0.04 * h,
+        Math.max(0.1, 0.03 * w),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent);
+      ctx.fill();
+
+      // 2. Front Eye (closer, slightly larger in 3/4 view)
+      const frontEyeX = posX + 0.36 * dir * w;
+      const frontEyeY = y - 0.52 * h;
+      const frontR = Math.max(0.1, 0.21 * w);
+
+      ctx.beginPath();
+      ctx.arc(frontEyeX, frontEyeY, frontR, 0, Math.PI * 2);
+      ctx.fillStyle = tealEye;
+      ctx.fill();
+      ctx.strokeStyle = outlineColor;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Front Eye: Main top glint
+      ctx.beginPath();
+      ctx.arc(
+        frontEyeX + 0.04 * dir * w,
+        frontEyeY - 0.04 * h,
         Math.max(0.1, 0.08 * w),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent);
+      ctx.fill();
+
+      // Front Eye: Secondary bottom glint
+      ctx.beginPath();
+      ctx.arc(
+        frontEyeX - 0.025 * dir * w,
+        frontEyeY + 0.045 * h,
+        Math.max(0.1, 0.035 * w),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent);
+      ctx.fill();
+
+      // 3. Cute smile centered between eyes
+      ctx.beginPath();
+      ctx.arc(
+        posX + 0.22 * dir * w,
+        y - 0.38 * h,
+        Math.max(0.1, 0.09 * w),
         0,
         Math.PI,
       );
