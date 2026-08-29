@@ -58,8 +58,15 @@ import {
   isYoshiCharacter,
   toGrayscale,
   toBlandPalette,
+  computeLedgeGrabCandidates,
 } from "./renderer.js";
-import type { Replay } from "@rmg-k/rmgr";
+import type {
+  Frame,
+  PortIndex,
+  PostFrameUpdate,
+  PreFrameUpdate,
+  Replay,
+} from "@rmg-k/rmgr";
 import {
   DREAM_LAND_BLAST_ZONE,
   DREAM_LAND_STAGE_ID,
@@ -1507,5 +1514,180 @@ describe("Fox Blaster and Yoshi Egg Throw", () => {
   it("classifies Yoshi Egg Throw correctly", () => {
     expect(getYoshiSpecialType(0x06, 0x0de)).toBe("egg_throw");
     expect(getYoshiSpecialType(0x06, 0x0e3)).toBe("egg_throw");
+  });
+});
+
+describe("computeLedgeGrabCandidates", () => {
+  function makePre(port: PortIndex): PreFrameUpdate {
+    return { frame: 0, port, buttons: 0, stickX: 0, stickY: 0 };
+  }
+
+  function makePost(
+    overrides: Partial<PostFrameUpdate> & { port: PortIndex },
+  ): PostFrameUpdate {
+    return {
+      frame: 0,
+      characterId: 0x01, // Fox
+      actionStateId: 0x01a, // Fall (generic airborne, non-dead)
+      positionX: 0,
+      positionY: 0,
+      facingDirection: 1,
+      velocityX: 0,
+      velocityY: 0,
+      damagePercent: 0,
+      stocksRemaining: 2,
+      jumpsRemaining: 1,
+      grounded: false,
+      hurtboxState: 0,
+      hitstunCounter: 0,
+      actionFrameCounter: 0,
+      comboHitCount: 0,
+      comboDamage: 0,
+      ...overrides,
+    };
+  }
+
+  function makeFrame(posts: PostFrameUpdate[]): Frame {
+    const ports: { -readonly [K in PortIndex]?: Frame["ports"][K] } = {};
+    for (const post of posts) {
+      ports[post.port] = { pre: makePre(post.port), post };
+    }
+    return { frame: 0, ports };
+  }
+
+  // Dream Land ground: leftX -2278, rightX 2278, y 0 (see stageGeometry.ts)
+  const RIGHT_EDGE_X = 2278;
+  const LEFT_EDGE_X = -2278;
+
+  it("produces no candidates when no stage geometry is known", () => {
+    const frame = makeFrame([
+      makePost({ port: 0 as PortIndex, positionX: RIGHT_EDGE_X + 500 }),
+    ]);
+    expect(computeLedgeGrabCandidates(frame, 0xff /* unknown stage */)).toEqual(
+      [],
+    );
+  });
+
+  it("produces no candidate for a character still on-stage horizontally", () => {
+    const frame = makeFrame([makePost({ port: 0 as PortIndex, positionX: 0 })]);
+    expect(computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID)).toEqual([]);
+  });
+
+  it("produces no candidate when off-stage but beyond the proximity threshold", () => {
+    const frame = makeFrame([
+      makePost({ port: 0 as PortIndex, positionX: RIGHT_EDGE_X + 3001 }),
+    ]);
+    expect(computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID)).toEqual([]);
+  });
+
+  it("produces no candidate for a dead/off-screen state", () => {
+    const frame = makeFrame([
+      makePost({
+        port: 0 as PortIndex,
+        positionX: RIGHT_EDGE_X + 500,
+        actionStateId: 0x000, // DeadD - see DEAD_ACTION_STATES
+      }),
+    ]);
+    expect(computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID)).toEqual([]);
+  });
+
+  it("produces no candidate for a character with no known ledge-grab offset", () => {
+    const frame = makeFrame([
+      makePost({
+        port: 0 as PortIndex,
+        positionX: RIGHT_EDGE_X + 500,
+        characterId: 0xff, // no fighter has this ID
+      }),
+    ]);
+    expect(computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID)).toEqual([]);
+  });
+
+  it("computes the reach-offset dot for a character off the right edge, facing the stage", () => {
+    const frame = makeFrame([
+      makePost({
+        port: 0 as PortIndex,
+        characterId: 0x01, // Fox: reachX 400, heightY 400
+        positionX: RIGHT_EDGE_X + 122,
+        positionY: 0,
+        facingDirection: -1, // facing left, toward the stage
+      }),
+    ]);
+    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toEqual({
+      port: 0,
+      edgeSide: "right",
+      dotWorldX: RIGHT_EDGE_X + 122 - 400,
+      dotWorldY: 400,
+    });
+  });
+
+  it("computes the reach-offset dot for a character off the left edge, facing the stage", () => {
+    const frame = makeFrame([
+      makePost({
+        port: 1 as PortIndex,
+        characterId: 0x05, // Link: reachX 280, heightY 400
+        positionX: LEFT_EDGE_X - 200,
+        positionY: 0,
+        facingDirection: 1, // facing right, toward the stage
+      }),
+    ]);
+    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toEqual({
+      port: 1,
+      edgeSide: "left",
+      dotWorldX: LEFT_EDGE_X - 200 + 280,
+      dotWorldY: 400,
+    });
+  });
+
+  it("puts the dot on the away-from-stage side when facing away", () => {
+    const frame = makeFrame([
+      makePost({
+        port: 0 as PortIndex,
+        characterId: 0x01, // Fox
+        positionX: RIGHT_EDGE_X + 100,
+        positionY: 0,
+        facingDirection: 1, // facing right, away from the stage
+      }),
+    ]);
+    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+    expect(candidates[0]?.dotWorldX).toBe(RIGHT_EDGE_X + 100 + 400);
+  });
+
+  it("applies the same offset for a Japanese-region character variant as the base fighter", () => {
+    const frame = makeFrame([
+      makePost({
+        port: 0 as PortIndex,
+        characterId: 0x29, // Fox (JP) - same offset as base Fox
+        positionX: RIGHT_EDGE_X + 100,
+        positionY: 0,
+        facingDirection: -1,
+      }),
+    ]);
+    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.dotWorldX).toBe(RIGHT_EDGE_X + 100 - 400);
+  });
+
+  it("handles two seated ports independently, one per edge", () => {
+    const frame = makeFrame([
+      makePost({
+        port: 0 as PortIndex,
+        characterId: 0x01, // Fox
+        positionX: RIGHT_EDGE_X + 100,
+        facingDirection: -1,
+      }),
+      makePost({
+        port: 1 as PortIndex,
+        characterId: 0x05, // Link
+        positionX: LEFT_EDGE_X - 100,
+        facingDirection: 1,
+      }),
+    ]);
+    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+    expect(candidates).toHaveLength(2);
+    expect(candidates.map((c) => c.edgeSide).sort()).toEqual(["left", "right"]);
   });
 });
