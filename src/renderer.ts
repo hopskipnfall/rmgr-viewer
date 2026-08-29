@@ -2,6 +2,7 @@ import {
   ItemLinkId,
   WPKind,
   getItemKindName,
+  getSeatedPorts,
   type Frame,
   type ItemUpdate,
   type PortIndex,
@@ -431,14 +432,17 @@ export function isPikachuCharacter(characterId: number): boolean {
 }
 
 export type PikachuSpecialType =
-  "thunder_jolt" | "thunder" | "quick_attack" | "quick_attack_zip";
+  "thunder" | "quick_attack" | "quick_attack_zip";
 
 export function getPikachuSpecialType(
   characterId: number,
   actionStateId: number,
 ): PikachuSpecialType | null {
   if (!isPikachuCharacter(characterId)) return null;
-  // Neutral-B: Thunder Jolt (0x0dc, 0x0dd, 0x0de, 0x0df, 0x0e0)
+  // Neutral-B: Thunder Jolt (0x0dc..0x0e0). No synthetic animation drawn for
+  // this anymore - the recorded Weapon objects (WPKind.ThunderJoltAir /
+  // WPKind.ThunderJoltGround, drawn by drawItemObjects() in renderer.ts)
+  // are the real Thunder Jolt projectiles now.
   if (
     actionStateId === 0x0dc ||
     actionStateId === 0x0dd ||
@@ -446,7 +450,7 @@ export function getPikachuSpecialType(
     actionStateId === 0x0df ||
     actionStateId === 0x0e0
   ) {
-    return "thunder_jolt";
+    return null;
   }
   // Down-B Thunder states: 0xe3, 0xe4, 0xe5, 0xe6, 0xe7
   if (
@@ -552,7 +556,7 @@ export function getDKSpecialType(
 }
 
 export type NessSpecialType =
-  "pk_fire" | "pk_thunder_charge" | "pk_thunder_rocket" | "psi_magnet";
+  "pk_thunder_charge" | "pk_thunder_rocket" | "psi_magnet";
 
 export function getNessSpecialType(
   characterId: number,
@@ -562,10 +566,11 @@ export function getNessSpecialType(
   // 0x0e6 confirmed empirically to be the landing lag after PK Fire 2
   // (0x0ec) - just a normal landing, not the active move, so no overlay.
   if (actionStateId === 0x0e6) return null;
-  // Neutral-B: PK Fire. 0x0ec ("PK Fire 2") confirmed empirically to belong
-  // here, not Down-B PSI Magnet as previously guessed.
+  // Neutral-B: PK Fire (0x0e7, 0x0ec). No synthetic animation drawn for
+  // this anymore - the recorded Weapon object (WPKind.PKFire, drawn by
+  // drawItemObjects() in renderer.ts) is the real PK Fire projectile now.
   if (actionStateId === 0x0e7 || actionStateId === 0x0ec) {
-    return "pk_fire";
+    return null;
   }
   // Up-B: PK Thunder
   if (actionStateId === 0x0e8 || actionStateId === 0x0e9) {
@@ -581,7 +586,7 @@ export function getNessSpecialType(
   return null;
 }
 
-export type MarioSpecialType = "fireball" | "super_jump_punch" | "tornado";
+export type MarioSpecialType = "super_jump_punch" | "tornado";
 
 export function getMarioSpecialType(
   characterId: number,
@@ -592,34 +597,29 @@ export function getMarioSpecialType(
   }
   // Character-specific action states (>= 0x0dc) are NOT shared across
   // characters (docs/RMGR_SPEC.md §8) - Mario and Luigi's IDs only
-  // coincidentally overlapped for most of this range. Confirmed empirically
-  // for BOTH characters: 0x0e0 is the Neutral-B fireball throw - it was
-  // misclassified as Up-B here before, which is the bug this carves out.
-  // The remaining boundaries (0x0e1, 0x0e2, and the down-B range) are NOT
-  // yet confirmed for either character - don't extend this guess further
-  // without real data.
-  if (actionStateId === 0x0e0) {
-    return "fireball";
-  }
-  // 0x0df is Luigi's landing lag right after the throw, not a second/third
-  // fireball - render his normal (non-special) pose for it instead of
-  // falling through to the shared Up-B bucket below, which would draw the
-  // Super Jump Punch coins/fist for a state that's just standing there.
-  if (isLuigiCharacter(characterId) && actionStateId === 0x0df) {
-    return null;
-  }
-  // Neutral-B Fireball: 0x0dc, 0x0dd, 0x0de
+  // coincidentally overlapped for most of this range.
+  //
+  // Neutral-B: Fireball (0x0dc, 0x0dd, 0x0de, 0x0e0). No synthetic animation
+  // drawn for this anymore - the recorded Weapon object (WPKind.Fireball,
+  // drawn by drawItemObjects() in renderer.ts) is the real fireball now,
+  // so drawing a fake one attached to Mario/Luigi would visually double up.
   if (
     actionStateId === 0x0dc ||
     actionStateId === 0x0dd ||
-    actionStateId === 0x0de
+    actionStateId === 0x0de ||
+    actionStateId === 0x0e0
   ) {
-    return "fireball";
+    return null;
   }
-  // Up-B Super Jump Punch: 0x0df, 0x0e0, 0x0e1, 0x0e2
+  // 0x0df is Luigi's landing lag right after the throw - render his normal
+  // (non-special) pose for it instead of falling through to the shared Up-B
+  // bucket below.
+  if (isLuigiCharacter(characterId) && actionStateId === 0x0df) {
+    return null;
+  }
+  // Up-B Super Jump Punch: 0x0df (Mario), 0x0e1, 0x0e2
   if (
     actionStateId === 0x0df ||
-    actionStateId === 0x0e0 ||
     actionStateId === 0x0e1 ||
     actionStateId === 0x0e2
   ) {
@@ -1081,7 +1081,7 @@ export type FoxSpecialType =
   | "shine_loop"
   | "shine_hit"
   | "shine_end"
-  | "blaster";
+  | "blaster_gun";
 
 export function getFoxSpecialType(
   characterId: number,
@@ -1089,9 +1089,10 @@ export function getFoxSpecialType(
 ): FoxSpecialType | null {
   if (!isFoxCharacter(characterId)) return null;
 
-  // Neutral-B Blaster: 0x0dc - 0x0e3
+  // Neutral-B: Blaster gun stance (0x0dc - 0x0e3).
+  // Fox draws and aims his blaster pistol (the flying laser bolt is WPKind.Blaster).
   if (actionStateId >= 0x0dc && actionStateId <= 0x0e3) {
-    return "blaster";
+    return "blaster_gun";
   }
 
   // Up-B Fire Fox Charge / Startup: 0x0e4 - 0x0e7
@@ -1193,7 +1194,10 @@ export function getFoxFlightAngle(
   return null;
 }
 
-export function getAttackInfo(actionStateId: number): AttackInfo | null {
+export function getAttackInfo(
+  actionStateId: number,
+  characterId?: number,
+): AttackInfo | null {
   // Jabs
   if (actionStateId === 0x0be || actionStateId === 0x0bf) {
     return { type: "jab", direction: "forward" };
@@ -1204,11 +1208,14 @@ export function getAttackInfo(actionStateId: number): AttackInfo | null {
     return { type: "dash-attack", direction: "forward" };
   }
 
-  // Grabs
+  // Grabs (standard + Link/Samus grapple grabs in Special 0x0e5)
   if (
     actionStateId === 0x0a6 ||
     actionStateId === 0x0a7 ||
-    actionStateId === 0x0a8
+    actionStateId === 0x0a8 ||
+    (characterId !== undefined &&
+      (isLinkCharacter(characterId) || isSamusCharacter(characterId)) &&
+      actionStateId === 0x0e5)
   ) {
     return { type: "grab", direction: "forward" };
   }
@@ -1631,7 +1638,7 @@ export class StageRenderer {
           frameIndex,
         );
       }
-      this.drawItemObjects(camera, frame.items ?? []);
+      this.drawItemObjects(camera, frame.items ?? [], replay, frame);
       this.drawDeathDirectionFlashes(frame);
 
       // Draw Directional Influence (DI) shift vector and overhead badge during hitlag and early hitstun
@@ -1773,7 +1780,12 @@ export class StageRenderer {
    * a detached object) are skipped entirely - see that constant's doc
    * comment.
    */
-  private drawItemObjects(camera: Camera, items: readonly ItemUpdate[]): void {
+  private drawItemObjects(
+    camera: Camera,
+    items: readonly ItemUpdate[],
+    replay?: Replay | null,
+    frame?: Frame,
+  ): void {
     if (items.length === 0) return;
     const { ctx } = this;
 
@@ -1802,18 +1814,37 @@ export class StageRenderer {
       ctx.translate(x, y);
       ctx.scale(markerScale, markerScale);
       ctx.translate(-x, -y);
+      const spinAngle = item.frame * 0.45;
+      const { isLuigi, dir } = this.getWeaponInfo(item, frame, replay);
       const drewCustomShape =
-        isWeapon && this.drawCustomWeaponShape(ctx, item.kind, x, y);
+        isWeapon &&
+        this.drawCustomWeaponShape(
+          ctx,
+          item.kind,
+          x,
+          y,
+          isLuigi,
+          dir,
+          spinAngle,
+        );
       if (!drewCustomShape) {
         this.drawGenericItemDiamond(ctx, x, y, isWeapon);
       }
       ctx.restore();
 
       // The generic diamond and most custom shapes are small enough for a
-      // fixed label offset, but the (much bigger) boomerang needs more
-      // clearance so the label doesn't sit on top of its arc.
+      // fixed label offset, but bigger shapes like boomerang, fireball, pk fire, and thunder jolt need more
+      // clearance so the label doesn't sit on top of their aura/arc.
       const labelOffset =
-        (isWeapon && item.kind === WPKind.Boomerang ? 18 : 14) * markerScale;
+        (isWeapon &&
+        (item.kind === WPKind.Boomerang ||
+          item.kind === WPKind.Fireball ||
+          item.kind === WPKind.PKFire ||
+          item.kind === WPKind.ThunderJoltAir ||
+          item.kind === WPKind.ThunderJoltGround ||
+          item.kind === WPKind.Blaster)
+          ? 22
+          : 14) * markerScale;
 
       ctx.save();
       ctx.font = `${10 * markerScale}px monospace`;
@@ -1822,6 +1853,74 @@ export class StageRenderer {
       ctx.fillText(getItemKindName(item.linkId, item.kind), x, y - labelOffset);
       ctx.restore();
     }
+  }
+
+  private getWeaponInfo(
+    item: ItemUpdate,
+    frame?: Frame,
+    replay?: Replay | null,
+  ): { isLuigi: boolean; dir: number } {
+    let isLuigi = false;
+    let dir = 1;
+    if (!replay) return { isLuigi, dir };
+
+    const seated = getSeatedPorts(replay);
+    const luigiPorts = seated.filter((p) =>
+      isLuigiCharacter(replay.gameStart.ports[p]?.characterId ?? -1),
+    );
+    const marioPorts = seated.filter((p) =>
+      isMarioCharacter(replay.gameStart.ports[p]?.characterId ?? -1),
+    );
+
+    if (luigiPorts.length > 0 && marioPorts.length === 0) {
+      isLuigi = true;
+    } else if (luigiPorts.length > 0 && frame) {
+      let closestLuigiDist = Infinity;
+      for (const p of luigiPorts) {
+        const pd = frame.ports[p];
+        if (!pd) continue;
+        const dx = pd.post.positionX - item.positionX;
+        const dy = pd.post.positionY - item.positionY;
+        const dist = dx * dx + dy * dy;
+        if (dist < closestLuigiDist) closestLuigiDist = dist;
+      }
+
+      let closestMarioDist = Infinity;
+      for (const p of marioPorts) {
+        const pd = frame.ports[p];
+        if (!pd) continue;
+        const dx = pd.post.positionX - item.positionX;
+        const dy = pd.post.positionY - item.positionY;
+        const dist = dx * dx + dy * dy;
+        if (dist < closestMarioDist) closestMarioDist = dist;
+      }
+
+      isLuigi = closestLuigiDist < closestMarioDist;
+    }
+
+    if (frame) {
+      let closestDist = Infinity;
+      let closestPort: PortIndex | null = null;
+      for (const p of seated) {
+        const pd = frame.ports[p];
+        if (!pd) continue;
+        const dx = pd.post.positionX - item.positionX;
+        const dy = pd.post.positionY - item.positionY;
+        const dist = dx * dx + dy * dy;
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestPort = p;
+        }
+      }
+      if (closestPort !== null) {
+        const pd = frame.ports[closestPort];
+        if (pd) {
+          dir = pd.post.facingDirection >= 0 ? 1 : -1;
+        }
+      }
+    }
+
+    return { isLuigi, dir };
   }
 
   /** Generic fallback marker for any Item/Weapon kind without a custom shape - a colored diamond. */
@@ -1861,10 +1960,22 @@ export class StageRenderer {
     kind: number,
     x: number,
     y: number,
+    isLuigi = false,
+    dir = 1,
+    spinAngle = 0,
   ): boolean {
     switch (kind) {
-      case WPKind.PKFire: // Ness neutral B - yellow PSI flame, distinct from Mario's orange
-        this.drawFlameMarker(ctx, x, y, "#fbbf24", "#fef08a");
+      case WPKind.Fireball: // Mario / Luigi Neutral-B fireball
+        this.drawFireballMarker(ctx, x, y, isLuigi, dir);
+        return true;
+      case WPKind.PKFire: // Ness Neutral-B PK Fire
+        this.drawPKFireMarker(ctx, x, y, dir);
+        return true;
+      case WPKind.ThunderJoltAir: // Pikachu Neutral-B Thunder Jolt (Air)
+        this.drawThunderJoltMarker(ctx, x, y, false, dir, spinAngle);
+        return true;
+      case WPKind.ThunderJoltGround: // Pikachu Neutral-B Thunder Jolt (Ground)
+        this.drawThunderJoltMarker(ctx, x, y, true, dir, spinAngle);
         return true;
       case WPKind.PKThunderHead:
       case WPKind.PKThunderTrail:
@@ -1874,7 +1985,10 @@ export class StageRenderer {
         this.drawOrbMarker(ctx, x, y, "#f472b6", "#fbcfe8");
         return true;
       case WPKind.Boomerang:
-        this.drawBoomerangMarker(ctx, x, y, "#eab308");
+        this.drawBoomerangMarker(ctx, x, y, "#eab308", spinAngle);
+        return true;
+      case WPKind.Blaster: // Fox Neutral-B laser
+        this.drawLaserMarker(ctx, x, y, dir);
         return true;
       case WPKind.EggThrow: // same shell art as a character encased in an egg (drawYoshiEggShell)
         this.drawYoshiEgg(x, y, 8, 6);
@@ -1884,56 +1998,277 @@ export class StageRenderer {
     }
   }
 
-  /** Teardrop flame silhouette with a brighter inner core, for PK Fire. */
-  private drawFlameMarker(
+  /**
+   * Fireball projectile visual (Mario / Luigi Neutral-B):
+   * - Outer flame aura with glow (Red for Mario, Emerald for Luigi)
+   * - Bright core (Yellow for Mario, Mint for Luigi)
+   * - White-hot center
+   * - Trailing sparks behind the fireball
+   */
+  private drawFireballMarker(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
-    color: string,
-    coreColor: string,
+    isLuigi: boolean,
+    dir = 1,
   ): void {
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
+    const fbRadius = 13;
+
+    ctx.save();
+
+    // 1. Fireball outer flame aura
     ctx.beginPath();
-    ctx.moveTo(x, y - 9);
-    ctx.bezierCurveTo(x + 5, y - 4, x + 6, y + 2, x + 3, y + 6);
-    ctx.bezierCurveTo(x + 1, y + 8, x - 1, y + 8, x - 3, y + 6);
-    ctx.bezierCurveTo(x - 6, y + 2, x - 4, y - 5, x, y - 9);
-    ctx.closePath();
-    ctx.fillStyle = color;
+    ctx.arc(x, y, fbRadius * 1.35, 0, Math.PI * 2);
+    ctx.fillStyle = isLuigi
+      ? "rgba(34, 197, 94, 0.45)"
+      : "rgba(239, 68, 68, 0.45)";
+    ctx.shadowColor = isLuigi ? "#22c55e" : "#ef4444";
+    ctx.shadowBlur = 16;
     ctx.fill();
 
-    ctx.shadowBlur = 0;
+    // 2. Fireball bright core
     ctx.beginPath();
-    ctx.moveTo(x, y - 4);
-    ctx.bezierCurveTo(x + 2, y - 1, x + 2, y + 3, x, y + 5);
-    ctx.bezierCurveTo(x - 2, y + 3, x - 2, y - 1, x, y - 4);
-    ctx.closePath();
-    ctx.fillStyle = coreColor;
+    ctx.arc(x, y, fbRadius, 0, Math.PI * 2);
+    ctx.fillStyle = isLuigi ? "#86efac" : "#fde047";
     ctx.fill();
+
+    // 3. White-hot center
+    ctx.beginPath();
+    ctx.arc(x - dir * 2, y - 1.5, fbRadius * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // 4. Trailing sparks
+    ctx.beginPath();
+    ctx.arc(x - dir * (fbRadius * 1.5), y + 3, 3.2, 0, Math.PI * 2);
+    ctx.arc(x - dir * (fbRadius * 2.2), y - 3, 2.4, 0, Math.PI * 2);
+    ctx.arc(x - dir * (fbRadius * 2.8), y + 1, 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = isLuigi ? "#4ade80" : "#f97316";
+    ctx.fill();
+
+    ctx.restore();
   }
 
-  /** A hooked chevron curve, for Boomerang. ~1.5x the size of the other markers - the actual in-game boomerang reads a bit bigger than a bomb/fireball. */
+  /**
+   * Searing psychic flame projectile, for Ness's PK Fire (Neutral-B):
+   * - Outer psychic flame aura & glow (Amber/Orange)
+   * - Bright core (Electric Yellow)
+   * - White-hot center
+   * - Trailing psychic sparks aligned with direction
+   */
+  private drawPKFireMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    dir = 1,
+  ): void {
+    const pkRadius = 11;
+
+    ctx.save();
+
+    // 1. Fiery outer flame aura
+    ctx.beginPath();
+    ctx.arc(x, y, pkRadius * 1.35, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(249, 115, 22, 0.45)"; // Vibrant PK Fire orange
+    ctx.shadowColor = "#ef4444";
+    ctx.shadowBlur = 14;
+    ctx.fill();
+
+    // 2. Bright yellow flame core
+    ctx.beginPath();
+    ctx.arc(x, y, pkRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "#fde047";
+    ctx.fill();
+
+    // 3. White-hot center
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(x - dir * 2, y - 1, pkRadius * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // 4. Trailing sparks
+    ctx.beginPath();
+    ctx.arc(x - dir * (pkRadius * 1.5), y + 2.5, 2.8, 0, Math.PI * 2);
+    ctx.arc(x - dir * (pkRadius * 2.2), y - 2.5, 2.0, 0, Math.PI * 2);
+    ctx.arc(x - dir * (pkRadius * 2.8), y + 1, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#fbbf24";
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Electric spark sphere & discharging shockwaves, for Pikachu's Thunder Jolt (Neutral-B):
+   * - Expanding / pulsating electric shock ring
+   * - Electric blue-cyan / vibrant yellow core spark
+   * - 4 branching zig-zag lightning sparks spinning and jittering with frame
+   * - Crisp white central lightning core
+   */
+  private drawThunderJoltMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    isGround: boolean,
+    dir = 1,
+    spinAngle = 0,
+  ): void {
+    const tjRadius = 12;
+
+    ctx.save();
+
+    // 1. Expanding electric shockwave ring
+    const ringPhase = (spinAngle * 2) % (Math.PI * 2);
+    const ringScale = 0.8 + 0.5 * Math.sin(ringPhase);
+    ctx.beginPath();
+    ctx.arc(x, y, tjRadius * 1.5 * ringScale, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.65)"; // Electric cyan
+    ctx.lineWidth = 2;
+    ctx.shadowColor = "#38bdf8";
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+
+    // 2. Electric spark aura & glow
+    ctx.beginPath();
+    ctx.arc(x, y, tjRadius * 1.25, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(250, 204, 21, 0.45)"; // Bright electric yellow
+    ctx.shadowColor = "#facc15";
+    ctx.shadowBlur = 14;
+    ctx.fill();
+
+    // 3. Electric core
+    ctx.beginPath();
+    ctx.arc(x, y, tjRadius, 0, Math.PI * 2);
+    ctx.fillStyle = isGround ? "#fde047" : "#38bdf8";
+    ctx.fill();
+
+    // 4. White-hot center
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(x, y, tjRadius * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // 5. 4 Branching zig-zag electric sparks radiating outward
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#fef08a";
+    ctx.lineCap = "round";
+    for (let i = 0; i < 4; i++) {
+      const sAngle = (i * Math.PI) / 2 + spinAngle;
+      const midDist = tjRadius * 0.85;
+      const midX = x + Math.cos(sAngle) * midDist + (i % 2 === 0 ? 3 : -3);
+      const midY = y + Math.sin(sAngle) * midDist + (i % 2 === 0 ? -3 : 3);
+      const endX = x + Math.cos(sAngle) * (tjRadius * 1.7);
+      const endY = y + Math.sin(sAngle) * (tjRadius * 1.7);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(midX, midY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+    }
+
+    // 6. Trailing spark dots behind travel direction
+    ctx.beginPath();
+    ctx.arc(x - dir * (tjRadius * 1.5), y + 2, 2.5, 0, Math.PI * 2);
+    ctx.arc(x - dir * (tjRadius * 2.2), y - 2, 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = "#38bdf8";
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /** A spinning hooked chevron curve, for Boomerang. */
   private drawBoomerangMarker(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
     color: string,
+    spinAngle = 0,
   ): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(spinAngle);
+
     ctx.shadowColor = color;
-    ctx.shadowBlur = 7;
+    ctx.shadowBlur = 8;
     ctx.strokeStyle = color;
     ctx.lineWidth = 3.5;
     ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.moveTo(x - 10.5, y - 9);
-    ctx.quadraticCurveTo(x, y + 10.5, x + 10.5, y - 9);
+    ctx.moveTo(-10.5, -9);
+    ctx.quadraticCurveTo(0, 10.5, 10.5, -9);
     ctx.stroke();
 
     ctx.shadowBlur = 0;
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 1.25;
     ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Fox's Blaster Laser Bolt visual (WPKind.Blaster):
+   * - Red/crimson glowing laser beam capsule with energetic aura
+   * - White-hot core beam
+   * - Front laser flare spark
+   * - Trailing energy sparks behind the bolt
+   */
+  private drawLaserMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    dir = 1,
+  ): void {
+    ctx.save();
+    const beamLen = 26;
+    const beamHalfH = 3;
+
+    // 1. Glowing red outer laser bolt
+    ctx.beginPath();
+    ctx.roundRect(
+      x - (dir > 0 ? beamLen * 0.75 : beamLen * 0.25),
+      y - beamHalfH,
+      beamLen,
+      beamHalfH * 2,
+      beamHalfH,
+    );
+    ctx.fillStyle = "rgba(239, 68, 68, 0.95)";
+    ctx.shadowColor = "#ff0033";
+    ctx.shadowBlur = 12;
+    ctx.fill();
+
+    // 2. White-hot inner core
+    ctx.beginPath();
+    ctx.roundRect(
+      x - (dir > 0 ? (beamLen - 4) * 0.75 : (beamLen - 4) * 0.25),
+      y - 1.2,
+      beamLen - 4,
+      2.4,
+      1.2,
+    );
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // 3. Leading tip star / energy flare
+    const tipX = x + dir * (beamLen * 0.55);
+    ctx.beginPath();
+    ctx.arc(tipX, y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.shadowColor = "#ff6688";
+    ctx.shadowBlur = 8;
+    ctx.fill();
+
+    // 4. Trailing energy wake sparks
+    const tailX = x - dir * (beamLen * 0.6);
+    ctx.beginPath();
+    ctx.arc(tailX - dir * 4, y, 1.5, 0, Math.PI * 2);
+    ctx.arc(tailX - dir * 9, y - 1, 1.0, 0, Math.PI * 2);
+    ctx.arc(tailX - dir * 14, y + 1, 0.8, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 120, 120, 0.85)";
+    ctx.fill();
+
+    ctx.restore();
   }
 
   /** Classic zigzag bolt silhouette, for PK Thunder. */
@@ -2410,26 +2745,9 @@ export class StageRenderer {
       ctx.restore();
     }
 
-    // Draw attack arc if character is executing an attack or grab
-    const attack = getAttackInfo(post.actionStateId);
+    // Check attacks and specials for label offsets and rendering
+    const attack = getAttackInfo(post.actionStateId, post.characterId);
     if (attack) {
-      const joystick =
-        replay && frameIndex !== undefined
-          ? replay.frames[frameIndex]?.ports[port]?.pre
-          : null;
-      const angleable = canAngleAttack(post.characterId, attack);
-
-      this.drawAttackArc(
-        x,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        attack,
-        joystick ? { x: joystick.stickX, y: joystick.stickY } : null,
-        angleable,
-      );
       if (attack.direction === "up" || attack.direction === "neutral") {
         const baseRadius = Math.max(halfWidth, heightPx * 0.5);
         const topRadius =
@@ -2438,234 +2756,81 @@ export class StageRenderer {
       }
     }
 
-    // Draw Falcon special move visuals if applicable
     const falconSpecial = getFalconSpecialType(
       post.characterId,
       post.actionStateId,
     );
-    if (falconSpecial) {
-      this.drawFalconSpecial(
-        x,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        falconSpecial,
-        post.actionFrameCounter,
-      );
-      if (
-        falconSpecial === "dive_reach" ||
-        falconSpecial === "dive_explosion"
-      ) {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
-      }
+    if (falconSpecial === "dive_reach" || falconSpecial === "dive_explosion") {
+      labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
     }
 
-    // Draw Pikachu special move visuals if applicable
     const pikaSpecial = getPikachuSpecialType(
       post.characterId,
       post.actionStateId,
     );
-    if (pikaSpecial) {
-      this.drawPikachuSpecial(
-        x,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        pikaSpecial,
-        post.actionFrameCounter,
-      );
-    }
 
-    // Draw Fox special move visuals if applicable
     const foxSpecial = getFoxSpecialType(post.characterId, post.actionStateId);
-    if (foxSpecial) {
-      const flightAngle =
-        foxSpecial === "firefox_fly"
-          ? getFoxFlightAngle(replay, frameIndex, port, post)
-          : null;
-
-      this.drawFoxSpecial(
-        x,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        foxSpecial,
-        post.actionFrameCounter,
-        flightAngle,
-      );
-      if (
-        foxSpecial === "shine_start" ||
-        foxSpecial === "shine_loop" ||
-        foxSpecial === "shine_hit" ||
-        foxSpecial === "shine_end" ||
-        foxSpecial === "firefox_charge"
-      ) {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
-      }
+    const flightAngle =
+      foxSpecial === "firefox_fly"
+        ? getFoxFlightAngle(replay, frameIndex, port, post)
+        : null;
+    if (
+      foxSpecial === "shine_start" ||
+      foxSpecial === "shine_loop" ||
+      foxSpecial === "shine_hit" ||
+      foxSpecial === "shine_end" ||
+      foxSpecial === "firefox_charge"
+    ) {
+      labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
     }
 
-    // Draw Yoshi special move visuals if applicable
     const yoshiSpecial = getYoshiSpecialType(
       post.characterId,
       post.actionStateId,
     );
-    if (yoshiSpecial) {
-      this.drawYoshiSpecial(
-        x,
-        y,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        yoshiSpecial,
-        post.actionFrameCounter,
-      );
-    }
 
-    // Draw Donkey Kong special move visuals if applicable
     const dkSpecial = getDKSpecialType(post.characterId, post.actionStateId);
-    if (dkSpecial) {
-      this.drawDKSpecial(
-        x,
-        y,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        dkSpecial,
-        post.actionFrameCounter,
-      );
-    }
 
-    // Draw Ness special move visuals if applicable
     const nessSpecial = getNessSpecialType(
       post.characterId,
       post.actionStateId,
     );
-    if (nessSpecial) {
-      this.drawNessSpecial(
-        x,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        nessSpecial,
-        post.actionFrameCounter,
-      );
-      if (nessSpecial === "pk_thunder_charge" || nessSpecial === "psi_magnet") {
-        labelY = Math.min(labelY, centerY - heightPx * 0.9 - 16);
-      }
+    if (nessSpecial === "pk_thunder_charge" || nessSpecial === "psi_magnet") {
+      labelY = Math.min(labelY, centerY - heightPx * 0.9 - 16);
     }
 
-    // Draw Mario / Luigi special move visuals if applicable
     const marioSpecial = getMarioSpecialType(
       post.characterId,
       post.actionStateId,
     );
-    if (marioSpecial) {
-      this.drawMarioSpecial(
-        x,
-        y,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        isLuigiCharacter(post.characterId),
-        marioSpecial,
-        post.actionFrameCounter,
-      );
-    }
 
-    // Draw Samus special move visuals if applicable
     const samusSpecial = getSamusSpecialType(
       post.characterId,
       post.actionStateId,
     );
-    if (samusSpecial) {
-      this.drawSamusSpecial(
-        x,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        samusSpecial,
-        post.actionFrameCounter,
-      );
-      if (samusSpecial === "screw_attack") {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
-      }
+    if (samusSpecial === "screw_attack") {
+      labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
     }
 
-    // Draw Link special move visuals if applicable
     const linkSpecial = getLinkSpecialType(
       post.characterId,
       post.actionStateId,
     );
-    if (linkSpecial) {
-      this.drawLinkSpecial(
-        x,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        linkSpecial,
-        post.actionFrameCounter,
-      );
-      if (linkSpecial === "spin_attack") {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
-      }
+    if (linkSpecial === "spin_attack") {
+      labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
     }
 
-    // Draw Kirby special move visuals if applicable
     const kirbySpecial = getKirbySpecialType(
       post.characterId,
       post.actionStateId,
     );
-    if (kirbySpecial) {
-      this.drawKirbySpecial(
-        x,
-        y,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        kirbySpecial,
-        post.actionFrameCounter,
-      );
-    }
 
-    // Draw Jigglypuff special move visuals if applicable
     const puffSpecial = getJigglypuffSpecialType(
       post.characterId,
       post.actionStateId,
     );
-    if (puffSpecial) {
-      this.drawJigglypuffSpecial(
-        x,
-        centerY,
-        halfWidth,
-        heightPx,
-        facingRight,
-        color,
-        puffSpecial,
-        post.actionFrameCounter,
-        post.actionStateId,
-      );
-      if (puffSpecial === "sing" || puffSpecial === "rest") {
-        labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
-      }
+    if (puffSpecial === "sing" || puffSpecial === "rest") {
+      labelY = Math.min(labelY, centerY - heightPx * 0.85 - 16);
     }
 
     const isTechRoll = isTechRollState(post.actionStateId);
@@ -3036,6 +3201,167 @@ export class StageRenderer {
       ctx.restore();
     }
     ctx.restore(); // Closes the character sway/bob/tumble/prone transform
+
+    // Draw attack arc / grab on top (in front) of character body
+    if (attack) {
+      const joystick =
+        replay && frameIndex !== undefined
+          ? replay.frames[frameIndex]?.ports[port]?.pre
+          : null;
+      const angleable = canAngleAttack(post.characterId, attack);
+
+      this.drawAttackArc(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        attack,
+        joystick ? { x: joystick.stickX, y: joystick.stickY } : null,
+        angleable,
+      );
+    }
+
+    // Draw special move visuals in front of character body
+    if (falconSpecial) {
+      this.drawFalconSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        falconSpecial,
+        post.actionFrameCounter,
+      );
+    }
+    if (pikaSpecial) {
+      this.drawPikachuSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        pikaSpecial,
+        post.actionFrameCounter,
+      );
+    }
+    if (foxSpecial) {
+      this.drawFoxSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        foxSpecial,
+        post.actionFrameCounter,
+        flightAngle,
+      );
+    }
+    if (yoshiSpecial) {
+      this.drawYoshiSpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        yoshiSpecial,
+        post.actionFrameCounter,
+      );
+    }
+    if (dkSpecial) {
+      this.drawDKSpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        dkSpecial,
+        post.actionFrameCounter,
+      );
+    }
+    if (nessSpecial) {
+      this.drawNessSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        nessSpecial,
+        post.actionFrameCounter,
+      );
+    }
+    if (marioSpecial) {
+      this.drawMarioSpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        isLuigiCharacter(post.characterId),
+        marioSpecial,
+        post.actionFrameCounter,
+      );
+    }
+    if (samusSpecial) {
+      this.drawSamusSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        samusSpecial,
+        post.actionFrameCounter,
+      );
+    }
+    if (linkSpecial) {
+      this.drawLinkSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        linkSpecial,
+        post.actionFrameCounter,
+      );
+    }
+    if (kirbySpecial) {
+      this.drawKirbySpecial(
+        x,
+        y,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        kirbySpecial,
+        post.actionFrameCounter,
+      );
+    }
+    if (puffSpecial) {
+      this.drawJigglypuffSpecial(
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        puffSpecial,
+        post.actionFrameCounter,
+        post.actionStateId,
+      );
+    }
 
     if (shielding) {
       this.drawShieldBubble(
@@ -6618,55 +6944,154 @@ export class StageRenderer {
     }
 
     if (attack.type === "grab") {
-      // Grab attempt: open rectangular clamping jaws with dashed capture field
+      // Comically large Mickey Mouse-style cartoon gloved grabbing hand
       const dir = facingRight ? 1 : -1;
       const noseX = x + dir * halfWidth;
-      const reachLen = halfWidth * 1.35;
-      const frontX = noseX + dir * reachLen;
-      const boxTop = centerY - heightPx * 0.38;
-      const boxBot = centerY + heightPx * 0.38;
-      const toothLen = heightPx * 0.18;
+      const handCenterX = noseX + dir * (halfWidth * 0.45);
+      const handCenterY = centerY - heightPx * 0.02;
+      const handScale = Math.max(16, heightPx * 0.36);
 
       ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.8;
+      ctx.translate(handCenterX, handCenterY);
+      if (dir < 0) {
+        ctx.scale(-1, 1);
+      }
+
       ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
 
-      // Top reaching arm + downward claw tooth
+      // 1. Puffy rolled glove wrist cuff
       ctx.beginPath();
-      ctx.moveTo(noseX, boxTop);
-      ctx.lineTo(frontX, boxTop);
-      ctx.lineTo(frontX, boxTop + toothLen);
+      ctx.ellipse(
+        -handScale * 0.55,
+        0,
+        handScale * 0.2,
+        handScale * 0.42,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.95)";
+      ctx.lineWidth = 2.4;
+      ctx.fill();
       ctx.stroke();
 
-      // Bottom reaching arm + upward claw tooth
+      // 2. Main rounded glove palm body
       ctx.beginPath();
-      ctx.moveTo(noseX, boxBot);
-      ctx.lineTo(frontX, boxBot);
-      ctx.lineTo(frontX, boxBot - toothLen);
+      ctx.ellipse(
+        -handScale * 0.15,
+        0,
+        handScale * 0.4,
+        handScale * 0.4,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
       ctx.stroke();
 
-      // White highlight on claws
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-      ctx.lineWidth = 1.2;
+      // 3. 3 Signature dark stitch dart lines on back of glove (classic Mickey glove darts)
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.lineWidth = 2.0;
+      for (let i = -1; i <= 1; i++) {
+        const dartY = i * (handScale * 0.15);
+        ctx.beginPath();
+        ctx.moveTo(-handScale * 0.32, dartY);
+        ctx.lineTo(-handScale * 0.08, dartY);
+        ctx.stroke();
+      }
+
+      // 4. Plump, rounded cartoon fingers reaching forward in a dynamic grab posture
+      const fingers = [
+        {
+          startX: -handScale * 0.05,
+          startY: -handScale * 0.35,
+          midX: handScale * 0.4,
+          midY: -handScale * 0.45,
+          tipX: handScale * 0.72,
+          tipY: -handScale * 0.28,
+          r: handScale * 0.18,
+        }, // Index
+        {
+          startX: handScale * 0.05,
+          startY: -handScale * 0.12,
+          midX: handScale * 0.52,
+          midY: -handScale * 0.18,
+          tipX: handScale * 0.8,
+          tipY: -handScale * 0.05,
+          r: handScale * 0.19,
+        }, // Middle
+        {
+          startX: handScale * 0.02,
+          startY: handScale * 0.1,
+          midX: handScale * 0.48,
+          midY: handScale * 0.12,
+          tipX: handScale * 0.75,
+          tipY: handScale * 0.18,
+          r: handScale * 0.18,
+        }, // Ring
+        {
+          startX: -handScale * 0.05,
+          startY: handScale * 0.28,
+          midX: handScale * 0.38,
+          midY: handScale * 0.35,
+          tipX: handScale * 0.65,
+          tipY: handScale * 0.36,
+          r: handScale * 0.16,
+        }, // Pinky
+      ];
+
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.95)";
+      ctx.lineWidth = 2.4;
+
+      for (const f of fingers) {
+        ctx.beginPath();
+        ctx.moveTo(f.startX, f.startY);
+        ctx.quadraticCurveTo(f.midX, f.midY, f.tipX, f.tipY);
+        ctx.stroke();
+
+        // Bulbous cartoon fingertip pad
+        ctx.beginPath();
+        ctx.arc(f.tipX, f.tipY, f.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // 5. Opposing chubby cartoon thumb curling from underneath
+      const thumbStartX = -handScale * 0.18;
+      const thumbStartY = handScale * 0.32;
+      const thumbMidX = handScale * 0.22;
+      const thumbMidY = handScale * 0.52;
+      const thumbTipX = handScale * 0.45;
+      const thumbTipY = handScale * 0.42;
+
       ctx.beginPath();
-      ctx.moveTo(noseX + dir * 2, boxTop);
-      ctx.lineTo(frontX, boxTop);
-      ctx.lineTo(frontX, boxTop + toothLen);
-      ctx.moveTo(noseX + dir * 2, boxBot);
-      ctx.lineTo(frontX, boxBot);
-      ctx.lineTo(frontX, boxBot - toothLen);
+      ctx.moveTo(thumbStartX, thumbStartY);
+      ctx.quadraticCurveTo(thumbMidX, thumbMidY, thumbTipX, thumbTipY);
       ctx.stroke();
 
-      // Dashed capture field line between the claw teeth
       ctx.beginPath();
-      ctx.moveTo(frontX, boxTop + toothLen + 2);
-      ctx.lineTo(frontX, boxBot - toothLen - 2);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([3, 3]);
+      ctx.arc(thumbTipX, thumbTipY, handScale * 0.2, 0, Math.PI * 2);
+      ctx.fill();
       ctx.stroke();
-      ctx.setLineDash([]);
+
+      // 6. Accent color energy rim / grab snatch glow
+      ctx.beginPath();
+      ctx.arc(
+        handScale * 0.35,
+        0,
+        handScale * 0.65,
+        -Math.PI * 0.42,
+        Math.PI * 0.42,
+      );
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
 
       ctx.restore();
       return;
@@ -7225,63 +7650,6 @@ export class StageRenderer {
     const dir = facingRight ? 1 : -1;
     const noseX = x + dir * halfWidth;
 
-    if (specialType === "thunder_jolt") {
-      ctx.save();
-      // Neutral-B: Thunder Jolt electric spark sphere condensing and discharging forward
-      const pulse = 1 + 0.3 * Math.sin(frameCounter * 0.5);
-      const sparkRadius = Math.max(6, halfWidth * 0.45) * pulse;
-      const sparkX = noseX + dir * 6;
-
-      // 1. Expanding electric shock ring
-      const ringProg = (frameCounter % 15) / 15;
-      ctx.beginPath();
-      ctx.arc(
-        sparkX + dir * (ringProg * 14),
-        centerY,
-        4 + ringProg * 10,
-        0,
-        Math.PI * 2,
-      );
-      ctx.strokeStyle = resolveColor("#38bdf8", false, (1 - ringProg) * 0.85);
-      ctx.lineWidth = 1.8;
-      ctx.shadowColor = "#38bdf8";
-      ctx.shadowBlur = 8;
-      ctx.stroke();
-
-      // 2. Electric blue-yellow core spark
-      ctx.beginPath();
-      ctx.arc(sparkX, centerY, sparkRadius, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(56, 189, 248, 0.4)";
-      ctx.shadowColor = "#facc15";
-      ctx.shadowBlur = 10;
-      ctx.fill();
-
-      // 3. 4 Branching zig-zag lightning sparks
-      ctx.lineWidth = 1.6;
-      ctx.strokeStyle = "#fef08a";
-      for (let i = 0; i < 4; i++) {
-        const sAngle = (i * Math.PI) / 2 + frameCounter * 0.4;
-        const midX =
-          sparkX +
-          Math.cos(sAngle) * (sparkRadius * 0.8) +
-          (i % 2 === 0 ? 2 : -2);
-        const midY =
-          centerY +
-          Math.sin(sAngle) * (sparkRadius * 0.8) +
-          (i % 2 === 0 ? -2 : 2);
-        const endX = sparkX + Math.cos(sAngle) * (sparkRadius * 1.6);
-        const endY = centerY + Math.sin(sAngle) * (sparkRadius * 1.6);
-        ctx.beginPath();
-        ctx.moveTo(sparkX, centerY);
-        ctx.lineTo(midX, midY);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-      return;
-    }
-
     if (specialType === "thunder") {
       ctx.save();
       // 1. Full-height lightning bolt coming down from sky (Y=0) straight to Pikachu (centerY)
@@ -7602,7 +7970,6 @@ export class StageRenderer {
 
   /**
    * Visualizes Mario / Luigi special moves:
-   * - Fireball (Neutral-B): Flame fireball projectile bouncing forward (Red for Mario, Emerald for Luigi).
    * - Super Jump Punch (Up-B): Uppercut flight with scattering spinning gold coins and Luigi sweetspot burst.
    * - Mario Tornado / Luigi Cyclone (Down-B): Whirling multi-tier cyclone discs.
    */
@@ -7620,60 +7987,6 @@ export class StageRenderer {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
     const noseX = x + dir * halfWidth;
-
-    if (specialType === "fireball") {
-      // frameCounter is frames-since-this-action-state-started, not
-      // frames-since-thrown, so a plain "% 20" loop restarted the bounce
-      // every 20 frames and looked like a new fireball each time on any
-      // throw lasting longer than that. Padding the cycle to 80 frames -
-      // 20 of bounce, 60 of nothing - keeps the single-throw animation but
-      // stops it from visibly repeating within one real throw (Luigi's is
-      // the longest of the two, and doesn't run anywhere near 80 frames).
-      const cyclePos = frameCounter % 80;
-      if (cyclePos >= 20) {
-        return;
-      }
-      ctx.save();
-      const fbProg = cyclePos / 20;
-      const fbX = noseX + dir * (10 + fbProg * halfWidth * 2.5);
-      const bounceY =
-        centerY +
-        Math.abs(Math.sin(fbProg * Math.PI * 2)) * (heightPx * 0.35) -
-        4;
-      const fbRadius = Math.max(5, halfWidth * 0.35);
-
-      // Fireball outer flame aura
-      ctx.beginPath();
-      ctx.arc(fbX, bounceY, fbRadius * 1.3, 0, Math.PI * 2);
-      ctx.fillStyle = isLuigi
-        ? "rgba(34, 197, 94, 0.45)"
-        : "rgba(239, 68, 68, 0.45)";
-      ctx.shadowColor = isLuigi ? "#22c55e" : "#ef4444";
-      ctx.shadowBlur = 12;
-      ctx.fill();
-
-      // Fireball bright core
-      ctx.beginPath();
-      ctx.arc(fbX, bounceY, fbRadius, 0, Math.PI * 2);
-      ctx.fillStyle = isLuigi ? "#86efac" : "#fde047";
-      ctx.fill();
-
-      // White-hot center
-      ctx.beginPath();
-      ctx.arc(fbX - dir * 1, bounceY - 1, fbRadius * 0.4, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-
-      // Trailing sparks
-      ctx.beginPath();
-      ctx.arc(fbX - dir * (fbRadius * 1.5), bounceY + 2, 2, 0, Math.PI * 2);
-      ctx.arc(fbX - dir * (fbRadius * 2.2), bounceY - 2, 1.5, 0, Math.PI * 2);
-      ctx.fillStyle = isLuigi ? "#4ade80" : "#f97316";
-      ctx.fill();
-
-      ctx.restore();
-      return;
-    }
 
     if (specialType === "super_jump_punch") {
       ctx.save();
@@ -7985,30 +8298,47 @@ export class StageRenderer {
 
     if (specialType === "spin_attack") {
       ctx.save();
-      // Full 360 hurricane sword slash disk
-      const spinRadius = Math.max(18, halfWidth * 2.4);
+      // Vertically-squashed hurricane sword slash oval disc
+      const spinRadiusX = Math.max(18, halfWidth * 2.4);
+      const spinRadiusY = spinRadiusX * 0.285;
       const rot = frameCounter * 0.5;
 
-      // 1. Translucent cyan cutting disc
+      // 1. Translucent cyan cutting oval disc
       ctx.beginPath();
-      ctx.arc(x, centerY, spinRadius, 0, Math.PI * 2);
+      ctx.ellipse(x, centerY, spinRadiusX, spinRadiusY, 0, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(56, 189, 248, 0.22)";
       ctx.shadowColor = "#38bdf8";
       ctx.shadowBlur = 12;
       ctx.fill();
 
-      // 2. Twin glowing blade trails along perimeter
+      // 2. Twin glowing blade trails along oval perimeter
       for (let i = 0; i < 2; i++) {
         const startAng = rot + i * Math.PI;
         ctx.beginPath();
-        ctx.arc(x, centerY, spinRadius, startAng, startAng + 1.6);
+        ctx.ellipse(
+          x,
+          centerY,
+          spinRadiusX,
+          spinRadiusY,
+          0,
+          startAng,
+          startAng + 1.6,
+        );
         ctx.strokeStyle = "#38bdf8";
         ctx.lineWidth = 3.5;
         ctx.lineCap = "round";
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(x, centerY, spinRadius, startAng + 0.2, startAng + 1.4);
+        ctx.ellipse(
+          x,
+          centerY,
+          spinRadiusX,
+          spinRadiusY,
+          0,
+          startAng + 0.2,
+          startAng + 1.4,
+        );
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1.6;
         ctx.stroke();
@@ -8548,7 +8878,6 @@ export class StageRenderer {
 
   /**
    * Visualizes Ness's signature special moves:
-   * - PK Fire (Neutral-B): Searing lightning-shaped stream of psychic flames streaming forward.
    * - PK Thunder (Up-B): Psychic energy guiding spark & explosive rocket launch.
    * - PSI Magnet (Down-B): Glowing hexagonal psychic absorption barrier shield.
    */
@@ -8564,67 +8893,6 @@ export class StageRenderer {
   ): void {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
-    const handX = x + dir * halfWidth;
-
-    if (specialType === "pk_fire") {
-      ctx.save();
-      // Searing lightning-shaped PK Fire stream projecting forward
-      const streamLen = halfWidth * 2.8;
-      const endX = handX + dir * streamLen;
-      const segs = 6;
-      const segW = streamLen / segs;
-
-      // 1. Fiery outer flame aura
-      ctx.beginPath();
-      ctx.moveTo(handX, centerY);
-      for (let i = 1; i <= segs; i++) {
-        const segX = handX + dir * (i * segW);
-        const jitterY =
-          i < segs ? Math.sin(frameCounter * 0.6 + i * 2.2) * 6 : 0;
-        ctx.lineTo(segX, centerY + jitterY);
-      }
-      ctx.strokeStyle = "rgba(249, 115, 22, 0.85)"; // Vibrant PK Fire orange
-      ctx.lineWidth = 4.5;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.shadowColor = "#ef4444";
-      ctx.shadowBlur = 12;
-      ctx.stroke();
-
-      // 2. Bright yellow lightning core
-      ctx.beginPath();
-      ctx.moveTo(handX, centerY);
-      for (let i = 1; i <= segs; i++) {
-        const segX = handX + dir * (i * segW);
-        const jitterY =
-          i < segs ? Math.sin(frameCounter * 0.6 + i * 2.2) * 6 : 0;
-        ctx.lineTo(segX, centerY + jitterY);
-      }
-      ctx.strokeStyle = "#fef08a";
-      ctx.lineWidth = 2.2;
-      ctx.stroke();
-
-      // 3. Flame burst tip
-      ctx.beginPath();
-      ctx.arc(
-        endX,
-        centerY,
-        7 + Math.sin(frameCounter * 0.4) * 2,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fillStyle = "#f97316";
-      ctx.shadowColor = "#ea580c";
-      ctx.shadowBlur = 8;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(endX, centerY, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-
-      ctx.restore();
-      return;
-    }
 
     if (specialType === "pk_thunder_charge") {
       ctx.save();
@@ -8996,7 +9264,8 @@ export class StageRenderer {
    * Visualizes Fox's signature special moves:
    * - Fire Fox (Up-B): Fiery startup/charge with radiating flame sparks + blazing fire missile flight envelope.
    * - Reflector / Shine (Down-B): Radiant glowing cyan hexagonal crystal barrier with inner facets and central spark.
-   * - Blaster (Neutral-B): Laser blaster muzzle flare.
+   * - Blaster (Neutral-B) used to have a synthetic laser beam here too, but that's gone now that the real recorded
+   *   Weapon object (WPKind.Blaster) gets its own marker in drawItemObjects().
    */
   private drawFoxSpecial(
     x: number,
@@ -9010,8 +9279,6 @@ export class StageRenderer {
     flightAngle?: number | null,
   ): void {
     const { ctx } = this;
-    const dir = facingRight ? 1 : -1;
-    const noseX = x + dir * halfWidth;
 
     if (specialType === "firefox_charge") {
       ctx.save();
@@ -9219,38 +9486,83 @@ export class StageRenderer {
       return;
     }
 
-    if (specialType === "blaster") {
+    if (specialType === "blaster_gun") {
       ctx.save();
-      const gunX = noseX + dir * 4;
-      const beamStart = gunX + dir * 4;
-      const beamEnd = gunX + dir * 28;
+      const dir = facingRight ? 1 : -1;
+      const noseX = x + dir * halfWidth;
+      const gunY = centerY + heightPx * 0.05;
 
-      // 1. Glowing red laser bolt shot
+      // 1. Fox's outstretched arm / glove reaching into the gun grip
       ctx.beginPath();
-      ctx.moveTo(beamStart, centerY);
-      ctx.lineTo(beamEnd, centerY);
-      ctx.strokeStyle = "rgba(255, 30, 30, 0.95)";
+      ctx.moveTo(noseX - dir * 4, gunY);
+      ctx.lineTo(noseX + dir * 6, gunY);
+      ctx.strokeStyle = "#e2e8f0"; // white glove / uniform sleeve
       ctx.lineWidth = 3.5;
       ctx.lineCap = "round";
-      ctx.shadowColor = "#ff0000";
-      ctx.shadowBlur = 10;
       ctx.stroke();
 
-      // 2. White-hot laser inner core
+      // 2. Pistol grip (angled downward)
       ctx.beginPath();
-      ctx.moveTo(beamStart + dir * 2, centerY);
-      ctx.lineTo(beamEnd - dir * 2, centerY);
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.5;
+      ctx.moveTo(noseX + dir * 6, gunY);
+      ctx.lineTo(noseX + dir * 3, gunY + 7);
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 3.0;
+      ctx.lineCap = "round";
       ctx.stroke();
 
-      // 3. Muzzle flare at blaster tip
+      // 3. Sci-fi Blaster receiver & barrel (silver/gunmetal body)
+      const barrelStartX = noseX + dir * 4;
+      const barrelLen = 14;
+      const barrelEndX = barrelStartX + dir * barrelLen;
+
+      // Main metallic blaster receiver
       ctx.beginPath();
-      ctx.arc(gunX, centerY, 4, 0, Math.PI * 2);
-      ctx.fillStyle = "#ff2222";
+      ctx.roundRect(
+        dir > 0 ? barrelStartX : barrelStartX - barrelLen,
+        gunY - 3.5,
+        barrelLen,
+        7,
+        2,
+      );
+      ctx.fillStyle = "#334155";
+      ctx.strokeStyle = "#64748b";
+      ctx.lineWidth = 1.2;
       ctx.fill();
+      ctx.stroke();
+
+      // 4. Cyan plasma energy power cell / glowing conduit along the side
       ctx.beginPath();
-      ctx.arc(gunX, centerY, 2, 0, Math.PI * 2);
+      ctx.moveTo(barrelStartX + dir * 2, gunY);
+      ctx.lineTo(barrelEndX - dir * 3, gunY);
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      // 5. Top scope / red targeting sensor light
+      ctx.beginPath();
+      ctx.arc(barrelStartX + dir * 4, gunY - 4.5, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ef4444";
+      ctx.shadowColor = "#ff0000";
+      ctx.shadowBlur = 4;
+      ctx.fill();
+
+      // 6. Muzzle tip and small firing spark
+      ctx.beginPath();
+      ctx.arc(barrelEndX, gunY, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#f8fafc";
+      ctx.fill();
+
+      // Pulsing muzzle flare flash at barrel tip during active shots
+      const flashSize = 4 + (frameCounter % 3);
+      ctx.beginPath();
+      ctx.arc(barrelEndX + dir * 2, gunY, flashSize, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 68, 68, 0.4)";
+      ctx.shadowColor = "#ff2222";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(barrelEndX + dir * 2, gunY, flashSize * 0.5, 0, Math.PI * 2);
       ctx.fillStyle = "#ffffff";
       ctx.fill();
 
@@ -9308,56 +9620,78 @@ export class StageRenderer {
     if (pathPoints.length < 2) return;
     pathPoints.reverse(); // Chronological order: [start, ..., current]
 
-    const startPt = pathPoints[0]!;
-    const endPt = pathPoints[pathPoints.length - 1]!;
-
-    // Determine horizontal movement direction (+1 for moving right, -1 for moving left)
-    let motionDir: 1 | -1 = endPt.x >= startPt.x ? 1 : -1;
-    if (Math.abs(endPt.x - startPt.x) < 0.1) {
-      const isForward = isRollForward(endPt.actionStateId);
-      motionDir = isForward
-        ? endPt.facingDirection
-        : (-endPt.facingDirection as 1 | -1);
-    }
-
-    // Full-height motion trail extending from the origin's back edge to the current character's far leading edge
-    const screenPoints = pathPoints.map((pt, idx) => {
-      const screen = camera.worldToScreen(pt.x, pt.y);
-      const isCurrent = idx === pathPoints.length - 1;
-      const offsetSign = isCurrent ? motionDir : -motionDir;
-      const edgeX = screen.x + offsetSign * pt.halfWidth;
-      return {
-        bottomX: edgeX,
-        bottomY: screen.y,
-        topX: edgeX,
-        topY: screen.y - pt.heightPx,
-      };
-    });
-
-    const start = screenPoints[0]!;
-    const end = screenPoints[screenPoints.length - 1]!;
-
+    // Draw modern, consistent roll visual: ghost afterimages, sleek speed lines, and ground dust swirls
     ctx.save();
-    // 1. Build the full-height trail ribbon polygon extending from back origin to far leading edge
-    ctx.beginPath();
-    ctx.moveTo(start.topX, start.topY);
-    for (let i = 1; i < screenPoints.length; i++) {
-      ctx.lineTo(screenPoints[i]!.topX, screenPoints[i]!.topY);
-    }
-    for (let i = screenPoints.length - 1; i >= 0; i--) {
-      ctx.lineTo(screenPoints[i]!.bottomX, screenPoints[i]!.bottomY);
-    }
-    ctx.closePath();
 
-    // 2. Linear gradient fading from start (faint/0%) to the far edge of the current character (vibrant white)
-    const grad = ctx.createLinearGradient(start.bottomX, 0, end.bottomX, 0);
-    grad.addColorStop(0, "rgba(255, 255, 255, 0.0)");
-    grad.addColorStop(0.5, "rgba(245, 250, 255, 0.35)");
-    grad.addColorStop(1, "rgba(255, 255, 255, 0.72)");
-    ctx.fillStyle = grad;
-    ctx.shadowColor = "rgba(255, 255, 255, 0.65)";
-    ctx.shadowBlur = 8;
-    ctx.fill();
+    // 1. Ghost afterimage wireframes along recent positions of the roll
+    const ghostIndices = [
+      Math.floor(pathPoints.length * 0.25),
+      Math.floor(pathPoints.length * 0.55),
+      Math.floor(pathPoints.length * 0.8),
+    ];
+    for (let g = 0; g < ghostIndices.length; g++) {
+      const idx = ghostIndices[g]!;
+      if (idx >= pathPoints.length - 1) continue;
+      const pt = pathPoints[idx]!;
+      const screen = camera.worldToScreen(pt.x, pt.y);
+      const alpha = (g + 1) * 0.12; // 0.12, 0.24, 0.36
+      const effDir = pt.facingDirection;
+
+      // Draw faint ghost wireframe triangle
+      const noseX = screen.x + effDir * pt.halfWidth;
+      const backX = screen.x - effDir * pt.halfWidth;
+      const topY = screen.y - pt.heightPx;
+
+      ctx.beginPath();
+      ctx.moveTo(backX, screen.y);
+      ctx.lineTo(noseX, screen.y - pt.heightPx * 0.5);
+      ctx.lineTo(backX, topY);
+      ctx.closePath();
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 1.5})`;
+      ctx.lineWidth = 1.4;
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.4})`;
+      ctx.fill();
+      ctx.stroke();
+
+      // Subtle ground dust arc under each ghost
+      ctx.beginPath();
+      ctx.ellipse(
+        screen.x,
+        screen.y - 2,
+        pt.halfWidth * 0.7,
+        3,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // 2. Streamlined horizontal speed streaks trailing behind the roll
+    const heights = [0.15, 0.5, 0.85]; // bottom, mid, top
+    for (let h = 0; h < heights.length; h++) {
+      const hFrac = heights[h]!;
+      ctx.beginPath();
+      for (let i = 0; i < pathPoints.length; i++) {
+        const pt = pathPoints[i]!;
+        const screen = camera.worldToScreen(pt.x, pt.y);
+        const yPos = screen.y - pt.heightPx * hFrac;
+        if (i === 0) {
+          ctx.moveTo(screen.x, yPos);
+        } else {
+          ctx.lineTo(screen.x, yPos);
+        }
+      }
+      ctx.strokeStyle =
+        h === 1 ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.45)";
+      ctx.lineWidth = h === 1 ? 2.0 : 1.2;
+      ctx.lineCap = "round";
+      ctx.shadowColor = "rgba(255, 255, 255, 0.6)";
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
