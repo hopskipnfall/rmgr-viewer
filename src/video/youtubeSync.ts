@@ -8,6 +8,25 @@ export interface VideoLinkData {
   url: string;
   offsetSeconds: number; // Video time (seconds) corresponding to replay frame 0
   viewMode: VideoViewMode;
+  /**
+   * True if a person explicitly set/confirmed this specific game's own
+   * offset (nudge, typed commit, or a future "sync to current frame") - an
+   * interpolation anchor. False means this offset was automatically
+   * inferred from sibling anchors in the same session (see
+   * recomputeInferredOffsets()) and is silently recomputed whenever those
+   * change, with no confirmation needed.
+   *
+   * Absent (links saved before this field existed) is treated as true -
+   * manual - rather than false, so an already-confirmed offset from before
+   * this feature shipped is never silently overwritten. See
+   * isOffsetManual().
+   */
+  isOffsetManual?: boolean;
+}
+
+/** True unless explicitly marked false - see VideoLinkData.isOffsetManual's own doc comment for why absent defaults to manual. */
+export function isOffsetManual(data: VideoLinkData): boolean {
+  return data.isOffsetManual !== false;
 }
 
 export interface ParsedYouTubeUrl {
@@ -176,6 +195,10 @@ export function loadVideoLink(replayId: string): VideoLinkData | null {
         offsetSeconds:
           typeof parsed.offsetSeconds === "number" ? parsed.offsetSeconds : 0,
         viewMode: parsed.viewMode || "canvas",
+        // Preserve as-is (including absent/undefined) rather than
+        // defaulting here - isOffsetManual()'s own "absent means manual"
+        // logic is the single source of truth for that default.
+        isOffsetManual: parsed.isOffsetManual,
       };
     }
   } catch {
@@ -305,6 +328,196 @@ export function propagateVideoLinkToSession(
   }
 
   return { updatedCount, isRealtime };
+}
+
+interface OffsetAnchor {
+  recordedAtSeconds: number;
+  offsetSeconds: number;
+}
+
+/**
+ * Recomputes offsetSeconds for every game in a session that does NOT have a
+ * manually-confirmed offset (see VideoLinkData.isOffsetManual), given
+ * whichever games in the session currently do - the fix for cumulative
+ * 60fps-assumption drift in RMG-K's bulk-exported .rmgr timestamps (session
+ * matches aren't recorded at an exactly constant frame rate, so estimating
+ * every match's start time by adding elapsedFrames/60 to the session's
+ * base timestamp drifts further from the truth the later a match falls in
+ * the session - see docs on the .rmgr format's recordedAtEpochMillis).
+ *
+ * With 2+ manual anchors: piecewise-linear interpolation between the two
+ * nearest anchors (by recordedAt) surrounding each inferred game - or
+ * linear extrapolation from the nearest two anchors, for a game outside
+ * the outermost ones. Each inferred game's own OFFSET (which corresponds
+ * to ITS frame 0, per VideoLinkData's own doc comment) is solved so that
+ * the game's MIDPOINT - not its frame 0 - lands exactly on the
+ * interpolated line: since a single game's own recordedAt/frameCount are
+ * themselves subject to the same (small, single-match-scale) 60fps
+ * assumption error the whole feature exists to correct for at the
+ * session scale, anchoring at the midpoint splits that residual error
+ * evenly across the game rather than concentrating it at one end.
+ *
+ * With exactly 1 manual anchor: every inferred game just gets that
+ * anchor's offset shifted by the raw recordedAt delta - the best estimate
+ * available with a single data point (matches propagateVideoLinkToSession's
+ * long-standing behavior).
+ *
+ * Silent by design - call this after ANY change to which games are manual
+ * or what their manual offsets are (a fresh manual set, an edit, or
+ * clearVideoOffsetOverride()), never gated behind a confirmation prompt;
+ * only attachVideoToSession() (extending the *set* of linked games) asks
+ * the user anything.
+ */
+export function recomputeInferredOffsets(
+  allGames: readonly SessionGameInfo[],
+  videoId: string,
+  url: string,
+  defaultViewMode: VideoViewMode,
+): { updatedCount: number } {
+  const withLinks = allGames.map((game) => ({
+    game,
+    link: loadVideoLink(game.id),
+  }));
+
+  const anchors: OffsetAnchor[] = withLinks
+    .filter(
+      ({ link }) => link && link.videoId === videoId && isOffsetManual(link),
+    )
+    .map(({ game, link }) => ({
+      recordedAtSeconds: game.recordedAt.getTime() / 1000,
+      offsetSeconds: link!.offsetSeconds,
+    }))
+    .sort((a, b) => a.recordedAtSeconds - b.recordedAtSeconds);
+
+  if (anchors.length === 0) return { updatedCount: 0 };
+
+  let updatedCount = 0;
+  for (const { game, link } of withLinks) {
+    if (link && link.videoId === videoId && isOffsetManual(link)) continue;
+
+    const t = game.recordedAt.getTime() / 1000;
+    const halfDuration = game.frameCount / 60 / 2;
+    let offsetSeconds: number;
+
+    if (anchors.length === 1) {
+      const only = anchors[0]!;
+      offsetSeconds = only.offsetSeconds + (t - only.recordedAtSeconds);
+    } else {
+      let lo = anchors[0]!;
+      let hi = anchors[anchors.length - 1]!;
+      for (let i = 0; i < anchors.length - 1; i++) {
+        const a = anchors[i]!;
+        const b = anchors[i + 1]!;
+        if (a.recordedAtSeconds <= t && t <= b.recordedAtSeconds) {
+          lo = a;
+          hi = b;
+          break;
+        }
+      }
+      if (t < anchors[0]!.recordedAtSeconds) {
+        lo = anchors[0]!;
+        hi = anchors[1]!;
+      } else if (t > anchors[anchors.length - 1]!.recordedAtSeconds) {
+        lo = anchors[anchors.length - 2]!;
+        hi = anchors[anchors.length - 1]!;
+      }
+
+      const span = hi.recordedAtSeconds - lo.recordedAtSeconds;
+      const driftPerSecond =
+        span === 0 ? 0 : (hi.offsetSeconds - lo.offsetSeconds) / span;
+      const midpoint = t + halfDuration;
+      const videoTimeAtMidpoint =
+        lo.offsetSeconds + driftPerSecond * (midpoint - lo.recordedAtSeconds);
+      offsetSeconds = videoTimeAtMidpoint - halfDuration;
+    }
+
+    offsetSeconds = Math.max(0, Number(offsetSeconds.toFixed(2)));
+    saveVideoLink(game.id, {
+      videoId,
+      url,
+      offsetSeconds,
+      viewMode: link?.viewMode ?? defaultViewMode,
+      isOffsetManual: false,
+    });
+    updatedCount++;
+  }
+
+  return { updatedCount };
+}
+
+/**
+ * The one confirmation-gated video-sync action: attaches `linkData` (with
+ * its offset treated as a fresh manual anchor) to `sourceGameId`, then
+ * silently infers every other linked-or-unlinked game in the session via
+ * recomputeInferredOffsets(). Call this from a "link this video to the
+ * other N games in this session?" prompt shown when a video is newly
+ * attached to a game that's part of a multi-game session - never for a
+ * plain offset edit on a game whose video is already attached (that just
+ * needs a silent recomputeInferredOffsets() call, no prompt).
+ */
+export function attachVideoToSession(
+  sourceGameId: string,
+  linkData: VideoLinkData,
+  allGames: readonly SessionGameInfo[],
+): { updatedCount: number } {
+  saveVideoLink(sourceGameId, { ...linkData, isOffsetManual: true });
+  if (allGames.length <= 1) return { updatedCount: 0 };
+  return recomputeInferredOffsets(
+    allGames,
+    linkData.videoId,
+    linkData.url,
+    linkData.viewMode,
+  );
+}
+
+/**
+ * Marks a game's offset as no-longer-manual and immediately recomputes it
+ * (and any other non-manual siblings) from whichever manual anchors remain
+ * in the session - the "clear override" action next to a manually-set
+ * offset. A no-op if the game has no link at all, or its video doesn't
+ * match any other game's (nothing to infer from/into).
+ */
+export function clearVideoOffsetOverride(
+  gameId: string,
+  allGames: readonly SessionGameInfo[],
+): { updatedCount: number } {
+  const link = loadVideoLink(gameId);
+  if (!link) return { updatedCount: 0 };
+  saveVideoLink(gameId, { ...link, isOffsetManual: false });
+  return recomputeInferredOffsets(
+    allGames,
+    link.videoId,
+    link.url,
+    link.viewMode,
+  );
+}
+
+/**
+ * Removes the video link from every OTHER game in the session that shares
+ * `sourceGameId`'s linked video (a sibling linked to a *different* video is
+ * left untouched) - the bulk counterpart to attachVideoToSession(), for
+ * undoing a session-wide link. Does not touch sourceGameId's own link;
+ * callers that want the source unlinked too should also call
+ * deleteVideoLink(sourceGameId) (or YouTubeSyncController.setLinkData(null)
+ * if it's the currently-loaded game).
+ */
+export function unlinkVideoFromSession(
+  sourceGameId: string,
+  allGames: readonly SessionGameInfo[],
+): { updatedCount: number } {
+  const sourceLink = loadVideoLink(sourceGameId);
+  if (!sourceLink) return { updatedCount: 0 };
+
+  let updatedCount = 0;
+  for (const game of allGames) {
+    if (game.id === sourceGameId) continue;
+    const link = loadVideoLink(game.id);
+    if (link && link.videoId === sourceLink.videoId) {
+      deleteVideoLink(game.id);
+      updatedCount++;
+    }
+  }
+  return { updatedCount };
 }
 
 // Global declaration for YouTube IFrame API
@@ -476,7 +689,11 @@ export class YouTubeSyncController {
     const newOffset = Number(
       (this.linkData.offsetSeconds + deltaSeconds).toFixed(3),
     );
-    this.linkData = { ...this.linkData, offsetSeconds: newOffset };
+    this.linkData = {
+      ...this.linkData,
+      offsetSeconds: newOffset,
+      isOffsetManual: true,
+    };
     if (this.currentReplayId) {
       saveVideoLink(this.currentReplayId, this.linkData);
     }
@@ -490,7 +707,11 @@ export class YouTubeSyncController {
   ): void {
     if (!this.linkData) return;
     const newOffset = Number(offsetSeconds.toFixed(3));
-    this.linkData = { ...this.linkData, offsetSeconds: newOffset };
+    this.linkData = {
+      ...this.linkData,
+      offsetSeconds: newOffset,
+      isOffsetManual: true,
+    };
     if (this.currentReplayId) {
       saveVideoLink(this.currentReplayId, this.linkData);
     }
@@ -504,7 +725,11 @@ export class YouTubeSyncController {
       const currentVideoTime = this.player.getCurrentTime();
       const replayTime = currentReplayFrame / 60;
       const newOffset = Number((currentVideoTime - replayTime).toFixed(3));
-      this.linkData = { ...this.linkData, offsetSeconds: newOffset };
+      this.linkData = {
+        ...this.linkData,
+        offsetSeconds: newOffset,
+        isOffsetManual: true,
+      };
       if (this.currentReplayId) {
         saveVideoLink(this.currentReplayId, this.linkData);
       }

@@ -357,7 +357,11 @@ export interface Translations {
   syncSessionVideosBtn: string;
   vodSyncBannerPrompt: (count: number) => string;
   sessionSyncedSuccess: (count: number) => string;
-  sessionNotRealtimeWarning: string;
+  offsetManualBadgeLabel: string;
+  offsetManualBadgeTitle: string;
+  clearOffsetOverrideTitle: string;
+  unlinkSessionBtn: string;
+  unlinkSessionConfirm: (count: number) => string;
 
   // Session Grouping
   groupBySession: string;
@@ -754,13 +758,19 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     vodEditLinkBtn: "✎ Edit",
     vodEditLinkTitle: "Edit linked video",
     pipCloseBtnTitle: "Close PiP",
-    syncSessionVideosBtn: "Sync now",
+    syncSessionVideosBtn: "Link video",
     vodSyncBannerPrompt: (count: number) =>
-      `Apply this timing to the other ${count} game${count === 1 ? "" : "s"} in this session?`,
+      `Link this video to the other ${count} game${count === 1 ? "" : "s"} in this session?`,
     sessionSyncedSuccess: (count: number) =>
-      `Successfully synchronized video timestamps for ${count} games in session.`,
-    sessionNotRealtimeWarning:
-      "These recordings were exported faster than real-time; relative timestamps could not be automatically calculated from file headers.",
+      `Linked video to ${count} other game${count === 1 ? "" : "s"} in session.`,
+    offsetManualBadgeLabel: "Manual",
+    offsetManualBadgeTitle:
+      "This game's offset was set by hand and won't change automatically.",
+    clearOffsetOverrideTitle:
+      "Clear manual offset (use the estimated session sync instead)",
+    unlinkSessionBtn: "Unlink from session",
+    unlinkSessionConfirm: (count: number) =>
+      `Unlink this video from ${count} other game${count === 1 ? "" : "s"} in this session too?`,
 
     // Session Grouping
     groupBySession: "Group by Session",
@@ -1146,13 +1156,18 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     vodEditLinkBtn: "✎ 編集",
     vodEditLinkTitle: "連携動画を編集",
     pipCloseBtnTitle: "PiPを閉じる",
-    syncSessionVideosBtn: "今すぐ同期",
+    syncSessionVideosBtn: "動画をリンク",
     vodSyncBannerPrompt: (count: number) =>
-      `このタイミングをセッション内の他の${count}試合にも適用しますか？`,
+      `この動画をセッション内の他の${count}試合にもリンクしますか？`,
     sessionSyncedSuccess: (count: number) =>
-      `セッション内の${count}試合の動画タイムスタンプを自動同期しました。`,
-    sessionNotRealtimeWarning:
-      "これらのリプレイは実時間より高速に出力されたため、相対タイムスタンプを自動計算できませんでした。",
+      `セッション内の他の${count}試合に動画をリンクしました。`,
+    offsetManualBadgeLabel: "手動",
+    offsetManualBadgeTitle:
+      "このオフセットは手動で設定されており、自動更新されません。",
+    clearOffsetOverrideTitle: "手動オフセットを解除する（推定同期を使用）",
+    unlinkSessionBtn: "セッションから解除",
+    unlinkSessionConfirm: (count: number) =>
+      `セッション内の他の${count}試合からもこの動画のリンクを解除しますか？`,
 
     // Session Grouping
     groupBySession: "セッションごとにグループ化",
