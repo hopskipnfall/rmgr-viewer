@@ -12,8 +12,10 @@
  * that method, but a real ledge-grab visualization bug (a grounded
  * character at X=2318 wrongly reading as past the edge) plus an
  * independent data source both point to ∓2318 as the correct value -
- * corrected here. The Teeter-based method for the other three platforms is
- * still trusted as-is.
+ * corrected here. That same independent source also corrected the three
+ * side/top platforms' X ranges (their Y values were already right and are
+ * unchanged) - the Teeter-based method apparently had the same kind of
+ * systematic offset on every platform, not just the ground.
  */
 import { StageId } from "@rmg-k/rmgr";
 
@@ -33,20 +35,20 @@ const DREAM_LAND_GROUND: PlatformSpec = {
   kind: "ground",
 };
 const DREAM_LAND_LEFT_PLATFORM: PlatformSpec = {
-  leftX: -1801,
-  rightX: -991,
+  leftX: -1841,
+  rightX: -951,
   y: 904,
   kind: "platform",
 };
 const DREAM_LAND_RIGHT_PLATFORM: PlatformSpec = {
-  leftX: 991,
-  rightX: 1852,
+  leftX: 951,
+  rightX: 1892,
   y: 907,
   kind: "platform",
 };
 const DREAM_LAND_TOP_PLATFORM: PlatformSpec = {
-  leftX: -530,
-  rightX: 530,
+  leftX: -570,
+  rightX: 570,
   y: 1542,
   kind: "platform",
 };
