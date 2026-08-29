@@ -1,4 +1,5 @@
 import {
+  ITKind,
   ItemLinkId,
   WPKind,
   getItemKindName,
@@ -39,7 +40,6 @@ import {
   ZONE_X_AT_Y_HI,
   isHitstunState,
   computeEdgeGuardEvents,
-  isOutsideZone,
 } from "./edgeGuard.js";
 import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
 import { characterIconUrl } from "./characterIcons.js";
@@ -926,7 +926,7 @@ export function getKirbySpecialType(
   actionStateId: number,
 ): KirbySpecialType | null {
   if (!isKirbyCharacter(characterId)) return null;
-  // Neutral-B: Inhale (0x0dc - 0x0de)
+  // Neutral-B: Inhale (0x0dc - 0x0de only, 0x0df+ are Kirby midair jumps)
   if (
     actionStateId === 0x0dc ||
     actionStateId === 0x0dd ||
@@ -934,20 +934,17 @@ export function getKirbySpecialType(
   ) {
     return "inhale";
   }
-  // Up-B: Final Cutter (0x0e5 - 0x0e8)
+  // Up-B: Final Cutter (0x0e5 - 0x0e8, 0x0fe - 0x104)
   if (
-    actionStateId === 0x0e5 ||
-    actionStateId === 0x0e6 ||
-    actionStateId === 0x0e7 ||
-    actionStateId === 0x0e8
+    (actionStateId >= 0x0e5 && actionStateId <= 0x0e8) ||
+    (actionStateId >= 0x0fe && actionStateId <= 0x104)
   ) {
     return "final_cutter";
   }
-  // Down-B: Stone (0x0e9 - 0x0eb)
+  // Down-B: Stone (0x0e9 - 0x0ec, 0x105 - 0x108)
   if (
-    actionStateId === 0x0e9 ||
-    actionStateId === 0x0ea ||
-    actionStateId === 0x0eb
+    (actionStateId >= 0x0e9 && actionStateId <= 0x0ec) ||
+    (actionStateId >= 0x105 && actionStateId <= 0x108)
   ) {
     return "stone";
   }
@@ -1796,14 +1793,14 @@ export class StageRenderer {
   }
 
   // Marks for every frame where a Kirby/Jigglypuff (any variant) port
-  // jumps while off-stage in the edge-guard danger zone - the "recovery
-  // jump" cue. Captures the world position and resulting jump count AT
-  // the jump itself so the on-screen label can stay anchored where the
-  // jump happened instead of tracking the character as they keep moving.
-  // isOutsideZone()'s geometry is Dream Land-only (see edgeGuard.ts), so
-  // this is empty for any other stage. jumpsRemaining is also only
-  // reliable from schema v7 onward (see playSfxForFrameChange's own note
-  // in matchView.ts) - older files never populate this cache.
+  // jumps while beyond either of the stage's ledges (X only - not a
+  // height/zone check) - the "recovery jump" cue. Captures the world
+  // position and resulting jump count AT the jump itself so the on-screen
+  // label can stay anchored where the jump happened instead of tracking
+  // the character as they keep moving. Empty for any stage stageLedges()
+  // has no geometry for. jumpsRemaining is also only reliable from schema
+  // v7 onward (see playSfxForFrameChange's own note in matchView.ts) -
+  // older files never populate this cache.
   private recoveryJumpMarksCache = new WeakMap<
     Replay,
     Map<PortIndex, RecoveryJumpMark[]>
@@ -1823,10 +1820,9 @@ export class StageRenderer {
       marks = [];
       const hasReliableJumpsRemaining =
         replay.header.recorderSchemaVersion >= 7;
-      if (
-        hasReliableJumpsRemaining &&
-        replay.gameStart.stageId === EDGE_GUARD_STAGE_ID
-      ) {
+      const ledges = stageLedges(replay.gameStart.stageId);
+      if (hasReliableJumpsRemaining && ledges) {
+        const [leftLedge, rightLedge] = ledges;
         for (let i = 1; i < replay.frames.length; i++) {
           const post = replay.frames[i]?.ports[port]?.post;
           const prevPost = replay.frames[i - 1]?.ports[port]?.post;
@@ -1835,7 +1831,7 @@ export class StageRenderer {
             (isKirbyCharacter(post.characterId) ||
               isJigglypuffCharacter(post.characterId)) &&
             post.jumpsRemaining < prevPost.jumpsRemaining &&
-            isOutsideZone(post.positionX, post.positionY)
+            (post.positionX < leftLedge.x || post.positionX > rightLedge.x)
           ) {
             marks.push({
               frame: i,
@@ -2176,35 +2172,41 @@ export class StageRenderer {
       ctx.translate(-x, -y);
       const spinAngle = item.frame * 0.45;
       const { isLuigi, dir } = this.getWeaponInfo(item, frame, replay);
-      const drewCustomShape =
-        isWeapon &&
-        this.drawCustomWeaponShape(
-          ctx,
-          item.kind,
-          x,
-          y,
-          isLuigi,
-          dir,
-          spinAngle,
-        );
+      const drewCustomShape = isWeapon
+        ? this.drawCustomWeaponShape(
+            ctx,
+            item.kind,
+            x,
+            y,
+            isLuigi,
+            dir,
+            spinAngle,
+          )
+        : this.drawCustomItemShape(ctx, item.kind, x, y, item.frame);
       if (!drewCustomShape) {
         this.drawGenericItemDiamond(ctx, x, y, isWeapon);
       }
       ctx.restore();
 
       // The generic diamond and most custom shapes are small enough for a
-      // fixed label offset, but bigger shapes like boomerang, fireball, pk fire, and thunder jolt need more
+      // fixed label offset, but bigger shapes like boomerang, fireball, pk fire, bomb, and thunder jolt need more
       // clearance so the label doesn't sit on top of their aura/arc.
-      const labelOffset =
-        (isWeapon &&
+      const isBomb =
+        !isWeapon &&
+        (item.kind === ITKind.Bomb ||
+          item.kind === ITKind.BobOmb ||
+          item.kind === ITKind.RTTFBomb);
+      const isLargeWeapon =
+        isWeapon &&
         (item.kind === WPKind.Boomerang ||
           item.kind === WPKind.Fireball ||
           item.kind === WPKind.PKFire ||
           item.kind === WPKind.ThunderJoltAir ||
           item.kind === WPKind.ThunderJoltGround ||
-          item.kind === WPKind.Blaster)
-          ? 22
-          : 14) * markerScale;
+          item.kind === WPKind.Blaster ||
+          item.kind === WPKind.Cutter);
+
+      const labelOffset = (isBomb ? 46 : isLargeWeapon ? 22 : 14) * markerScale;
 
       ctx.save();
       ctx.font = `${10 * markerScale}px monospace`;
@@ -2350,12 +2352,238 @@ export class StageRenderer {
       case WPKind.Blaster: // Fox Neutral-B laser
         this.drawLaserMarker(ctx, x, y, dir);
         return true;
+      case WPKind.Cutter: // Kirby Up-B Final Cutter wave
+        this.drawCutterWaveMarker(ctx, x, y, dir);
+        return true;
       case WPKind.EggThrow: // same shell art as a character encased in an egg (drawYoshiEggShell)
         this.drawYoshiEgg(x, y, 8, 6);
         return true;
       default:
         return false;
     }
+  }
+
+  /**
+   * Draws recognizable shapes for select Item kinds (thrown, held, or ground items).
+   */
+  private drawCustomItemShape(
+    ctx: CanvasRenderingContext2D,
+    kind: number,
+    x: number,
+    y: number,
+    frameCounter = 0,
+  ): boolean {
+    switch (kind) {
+      case ITKind.Bomb:
+      case ITKind.BobOmb:
+      case ITKind.RTTFBomb:
+        this.drawRoundBombItem(ctx, x, y, frameCounter, kind === ITKind.BobOmb);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Round Bomb Item visual with a burning-down fuse:
+   * - Spherical charcoal/slate bomb body with 3D spherical radial highlight
+   * - Gold/brass metal neck collar
+   * - Animated curved burning fuse that burns down over time
+   * - Sizzling flame tip with glowing aura, white-hot core, and flying sparks
+   */
+  private drawRoundBombItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    frameCounter = 0,
+    isBobOmb = false,
+    bombRadius = 32,
+  ): void {
+    ctx.save();
+    const scale = bombRadius / 32;
+    const bodyCenterY = y + 8 * scale;
+
+    // 1. Bomb Sphere Shadow & Body with 3D Radial Lighting
+    const bombGrad = ctx.createRadialGradient(
+      x - 9 * scale,
+      bodyCenterY - 9 * scale,
+      5 * scale,
+      x,
+      bodyCenterY,
+      bombRadius,
+    );
+    bombGrad.addColorStop(0.0, "#64748b"); // Specular highlight
+    bombGrad.addColorStop(0.35, "#1e293b"); // Main slate-iron body
+    bombGrad.addColorStop(1.0, "#090d16"); // Deep shadow edge
+
+    ctx.beginPath();
+    ctx.arc(x, bodyCenterY, bombRadius, 0, Math.PI * 2);
+    ctx.fillStyle = bombGrad;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+    ctx.shadowBlur = 16 * scale;
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.lineWidth = Math.max(1, 2.4 * scale);
+    ctx.stroke();
+
+    // Specular shine dot
+    ctx.beginPath();
+    ctx.ellipse(
+      x - 11 * scale,
+      bodyCenterY - 11 * scale,
+      7.5 * scale,
+      4.6 * scale,
+      -Math.PI / 4,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+    ctx.fill();
+
+    // Optional Bob-omb eyes
+    if (isBobOmb) {
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.ellipse(
+        x - 8 * scale,
+        bodyCenterY,
+        4.5 * scale,
+        9 * scale,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.ellipse(
+        x + 8 * scale,
+        bodyCenterY,
+        4.5 * scale,
+        9 * scale,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      ctx.fillStyle = "#0f172a";
+      ctx.beginPath();
+      ctx.arc(x - 8 * scale, bodyCenterY, 2.8 * scale, 0, Math.PI * 2);
+      ctx.arc(x + 8 * scale, bodyCenterY, 2.8 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 2. Brass/Gold Metal Cap on Top
+    const capY = bodyCenterY - bombRadius;
+    ctx.beginPath();
+    ctx.roundRect(
+      x - 11 * scale,
+      capY - 9 * scale,
+      22 * scale,
+      10 * scale,
+      3.5 * scale,
+    );
+    ctx.fillStyle = "#eab308";
+    ctx.fill();
+    ctx.strokeStyle = "#854d0e";
+    ctx.lineWidth = Math.max(0.8, 2 * scale);
+    ctx.stroke();
+
+    // 3. Burning Down S-Curved Fuse
+    // Fuse curves from neck (x, capY - 9 * scale) through control points to full length tip
+    // Burn down progress: burns from 1.0 (full length) down to 0.15 (near cap)
+    const burnCycle = 90; // frames per full fuse burn cycle
+    const burnProg = (frameCounter % burnCycle) / burnCycle;
+    const fuseFraction = Math.max(0.12, 1 - burnProg * 0.85);
+
+    // Fuse bezier control points: P0 -> P1 -> P2 -> P3
+    const p0 = { x: x, y: capY - 9 * scale };
+    const p1 = { x: x - 11 * scale, y: capY - 30 * scale };
+    const p2 = { x: x + 22 * scale, y: capY - 48 * scale };
+    const p3 = { x: x + 36 * scale, y: capY - 38 * scale };
+
+    // Function to sample cubic bezier at t
+    const sampleBezier = (t: number) => {
+      const u = 1 - t;
+      const tt = t * t;
+      const uu = u * u;
+      const uuu = uu * u;
+      const ttt = tt * t;
+      return {
+        x: uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x,
+        y: uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y,
+      };
+    };
+
+    // Draw remaining unburnt fuse rope
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    const steps = 20;
+    for (let i = 1; i <= steps; i++) {
+      const t = (i / steps) * fuseFraction;
+      const pt = sampleBezier(t);
+      ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.strokeStyle = "#d97706"; // Hemp rope
+    ctx.lineWidth = Math.max(1.2, 4.5 * scale);
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // 4. Sizzling Spark & Flame at the Burning Tip
+    const sparkTip = sampleBezier(fuseFraction);
+
+    // Glowing flame aura
+    ctx.beginPath();
+    ctx.arc(
+      sparkTip.x,
+      sparkTip.y,
+      (13 + Math.sin(frameCounter * 0.8) * 3) * scale,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "rgba(249, 115, 22, 0.45)";
+    ctx.shadowColor = "#ea580c";
+    ctx.shadowBlur = 24 * scale;
+    ctx.fill();
+
+    // Bright orange flame core
+    ctx.beginPath();
+    ctx.arc(
+      sparkTip.x,
+      sparkTip.y,
+      (9 + Math.sin(frameCounter * 0.6) * 2) * scale,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "#f97316";
+    ctx.fill();
+
+    // Yellow bright center
+    ctx.beginPath();
+    ctx.arc(sparkTip.x, sparkTip.y, 5.5 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = "#fde047";
+    ctx.fill();
+
+    // White-hot spark dot
+    ctx.beginPath();
+    ctx.arc(sparkTip.x, sparkTip.y, 2.8 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // 5. Flying Spark Particles
+    ctx.shadowBlur = 0;
+    for (let i = 0; i < 4; i++) {
+      const sparkAngle = (frameCounter * 1.7 + i * 1.6) % (Math.PI * 2);
+      const sparkDist = (9 + ((frameCounter + i * 6) % 12)) * scale;
+      const sx = sparkTip.x + Math.cos(sparkAngle) * sparkDist;
+      const sy = sparkTip.y + Math.sin(sparkAngle) * sparkDist;
+      ctx.beginPath();
+      ctx.arc(sx, sy, Math.max(0.6, 2.4 * scale), 0, Math.PI * 2);
+      ctx.fillStyle = i % 2 === 0 ? "#fef08a" : "#fb923c";
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   /**
@@ -2627,6 +2855,75 @@ export class StageRenderer {
     ctx.arc(tailX - dir * 14, y + 1, 0.8, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255, 120, 120, 0.85)";
     ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Kirby's Final Cutter Wave projectile visual (WPKind.Cutter):
+   * - Vertical crescent energy blade surging forward along the ground
+   * - Outer glowing cyan aura
+   * - Crisp white-hot leading edge
+   * - Multi-tiered energy crest teeth
+   * - Trailing motion streaks behind the wave
+   */
+  private drawCutterWaveMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    dir = 1,
+  ): void {
+    ctx.save();
+    const waveH = 22;
+    const waveW = 14;
+
+    // 1. Glowing cyan aura
+    ctx.beginPath();
+    ctx.moveTo(x + dir * (waveW * 0.7), y);
+    ctx.lineTo(x + dir * (waveW * 0.4), y - waveH * 0.45);
+    ctx.lineTo(x + dir * (waveW * 0.8), y - waveH * 0.75);
+    ctx.lineTo(x + dir * (waveW * 0.2), y - waveH);
+    ctx.lineTo(x - dir * (waveW * 0.6), y - waveH * 0.5);
+    ctx.lineTo(x - dir * (waveW * 0.8), y);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(56, 189, 248, 0.4)";
+    ctx.shadowColor = "#0284c7";
+    ctx.shadowBlur = 14;
+    ctx.fill();
+
+    // 2. Solid cyan/blue energy blade core
+    ctx.beginPath();
+    ctx.moveTo(x + dir * (waveW * 0.6), y);
+    ctx.lineTo(x + dir * (waveW * 0.3), y - waveH * 0.45);
+    ctx.lineTo(x + dir * (waveW * 0.7), y - waveH * 0.75);
+    ctx.lineTo(x + dir * (waveW * 0.1), y - waveH * 0.95);
+    ctx.lineTo(x - dir * (waveW * 0.45), y - waveH * 0.5);
+    ctx.lineTo(x - dir * (waveW * 0.65), y);
+    ctx.closePath();
+    ctx.fillStyle = "#38bdf8";
+    ctx.fill();
+
+    // 3. Bright white-hot leading crest edge
+    ctx.beginPath();
+    ctx.moveTo(x + dir * (waveW * 0.6), y);
+    ctx.lineTo(x + dir * (waveW * 0.3), y - waveH * 0.45);
+    ctx.lineTo(x + dir * (waveW * 0.7), y - waveH * 0.75);
+    ctx.lineTo(x + dir * (waveW * 0.1), y - waveH * 0.95);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // 4. Trailing velocity streaks
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = "rgba(186, 230, 253, 0.8)";
+    ctx.beginPath();
+    ctx.moveTo(x - dir * (waveW * 0.5), y - waveH * 0.25);
+    ctx.lineTo(x - dir * (waveW * 1.3), y - waveH * 0.25);
+    ctx.moveTo(x - dir * (waveW * 0.3), y - waveH * 0.65);
+    ctx.lineTo(x - dir * (waveW * 1.0), y - waveH * 0.65);
+    ctx.stroke();
 
     ctx.restore();
   }
@@ -4473,6 +4770,7 @@ export class StageRenderer {
         color,
         kirbySpecial,
         post.actionFrameCounter,
+        post.actionStateId,
       );
     }
     if (puffSpecial) {
@@ -9702,43 +10000,18 @@ export class StageRenderer {
     }
 
     if (specialType === "bomb") {
-      ctx.save();
-      // Round blue cartoon bomb with burning fuse
-      const bombX = noseX + dir * 8;
-      const bombY = centerY - heightPx * 0.35;
-      const bombR = Math.max(6, halfWidth * 0.45);
-
-      // Bomb spherical body
-      ctx.beginPath();
-      ctx.arc(bombX, bombY, bombR, 0, Math.PI * 2);
-      ctx.fillStyle = "#1d4ed8";
-      ctx.shadowColor = "#3b82f6";
-      ctx.shadowBlur = 8;
-      ctx.fill();
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      // Brass fuse cap
-      ctx.fillStyle = "#ca8a04";
-      ctx.fillRect(bombX - 2, bombY - bombR - 3, 4, 3);
-
-      // Sparkling burning fuse
-      const fuseProg = (frameCounter % 6) / 6;
-      ctx.beginPath();
-      ctx.arc(
-        bombX + (fuseProg > 0.5 ? 2 : -2),
-        bombY - bombR - 6,
-        2.5,
-        0,
-        Math.PI * 2,
+      // Round bomb with burning-down fuse held in Link's hand (proportional to Link's body/hand)
+      const handBombRadius = Math.max(6.5, halfWidth * 0.42);
+      const bombX = noseX + dir * (halfWidth * 0.3);
+      const bombY = centerY - heightPx * 0.26;
+      this.drawRoundBombItem(
+        ctx,
+        bombX,
+        bombY,
+        frameCounter,
+        false,
+        handBombRadius,
       );
-      ctx.fillStyle = "#facc15";
-      ctx.shadowColor = "#ef4444";
-      ctx.shadowBlur = 6;
-      ctx.fill();
-
-      ctx.restore();
       return;
     }
   }
@@ -9759,6 +10032,7 @@ export class StageRenderer {
     _color: string,
     specialType: KirbySpecialType,
     frameCounter: number,
+    actionStateId?: number,
   ): void {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
@@ -9810,35 +10084,230 @@ export class StageRenderer {
 
     if (specialType === "final_cutter") {
       ctx.save();
-      // Upward rising slash / downward dive / floor shockwave wave
-      const swordX = mouthX + dir * (halfWidth * 0.4);
+      const fc = Math.max(1, frameCounter);
+      const isLanded = actionStateId === 0x101 || actionStateId === 0x0e8;
+      const isFallingFast = !isLanded && fc > 45;
 
-      // Vertical energy blade trail
+      // Blade positioning:
+      // In the air: held forward in Kirby's front hand at chest/hand level
+      // On the ground: slammed down into the floor
+      const bladeY = isLanded ? y - 4 : centerY - heightPx * 0.02;
+
+      // Horizontal blade dimensions
+      const bladeW = Math.max(26, halfWidth * 1.85);
+      const bladeH = 5.5;
+      const hiltX = isLanded
+        ? x + dir * (halfWidth * 0.45)
+        : x + dir * (halfWidth * 0.58);
+      const tipX = hiltX + dir * bladeW;
+      const leftX = Math.min(hiltX, tipX);
+      const rightX = Math.max(hiltX, tipX);
+      const bladeCenterX = (leftX + rightX) * 0.5;
+
+      // 1. Slashing Trail Behind the Horizontal Blade (streaming upward above the blade)
+      if (isFallingFast) {
+        // In-flight downward slash: high-speed vertical energy wake streaming upward behind plunging blade
+        const dropFrames = fc - 45;
+        const trailHeight = Math.min(heightPx * 3.0, dropFrames * 5.5);
+        const trailTopY = bladeY - trailHeight;
+        const trailBottomY = bladeY;
+
+        const trailGrad = ctx.createLinearGradient(
+          0,
+          trailTopY,
+          0,
+          trailBottomY,
+        );
+        trailGrad.addColorStop(0.0, "rgba(56, 189, 248, 0.0)");
+        trailGrad.addColorStop(0.4, "rgba(56, 189, 248, 0.3)");
+        trailGrad.addColorStop(0.8, "rgba(56, 189, 248, 0.65)");
+        trailGrad.addColorStop(1.0, "rgba(186, 230, 253, 0.85)");
+
+        ctx.beginPath();
+        ctx.moveTo(leftX + 2, trailTopY);
+        ctx.lineTo(rightX - 2, trailTopY);
+        ctx.lineTo(rightX, trailBottomY);
+        ctx.lineTo(leftX, trailBottomY);
+        ctx.closePath();
+        ctx.fillStyle = trailGrad;
+        ctx.shadowColor = "#0284c7";
+        ctx.shadowBlur = 18;
+        ctx.fill();
+
+        // White-hot core stream lines
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.beginPath();
+        ctx.moveTo(
+          bladeCenterX - dir * 3,
+          trailTopY + (trailBottomY - trailTopY) * 0.25,
+        );
+        ctx.lineTo(bladeCenterX - dir * 3, trailBottomY);
+        ctx.moveTo(
+          bladeCenterX + dir * 4,
+          trailTopY + (trailBottomY - trailTopY) * 0.1,
+        );
+        ctx.lineTo(bladeCenterX + dir * 4, trailBottomY);
+        ctx.stroke();
+
+        // Speed streaks
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = "rgba(125, 211, 252, 0.75)";
+        ctx.beginPath();
+        ctx.moveTo(leftX + 4, trailTopY + (trailBottomY - trailTopY) * 0.35);
+        ctx.lineTo(leftX + 4, trailBottomY);
+        ctx.moveTo(rightX - 6, trailTopY + (trailBottomY - trailTopY) * 0.18);
+        ctx.lineTo(rightX - 6, trailBottomY);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      } else if (isLanded) {
+        // Ground landing after striking through air: dissipating upward energy residue
+        const residueH = Math.max(8, heightPx * 0.9 - fc * 1.2);
+        const trailTopY = bladeY - residueH;
+        const trailBottomY = bladeY;
+        const alpha = Math.max(0, 0.7 - fc * 0.05);
+
+        if (alpha > 0) {
+          const resGrad = ctx.createLinearGradient(
+            0,
+            trailTopY,
+            0,
+            trailBottomY,
+          );
+          resGrad.addColorStop(0.0, `rgba(56, 189, 248, 0.0)`);
+          resGrad.addColorStop(1.0, `rgba(186, 230, 253, ${alpha})`);
+
+          ctx.beginPath();
+          ctx.moveTo(leftX + 4, trailTopY);
+          ctx.lineTo(rightX - 4, trailTopY);
+          ctx.lineTo(rightX, trailBottomY);
+          ctx.lineTo(leftX, trailBottomY);
+          ctx.closePath();
+          ctx.fillStyle = resGrad;
+          ctx.fill();
+        }
+      }
+
+      // 2. Horizontal Cutter Blade
+      // Outer cyan aura glow
       ctx.beginPath();
-      ctx.moveTo(swordX, y);
-      ctx.lineTo(swordX, centerY - heightPx * 1.1);
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 3.5;
+      ctx.roundRect(
+        leftX - 3,
+        bladeY - bladeH * 0.5 - 3,
+        bladeW + 6,
+        bladeH + 6,
+        4,
+      );
+      ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
       ctx.shadowColor = "#0284c7";
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 14;
+      ctx.fill();
+
+      // Sharp horizontal blade polygon (tapered forward tip)
+      ctx.beginPath();
+      ctx.moveTo(hiltX + dir * 3, bladeY - bladeH * 0.5);
+      ctx.lineTo(tipX - dir * 5, bladeY - bladeH * 0.5);
+      ctx.lineTo(tipX, bladeY);
+      ctx.lineTo(tipX - dir * 5, bladeY + bladeH * 0.5);
+      ctx.lineTo(hiltX + dir * 3, bladeY + bladeH * 0.5);
+      ctx.closePath();
+      ctx.fillStyle = "#f0f9ff";
+      ctx.fill();
+      ctx.strokeStyle = "#0284c7";
+      ctx.lineWidth = 1.2;
       ctx.stroke();
 
+      // Center cyan energy fuller line
       ctx.beginPath();
-      ctx.moveTo(swordX, y);
-      ctx.lineTo(swordX, centerY - heightPx * 1.1);
-      ctx.strokeStyle = "#ffffff";
+      ctx.moveTo(hiltX + dir * 5, bladeY);
+      ctx.lineTo(tipX - dir * 6, bladeY);
+      ctx.strokeStyle = "#38bdf8";
       ctx.lineWidth = 1.6;
       ctx.stroke();
 
-      // Floor cutter shockwave wave
-      const waveX = mouthX + dir * (halfWidth * 1.6);
+      // White-hot cutting edge
       ctx.beginPath();
-      ctx.moveTo(waveX, y);
-      ctx.lineTo(waveX + dir * 10, y - heightPx * 0.45);
-      ctx.lineTo(waveX + dir * 16, y);
-      ctx.closePath();
-      ctx.fillStyle = "rgba(56, 189, 248, 0.75)";
+      ctx.moveTo(hiltX + dir * 3, bladeY - bladeH * 0.5);
+      ctx.lineTo(tipX - dir * 5, bladeY - bladeH * 0.5);
+      ctx.lineTo(tipX, bladeY);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Gold crossguard & pommel at the hilt end
+      ctx.beginPath();
+      ctx.ellipse(hiltX + dir * 2, bladeY, 2.8, 5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "#facc15";
       ctx.fill();
+      ctx.strokeStyle = "#854d0e";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.ellipse(hiltX - dir * 2, bladeY, 2.2, 2.2, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "#ca8a04";
+      ctx.fill();
+
+      // 3. Front Hand Grip
+      ctx.beginPath();
+      ctx.ellipse(
+        hiltX + dir * 1,
+        bladeY,
+        Math.max(0.1, 0.22 * halfWidth),
+        Math.max(0.1, 0.22 * halfWidth),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#f472b6";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+
+      // 4. Ground impact shockwave on landing (surges strictly forward in front of Kirby)
+      if (isLanded) {
+        const startX = x + dir * (halfWidth * 0.35);
+        const impW = Math.max(32, halfWidth * (2.2 + fc * 0.35));
+        const waveEndX = startX + dir * impW;
+        const waveH = Math.max(6, 12 - fc * 0.25);
+
+        // Forward-surging ground shockwave wedge / crest
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.quadraticCurveTo(
+          startX + dir * (impW * 0.5),
+          y - waveH,
+          waveEndX,
+          y,
+        );
+        ctx.closePath();
+        ctx.fillStyle = "rgba(56, 189, 248, 0.8)";
+        ctx.shadowColor = "#38bdf8";
+        ctx.shadowBlur = 16;
+        ctx.fill();
+
+        // White-hot forward leading crest line
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.quadraticCurveTo(
+          startX + dir * (impW * 0.45),
+          y - waveH * 0.85,
+          waveEndX,
+          y,
+        );
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        // Forward ground wave base streak line
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(186, 230, 253, 0.9)";
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(waveEndX, y);
+        ctx.stroke();
+      }
 
       ctx.restore();
       return;
