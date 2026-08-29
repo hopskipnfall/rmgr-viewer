@@ -174,7 +174,40 @@ export function calculateDIFrames(damage: number, isElectric = false): number {
 }
 
 /**
- * Checks if a stick input satisfies the Smash 64 DI activation condition relative to previous stick input.
+ * Checks a single axis's stick value for a DI activation transition,
+ * independent of the other axis - see checkDIActivation()'s doc comment
+ * for why these must be evaluated separately rather than jointly.
+ */
+function checkAxisActivation(prev: number, curr: number): boolean {
+  const wasInBand = Math.abs(prev) <= DI_DEADZONE_STICK;
+  const isOutOfBand = Math.abs(curr) > DI_DEADZONE_STICK;
+
+  // Left this axis's own center band.
+  if (wasInBand && isOutOfBand) return true;
+
+  // Crossed from one side of this axis's band to the opposite side.
+  return (
+    (prev < -DI_DEADZONE_STICK && curr > DI_DEADZONE_STICK) ||
+    (prev > DI_DEADZONE_STICK && curr < -DI_DEADZONE_STICK)
+  );
+}
+
+/**
+ * Checks if a stick input satisfies the Smash 64 DI activation condition
+ * relative to the previous stick input.
+ *
+ * Per smash64.net's DI mechanics guide: activation is checked against two
+ * independent per-axis bands (their "blue box"/"red box" - a Y-band and an
+ * X-band respectively), not a single joint deadzone square. "If you were in
+ * both boxes (the center purple square) last frame, you only need to leave
+ * one of them to receive DI, not both." Concretely: holding one axis
+ * pinned outside its own band while flicking only the other axis still
+ * activates DI, since leaving *that* axis's band is sufficient on its own -
+ * it doesn't matter that the held axis was already outside its band and
+ * therefore can't "leave" it again. The previous joint-deadzone
+ * implementation required both axes to return inside the box together
+ * before either could activate again, which silently dropped real DI
+ * inputs during exactly this (common) held-axis-plus-flick pattern.
  */
 export function checkDIActivation(
   prevX: number,
@@ -185,27 +218,7 @@ export function checkDIActivation(
   const currMag = Math.hypot(currX, currY);
   if (currMag < DI_MIN_MAGNITUDE) return false;
 
-  const wasInDeadzoneX = Math.abs(prevX) <= DI_DEADZONE_STICK;
-  const wasInDeadzoneY = Math.abs(prevY) <= DI_DEADZONE_STICK;
-  const wasInDeadzone = wasInDeadzoneX && wasInDeadzoneY;
-
-  const isNowOutOfDeadzoneX = Math.abs(currX) > DI_DEADZONE_STICK;
-  const isNowOutOfDeadzoneY = Math.abs(currY) > DI_DEADZONE_STICK;
-
-  // 1. Leaving the deadzone center box
-  if (wasInDeadzone && (isNowOutOfDeadzoneX || isNowOutOfDeadzoneY)) {
-    return true;
-  }
-
-  // 2. Crossing from one side to the opposite side across the center
-  const crossedX =
-    (prevX < -DI_DEADZONE_STICK && currX > DI_DEADZONE_STICK) ||
-    (prevX > DI_DEADZONE_STICK && currX < -DI_DEADZONE_STICK);
-  const crossedY =
-    (prevY < -DI_DEADZONE_STICK && currY > DI_DEADZONE_STICK) ||
-    (prevY > DI_DEADZONE_STICK && currY < -DI_DEADZONE_STICK);
-
-  return crossedX || crossedY;
+  return checkAxisActivation(prevX, currX) || checkAxisActivation(prevY, currY);
 }
 
 /**
