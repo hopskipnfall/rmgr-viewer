@@ -28,6 +28,7 @@ import {
   LEDGE_GRAB_ZONE_WIDTH,
   LEDGE_GRAB_PROXIMITY,
 } from "./ledgeGrabRange.js";
+import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
 import {
   EDGE_GUARD_STAGE_ID,
   ZONE_Y_LO,
@@ -131,58 +132,151 @@ export interface LedgeGrabCandidate {
   /** World position of the character's ledge-grab check point (positionX + facingDirection * reachX, positionY + heightY) - see ledgeGrabRange.ts. */
   dotWorldX: number;
   dotWorldY: number;
+  /** Fade in/out progress, 0 (invisible) to 1 (fully shown) - see LEDGE_GRAB_FADE_FRAMES. */
+  alpha: number;
+}
+
+interface RawLedgeGrabState {
+  edgeSide: "left" | "right";
+  dotWorldX: number;
+  dotWorldY: number;
 }
 
 /**
- * Every seated port currently worth visualizing a ledge-grab check for:
- * off-stage horizontally (past the ground's left/right edge, at any
- * height), within LEDGE_GRAB_PROXIMITY of that edge in both X and Y, alive,
- * and with a known ledge-grab offset for their character (see
- * ledgeGrabRange.ts - Japanese-region variants included, same offsets).
+ * The single-frame geometric check, with no fade applied: off-stage
+ * horizontally (past the ground's left/right edge, at any height), within
+ * LEDGE_GRAB_PROXIMITY of that edge in both X and Y, alive, not already
+ * hanging from a ledge (LEDGE_ACTION_STATES - once grabbed there's nothing
+ * left to visualize), and with a known ledge-grab offset for their
+ * character (ledgeGrabRange.ts - Japanese-region variants included, same
+ * offsets).
+ */
+function rawLedgeGrabState(
+  post: {
+    positionX: number;
+    positionY: number;
+    facingDirection: 1 | -1;
+    characterId: number;
+    actionStateId: number;
+    stocksRemaining: number;
+    grounded: boolean;
+  },
+  leftLedge: LedgePoint,
+  rightLedge: LedgePoint,
+): RawLedgeGrabState | null {
+  if (isDeadState(post.actionStateId) || post.stocksRemaining < 0) return null;
+  if (LEDGE_ACTION_STATES.has(post.actionStateId)) return null;
+  // Still standing on a surface - never truly "off the stage" regardless of
+  // how positionX compares to the measured platform edge. Without this, a
+  // character walking right at the edge could read as past it (measurement
+  // slack between the platform's rendered edge and the game's own
+  // grounded/not-grounded signal) and wrongly show the overlay while
+  // plainly standing on the stage.
+  if (post.grounded) return null;
+
+  // "Off the stage horizontally" - past the ground's left/right edge,
+  // regardless of height (e.g. still well above/below the stage).
+  let edge: LedgePoint;
+  if (post.positionX < leftLedge.x) {
+    edge = leftLedge;
+  } else if (post.positionX > rightLedge.x) {
+    edge = rightLedge;
+  } else {
+    return null;
+  }
+
+  const withinProximity =
+    Math.abs(post.positionX - edge.x) <= LEDGE_GRAB_PROXIMITY &&
+    Math.abs(post.positionY - edge.y) <= LEDGE_GRAB_PROXIMITY;
+  if (!withinProximity) return null;
+
+  const offset = ledgeGrabOffset(post.characterId);
+  if (!offset) return null;
+
+  return {
+    edgeSide: edge.side,
+    dotWorldX: post.positionX + post.facingDirection * offset.reachX,
+    dotWorldY: post.positionY + offset.heightY,
+  };
+}
+
+/** How many frames the ledge-grab overlay takes to fade fully in or out. */
+export const LEDGE_GRAB_FADE_FRAMES = 8;
+
+/**
+ * Every seated port currently worth visualizing a ledge-grab check for (see
+ * rawLedgeGrabState()), each with a 0-1 fade progress: ramping up over the
+ * first LEDGE_GRAB_FADE_FRAMES frames the underlying condition has held
+ * true, and - once the condition stops holding (moved back on-stage, moved
+ * out of proximity, or grabbed the ledge) - ramping back down over the
+ * following LEDGE_GRAB_FADE_FRAMES frames using the last active frame's
+ * position, rather than disappearing outright.
  */
 export function computeLedgeGrabCandidates(
-  frame: Frame,
+  replay: Replay,
+  frameIndex: number,
   stageId: number | undefined,
 ): LedgeGrabCandidate[] {
   const ledges = stageLedges(stageId);
   if (!ledges) return [];
   const [leftLedge, rightLedge] = ledges;
+  const frame = replay.frames[frameIndex];
+  if (!frame) return [];
 
   const candidates: LedgeGrabCandidate[] = [];
 
   for (const key of Object.keys(frame.ports)) {
     const port = Number(key) as PortIndex;
-    const post = frame.ports[port]?.post;
-    if (!post) continue;
-    if (isDeadState(post.actionStateId) || post.stocksRemaining < 0) {
+    const currentPost = frame.ports[port]?.post;
+    if (!currentPost) continue;
+
+    const currentRaw = rawLedgeGrabState(currentPost, leftLedge, rightLedge);
+    if (currentRaw) {
+      let consecutiveFrames = 0;
+      let idx = frameIndex;
+      while (consecutiveFrames < LEDGE_GRAB_FADE_FRAMES && idx >= 0) {
+        const post = replay.frames[idx]?.ports[port]?.post;
+        if (!post || !rawLedgeGrabState(post, leftLedge, rightLedge)) break;
+        consecutiveFrames++;
+        idx--;
+      }
+      candidates.push({
+        port,
+        edgeSide: currentRaw.edgeSide,
+        dotWorldX: currentRaw.dotWorldX,
+        dotWorldY: currentRaw.dotWorldY,
+        alpha: Math.min(1, consecutiveFrames / LEDGE_GRAB_FADE_FRAMES),
+      });
       continue;
     }
 
-    // "Off the stage horizontally" - past the ground's left/right edge,
-    // regardless of height (e.g. still well above/below the stage).
-    let edge: LedgePoint | undefined;
-    if (post.positionX < leftLedge.x) {
-      edge = leftLedge;
-    } else if (post.positionX > rightLedge.x) {
-      edge = rightLedge;
-    } else {
-      continue;
+    // Not active this frame - if it was active recently, fade out using
+    // that last-active frame's position rather than vanishing outright.
+    let framesSinceActive = 0;
+    let idx = frameIndex - 1;
+    let lastActive: RawLedgeGrabState | null = null;
+    while (framesSinceActive < LEDGE_GRAB_FADE_FRAMES && idx >= 0) {
+      framesSinceActive++;
+      const post = replay.frames[idx]?.ports[port]?.post;
+      const raw = post ? rawLedgeGrabState(post, leftLedge, rightLedge) : null;
+      if (raw) {
+        lastActive = raw;
+        break;
+      }
+      idx--;
     }
-
-    const withinProximity =
-      Math.abs(post.positionX - edge.x) <= LEDGE_GRAB_PROXIMITY &&
-      Math.abs(post.positionY - edge.y) <= LEDGE_GRAB_PROXIMITY;
-    if (!withinProximity) continue;
-
-    const offset = ledgeGrabOffset(post.characterId);
-    if (!offset) continue;
-
-    candidates.push({
-      port,
-      edgeSide: edge.side,
-      dotWorldX: post.positionX + post.facingDirection * offset.reachX,
-      dotWorldY: post.positionY + offset.heightY,
-    });
+    if (lastActive) {
+      const alpha = Math.max(0, 1 - framesSinceActive / LEDGE_GRAB_FADE_FRAMES);
+      if (alpha > 0) {
+        candidates.push({
+          port,
+          edgeSide: lastActive.edgeSide,
+          dotWorldX: lastActive.dotWorldX,
+          dotWorldY: lastActive.dotWorldY,
+          alpha,
+        });
+      }
+    }
   }
 
   return candidates;
@@ -1671,7 +1765,12 @@ export class StageRenderer {
     }
 
     if (frame) {
-      const ledgeGrabCandidates = computeLedgeGrabCandidates(frame, stageId);
+      // Needs replay + frameIndex (not just this frame) to compute fade
+      // in/out - see computeLedgeGrabCandidates()'s own doc comment.
+      const ledgeGrabCandidates =
+        replay && frameIndex !== undefined
+          ? computeLedgeGrabCandidates(replay, frameIndex, stageId)
+          : [];
       this.drawLedgeGrabZoneHighlight(camera, stageId, ledgeGrabCandidates);
 
       // Draw motion trails (Pikachu Quick Attack streaks, Fox Fire Fox streaks, Roll trails) before characters
@@ -2715,10 +2814,21 @@ export class StageRenderer {
     const ledges = stageLedges(stageId);
     if (!ledges) return;
 
-    const highlightedSides = new Set(candidates.map((c) => c.edgeSide));
+    // Multiple ports can be near the same edge at different fade progress
+    // (one just arriving, one just leaving) - show that edge at whichever
+    // is more visible right now, not the first one found.
+    const alphaBySide = new Map<"left" | "right", number>();
+    for (const candidate of candidates) {
+      alphaBySide.set(
+        candidate.edgeSide,
+        Math.max(alphaBySide.get(candidate.edgeSide) ?? 0, candidate.alpha),
+      );
+    }
+
     const { ctx } = this;
     for (const ledge of ledges) {
-      if (!highlightedSides.has(ledge.side)) continue;
+      const alpha = alphaBySide.get(ledge.side);
+      if (!alpha) continue;
       // Grabbable area extends inward from the edge (toward the stage
       // center) - left edge's "inward" is +X, right edge's is -X.
       const inwardSign = ledge.side === "left" ? 1 : -1;
@@ -2726,7 +2836,7 @@ export class StageRenderer {
       const outer = camera.worldToScreen(ledge.x, ledge.y);
       const inner = camera.worldToScreen(innerX, ledge.y);
 
-      ctx.strokeStyle = "rgba(255,0,255,0.95)";
+      ctx.strokeStyle = `rgba(255,0,255,${0.95 * alpha})`;
       ctx.lineWidth = 10;
       ctx.lineCap = "round";
       ctx.beginPath();
@@ -2747,6 +2857,7 @@ export class StageRenderer {
         candidate.dotWorldX,
         candidate.dotWorldY,
       );
+      ctx.globalAlpha = candidate.alpha;
       ctx.beginPath();
       ctx.arc(x, y, 6, 0, Math.PI * 2);
       ctx.fillStyle = "magenta";
@@ -2754,6 +2865,7 @@ export class StageRenderer {
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = "rgba(255,255,255,0.85)";
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
   }
 

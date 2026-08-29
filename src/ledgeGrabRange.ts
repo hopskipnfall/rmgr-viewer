@@ -39,4 +39,4 @@ export function ledgeGrabOffset(
 export const LEDGE_GRAB_ZONE_WIDTH = 800;
 
 /** How close (in both X and Y, world units) a character must be to a ledge point before the ledge-grab visualization considers them "near" it. */
-export const LEDGE_GRAB_PROXIMITY = 3000;
+export const LEDGE_GRAB_PROXIMITY = 2400;
