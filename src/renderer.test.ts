@@ -59,6 +59,7 @@ import {
   toGrayscale,
   toBlandPalette,
   computeLedgeGrabCandidates,
+  LEDGE_GRAB_FADE_FRAMES,
 } from "./renderer.js";
 import type {
   Frame,
@@ -1518,8 +1519,8 @@ describe("Fox Blaster and Yoshi Egg Throw", () => {
 });
 
 describe("computeLedgeGrabCandidates", () => {
-  function makePre(port: PortIndex): PreFrameUpdate {
-    return { frame: 0, port, buttons: 0, stickX: 0, stickY: 0 };
+  function makePre(port: PortIndex, frameNum: number): PreFrameUpdate {
+    return { frame: frameNum, port, buttons: 0, stickX: 0, stickY: 0 };
   }
 
   function makePost(
@@ -1547,94 +1548,210 @@ describe("computeLedgeGrabCandidates", () => {
     };
   }
 
-  function makeFrame(posts: PostFrameUpdate[]): Frame {
+  function makeFrame(frameNum: number, posts: PostFrameUpdate[]): Frame {
     const ports: { -readonly [K in PortIndex]?: Frame["ports"][K] } = {};
     for (const post of posts) {
-      ports[post.port] = { pre: makePre(post.port), post };
+      ports[post.port] = { pre: makePre(post.port, frameNum), post };
     }
-    return { frame: 0, ports };
+    return { frame: frameNum, ports };
   }
 
-  // Dream Land ground: leftX -2278, rightX 2278, y 0 (see stageGeometry.ts)
-  const RIGHT_EDGE_X = 2278;
-  const LEFT_EDGE_X = -2278;
+  /** A minimal Replay stub - computeLedgeGrabCandidates only ever reads `.frames`. */
+  function makeReplay(frames: Frame[]): Replay {
+    return { frames } as unknown as Replay;
+  }
+
+  /** A replay where every frame has the same single port/post (constant condition), for fade-ramp tests. */
+  function makeSteadyReplay(
+    frameCount: number,
+    post: Omit<PostFrameUpdate, "frame">,
+  ): Replay {
+    return makeReplay(
+      Array.from({ length: frameCount }, (_, i) =>
+        makeFrame(i, [makePost({ ...post, frame: i })]),
+      ),
+    );
+  }
+
+  // Dream Land ground: leftX -2318, rightX 2318, y 0 (see stageGeometry.ts)
+  const RIGHT_EDGE_X = 2318;
+  const LEFT_EDGE_X = -2318;
+  const FOX_OFF_RIGHT_EDGE: Omit<PostFrameUpdate, "frame"> = {
+    port: 0 as PortIndex,
+    characterId: 0x01, // Fox: reachX 400, heightY 400
+    actionStateId: 0x01a, // Fall
+    positionX: RIGHT_EDGE_X + 122,
+    positionY: 0,
+    facingDirection: -1, // facing left, toward the stage
+    velocityX: 0,
+    velocityY: 0,
+    damagePercent: 0,
+    stocksRemaining: 2,
+    jumpsRemaining: 1,
+    grounded: false,
+    hurtboxState: 0,
+    hitstunCounter: 0,
+    actionFrameCounter: 0,
+    comboHitCount: 0,
+    comboDamage: 0,
+  };
 
   it("produces no candidates when no stage geometry is known", () => {
-    const frame = makeFrame([
-      makePost({ port: 0 as PortIndex, positionX: RIGHT_EDGE_X + 500 }),
+    const replay = makeReplay([
+      makeFrame(0, [
+        makePost({ port: 0 as PortIndex, positionX: RIGHT_EDGE_X + 500 }),
+      ]),
     ]);
-    expect(computeLedgeGrabCandidates(frame, 0xff /* unknown stage */)).toEqual(
+    expect(
+      computeLedgeGrabCandidates(replay, 0, 0xff /* unknown stage */),
+    ).toEqual([]);
+  });
+
+  it("produces no candidate for a character still on-stage horizontally", () => {
+    const replay = makeReplay([
+      makeFrame(0, [makePost({ port: 0 as PortIndex, positionX: 0 })]),
+    ]);
+    expect(computeLedgeGrabCandidates(replay, 0, DREAM_LAND_STAGE_ID)).toEqual(
       [],
     );
   });
 
-  it("produces no candidate for a character still on-stage horizontally", () => {
-    const frame = makeFrame([makePost({ port: 0 as PortIndex, positionX: 0 })]);
-    expect(computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID)).toEqual([]);
+  it("produces no candidate when off-stage but beyond the (2400-unit) proximity threshold", () => {
+    const replay = makeReplay([
+      makeFrame(0, [
+        makePost({ port: 0 as PortIndex, positionX: RIGHT_EDGE_X + 2401 }),
+      ]),
+    ]);
+    expect(computeLedgeGrabCandidates(replay, 0, DREAM_LAND_STAGE_ID)).toEqual(
+      [],
+    );
   });
 
-  it("produces no candidate when off-stage but beyond the proximity threshold", () => {
-    const frame = makeFrame([
-      makePost({ port: 0 as PortIndex, positionX: RIGHT_EDGE_X + 3001 }),
+  it("produces no candidate exactly on the edge, but does one unit past it", () => {
+    const onEdge = makeReplay([
+      makeFrame(0, [
+        makePost({ port: 0 as PortIndex, positionX: RIGHT_EDGE_X }),
+      ]),
     ]);
-    expect(computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID)).toEqual([]);
+    expect(computeLedgeGrabCandidates(onEdge, 0, DREAM_LAND_STAGE_ID)).toEqual(
+      [],
+    );
+
+    const pastEdge = makeReplay([
+      makeFrame(0, [
+        makePost({ port: 0 as PortIndex, positionX: RIGHT_EDGE_X + 1 }),
+      ]),
+    ]);
+    expect(
+      computeLedgeGrabCandidates(pastEdge, 0, DREAM_LAND_STAGE_ID),
+    ).toHaveLength(1);
   });
 
   it("produces no candidate for a dead/off-screen state", () => {
-    const frame = makeFrame([
-      makePost({
-        port: 0 as PortIndex,
-        positionX: RIGHT_EDGE_X + 500,
-        actionStateId: 0x000, // DeadD - see DEAD_ACTION_STATES
-      }),
+    const replay = makeReplay([
+      makeFrame(0, [
+        makePost({
+          port: 0 as PortIndex,
+          positionX: RIGHT_EDGE_X + 500,
+          actionStateId: 0x000, // DeadD - see DEAD_ACTION_STATES
+        }),
+      ]),
     ]);
-    expect(computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID)).toEqual([]);
+    expect(computeLedgeGrabCandidates(replay, 0, DREAM_LAND_STAGE_ID)).toEqual(
+      [],
+    );
+  });
+
+  it("produces no candidate for a grounded character, even past the measured edge (real bug report: standing at 2318 wrongly triggered)", () => {
+    const replay = makeReplay([
+      makeFrame(0, [
+        makePost({
+          port: 0 as PortIndex,
+          positionX: 2318,
+          positionY: 0,
+          grounded: true,
+        }),
+      ]),
+    ]);
+    expect(computeLedgeGrabCandidates(replay, 0, DREAM_LAND_STAGE_ID)).toEqual(
+      [],
+    );
+  });
+
+  it("produces no candidate once the ledge has actually been grabbed (CliffCatch/LEDGE_ACTION_STATES)", () => {
+    const replay = makeReplay([
+      makeFrame(0, [
+        makePost({
+          port: 0 as PortIndex,
+          positionX: RIGHT_EDGE_X + 20,
+          actionStateId: 0x054, // CliffCatch
+        }),
+      ]),
+    ]);
+    expect(computeLedgeGrabCandidates(replay, 0, DREAM_LAND_STAGE_ID)).toEqual(
+      [],
+    );
   });
 
   it("produces no candidate for a character with no known ledge-grab offset", () => {
-    const frame = makeFrame([
-      makePost({
-        port: 0 as PortIndex,
-        positionX: RIGHT_EDGE_X + 500,
-        characterId: 0xff, // no fighter has this ID
-      }),
+    const replay = makeReplay([
+      makeFrame(0, [
+        makePost({
+          port: 0 as PortIndex,
+          positionX: RIGHT_EDGE_X + 500,
+          characterId: 0xff, // no fighter has this ID
+        }),
+      ]),
     ]);
-    expect(computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID)).toEqual([]);
+    expect(computeLedgeGrabCandidates(replay, 0, DREAM_LAND_STAGE_ID)).toEqual(
+      [],
+    );
   });
 
-  it("computes the reach-offset dot for a character off the right edge, facing the stage", () => {
-    const frame = makeFrame([
-      makePost({
-        port: 0 as PortIndex,
-        characterId: 0x01, // Fox: reachX 400, heightY 400
-        positionX: RIGHT_EDGE_X + 122,
-        positionY: 0,
-        facingDirection: -1, // facing left, toward the stage
-      }),
-    ]);
-    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+  it("computes the reach-offset dot for a character off the right edge, facing the stage, at full alpha once held long enough", () => {
+    const replay = makeSteadyReplay(LEDGE_GRAB_FADE_FRAMES, FOX_OFF_RIGHT_EDGE);
+    const candidates = computeLedgeGrabCandidates(
+      replay,
+      LEDGE_GRAB_FADE_FRAMES - 1,
+      DREAM_LAND_STAGE_ID,
+    );
     expect(candidates).toHaveLength(1);
     expect(candidates[0]).toEqual({
       port: 0,
       edgeSide: "right",
       dotWorldX: RIGHT_EDGE_X + 122 - 400,
       dotWorldY: 400,
+      alpha: 1,
     });
   });
 
   it("computes the reach-offset dot for a character off the left edge, facing the stage", () => {
-    const frame = makeFrame([
-      makePost({
-        port: 1 as PortIndex,
-        characterId: 0x05, // Link: reachX 280, heightY 400
-        positionX: LEFT_EDGE_X - 200,
-        positionY: 0,
-        facingDirection: 1, // facing right, toward the stage
-      }),
-    ]);
-    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+    const replay = makeSteadyReplay(LEDGE_GRAB_FADE_FRAMES, {
+      port: 1 as PortIndex,
+      characterId: 0x05, // Link: reachX 280, heightY 400
+      actionStateId: 0x01a,
+      positionX: LEFT_EDGE_X - 200,
+      positionY: 0,
+      facingDirection: 1, // facing right, toward the stage
+      velocityX: 0,
+      velocityY: 0,
+      damagePercent: 0,
+      stocksRemaining: 2,
+      jumpsRemaining: 1,
+      grounded: false,
+      hurtboxState: 0,
+      hitstunCounter: 0,
+      actionFrameCounter: 0,
+      comboHitCount: 0,
+      comboDamage: 0,
+    });
+    const candidates = computeLedgeGrabCandidates(
+      replay,
+      LEDGE_GRAB_FADE_FRAMES - 1,
+      DREAM_LAND_STAGE_ID,
+    );
     expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toEqual({
+    expect(candidates[0]).toMatchObject({
       port: 1,
       edgeSide: "left",
       dotWorldX: LEFT_EDGE_X - 200 + 280,
@@ -1643,51 +1760,148 @@ describe("computeLedgeGrabCandidates", () => {
   });
 
   it("puts the dot on the away-from-stage side when facing away", () => {
-    const frame = makeFrame([
-      makePost({
-        port: 0 as PortIndex,
-        characterId: 0x01, // Fox
-        positionX: RIGHT_EDGE_X + 100,
-        positionY: 0,
-        facingDirection: 1, // facing right, away from the stage
-      }),
-    ]);
-    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+    const replay = makeSteadyReplay(1, {
+      ...FOX_OFF_RIGHT_EDGE,
+      positionX: RIGHT_EDGE_X + 100,
+      facingDirection: 1, // facing right, away from the stage
+    });
+    const candidates = computeLedgeGrabCandidates(
+      replay,
+      0,
+      DREAM_LAND_STAGE_ID,
+    );
     expect(candidates[0]?.dotWorldX).toBe(RIGHT_EDGE_X + 100 + 400);
   });
 
   it("applies the same offset for a Japanese-region character variant as the base fighter", () => {
-    const frame = makeFrame([
-      makePost({
-        port: 0 as PortIndex,
-        characterId: 0x29, // Fox (JP) - same offset as base Fox
-        positionX: RIGHT_EDGE_X + 100,
-        positionY: 0,
-        facingDirection: -1,
-      }),
-    ]);
-    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+    const replay = makeSteadyReplay(1, {
+      ...FOX_OFF_RIGHT_EDGE,
+      characterId: 0x29, // Fox (JP) - same offset as base Fox
+      positionX: RIGHT_EDGE_X + 100,
+    });
+    const candidates = computeLedgeGrabCandidates(
+      replay,
+      0,
+      DREAM_LAND_STAGE_ID,
+    );
     expect(candidates).toHaveLength(1);
     expect(candidates[0]?.dotWorldX).toBe(RIGHT_EDGE_X + 100 - 400);
   });
 
   it("handles two seated ports independently, one per edge", () => {
-    const frame = makeFrame([
-      makePost({
-        port: 0 as PortIndex,
-        characterId: 0x01, // Fox
-        positionX: RIGHT_EDGE_X + 100,
-        facingDirection: -1,
-      }),
-      makePost({
-        port: 1 as PortIndex,
-        characterId: 0x05, // Link
-        positionX: LEFT_EDGE_X - 100,
-        facingDirection: 1,
-      }),
+    const replay = makeReplay([
+      makeFrame(0, [
+        makePost({
+          port: 0 as PortIndex,
+          characterId: 0x01, // Fox
+          positionX: RIGHT_EDGE_X + 100,
+          facingDirection: -1,
+        }),
+        makePost({
+          port: 1 as PortIndex,
+          characterId: 0x05, // Link
+          positionX: LEFT_EDGE_X - 100,
+          facingDirection: 1,
+        }),
+      ]),
     ]);
-    const candidates = computeLedgeGrabCandidates(frame, DREAM_LAND_STAGE_ID);
+    const candidates = computeLedgeGrabCandidates(
+      replay,
+      0,
+      DREAM_LAND_STAGE_ID,
+    );
     expect(candidates).toHaveLength(2);
     expect(candidates.map((c) => c.edgeSide).sort()).toEqual(["left", "right"]);
+  });
+
+  it("fades in gradually rather than snapping to full opacity on the first active frame", () => {
+    const replay = makeSteadyReplay(3, FOX_OFF_RIGHT_EDGE);
+    const alphaAtFrame0 = computeLedgeGrabCandidates(
+      replay,
+      0,
+      DREAM_LAND_STAGE_ID,
+    )[0]?.alpha;
+    const alphaAtFrame2 = computeLedgeGrabCandidates(
+      replay,
+      2,
+      DREAM_LAND_STAGE_ID,
+    )[0]?.alpha;
+    expect(alphaAtFrame0).toBeCloseTo(1 / LEDGE_GRAB_FADE_FRAMES);
+    expect(alphaAtFrame2).toBeCloseTo(3 / LEDGE_GRAB_FADE_FRAMES);
+    expect(alphaAtFrame2).toBeGreaterThan(alphaAtFrame0!);
+  });
+
+  it("fades out gradually, frozen at the last active position, once the condition stops holding", () => {
+    const frames = [
+      makeFrame(0, [makePost({ ...FOX_OFF_RIGHT_EDGE, frame: 0 })]),
+      // Frame 1: moved back on-stage - condition no longer holds.
+      makeFrame(1, [
+        makePost({ ...FOX_OFF_RIGHT_EDGE, frame: 1, positionX: 0 }),
+      ]),
+      makeFrame(2, [
+        makePost({ ...FOX_OFF_RIGHT_EDGE, frame: 2, positionX: 0 }),
+      ]),
+    ];
+    const replay = makeReplay(frames);
+
+    const frame1Candidates = computeLedgeGrabCandidates(
+      replay,
+      1,
+      DREAM_LAND_STAGE_ID,
+    );
+    expect(frame1Candidates).toHaveLength(1);
+    expect(frame1Candidates[0]).toMatchObject({
+      edgeSide: "right",
+      dotWorldX: RIGHT_EDGE_X + 122 - 400, // frozen at frame 0's position
+      alpha: 1 - 1 / LEDGE_GRAB_FADE_FRAMES,
+    });
+
+    const frame2Candidates = computeLedgeGrabCandidates(
+      replay,
+      2,
+      DREAM_LAND_STAGE_ID,
+    );
+    expect(frame2Candidates[0]?.alpha).toBeCloseTo(
+      1 - 2 / LEDGE_GRAB_FADE_FRAMES,
+    );
+    expect(frame2Candidates[0]?.alpha).toBeLessThan(frame1Candidates[0]!.alpha);
+  });
+
+  it("fades out (not vanishes) the instant the ledge is grabbed", () => {
+    const frames = [
+      makeFrame(0, [makePost({ ...FOX_OFF_RIGHT_EDGE, frame: 0 })]),
+      makeFrame(1, [
+        makePost({
+          ...FOX_OFF_RIGHT_EDGE,
+          frame: 1,
+          actionStateId: 0x054, // CliffCatch - grabbed
+        }),
+      ]),
+    ];
+    const replay = makeReplay(frames);
+    const candidates = computeLedgeGrabCandidates(
+      replay,
+      1,
+      DREAM_LAND_STAGE_ID,
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.alpha).toBeLessThan(1);
+    expect(candidates[0]?.alpha).toBeGreaterThan(0);
+  });
+
+  it("stops producing any candidate once fully faded out (beyond LEDGE_GRAB_FADE_FRAMES since last active)", () => {
+    const frames = [
+      makeFrame(0, [makePost({ ...FOX_OFF_RIGHT_EDGE, frame: 0 })]),
+      ...Array.from({ length: LEDGE_GRAB_FADE_FRAMES + 2 }, (_, i) =>
+        makeFrame(i + 1, [
+          makePost({ ...FOX_OFF_RIGHT_EDGE, frame: i + 1, positionX: 0 }),
+        ]),
+      ),
+    ];
+    const replay = makeReplay(frames);
+    const lastFrameIndex = frames.length - 1;
+    expect(
+      computeLedgeGrabCandidates(replay, lastFrameIndex, DREAM_LAND_STAGE_ID),
+    ).toEqual([]);
   });
 });

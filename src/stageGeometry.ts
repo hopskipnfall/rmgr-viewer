@@ -7,6 +7,13 @@
  * and clustered positionX by surface - every edge came out as a single
  * exact float across hundreds of samples and many characters, so these are
  * ground truth, not estimates. No other stage has been measured yet.
+ *
+ * Dream Land's ground leftX/rightX were originally recorded as ∓2278 via
+ * that method, but a real ledge-grab visualization bug (a grounded
+ * character at X=2318 wrongly reading as past the edge) plus an
+ * independent data source both point to ∓2318 as the correct value -
+ * corrected here. The Teeter-based method for the other three platforms is
+ * still trusted as-is.
  */
 import { StageId } from "@rmg-k/rmgr";
 
@@ -20,8 +27,8 @@ export interface PlatformSpec {
 export const DREAM_LAND_STAGE_ID = StageId.DreamLand;
 
 const DREAM_LAND_GROUND: PlatformSpec = {
-  leftX: -2278,
-  rightX: 2278,
+  leftX: -2318,
+  rightX: 2318,
   y: 0,
   kind: "ground",
 };
