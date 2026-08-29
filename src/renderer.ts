@@ -39,6 +39,7 @@ import {
   ZONE_X_AT_Y_HI,
   isHitstunState,
   computeEdgeGuardEvents,
+  isOutsideZone,
 } from "./edgeGuard.js";
 import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
 import { characterIconUrl } from "./characterIcons.js";
@@ -499,6 +500,14 @@ export function isRollForward(actionStateId: number): boolean {
  * its own.
  */
 const REVIVE2_ACTION_STATE_ID = 0x008;
+
+/** A single recovery jump, captured at the moment it happened - see getRecoveryJumpMarks(). */
+interface RecoveryJumpMark {
+  readonly frame: number;
+  readonly worldX: number;
+  readonly worldY: number;
+  readonly jumpsRemaining: number;
+}
 
 /** Total frames at match start where player name tags are displayed (240 frames = 4.0s @ 60fps). */
 export const START_NAME_DISPLAY_FRAMES = 240;
@@ -1784,6 +1793,84 @@ export class StageRenderer {
       }
     }
     return frameIndex - mostRecentSpawn;
+  }
+
+  // Marks for every frame where a Kirby/Jigglypuff (any variant) port
+  // jumps while off-stage in the edge-guard danger zone - the "recovery
+  // jump" cue. Captures the world position and resulting jump count AT
+  // the jump itself so the on-screen label can stay anchored where the
+  // jump happened instead of tracking the character as they keep moving.
+  // isOutsideZone()'s geometry is Dream Land-only (see edgeGuard.ts), so
+  // this is empty for any other stage. jumpsRemaining is also only
+  // reliable from schema v7 onward (see playSfxForFrameChange's own note
+  // in matchView.ts) - older files never populate this cache.
+  private recoveryJumpMarksCache = new WeakMap<
+    Replay,
+    Map<PortIndex, RecoveryJumpMark[]>
+  >();
+
+  private getRecoveryJumpMarks(
+    replay: Replay,
+    port: PortIndex,
+  ): RecoveryJumpMark[] {
+    let byPort = this.recoveryJumpMarksCache.get(replay);
+    if (!byPort) {
+      byPort = new Map();
+      this.recoveryJumpMarksCache.set(replay, byPort);
+    }
+    let marks = byPort.get(port);
+    if (!marks) {
+      marks = [];
+      const hasReliableJumpsRemaining =
+        replay.header.recorderSchemaVersion >= 7;
+      if (
+        hasReliableJumpsRemaining &&
+        replay.gameStart.stageId === EDGE_GUARD_STAGE_ID
+      ) {
+        for (let i = 1; i < replay.frames.length; i++) {
+          const post = replay.frames[i]?.ports[port]?.post;
+          const prevPost = replay.frames[i - 1]?.ports[port]?.post;
+          if (!post || !prevPost) continue;
+          if (
+            (isKirbyCharacter(post.characterId) ||
+              isJigglypuffCharacter(post.characterId)) &&
+            post.jumpsRemaining < prevPost.jumpsRemaining &&
+            isOutsideZone(post.positionX, post.positionY)
+          ) {
+            marks.push({
+              frame: i,
+              worldX: post.positionX,
+              worldY: post.positionY,
+              jumpsRemaining: post.jumpsRemaining,
+            });
+          }
+        }
+      }
+      byPort.set(port, marks);
+    }
+    return marks;
+  }
+
+  /** This port's most recent recovery jump at or before frameIndex, or null if it's never had one (yet). */
+  private getMostRecentRecoveryJump(
+    replay: Replay,
+    port: PortIndex,
+    frameIndex: number,
+  ): RecoveryJumpMark | null {
+    const marks = this.getRecoveryJumpMarks(replay, port);
+    let lo = 0;
+    let hi = marks.length - 1;
+    let mostRecent: RecoveryJumpMark | null = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (marks[mid]!.frame <= frameIndex) {
+        mostRecent = marks[mid]!;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return mostRecent;
   }
 
   // Cache of loaded character icon <img> elements, keyed by URL - drawImage()
@@ -3696,6 +3783,7 @@ export class StageRenderer {
       comboHitCount?: number;
       hitstunCounter?: number;
       stocksRemaining: number;
+      jumpsRemaining: number;
     },
     perspectivePort?: PortIndex | null,
     replay?: Replay | null,
@@ -4538,6 +4626,70 @@ export class StageRenderer {
         post.stocksRemaining + 1,
       );
     }
+
+    // Remaining jump count, floating above where a Kirby/Jigglypuff jumped
+    // (fixed in place, not tracking them as they keep moving) for a
+    // second after each jump while they're off-stage recovering - both
+    // characters' jump counts are easy to lose track of mid-recovery.
+    if (
+      (isKirbyCharacter(post.characterId) ||
+        isJigglypuffCharacter(post.characterId)) &&
+      replay &&
+      frameIndex !== undefined
+    ) {
+      const jumpMark = this.getMostRecentRecoveryJump(replay, port, frameIndex);
+      const RECOVERY_JUMP_DISPLAY_FRAMES = 60; // 1.0s @ 60fps
+      if (jumpMark) {
+        const framesSinceJump = frameIndex - jumpMark.frame;
+        if (framesSinceJump < RECOVERY_JUMP_DISPLAY_FRAMES) {
+          const jumpCountAlpha =
+            1 - framesSinceJump / RECOVERY_JUMP_DISPLAY_FRAMES;
+          const jumpScreen = camera.worldToScreen(
+            jumpMark.worldX,
+            jumpMark.worldY,
+          );
+          this.drawRecoveryJumpCount(
+            jumpScreen.x,
+            jumpScreen.y - 90,
+            jumpMark.jumpsRemaining,
+            color,
+            jumpCountAlpha,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Draws the remaining-jumps count above a recovering Kirby/Jigglypuff's
+   * head, faded by `alpha` (caller fades it out over ~1s after each jump).
+   */
+  private drawRecoveryJumpCount(
+    x: number,
+    y: number,
+    jumpsRemaining: number,
+    color: string,
+    alpha: number,
+  ): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = "900 34px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const text = String(jumpsRemaining);
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.9)";
+    ctx.lineWidth = 5;
+    ctx.lineJoin = "round";
+    ctx.strokeText(text, x, y);
+
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.fillText(text, x, y);
+
+    ctx.restore();
   }
 
   /**
