@@ -28,6 +28,7 @@ import {
   LEDGE_GRAB_ZONE_WIDTH,
   LEDGE_GRAB_PROXIMITY,
   LEDGE_GRAB_VISUALIZATION_ENABLED,
+  LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS,
 } from "./ledgeGrabRange.js";
 import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
 import {
@@ -2857,6 +2858,14 @@ export class StageRenderer {
     candidates: readonly LedgeGrabCandidate[],
   ): void {
     const { ctx } = this;
+    // World units, not fixed screen pixels - so the dot shrinks/grows with
+    // the camera the same way a character marker does, instead of looking
+    // correctly-sized at only one specific zoom level (see
+    // LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS's own doc comment).
+    const radiusPx = camera.worldLengthToScreen(
+      LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS,
+    );
+    const strokeWidthPx = Math.max(1, radiusPx * 0.25);
     for (const candidate of candidates) {
       const { x, y } = camera.worldToScreen(
         candidate.dotWorldX,
@@ -2864,10 +2873,10 @@ export class StageRenderer {
       );
       ctx.globalAlpha = candidate.alpha;
       ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.arc(x, y, radiusPx, 0, Math.PI * 2);
       ctx.fillStyle = "magenta";
       ctx.fill();
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = strokeWidthPx;
       ctx.strokeStyle = "rgba(255,255,255,0.85)";
       ctx.stroke();
       ctx.globalAlpha = 1;

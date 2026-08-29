@@ -50,3 +50,17 @@ export const LEDGE_GRAB_ZONE_WIDTH = 800;
 
 /** How close (in both X and Y, world units) a character must be to a ledge point before the ledge-grab visualization considers them "near" it. */
 export const LEDGE_GRAB_PROXIMITY = 2400;
+
+/**
+ * Radius of the ledge-grab check-point dot, in world units (not screen
+ * pixels) - so it shrinks/grows with the camera the same way a character
+ * marker does (camera.worldLengthToScreen()), instead of staying a fixed
+ * pixel size that looks correct at one specific zoom level and wrong at
+ * every other one (e.g. the more zoomed-out framing a narrower mobile
+ * viewport needs).
+ *
+ * 70 was an uncalibrated first guess and rendered roughly 2x the size of
+ * the original fixed-6px dot at a typical zoom level - this value is
+ * chosen to land close to that original, already-reasonable size instead.
+ */
+export const LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS = 30;
