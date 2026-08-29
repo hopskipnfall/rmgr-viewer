@@ -58,5 +58,9 @@ export const LEDGE_GRAB_PROXIMITY = 2400;
  * pixel size that looks correct at one specific zoom level and wrong at
  * every other one (e.g. the more zoomed-out framing a narrower mobile
  * viewport needs).
+ *
+ * 70 was an uncalibrated first guess and rendered roughly 2x the size of
+ * the original fixed-6px dot at a typical zoom level - this value is
+ * chosen to land close to that original, already-reasonable size instead.
  */
-export const LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS = 70;
+export const LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS = 30;
