@@ -274,6 +274,14 @@ describe("getPikachuSpecialType", () => {
     expect(getPikachuSpecialType(0x09, 0x0ea)).toBe("quick_attack");
   });
 
+  it("returns null for Thunder Jolt (Neutral-B) states as they are handled by real weapon markers", () => {
+    expect(getPikachuSpecialType(0x09, 0x0dc)).toBeNull();
+    expect(getPikachuSpecialType(0x09, 0x0dd)).toBeNull();
+    expect(getPikachuSpecialType(0x09, 0x0de)).toBeNull();
+    expect(getPikachuSpecialType(0x09, 0x0df)).toBeNull();
+    expect(getPikachuSpecialType(0x09, 0x0e0)).toBeNull();
+  });
+
   it("returns null for non-special states or non-Pikachu characters", () => {
     expect(getPikachuSpecialType(0x09, 0x00a)).toBeNull(); // Idle
     expect(getPikachuSpecialType(0x09, 0x0d1)).toBeNull(); // Nair
@@ -635,7 +643,7 @@ describe("getAttackInfo", () => {
     }); // Jab2
   });
 
-  it("identifies grab attempts correctly", () => {
+  it("identifies grab attempts correctly including Link and Samus grapple grabs", () => {
     expect(getAttackInfo(0x0a6)).toEqual({
       type: "grab",
       direction: "forward",
@@ -648,6 +656,14 @@ describe("getAttackInfo", () => {
       type: "grab",
       direction: "forward",
     }); // GrabWait
+    expect(getAttackInfo(0x0e5, 0x05)).toEqual({
+      type: "grab",
+      direction: "forward",
+    }); // Link Hookshot grab
+    expect(getAttackInfo(0x0e5, 0x03)).toEqual({
+      type: "grab",
+      direction: "forward",
+    }); // Samus Grapple Beam grab
   });
 
   it("identifies tilt attacks correctly", () => {
@@ -828,11 +844,11 @@ describe("getFoxSpecialType", () => {
     expect(getFoxSpecialType(0x29, 0x0f8)).toBe("shine_end");
   });
 
-  it("identifies Blaster (Neutral-B) states correctly", () => {
-    expect(getFoxSpecialType(0x01, 0x0dc)).toBe("blaster");
-    expect(getFoxSpecialType(0x29, 0x0dd)).toBe("blaster");
-    expect(getFoxSpecialType(0x01, 0x0e1)).toBe("blaster");
-    expect(getFoxSpecialType(0x29, 0x0e2)).toBe("blaster");
+  it("identifies Blaster (Neutral-B) blaster_gun states correctly", () => {
+    expect(getFoxSpecialType(0x01, 0x0dc)).toBe("blaster_gun");
+    expect(getFoxSpecialType(0x29, 0x0dd)).toBe("blaster_gun");
+    expect(getFoxSpecialType(0x01, 0x0e1)).toBe("blaster_gun");
+    expect(getFoxSpecialType(0x29, 0x0e2)).toBe("blaster_gun");
   });
 
   it("returns null for non-special states or non-Fox characters", () => {
@@ -1261,7 +1277,9 @@ describe("getDKSpecialType", () => {
 
 describe("getNessSpecialType", () => {
   it("classifies Ness special moves correctly", () => {
-    expect(getNessSpecialType(0x0b, 0x0e7)).toBe("pk_fire");
+    // PK Fire (0x0e7) returns null - the recorded Weapon object (WPKind.PKFire)
+    // gets its own marker instead.
+    expect(getNessSpecialType(0x0b, 0x0e7)).toBeNull();
     expect(getNessSpecialType(0x0b, 0x0e8)).toBe("pk_thunder_charge");
     expect(getNessSpecialType(0x0b, 0x0e9)).toBe("pk_thunder_charge");
     expect(getNessSpecialType(0x0b, 0x0ea)).toBe("pk_thunder_rocket");
@@ -1270,8 +1288,8 @@ describe("getNessSpecialType", () => {
     expect(getNessSpecialType(0x0b, 0x00a)).toBeNull(); // Idle
   });
 
-  it("classifies 0x0ec as PK Fire 2, not PSI Magnet (confirmed empirically - previously misclassified as PSI Magnet)", () => {
-    expect(getNessSpecialType(0x0b, 0x0ec)).toBe("pk_fire");
+  it("classifies 0x0ec (PK Fire 2) as returning null (handled as real Weapon object), not PSI Magnet", () => {
+    expect(getNessSpecialType(0x0b, 0x0ec)).toBeNull();
   });
 
   it("returns null for 0x0e6 (landing lag after PK Fire 2, not the active move - confirmed empirically, previously misclassified as PK Fire)", () => {
@@ -1344,9 +1362,10 @@ describe("canAngleAttack", () => {
 
 describe("getMarioSpecialType", () => {
   it("classifies Mario / Luigi special moves correctly", () => {
-    // Fireball
-    expect(getMarioSpecialType(0x00, 0x0dc)).toBe("fireball");
-    expect(getMarioSpecialType(0x04, 0x0dd)).toBe("fireball");
+    // Fireball startup/throw states return null - the real recorded Weapon object
+    // (WPKind.Fireball) gets its own marker instead.
+    expect(getMarioSpecialType(0x00, 0x0dc)).toBeNull();
+    expect(getMarioSpecialType(0x04, 0x0dd)).toBeNull();
     // Super Jump Punch
     expect(getMarioSpecialType(0x00, 0x0df)).toBe("super_jump_punch");
     // Tornado / Cyclone
@@ -1354,13 +1373,10 @@ describe("getMarioSpecialType", () => {
     expect(getMarioSpecialType(0x04, 0x0e4)).toBe("tornado");
   });
 
-  it("classifies 0x0e0 as the fireball throw for BOTH Mario and Luigi (confirmed empirically for each - it was misclassified as shared Up-B before), and Luigi's 0x0df landing lag as no special at all", () => {
-    expect(getMarioSpecialType(0x00, 0x0e0)).toBe("fireball"); // Mario throw
-    expect(getMarioSpecialType(0x04, 0x0e0)).toBe("fireball"); // Luigi throw
-    // Landing lag right after Luigi's throw - not a second fireball, and not
-    // his shared Up-B bucket either (this state doesn't punch). Not yet
-    // confirmed whether Mario has the same landing-lag state.
-    expect(getMarioSpecialType(0x04, 0x0df)).toBeNull();
+  it("classifies 0x0e0 (fireball throw) and Luigi's 0x0df (landing lag) as no synthetic special to draw here", () => {
+    expect(getMarioSpecialType(0x00, 0x0e0)).toBeNull(); // Mario throw
+    expect(getMarioSpecialType(0x04, 0x0e0)).toBeNull(); // Luigi throw
+    expect(getMarioSpecialType(0x04, 0x0df)).toBeNull(); // Luigi landing lag
   });
 
   it("returns null for non-Mario/Luigi or non-special states", () => {
@@ -1483,9 +1499,9 @@ describe("getJigglypuffSpecialType", () => {
 });
 
 describe("Fox Blaster and Yoshi Egg Throw", () => {
-  it("classifies Fox Blaster correctly", () => {
-    expect(getFoxSpecialType(0x01, 0x0dc)).toBe("blaster");
-    expect(getFoxSpecialType(0x01, 0x0e1)).toBe("blaster");
+  it("classifies Fox Blaster stance as blaster_gun", () => {
+    expect(getFoxSpecialType(0x01, 0x0dc)).toBe("blaster_gun");
+    expect(getFoxSpecialType(0x01, 0x0e1)).toBe("blaster_gun");
   });
 
   it("classifies Yoshi Egg Throw correctly", () => {
