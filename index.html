@@ -2538,10 +2538,40 @@
         align-items: center;
         justify-content: center;
       }
-      #stageWrap:hover .stage-expand-btn {
+      .stage-bg-btn {
+        position: absolute;
+        bottom: 14px;
+        right: 58px;
+        z-index: 25;
+        background: rgba(18, 20, 26, 0.85);
+        backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        font-size: 14px;
+        line-height: 1;
+        padding: 7px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        opacity: 0.75;
+        pointer-events: auto;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+        transition:
+          opacity 0.2s ease,
+          background 0.15s ease,
+          color 0.15s ease,
+          border-color 0.15s ease,
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #stageWrap:hover .stage-expand-btn,
+      #stageWrap:hover .stage-bg-btn {
         opacity: 1;
       }
-      .stage-expand-btn:hover {
+      .stage-expand-btn:hover,
+      .stage-bg-btn:hover {
         background: #2563eb;
         border-color: #60a5fa;
         color: #fff;
@@ -2552,6 +2582,11 @@
         background: rgba(56, 189, 248, 0.35);
         color: #38bdf8;
         border-color: rgba(56, 189, 248, 0.8);
+      }
+      .stage-bg-btn.active {
+        background: rgba(168, 85, 247, 0.35);
+        color: #c084fc;
+        border-color: rgba(168, 85, 247, 0.8);
       }
       #players {
         flex-shrink: 0;
@@ -4415,6 +4450,14 @@
             <div id="stageOverlayList"></div>
           </div>
           <button
+            id="stageBgBtn"
+            class="stage-bg-btn"
+            title="Toggle background theme (b)"
+            aria-label="Toggle background theme"
+          >
+            🏔️
+          </button>
+          <button
             id="stageExpandBtn"
             class="stage-expand-btn"
             title="Expand player (t)"
@@ -4964,6 +5007,12 @@
               >Toggle video / 2D mini overlay</span
             >
             <div class="shortcut-keys"><kbd>p</kbd></div>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc" id="shortcutsToggleBackground"
+              >Toggle background scenery</span
+            >
+            <div class="shortcut-keys"><kbd>b</kbd></div>
           </div>
         </div>
         <div class="shortcuts-section">

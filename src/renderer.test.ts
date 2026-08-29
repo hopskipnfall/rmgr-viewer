@@ -60,6 +60,7 @@ import {
   toBlandPalette,
   computeLedgeGrabCandidates,
   LEDGE_GRAB_FADE_FRAMES,
+  StageRenderer,
 } from "./renderer.js";
 import type {
   Frame,
@@ -1903,5 +1904,40 @@ describe("computeLedgeGrabCandidates", () => {
     expect(
       computeLedgeGrabCandidates(replay, lastFrameIndex, DREAM_LAND_STAGE_ID),
     ).toEqual([]);
+  });
+});
+
+describe("StageRenderer background themes", () => {
+  it("defaults to mountain theme and allows switching to grid theme", () => {
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        fillRect: () => {},
+        createLinearGradient: () => ({
+          addColorStop: () => {},
+        }),
+        beginPath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        closePath: () => {},
+        arc: () => {},
+        fill: () => {},
+        stroke: () => {},
+        drawImage: () => {},
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    expect(renderer.getBackgroundTheme()).toBe("mountain");
+
+    renderer.setBackgroundTheme("grid");
+    expect(renderer.getBackgroundTheme()).toBe("grid");
+
+    renderer.setBackgroundTheme("mountain");
+    expect(renderer.getBackgroundTheme()).toBe("mountain");
   });
 });
