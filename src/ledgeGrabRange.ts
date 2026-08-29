@@ -1,5 +1,15 @@
 import { VARIANT_TO_BASE_ID } from "./characterSizes.js";
 
+/**
+ * Temporary kill switch: a suspected bug in the reach-offset distance
+ * itself is being investigated (with the remix agent) as of 2026-08-29.
+ * Flip back to true once that's resolved and confirmed correct - this
+ * disables the whole visualization (both the dot and the ledge-strip
+ * highlight), not just part of it, since computeLedgeGrabCandidates() is
+ * the single point both draw calls read from.
+ */
+export const LEDGE_GRAB_VISUALIZATION_ENABLED = false;
+
 export interface LedgeGrabOffset {
   /** How far in front of (along facingDirection) the character's position the ledge-grab check point sits. */
   reachX: number;

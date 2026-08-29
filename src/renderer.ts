@@ -27,6 +27,7 @@ import {
   ledgeGrabOffset,
   LEDGE_GRAB_ZONE_WIDTH,
   LEDGE_GRAB_PROXIMITY,
+  LEDGE_GRAB_VISUALIZATION_ENABLED,
 } from "./ledgeGrabRange.js";
 import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
 import {
@@ -1767,8 +1768,12 @@ export class StageRenderer {
     if (frame) {
       // Needs replay + frameIndex (not just this frame) to compute fade
       // in/out - see computeLedgeGrabCandidates()'s own doc comment.
+      // LEDGE_GRAB_VISUALIZATION_ENABLED is checked here, at the call
+      // site, rather than inside computeLedgeGrabCandidates() itself, so
+      // that function's geometry logic stays fully unit-testable
+      // regardless of the flag's current value.
       const ledgeGrabCandidates =
-        replay && frameIndex !== undefined
+        LEDGE_GRAB_VISUALIZATION_ENABLED && replay && frameIndex !== undefined
           ? computeLedgeGrabCandidates(replay, frameIndex, stageId)
           : [];
       this.drawLedgeGrabZoneHighlight(camera, stageId, ledgeGrabCandidates);
