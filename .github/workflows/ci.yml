@@ -41,6 +41,8 @@ jobs:
         working-directory: rmgr-viewer
       - run: npm run typecheck
         working-directory: rmgr-viewer
+      - run: npm run typecheck:scripts
+        working-directory: rmgr-viewer
       - run: npm run lint
         working-directory: rmgr-viewer
       - run: npm test

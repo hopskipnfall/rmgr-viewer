@@ -43,7 +43,7 @@ function loadReplayFromDisk(filename: string): LoadedReplay {
   return {
     replay,
     sourceName: filename,
-    recordedAt: new Date(replay.header.recordedAtEpochSeconds * 1000),
+    recordedAt: new Date(replay.header.recordedAtEpochMillis),
   };
 }
 
