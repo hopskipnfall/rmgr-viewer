@@ -71,6 +71,29 @@ export function stageGeometry(
   return stageId !== undefined ? STAGE_GEOMETRY[stageId] : undefined;
 }
 
+export interface LedgePoint {
+  x: number;
+  y: number;
+  side: "left" | "right";
+}
+
+/**
+ * The two grabbable ledges (main stage edges) for a stage, derived from its
+ * "ground" platform - side/top platforms don't have grabbable ledges. See
+ * ledgeGrabRange.ts for the reach/grab-zone logic built on top of these.
+ */
+export function stageLedges(
+  stageId: number | undefined,
+): readonly [LedgePoint, LedgePoint] | undefined {
+  const platforms = stageGeometry(stageId);
+  const ground = platforms?.find((p) => p.kind === "ground");
+  if (!ground) return undefined;
+  return [
+    { x: ground.leftX, y: ground.y, side: "left" },
+    { x: ground.rightX, y: ground.y, side: "right" },
+  ];
+}
+
 /**
  * Stage blast zone (death boundary) coordinates in world units.
  *

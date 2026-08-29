@@ -111,7 +111,7 @@ const CHARACTER_SIZES: Partial<Record<number, CharacterSize>> = {
 };
 
 // Map variants (Polygon, JP, EU, Boss/Metal) to base character IDs
-const VARIANT_TO_BASE_ID: Partial<Record<number, number>> = {
+export const VARIANT_TO_BASE_ID: Partial<Record<number, number>> = {
   // Polygon Team
   0x0e: 0x00, // Polygon Mario
   0x0f: 0x01, // Polygon Fox

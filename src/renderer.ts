@@ -18,9 +18,16 @@ import {
 import {
   stageGeometry,
   stageBlastZone,
+  stageLedges,
   type PlatformSpec,
+  type LedgePoint,
 } from "./stageGeometry.js";
 import { characterSize } from "./characterSizes.js";
+import {
+  ledgeGrabOffset,
+  LEDGE_GRAB_ZONE_WIDTH,
+  LEDGE_GRAB_PROXIMITY,
+} from "./ledgeGrabRange.js";
 import {
   EDGE_GUARD_STAGE_ID,
   ZONE_Y_LO,
@@ -116,6 +123,69 @@ export function getDeathDirection(
   if (actionStateId === 0x002) return "top";
   if (actionStateId === 0x003 || actionStateId === 0x004) return "screen";
   return null;
+}
+
+export interface LedgeGrabCandidate {
+  port: PortIndex;
+  edgeSide: "left" | "right";
+  /** World position of the character's ledge-grab check point (positionX + facingDirection * reachX, positionY + heightY) - see ledgeGrabRange.ts. */
+  dotWorldX: number;
+  dotWorldY: number;
+}
+
+/**
+ * Every seated port currently worth visualizing a ledge-grab check for:
+ * off-stage horizontally (past the ground's left/right edge, at any
+ * height), within LEDGE_GRAB_PROXIMITY of that edge in both X and Y, alive,
+ * and with a known ledge-grab offset for their character (see
+ * ledgeGrabRange.ts - Japanese-region variants included, same offsets).
+ */
+export function computeLedgeGrabCandidates(
+  frame: Frame,
+  stageId: number | undefined,
+): LedgeGrabCandidate[] {
+  const ledges = stageLedges(stageId);
+  if (!ledges) return [];
+  const [leftLedge, rightLedge] = ledges;
+
+  const candidates: LedgeGrabCandidate[] = [];
+
+  for (const key of Object.keys(frame.ports)) {
+    const port = Number(key) as PortIndex;
+    const post = frame.ports[port]?.post;
+    if (!post) continue;
+    if (isDeadState(post.actionStateId) || post.stocksRemaining < 0) {
+      continue;
+    }
+
+    // "Off the stage horizontally" - past the ground's left/right edge,
+    // regardless of height (e.g. still well above/below the stage).
+    let edge: LedgePoint | undefined;
+    if (post.positionX < leftLedge.x) {
+      edge = leftLedge;
+    } else if (post.positionX > rightLedge.x) {
+      edge = rightLedge;
+    } else {
+      continue;
+    }
+
+    const withinProximity =
+      Math.abs(post.positionX - edge.x) <= LEDGE_GRAB_PROXIMITY &&
+      Math.abs(post.positionY - edge.y) <= LEDGE_GRAB_PROXIMITY;
+    if (!withinProximity) continue;
+
+    const offset = ledgeGrabOffset(post.characterId);
+    if (!offset) continue;
+
+    candidates.push({
+      port,
+      edgeSide: edge.side,
+      dotWorldX: post.positionX + post.facingDirection * offset.reachX,
+      dotWorldY: post.positionY + offset.heightY,
+    });
+  }
+
+  return candidates;
 }
 
 const CROUCH_ACTION_STATES = new Set([
@@ -1601,6 +1671,9 @@ export class StageRenderer {
     }
 
     if (frame) {
+      const ledgeGrabCandidates = computeLedgeGrabCandidates(frame, stageId);
+      this.drawLedgeGrabZoneHighlight(camera, stageId, ledgeGrabCandidates);
+
       // Draw motion trails (Pikachu Quick Attack streaks, Fox Fire Fox streaks, Roll trails) before characters
       if (replay && frameIndex !== undefined) {
         for (const key of Object.keys(frame.ports)) {
@@ -1640,6 +1713,7 @@ export class StageRenderer {
       }
       this.drawItemObjects(camera, frame.items ?? [], replay, frame);
       this.drawDeathDirectionFlashes(frame);
+      this.drawLedgeGrabDots(camera, ledgeGrabCandidates);
 
       // Draw Directional Influence (DI) shift vector and overhead badge during hitlag and early hitstun
       if (replay && frameIndex !== undefined) {
@@ -2629,6 +2703,58 @@ export class StageRenderer {
     ctx.moveTo(left.x, left.y);
     ctx.lineTo(right.x, right.y);
     ctx.stroke();
+  }
+
+  /** Highlights the grabbable 800-unit ledge strip (see ledgeGrabRange.ts) in magenta for any edge a candidate is near. */
+  private drawLedgeGrabZoneHighlight(
+    camera: Camera,
+    stageId: number | undefined,
+    candidates: readonly LedgeGrabCandidate[],
+  ): void {
+    if (candidates.length === 0) return;
+    const ledges = stageLedges(stageId);
+    if (!ledges) return;
+
+    const highlightedSides = new Set(candidates.map((c) => c.edgeSide));
+    const { ctx } = this;
+    for (const ledge of ledges) {
+      if (!highlightedSides.has(ledge.side)) continue;
+      // Grabbable area extends inward from the edge (toward the stage
+      // center) - left edge's "inward" is +X, right edge's is -X.
+      const inwardSign = ledge.side === "left" ? 1 : -1;
+      const innerX = ledge.x + inwardSign * LEDGE_GRAB_ZONE_WIDTH;
+      const outer = camera.worldToScreen(ledge.x, ledge.y);
+      const inner = camera.worldToScreen(innerX, ledge.y);
+
+      ctx.strokeStyle = "rgba(255,0,255,0.95)";
+      ctx.lineWidth = 10;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(outer.x, outer.y);
+      ctx.lineTo(inner.x, inner.y);
+      ctx.stroke();
+    }
+  }
+
+  /** The magenta ledge-grab check-point dot(s) - see computeLedgeGrabCandidates(). Drawn on top of everything else so it's never hidden behind a player marker. */
+  private drawLedgeGrabDots(
+    camera: Camera,
+    candidates: readonly LedgeGrabCandidate[],
+  ): void {
+    const { ctx } = this;
+    for (const candidate of candidates) {
+      const { x, y } = camera.worldToScreen(
+        candidate.dotWorldX,
+        candidate.dotWorldY,
+      );
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "magenta";
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.stroke();
+    }
   }
 
   private drawFallbackGroundLine(camera: Camera): void {
