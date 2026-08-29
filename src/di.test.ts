@@ -90,6 +90,27 @@ describe("checkDIActivation", () => {
     // (0,0) -> (35, 35) (magnitude 49.5 < 53)
     expect(checkDIActivation(0, 0, 35, 35)).toBe(false);
   });
+
+  it("triggers on one axis alone while the other axis stays pinned outside its own band (real replay regression)", () => {
+    // Per smash64.net's DI mechanics guide, the two axes are independent
+    // "boxes" - leaving either one activates DI, even if the other axis
+    // never returns to its own band. Real stick trace from a 260828205834
+    // recording where the player held X hard-left the whole time but
+    // flicked Y from up to down and back - previously missed entirely
+    // because the old joint-deadzone check required X to also return to
+    // center before Y's flip could register.
+    // X held at -70 to -80 throughout (always outside its ±30 band);
+    // Y flips from +20 (inside band) to -66 (outside) - Y-axis activation.
+    expect(checkDIActivation(-80, 20, -73, -66)).toBe(true);
+    // Y flips back from -20 (inside band) to +76 (outside) - Y-axis activation again.
+    expect(checkDIActivation(-80, -20, -69, 76)).toBe(true);
+  });
+
+  it("does not trigger when an axis moves between two values that are both already outside its band on the same side", () => {
+    // Y held solidly positive and outside its band the whole time (74 -> 77) -
+    // wobbling in magnitude without crossing or leaving anything isn't DI.
+    expect(checkDIActivation(-70, 74, -70, 77)).toBe(false);
+  });
 });
 
 describe("classifyDICardinal", () => {
