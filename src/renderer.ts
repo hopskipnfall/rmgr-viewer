@@ -3929,8 +3929,21 @@ export class StageRenderer {
     const right = camera.worldToScreen(platform.rightX, platform.y);
 
     const isGround = platform.kind === "ground";
-    const lineSpacing = isGround ? 2.5 : 2.0;
-    const lineWidth = isGround ? 1.75 : 1.5;
+    // World-unit thickness (tuned so they match the old fixed-pixel look
+    // at a typical close-quarters camera framing), converted to screen
+    // pixels every frame so platform edges actually get thicker as the
+    // camera zooms in and thinner as it zooms out, instead of staying a
+    // constant pixel width regardless of zoom. Floored at 1px so they
+    // don't vanish into sub-pixel invisibility on a wide zoomed-out shot.
+    const lineSpacing = Math.max(
+      1,
+      camera.worldLengthToScreen(isGround ? 20.0 : 16.0),
+    );
+    // Each line's stroke has to be at least as thick as lineSpacing or the
+    // three stacked lines (top/middle/bottom) leave a gap between them
+    // that shows the background through - overlap by 30% so anti-aliased
+    // edges don't leave a hairline gap either.
+    const lineWidth = lineSpacing * 1.3;
 
     // Linear gradient for the outer lines:
     // - Inner third (1/3 to 2/3): solid #334ba3
