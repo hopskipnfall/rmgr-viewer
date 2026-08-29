@@ -16,7 +16,8 @@
     "test": "vitest run",
     "generate:demo-summaries": "tsx scripts/generateDemoSummaries.ts",
     "generate:character-svgs": "tsx scripts/generateCharacterSvgs.ts",
-    "inspect:replay": "tsx scripts/inspectReplay.ts"
+    "inspect:replay": "tsx scripts/inspectReplay.ts",
+    "rename:replays": "tsx scripts/renameReplays.ts"
   },
   "dependencies": {
     "@rmg-k/rmgr": "file:../rmgr-ts"

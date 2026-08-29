@@ -41,6 +41,7 @@ import {
   computeEdgeGuardEvents,
 } from "./edgeGuard.js";
 import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
+import { characterIconUrl } from "./characterIcons.js";
 
 /**
  * Weapon kinds that represent a hitbox attached to the attacker's own body
@@ -487,6 +488,17 @@ export function isRollForward(actionStateId: number): boolean {
     actionStateId === 0x05b
   );
 }
+
+/**
+ * Action state for "Revive2", the tail end of the post-death respawn
+ * sequence (Dead -> Revive1 0x007 -> Revive2 0x008 -> Fall 0x01a -> normal
+ * play). The moment a player LEAVES this state is when they actually
+ * reappear and start descending onto the stage - the state that comes
+ * after it (0x01a, "Fall") is the same generic falling state used
+ * constantly during normal play, so it can't be used as a spawn marker on
+ * its own.
+ */
+const REVIVE2_ACTION_STATE_ID = 0x008;
 
 /** Total frames at match start where player name tags are displayed (240 frames = 4.0s @ 60fps). */
 export const START_NAME_DISPLAY_FRAMES = 240;
@@ -1710,6 +1722,73 @@ export class StageRenderer {
     return events;
   }
 
+  // Frame indices where ANY seated port respawns (leaves Revive2, see
+  // REVIVE2_ACTION_STATE_ID's own doc comment) - frame 0 always counts
+  // too, even though the game's pre-battle frames may not literally be in
+  // that state yet, to preserve the original match-start name tag
+  // behavior exactly. Shared across all ports (not tracked per-port) since
+  // a respawn should flash every player's name/stock tag back in, not
+  // just the respawning player's.
+  private spawnFramesCache = new WeakMap<Replay, number[]>();
+
+  private getSpawnFrames(replay: Replay): number[] {
+    let frames = this.spawnFramesCache.get(replay);
+    if (!frames) {
+      const spawnFrameSet = new Set<number>([0]);
+      for (const port of getSeatedPorts(replay)) {
+        for (let i = 1; i < replay.frames.length; i++) {
+          const cur = replay.frames[i]?.ports[port]?.post.actionStateId;
+          const prev = replay.frames[i - 1]?.ports[port]?.post.actionStateId;
+          if (
+            prev === REVIVE2_ACTION_STATE_ID &&
+            cur !== REVIVE2_ACTION_STATE_ID
+          ) {
+            spawnFrameSet.add(i);
+          }
+        }
+      }
+      frames = [...spawnFrameSet].sort((a, b) => a - b);
+      this.spawnFramesCache.set(replay, frames);
+    }
+    return frames;
+  }
+
+  /** Frames elapsed since the most recent spawn/respawn (any player), for the fading name/stock tag. */
+  private getFramesSinceSpawn(replay: Replay, frameIndex: number): number {
+    const spawnFrames = this.getSpawnFrames(replay);
+    let lo = 0;
+    let hi = spawnFrames.length - 1;
+    let mostRecentSpawn = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (spawnFrames[mid]! <= frameIndex) {
+        mostRecentSpawn = spawnFrames[mid]!;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return frameIndex - mostRecentSpawn;
+  }
+
+  // Cache of loaded character icon <img> elements, keyed by URL - drawImage()
+  // is a no-op until the image finishes loading, so callers should tolerate
+  // a null return (fall back to an emoji) for the first frame or two after a
+  // new character's icon is first requested.
+  private iconImageCache = new Map<string, HTMLImageElement>();
+
+  private getCharacterIconImage(characterId: number): HTMLImageElement | null {
+    const url = characterIconUrl(characterId);
+    if (!url) return null;
+    let img = this.iconImageCache.get(url);
+    if (!img) {
+      img = new Image();
+      img.src = url;
+      this.iconImageCache.set(url, img);
+    }
+    return img.complete && img.naturalWidth > 0 ? img : null;
+  }
+
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2D canvas context unavailable");
@@ -2910,6 +2989,7 @@ export class StageRenderer {
       hurtboxState?: number;
       comboHitCount?: number;
       hitstunCounter?: number;
+      stocksRemaining: number;
     },
     perspectivePort?: PortIndex | null,
     replay?: Replay | null,
@@ -3719,8 +3799,14 @@ export class StageRenderer {
       ctx.restore();
     }
 
-    // Player name tag at match start (fades out after initial frames)
-    const nameAlpha = getStartNameAlpha(frameIndex);
+    // Player name + stock tag, shown at match start and again (for every
+    // player, not just the one who respawned) for a few seconds after any
+    // respawn (fades out after initial frames).
+    const framesSinceSpawn =
+      replay && frameIndex !== undefined
+        ? this.getFramesSinceSpawn(replay, frameIndex)
+        : frameIndex;
+    const nameAlpha = getStartNameAlpha(framesSinceSpawn);
     if (nameAlpha > 0) {
       const rawName = replay?.gameStart?.playerNames?.[port]?.trim();
       const playerName =
@@ -3742,14 +3828,18 @@ export class StageRenderer {
         tagColor,
         isPerspective,
         nameAlpha,
+        post.characterId,
+        post.stocksRemaining + 1,
       );
     }
   }
 
   /**
-   * Draws a player name tag above the character's head at the start of the match.
-   * Renders a capsule pill with a downward pointer arrow and distinct blue styling
-   * for the perspective player.
+   * Draws a player name + stock-count tag above the character's head at
+   * the start of the match and again for a few seconds after every
+   * respawn. Renders a two-line capsule pill (name, then a stock
+   * icon/emoji + "×N" count below it) with a downward pointer arrow and
+   * distinct blue styling for the perspective player.
    */
   private drawPlayerNameTag(
     x: number,
@@ -3758,6 +3848,8 @@ export class StageRenderer {
     tagColor: string,
     isPerspective: boolean,
     alpha: number,
+    characterId: number,
+    stockCount: number,
   ): void {
     if (alpha <= 0 || !name) return;
 
@@ -3765,18 +3857,36 @@ export class StageRenderer {
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
+    const nameFont = "bold 13px system-ui, -apple-system, sans-serif";
+    const stockFont = "bold 12px system-ui, -apple-system, sans-serif";
+    const stockIconSize = 20;
+    const stockGap = 3;
+    const stockText = `×${stockCount}`;
+    const stockIcon = this.getCharacterIconImage(characterId);
+
+    ctx.font = nameFont;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    const nameWidth = ctx.measureText(name).width;
 
-    const textMetrics = ctx.measureText(name);
-    const textWidth = textMetrics.width;
+    ctx.font = stockFont;
+    const stockTextWidth = ctx.measureText(
+      stockIcon ? stockText : `⭐${stockText}`,
+    ).width;
+    const stockRowWidth = stockIcon
+      ? stockIconSize + stockGap + stockTextWidth
+      : stockTextWidth;
+
     const paddingX = 10;
-    const pillWidth = Math.max(textWidth + paddingX * 2, 32);
-    const pillHeight = 22;
+    const contentWidth = Math.max(nameWidth, stockRowWidth);
+    const pillWidth = Math.max(contentWidth + paddingX * 2, 40);
+    const nameLineHeight = 18;
+    const stockLineHeight = stockIconSize + 4;
+    const paddingY = 6;
+    const pillHeight = nameLineHeight + stockLineHeight + paddingY;
     const pillX = x - pillWidth / 2;
     const pillY = y - pillHeight - 5; // 5px above the arrow tip at y
-    const borderRadius = 5;
+    const borderRadius = 6;
 
     // 1. Tag capsule background
     ctx.beginPath();
@@ -3807,11 +3917,39 @@ export class StageRenderer {
     ctx.fillStyle = tagColor;
     ctx.fill();
 
-    // 4. Name text inside capsule
+    // 4. Name text (top line)
+    const nameY = pillY + paddingY / 2 + nameLineHeight / 2;
+    ctx.font = nameFont;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     ctx.fillStyle = isPerspective ? "#ffffff" : "#d1d5db";
     ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
     ctx.shadowBlur = 2;
-    ctx.fillText(name, x, pillY + pillHeight / 2);
+    ctx.fillText(name, x, nameY);
+    ctx.shadowBlur = 0;
+
+    // 5. Stock row (bottom line) - character icon if we have one, else a
+    // plain star emoji, followed by "×N".
+    const stockY = pillY + paddingY / 2 + nameLineHeight + stockLineHeight / 2;
+    ctx.font = stockFont;
+    ctx.fillStyle = "#fbbf24";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 2;
+    if (stockIcon) {
+      const rowStartX = x - stockRowWidth / 2;
+      ctx.drawImage(
+        stockIcon,
+        rowStartX,
+        stockY - stockIconSize / 2,
+        stockIconSize,
+        stockIconSize,
+      );
+      ctx.textAlign = "left";
+      ctx.fillText(stockText, rowStartX + stockIconSize + stockGap, stockY);
+    } else {
+      ctx.textAlign = "center";
+      ctx.fillText(`⭐${stockText}`, x, stockY);
+    }
     ctx.shadowBlur = 0;
 
     ctx.restore();

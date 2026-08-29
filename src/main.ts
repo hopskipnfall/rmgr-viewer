@@ -594,19 +594,19 @@ async function init(): Promise<void> {
   }
 
   // 3b. Seed the default YouTube sync link for the 12CB session recorded on
-  // 2026-08-20: frame 0 of the first file was confirmed to line up with
+  // 2026-08-13: frame 0 of the first file was confirmed to line up with
   // 0:05.80 in the linked video. Propagate it across the rest of that same
   // real-time session (not the unrelated 08-22/08-25 demo files) as a
   // rough estimate so every match in the battle opens already synced.
   // Skip if a visitor already set their own link for this game.
   const TWELVE_CB_VIDEO_ID = "tcMChEWcHZ4";
   const TWELVE_CB_VIDEO_URL = `https://www.youtube.com/watch?v=${TWELVE_CB_VIDEO_ID}`;
-  const TWELVE_CB_VIDEO_SOURCE = "20260820-175726-George-Harold.rmgr";
+  const TWELVE_CB_VIDEO_SOURCE = "20260813-175723-George-Harold.rmgr";
   const twelveCbSourceSummary = demoSummaries.find(
     (s) => s.sourceName === TWELVE_CB_VIDEO_SOURCE,
   );
   const twelveCbSessionGames = demoSummaries.filter((s) =>
-    s.sourceName.startsWith("20260820-"),
+    s.sourceName.startsWith("20260813-"),
   );
   if (twelveCbSourceSummary && !hasVideoLink(twelveCbSourceSummary.id)) {
     const linkData: VideoLinkData = {
@@ -631,25 +631,25 @@ async function init(): Promise<void> {
   // at a constant cadence). Extend this map as more are confirmed; existing
   // viewMode preference is preserved.
   const TWELVE_CB_EXACT_OFFSETS: Record<string, number> = {
-    "20260820-175726-George-Harold.rmgr": 5.8,
-    "20260820-180010-George-Harold.rmgr": 169.95,
-    "20260820-180146-George-Harold.rmgr": 266.45,
-    "20260820-180229-George-Harold.rmgr": 309.2,
-    "20260820-180657-George-Harold.rmgr": 576.92,
-    "20260820-181042-George-Harold.rmgr": 802.21,
-    "20260820-181157-George-Harold.rmgr": 877.19,
-    "20260820-181413-George-Harold.rmgr": 1013.36,
-    "20260820-181511-George-Harold.rmgr": 1071.31,
-    "20260820-181820-George-Harold.rmgr": 1260.43,
-    "20260820-181916-George-Harold.rmgr": 1315.78,
-    "20260820-182308-George-Harold.rmgr": 1547.75,
-    "20260820-182538-George-Harold.rmgr": 1698.34,
-    "20260820-182632-George-Harold.rmgr": 1752.19,
-    "20260820-182926-George-Harold.rmgr": 1926.45,
-    "20260820-183112-George-Harold.rmgr": 2031.7,
-    "20260820-183150-George-Harold.rmgr": 2070.16,
-    "20260820-183423-George-Harold.rmgr": 2222.8,
-    "20260820-183646-George-Harold.rmgr": 2366.29,
+    "20260813-175723-George-Harold.rmgr": 5.8,
+    "20260813-180007-George-Harold.rmgr": 169.95,
+    "20260813-180143-George-Harold.rmgr": 266.45,
+    "20260813-180226-George-Harold.rmgr": 309.2,
+    "20260813-180654-George-Harold.rmgr": 576.92,
+    "20260813-181039-George-Harold.rmgr": 802.21,
+    "20260813-181154-George-Harold.rmgr": 877.19,
+    "20260813-181410-George-Harold.rmgr": 1013.36,
+    "20260813-181508-George-Harold.rmgr": 1071.31,
+    "20260813-181817-George-Harold.rmgr": 1260.43,
+    "20260813-181913-George-Harold.rmgr": 1315.78,
+    "20260813-182305-George-Harold.rmgr": 1547.75,
+    "20260813-182535-George-Harold.rmgr": 1698.34,
+    "20260813-182629-George-Harold.rmgr": 1752.19,
+    "20260813-182923-George-Harold.rmgr": 1926.45,
+    "20260813-183109-George-Harold.rmgr": 2031.7,
+    "20260813-183147-George-Harold.rmgr": 2070.16,
+    "20260813-183420-George-Harold.rmgr": 2222.8,
+    "20260813-183643-George-Harold.rmgr": 2366.29,
   };
   for (const game of twelveCbSessionGames) {
     const offsetSeconds = TWELVE_CB_EXACT_OFFSETS[game.sourceName];

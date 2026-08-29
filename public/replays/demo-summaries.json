@@ -395,9 +395,9 @@
     "isUnevenStockStart": false
   },
   {
-    "id": "g_b4e83aed",
-    "sourceName": "20260820-175726-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T08:57:26.000Z",
+    "id": "g_1006b004",
+    "sourceName": "20260813-175723-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T08:57:23.250Z",
     "stageId": 6,
     "frameCount": 8985,
     "isComplete": true,
@@ -492,9 +492,9 @@
     "isUnevenStockStart": false
   },
   {
-    "id": "g_56186e7e",
-    "sourceName": "20260820-180010-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:00:10.000Z",
+    "id": "g_852bcd8a",
+    "sourceName": "20260813-180007-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:00:07.417Z",
     "stageId": 6,
     "frameCount": 4806,
     "isComplete": true,
@@ -585,9 +585,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_5029ea0f",
-    "sourceName": "20260820-180146-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:01:46.000Z",
+    "id": "g_b4db4d44",
+    "sourceName": "20260813-180143-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:01:43.933Z",
     "stageId": 6,
     "frameCount": 1821,
     "isComplete": true,
@@ -670,9 +670,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_ad6489b7",
-    "sourceName": "20260820-180229-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:02:29.000Z",
+    "id": "g_8bb6ca58",
+    "sourceName": "20260813-180226-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:02:26.683Z",
     "stageId": 6,
     "frameCount": 14344,
     "isComplete": true,
@@ -767,9 +767,9 @@
     "isUnevenStockStart": false
   },
   {
-    "id": "g_81840cc6",
-    "sourceName": "20260820-180657-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:06:57.000Z",
+    "id": "g_f5805efd",
+    "sourceName": "20260813-180654-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:06:54.433Z",
     "stageId": 6,
     "frameCount": 5355,
     "isComplete": true,
@@ -866,9 +866,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_9cfac2cf",
-    "sourceName": "20260820-181042-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:10:42.000Z",
+    "id": "g_ec253c58",
+    "sourceName": "20260813-181039-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:10:39.733Z",
     "stageId": 6,
     "frameCount": 3687,
     "isComplete": true,
@@ -955,9 +955,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_f1a60e06",
-    "sourceName": "20260820-181157-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:11:57.000Z",
+    "id": "g_62d176ab",
+    "sourceName": "20260813-181154-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:11:54.700Z",
     "stageId": 6,
     "frameCount": 7069,
     "isComplete": true,
@@ -1048,9 +1048,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_01cf996c",
-    "sourceName": "20260820-181413-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:14:13.000Z",
+    "id": "g_ac21a6c7",
+    "sourceName": "20260813-181410-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:14:10.867Z",
     "stageId": 6,
     "frameCount": 2124,
     "isComplete": true,
@@ -1135,9 +1135,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_fd3b6507",
-    "sourceName": "20260820-181511-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:15:11.000Z",
+    "id": "g_9f4beebf",
+    "sourceName": "20260813-181508-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:15:08.833Z",
     "stageId": 6,
     "frameCount": 9915,
     "isComplete": true,
@@ -1232,9 +1232,9 @@
     "isUnevenStockStart": false
   },
   {
-    "id": "g_eaf4b17c",
-    "sourceName": "20260820-181820-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:18:20.000Z",
+    "id": "g_7a6c53a9",
+    "sourceName": "20260813-181817-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:18:17.950Z",
     "stageId": 6,
     "frameCount": 2210,
     "isComplete": true,
@@ -1315,9 +1315,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_0bbe6a52",
-    "sourceName": "20260820-181916-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:19:16.000Z",
+    "id": "g_8e5513c9",
+    "sourceName": "20260813-181913-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:19:13.300Z",
     "stageId": 6,
     "frameCount": 10152,
     "isComplete": true,
@@ -1362,8 +1362,7 @@
         "openingsWon": 19,
         "openingsLost": 9,
         "openingsWonByReason": {
-          "unknown": 1,
-          "whiff-punish": 10,
+          "whiff-punish": 11,
           "landing-lag": 6,
           "reversal": 2
         },
@@ -1399,8 +1398,7 @@
           "reversal": 5
         },
         "openingsLostByReason": {
-          "unknown": 1,
-          "whiff-punish": 10,
+          "whiff-punish": 11,
           "landing-lag": 6,
           "reversal": 2
         },
@@ -1412,9 +1410,9 @@
     "isUnevenStockStart": false
   },
   {
-    "id": "g_787fe465",
-    "sourceName": "20260820-182308-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:23:08.000Z",
+    "id": "g_b14b3404",
+    "sourceName": "20260813-182305-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:23:05.267Z",
     "stageId": 6,
     "frameCount": 7903,
     "isComplete": true,
@@ -1503,9 +1501,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_26cfe5c0",
-    "sourceName": "20260820-182538-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:25:38.000Z",
+    "id": "g_368a735c",
+    "sourceName": "20260813-182535-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:25:35.867Z",
     "stageId": 6,
     "frameCount": 2369,
     "isComplete": true,
@@ -1588,9 +1586,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_4a896026",
-    "sourceName": "20260820-182632-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:26:32.000Z",
+    "id": "g_1f14cb42",
+    "sourceName": "20260813-182629-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:26:29.733Z",
     "stageId": 6,
     "frameCount": 9313,
     "isComplete": true,
@@ -1700,9 +1698,9 @@
     "isUnevenStockStart": false
   },
   {
-    "id": "g_c55a6206",
-    "sourceName": "20260820-182926-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:29:26.000Z",
+    "id": "g_af914be5",
+    "sourceName": "20260813-182923-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:29:23.933Z",
     "stageId": 6,
     "frameCount": 5224,
     "isComplete": true,
@@ -1789,9 +1787,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_ef1bffbb",
-    "sourceName": "20260820-183112-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:31:12.000Z",
+    "id": "g_f57d0d5f",
+    "sourceName": "20260813-183109-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:31:09.233Z",
     "stageId": 6,
     "frameCount": 1487,
     "isComplete": true,
@@ -1880,9 +1878,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_6b07cf64",
-    "sourceName": "20260820-183150-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:31:50.000Z",
+    "id": "g_230f2d3b",
+    "sourceName": "20260813-183147-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:31:47.717Z",
     "stageId": 6,
     "frameCount": 8362,
     "isComplete": true,
@@ -1922,8 +1920,7 @@
         "openingsLost": 15,
         "openingsWonByReason": {
           "reversal": 13,
-          "whiff-punish": 2,
-          "standing-hit": 1,
+          "whiff-punish": 3,
           "unknown": 1
         },
         "openingsLostByReason": {
@@ -1959,8 +1956,7 @@
         },
         "openingsLostByReason": {
           "reversal": 13,
-          "whiff-punish": 2,
-          "standing-hit": 1,
+          "whiff-punish": 3,
           "unknown": 1
         },
         "damageDealtOnOpenings": 347,
@@ -1971,9 +1967,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_72446afc",
-    "sourceName": "20260820-183423-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:34:23.000Z",
+    "id": "g_d1320362",
+    "sourceName": "20260813-183420-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:34:20.367Z",
     "stageId": 6,
     "frameCount": 7822,
     "isComplete": true,
@@ -2064,9 +2060,9 @@
     "isUnevenStockStart": true
   },
   {
-    "id": "g_3aadbf7b",
-    "sourceName": "20260820-183646-George-Harold.rmgr",
-    "recordedAt": "2026-08-20T09:36:46.000Z",
+    "id": "g_bdfcd4bc",
+    "sourceName": "20260813-183643-George-Harold.rmgr",
+    "recordedAt": "2026-08-13T09:36:43.883Z",
     "stageId": 6,
     "frameCount": 6578,
     "isComplete": true,
