@@ -1360,6 +1360,16 @@
         color: var(--text-dim);
         font-size: 12px;
       }
+      .char-icon {
+        width: 20px;
+        height: 20px;
+        vertical-align: middle;
+      }
+      .char-icon-jp-badge {
+        font-size: 10px;
+        color: var(--text-dim);
+        margin-left: 2px;
+      }
       .vs-label {
         color: var(--text-dim);
         font-size: 11px;
@@ -3701,6 +3711,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: 6px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -3709,6 +3720,15 @@
           border-color 0.12s,
           color 0.12s,
           box-shadow 0.12s;
+      }
+      .perspective-btn-icon {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+      }
+      .perspective-btn span {
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .perspective-btn:hover {
         background: #2c3040;

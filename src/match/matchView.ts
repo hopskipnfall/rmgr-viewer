@@ -24,6 +24,7 @@ import {
   extractAllQuickAttackPaths,
 } from "../renderer.js";
 import { characterSize } from "../characterSizes.js";
+import { characterIconUrl } from "../characterIcons.js";
 import { ActionStateId, actionStateName, characterName } from "../lookups.js";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { t, getLanguage } from "../i18n.js";
@@ -1810,7 +1811,10 @@ export class MatchViewController {
       const btn = document.createElement("button");
       btn.className = "perspective-btn";
       const name = replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
-      btn.textContent = name;
+      const iconUrl = characterIconUrl(
+        replay.gameStart.ports[port]?.characterId ?? -1,
+      );
+      btn.innerHTML = `${iconUrl ? `<img class="perspective-btn-icon" src="${iconUrl}" alt="" />` : ""}<span>${escapeHtml(name)}</span>`;
 
       btn.addEventListener("click", () => {
         const wasOverlayActive =
