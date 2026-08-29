@@ -11,9 +11,15 @@ import {
   hasVideoLink,
   isRealtimeSession,
   propagateVideoLinkToSession,
+  isOffsetManual,
+  recomputeInferredOffsets,
+  attachVideoToSession,
+  clearVideoOffsetOverride,
+  unlinkVideoFromSession,
   YouTubeSyncController,
   type VideoLinkData,
   type VideoViewMode,
+  type SessionGameInfo,
 } from "./youtubeSync.js";
 
 describe("parseYouTubeTimestamp", () => {
@@ -311,5 +317,331 @@ describe("propagateVideoLinkToSession & hasVideoLink", () => {
 
     const g3Data = loadVideoLink("game-3");
     expect(g3Data?.offsetSeconds).toBe(350); // 30 + 320s
+  });
+});
+
+describe("isOffsetManual", () => {
+  const base: VideoLinkData = {
+    videoId: "abc",
+    url: "https://youtube.com/watch?v=abc",
+    offsetSeconds: 10,
+    viewMode: "canvas",
+  };
+
+  it("is true when explicitly set true", () => {
+    expect(isOffsetManual({ ...base, isOffsetManual: true })).toBe(true);
+  });
+
+  it("is false when explicitly set false", () => {
+    expect(isOffsetManual({ ...base, isOffsetManual: false })).toBe(false);
+  });
+
+  it("defaults to true when absent (pre-existing links are never silently overwritten)", () => {
+    expect(isOffsetManual(base)).toBe(true);
+  });
+});
+
+describe("recomputeInferredOffsets", () => {
+  const videoId = "abc123xyz45";
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+
+  function game(
+    id: string,
+    tSeconds: number,
+    frameCount: number,
+  ): SessionGameInfo {
+    return { id, recordedAt: new Date(tSeconds * 1000), frameCount };
+  }
+
+  it("falls back to a flat recordedAt-delta shift with only one manual anchor", () => {
+    const anchor = game("anchor", 100, 600);
+    const inferred = game("inferred", 250, 600);
+    saveVideoLink(anchor.id, {
+      videoId,
+      url,
+      offsetSeconds: 30,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+
+    const result = recomputeInferredOffsets(
+      [anchor, inferred],
+      videoId,
+      url,
+      "canvas",
+    );
+    expect(result.updatedCount).toBe(1);
+    expect(loadVideoLink(inferred.id)?.offsetSeconds).toBe(180); // 30 + (250-100)
+    expect(loadVideoLink(inferred.id)?.isOffsetManual).toBe(false);
+  });
+
+  it("interpolates an in-between game's offset using its own midpoint, not its frame 0", () => {
+    // Anchors: t=0 -> offset 0, t=100 -> offset 50 (driftPerSecond = 0.5,
+    // i.e. the estimated clock runs 2x "faster" than the true video clock
+    // over this stretch). In-between game: t=40, 600 frames (10s duration,
+    // 5s half-duration) -> midpoint at t=45.
+    // videoTimeAtMidpoint = 0 + 0.5*(45-0) = 22.5; offset = 22.5 - 5 = 17.5.
+    const first = game("first", 0, 100);
+    const last = game("last", 100, 100);
+    const mid = game("mid", 40, 600);
+    saveVideoLink(first.id, {
+      videoId,
+      url,
+      offsetSeconds: 0,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+    saveVideoLink(last.id, {
+      videoId,
+      url,
+      offsetSeconds: 50,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+
+    recomputeInferredOffsets([first, mid, last], videoId, url, "canvas");
+    expect(loadVideoLink(mid.id)?.offsetSeconds).toBe(17.5);
+  });
+
+  it("uses piecewise-linear interpolation across 3+ anchors, not a single global line", () => {
+    // A: t=0 offset=0; B: t=100 offset=50 (drift 0.5 in A-B);
+    // C: t=200 offset=250 (drift 2.0 in B-C).
+    const a = game("a", 0, 100);
+    const b = game("b", 100, 100);
+    const c = game("c", 200, 100);
+    const midAB = game("midAB", 40, 600); // 10s duration, falls in A-B
+    const midBC = game("midBC", 150, 1200); // 20s duration, falls in B-C
+    for (const [g, offset] of [
+      [a, 0],
+      [b, 50],
+      [c, 250],
+    ] as const) {
+      saveVideoLink(g.id, {
+        videoId,
+        url,
+        offsetSeconds: offset,
+        viewMode: "canvas",
+        isOffsetManual: true,
+      });
+    }
+
+    recomputeInferredOffsets([a, midAB, b, midBC, c], videoId, url, "canvas");
+    expect(loadVideoLink(midAB.id)?.offsetSeconds).toBe(17.5); // same A-B segment as the previous test
+    // midBC: midpoint = 150+10 = 160; videoTimeAtMidpoint = 50 + 2.0*(160-100) = 170; offset = 170-10 = 160.
+    expect(loadVideoLink(midBC.id)?.offsetSeconds).toBe(160);
+  });
+
+  it("extrapolates (clamped to 0) for a game outside the outermost anchors", () => {
+    const a = game("a2", 0, 100);
+    const b = game("b2", 100, 100);
+    const before = game("before2", -20, 600); // 10s duration, 5s half
+    saveVideoLink(a.id, {
+      videoId,
+      url,
+      offsetSeconds: 0,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+    saveVideoLink(b.id, {
+      videoId,
+      url,
+      offsetSeconds: 50,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+
+    recomputeInferredOffsets([before, a, b], videoId, url, "canvas");
+    // videoTimeAtMidpoint = 0 + 0.5*(-15-0) = -7.5; offset = -7.5-5 = -12.5 -> clamped to 0.
+    expect(loadVideoLink(before.id)?.offsetSeconds).toBe(0);
+  });
+
+  it("never touches a manual anchor's own offset", () => {
+    const a = game("a3", 0, 100);
+    const b = game("b3", 100, 100);
+    saveVideoLink(a.id, {
+      videoId,
+      url,
+      offsetSeconds: 5,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+    saveVideoLink(b.id, {
+      videoId,
+      url,
+      offsetSeconds: 999,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+
+    const result = recomputeInferredOffsets([a, b], videoId, url, "canvas");
+    expect(result.updatedCount).toBe(0);
+    expect(loadVideoLink(a.id)?.offsetSeconds).toBe(5);
+    expect(loadVideoLink(b.id)?.offsetSeconds).toBe(999);
+  });
+
+  it("preserves an inferred game's own existing viewMode instead of overwriting it with the default", () => {
+    const a = game("a4", 0, 100);
+    const inferred = game("inferred4", 50, 600);
+    saveVideoLink(a.id, {
+      videoId,
+      url,
+      offsetSeconds: 0,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+    saveVideoLink(inferred.id, {
+      videoId,
+      url,
+      offsetSeconds: 0,
+      viewMode: "video-only",
+      isOffsetManual: false,
+    });
+
+    recomputeInferredOffsets([a, inferred], videoId, url, "canvas");
+    expect(loadVideoLink(inferred.id)?.viewMode).toBe("video-only");
+  });
+});
+
+describe("attachVideoToSession", () => {
+  it("marks the source game manual and infers the rest of the session", () => {
+    const videoId = "def456uvw78";
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const source: SessionGameInfo = {
+      id: "src1",
+      recordedAt: new Date(0),
+      frameCount: 100,
+    };
+    const sibling: SessionGameInfo = {
+      id: "sib1",
+      recordedAt: new Date(100_000),
+      frameCount: 100,
+    };
+    const linkData: VideoLinkData = {
+      videoId,
+      url,
+      offsetSeconds: 12,
+      viewMode: "canvas",
+    };
+
+    const result = attachVideoToSession("src1", linkData, [source, sibling]);
+    expect(result.updatedCount).toBe(1);
+    expect(loadVideoLink("src1")?.isOffsetManual).toBe(true);
+    expect(loadVideoLink("sib1")?.isOffsetManual).toBe(false);
+    expect(loadVideoLink("sib1")?.offsetSeconds).toBe(112); // 12 + 100s, single-anchor fallback
+  });
+});
+
+describe("clearVideoOffsetOverride", () => {
+  it("converts a manual game back to inferred and recomputes it from remaining anchors", () => {
+    const videoId = "ghi789rst01";
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const a: SessionGameInfo = {
+      id: "clearA",
+      recordedAt: new Date(0),
+      frameCount: 100,
+    };
+    const b: SessionGameInfo = {
+      id: "clearB",
+      recordedAt: new Date(100_000),
+      frameCount: 100,
+    };
+    saveVideoLink(a.id, {
+      videoId,
+      url,
+      offsetSeconds: 0,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+    saveVideoLink(b.id, {
+      videoId,
+      url,
+      offsetSeconds: 999, // a stale/wrong manual value we're about to clear
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+
+    const result = clearVideoOffsetOverride("clearB", [a, b]);
+    expect(result.updatedCount).toBe(1);
+    expect(loadVideoLink("clearB")?.isOffsetManual).toBe(false);
+    expect(loadVideoLink("clearB")?.offsetSeconds).toBe(100); // 0 + 100s, single-remaining-anchor fallback
+  });
+
+  it("is a no-op for a game with no link at all", () => {
+    const result = clearVideoOffsetOverride("nonexistent-game", []);
+    expect(result.updatedCount).toBe(0);
+  });
+});
+
+describe("unlinkVideoFromSession", () => {
+  it("removes the link from siblings sharing the same video, leaving the source untouched", () => {
+    const videoId = "jkl012mno34";
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const source: SessionGameInfo = {
+      id: "unlinkSrc",
+      recordedAt: new Date(0),
+      frameCount: 100,
+    };
+    const sibling: SessionGameInfo = {
+      id: "unlinkSib",
+      recordedAt: new Date(100_000),
+      frameCount: 100,
+    };
+    saveVideoLink(source.id, {
+      videoId,
+      url,
+      offsetSeconds: 0,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+    saveVideoLink(sibling.id, {
+      videoId,
+      url,
+      offsetSeconds: 100,
+      viewMode: "canvas",
+      isOffsetManual: false,
+    });
+
+    const result = unlinkVideoFromSession(source.id, [source, sibling]);
+    expect(result.updatedCount).toBe(1);
+    expect(loadVideoLink(sibling.id)).toBeNull();
+    expect(loadVideoLink(source.id)).not.toBeNull();
+  });
+
+  it("leaves a sibling linked to a different video alone", () => {
+    const videoId = "pqr567stu89";
+    const otherVideoId = "vwx012yza34";
+    const source: SessionGameInfo = {
+      id: "unlinkSrc2",
+      recordedAt: new Date(0),
+      frameCount: 100,
+    };
+    const sibling: SessionGameInfo = {
+      id: "unlinkSib2",
+      recordedAt: new Date(100_000),
+      frameCount: 100,
+    };
+    saveVideoLink(source.id, {
+      videoId,
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      offsetSeconds: 0,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+    saveVideoLink(sibling.id, {
+      videoId: otherVideoId,
+      url: `https://www.youtube.com/watch?v=${otherVideoId}`,
+      offsetSeconds: 5,
+      viewMode: "canvas",
+      isOffsetManual: true,
+    });
+
+    const result = unlinkVideoFromSession(source.id, [source, sibling]);
+    expect(result.updatedCount).toBe(0);
+    expect(loadVideoLink(sibling.id)?.videoId).toBe(otherVideoId);
+  });
+
+  it("is a no-op for a source game with no link at all", () => {
+    const result = unlinkVideoFromSession("nonexistent-game", []);
+    expect(result.updatedCount).toBe(0);
   });
 });

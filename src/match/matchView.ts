@@ -24,6 +24,7 @@ import {
   extractAllQuickAttackPaths,
 } from "../renderer.js";
 import { characterSize } from "../characterSizes.js";
+import { characterIconUrl } from "../characterIcons.js";
 import { ActionStateId, actionStateName, characterName } from "../lookups.js";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { t, getLanguage } from "../i18n.js";
@@ -83,7 +84,12 @@ import {
   parseYouTubeUrl,
   parseYouTubeTimestamp,
   formatVideoTime,
-  propagateVideoLinkToSession,
+  loadVideoLink,
+  isOffsetManual,
+  attachVideoToSession,
+  recomputeInferredOffsets,
+  clearVideoOffsetOverride,
+  unlinkVideoFromSession,
 } from "../video/youtubeSync.js";
 
 export type MatchEvent =
@@ -247,8 +253,12 @@ export class MatchViewController {
   private vodLinkEditRow: HTMLDivElement;
   private videoUrlInput: HTMLInputElement;
   private videoOffsetInput: HTMLInputElement;
+  private offsetManualBadge: HTMLSpanElement;
+  private offsetManualBadgeLabel: HTMLSpanElement;
+  private clearOffsetOverrideBtn: HTMLButtonElement;
   private videoLinkError: HTMLDivElement;
   private videoUnlinkBtn: HTMLButtonElement;
+  private unlinkSessionBtn: HTMLButtonElement;
   private videoLinkCancelBtn: HTMLButtonElement;
   private videoLinkSaveBtn: HTMLButtonElement;
   private vodSyncBanner: HTMLDivElement;
@@ -601,11 +611,23 @@ export class MatchViewController {
     this.videoOffsetInput = document.getElementById(
       "videoOffsetInput",
     ) as HTMLInputElement;
+    this.offsetManualBadge = document.getElementById(
+      "offsetManualBadge",
+    ) as HTMLSpanElement;
+    this.offsetManualBadgeLabel = document.getElementById(
+      "offsetManualBadgeLabel",
+    ) as HTMLSpanElement;
+    this.clearOffsetOverrideBtn = document.getElementById(
+      "clearOffsetOverrideBtn",
+    ) as HTMLButtonElement;
     this.videoLinkError = document.getElementById(
       "videoLinkError",
     ) as HTMLDivElement;
     this.videoUnlinkBtn = document.getElementById(
       "videoUnlinkBtn",
+    ) as HTMLButtonElement;
+    this.unlinkSessionBtn = document.getElementById(
+      "unlinkSessionBtn",
     ) as HTMLButtonElement;
     this.videoLinkCancelBtn = document.getElementById(
       "videoLinkCancelBtn",
@@ -926,15 +948,19 @@ export class MatchViewController {
 
     this.nudgeMinus1sBtn.addEventListener("click", () => {
       this.youtubeSync.nudgeOffset(-1, this.playback?.currentIndex ?? 0);
+      this.showSyncBannerIfApplicable();
     });
     this.nudgeMinus1fBtn.addEventListener("click", () => {
       this.youtubeSync.nudgeOffset(-1 / 60, this.playback?.currentIndex ?? 0);
+      this.showSyncBannerIfApplicable();
     });
     this.nudgePlus1fBtn.addEventListener("click", () => {
       this.youtubeSync.nudgeOffset(1 / 60, this.playback?.currentIndex ?? 0);
+      this.showSyncBannerIfApplicable();
     });
     this.nudgePlus1sBtn.addEventListener("click", () => {
       this.youtubeSync.nudgeOffset(1, this.playback?.currentIndex ?? 0);
+      this.showSyncBannerIfApplicable();
     });
     this.videoOffsetInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -949,6 +975,9 @@ export class MatchViewController {
     this.videoOffsetInput.addEventListener("blur", () => {
       this.handleOffsetInputCommit();
     });
+    this.clearOffsetOverrideBtn.addEventListener("click", () => {
+      this.handleClearOffsetOverride();
+    });
 
     this.vodEditLinkBtn.addEventListener("click", () => {
       this.openLinkEdit();
@@ -959,6 +988,9 @@ export class MatchViewController {
     this.videoUnlinkBtn.addEventListener("click", () => {
       this.youtubeSync.setLinkData(null);
       this.closeLinkEdit();
+    });
+    this.unlinkSessionBtn.addEventListener("click", () => {
+      this.handleUnlinkSessionVideos();
     });
     this.videoLinkSaveBtn.addEventListener("click", () => {
       this.handleVideoLinkSave();
@@ -1255,6 +1287,8 @@ export class MatchViewController {
       this.videoLinkSaveBtn.textContent = tr.youtubeSaveLinkBtn;
     if (this.videoUnlinkBtn)
       this.videoUnlinkBtn.textContent = tr.youtubeUnlinkBtn;
+    if (this.unlinkSessionBtn)
+      this.unlinkSessionBtn.textContent = tr.unlinkSessionBtn;
     if (this.videoLinkCancelBtn) this.videoLinkCancelBtn.textContent = tr.close;
     if (this.vodEditLinkBtn) {
       this.vodEditLinkBtn.textContent = tr.vodEditLinkBtn;
@@ -1810,7 +1844,10 @@ export class MatchViewController {
       const btn = document.createElement("button");
       btn.className = "perspective-btn";
       const name = replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
-      btn.textContent = name;
+      const iconUrl = characterIconUrl(
+        replay.gameStart.ports[port]?.characterId ?? -1,
+      );
+      btn.innerHTML = `${iconUrl ? `<img class="perspective-btn-icon" src="${iconUrl}" alt="" />` : ""}<span>${escapeHtml(name)}</span>`;
 
       btn.addEventListener("click", () => {
         const wasOverlayActive =
@@ -3858,6 +3895,13 @@ export class MatchViewController {
     const data = this.youtubeSync.getLinkData();
     this.videoUrlInput.value = data?.url ?? "";
     this.videoUnlinkBtn.hidden = !data;
+    this.unlinkSessionBtn.hidden =
+      !data ||
+      !this.sessionSummaries.some(
+        (game) =>
+          game.id !== this.currentReplayId &&
+          loadVideoLink(game.id)?.videoId === data.videoId,
+      );
     this.videoLinkError.hidden = true;
     this.vodWidget.hidden = false;
     this.vodLinkDisplayRow.hidden = true;
@@ -3890,7 +3934,7 @@ export class MatchViewController {
       parsed.startSeconds > 0
         ? parsed.startSeconds
         : (currentData?.offsetSeconds ?? 0);
-    const viewMode = currentData?.viewMode ?? "canvas";
+    const viewMode = currentData?.viewMode ?? "video-only";
 
     const linkData: VideoLinkData = {
       videoId: parsed.videoId,
@@ -3915,13 +3959,47 @@ export class MatchViewController {
     this.showSyncBannerIfApplicable();
   }
 
-  // The bulk "apply to the rest of the session" action only makes sense
-  // right after you've actually changed something about the sync (a new
-  // video, or a corrected offset) - it's a contextual prompt, not a
-  // standing button, since a stale offset shouldn't silently get pushed
-  // onto sibling games that already have their own exact timing.
+  // Reverts this game's offset from manually-set back to inferred, then
+  // immediately recomputes it (and any other non-manual siblings) from
+  // whichever manual anchors remain in the session - no confirmation
+  // needed, same as any other inferred-offset update.
+  private handleClearOffsetOverride(): void {
+    if (!this.currentReplayId) return;
+    clearVideoOffsetOverride(this.currentReplayId, this.sessionSummaries);
+    const refreshed = loadVideoLink(this.currentReplayId);
+    // persist=false: clearVideoOffsetOverride() already saved it - this
+    // just brings the in-memory controller (and therefore the UI) in sync
+    // with what's now on disk.
+    this.youtubeSync.setLinkData(refreshed, false);
+  }
+
+  // The only video-sync action this app still asks about: whether to
+  // attach the current video to sibling games that don't have it yet. Once
+  // every game in the session already shares this exact video, there's
+  // nothing left to ask - any manual offset change just needs its inferred
+  // siblings quietly recomputed (see recomputeInferredOffsets's own doc
+  // comment for why that's safe to do without confirmation).
   private showSyncBannerIfApplicable(): void {
     if (!this.currentReplayId || this.sessionSummaries.length <= 1) return;
+    const linkData = this.youtubeSync.getLinkData();
+    if (!linkData) return;
+
+    const allSiblingsShareVideo = this.sessionSummaries.every(
+      (game) =>
+        game.id === this.currentReplayId ||
+        loadVideoLink(game.id)?.videoId === linkData.videoId,
+    );
+
+    if (allSiblingsShareVideo) {
+      recomputeInferredOffsets(
+        this.sessionSummaries,
+        linkData.videoId,
+        linkData.url,
+        linkData.viewMode,
+      );
+      return;
+    }
+
     this.vodSyncBanner.className = "form-notice vod-sync-banner";
     this.vodSyncBannerText.textContent = t().vodSyncBannerPrompt(
       this.sessionSummaries.length - 1,
@@ -3932,25 +4010,48 @@ export class MatchViewController {
   private handleSyncSessionVideos(): void {
     const linkData = this.youtubeSync.getLinkData();
     if (!this.currentReplayId || !linkData) return;
-    const result = propagateVideoLinkToSession(
+    const result = attachVideoToSession(
       this.currentReplayId,
       linkData,
       this.sessionSummaries,
-      true,
     );
-    const tr = t();
-    if (result.isRealtime) {
-      this.vodSyncBanner.className = "form-notice vod-sync-banner success";
-      this.vodSyncBannerText.textContent = tr.sessionSyncedSuccess(
-        result.updatedCount,
-      );
-    } else {
-      this.vodSyncBanner.className = "form-notice vod-sync-banner warning";
-      this.vodSyncBannerText.textContent = tr.sessionNotRealtimeWarning;
-    }
+    this.vodSyncBanner.className = "form-notice vod-sync-banner success";
+    this.vodSyncBannerText.textContent = t().sessionSyncedSuccess(
+      result.updatedCount,
+    );
     setTimeout(() => {
       this.vodSyncBanner.hidden = true;
     }, 3000);
+  }
+
+  // Unlinks this game's video from every sibling in the session that shares
+  // it, then unlinks it from this game too - the bulk undo of
+  // handleSyncSessionVideos(). Confirmed via window.confirm() since it's a
+  // one-way bulk edit across potentially dozens of games.
+  private handleUnlinkSessionVideos(): void {
+    if (!this.currentReplayId) return;
+    const linkData = this.youtubeSync.getLinkData();
+    if (!linkData) return;
+
+    const siblingCount = this.sessionSummaries.filter(
+      (game) =>
+        game.id !== this.currentReplayId &&
+        loadVideoLink(game.id)?.videoId === linkData.videoId,
+    ).length;
+    if (siblingCount === 0) {
+      this.youtubeSync.setLinkData(null);
+      this.closeLinkEdit();
+      return;
+    }
+
+    if (!window.confirm(t().unlinkSessionConfirm(siblingCount))) return;
+
+    // No success toast here (unlike handleSyncSessionVideos): unlinking the
+    // current game closes vodWidget immediately, and the toast lives inside
+    // it - there'd be nothing left on screen to show it in.
+    unlinkVideoFromSession(this.currentReplayId, this.sessionSummaries);
+    this.youtubeSync.setLinkData(null);
+    this.closeLinkEdit();
   }
 
   private applyVideoViewMode(mode: VideoViewMode): void {
@@ -4034,6 +4135,15 @@ export class MatchViewController {
       if (document.activeElement !== this.videoOffsetInput) {
         this.videoOffsetInput.value = formatVideoTime(data.offsetSeconds);
       }
+      // Only shown (with a way to clear it) when this game's own offset was
+      // set by hand - an inferred offset has nothing to "clear" back to,
+      // since inferred is already the default, silently-recomputed state.
+      this.offsetManualBadge.hidden = !isOffsetManual(data);
+      if (isOffsetManual(data)) {
+        this.offsetManualBadgeLabel.textContent = tr.offsetManualBadgeLabel;
+        this.offsetManualBadge.title = tr.offsetManualBadgeTitle;
+        this.clearOffsetOverrideBtn.title = tr.clearOffsetOverrideTitle;
+      }
       this.vodYoutubeLink.href = data.url;
       this.videoUnlinkBtn.hidden = false;
       this.replayInfoVideoValue.innerHTML = `
@@ -4050,6 +4160,7 @@ export class MatchViewController {
       this.vodWidget.hidden = true;
       this.vodLinkDisplayRow.hidden = true;
       this.videoUnlinkBtn.hidden = true;
+      this.offsetManualBadge.hidden = true;
       this.replayInfoVideoValue.innerHTML = `
         <button id="replayInfoLinkVideoBtn" class="link-video-btn">+ ${escapeHtml(tr.linkYouTubeVideoBtn)}</button>
       `;

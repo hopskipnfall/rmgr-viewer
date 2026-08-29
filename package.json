@@ -15,6 +15,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "generate:demo-summaries": "tsx scripts/generateDemoSummaries.ts",
+    "generate:character-svgs": "tsx scripts/generateCharacterSvgs.ts",
     "inspect:replay": "tsx scripts/inspectReplay.ts"
   },
   "dependencies": {

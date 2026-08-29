@@ -1,5 +1,6 @@
 import { t } from "../i18n.js";
-import { characterName, stageName } from "../lookups.js";
+import { stageName } from "../lookups.js";
+import { characterIconHtml } from "../characterIcons.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import {
   type Identity,
@@ -386,7 +387,7 @@ export class GameList {
               <span class="unsupported-badge">${escapeHtml(tr.notSupportedPlayers)}</span>
             </div>
             <div class="game-row-players">
-              ${summary.ports.map((p) => `${escapeHtml(p.playerName || `P${p.port + 1}`)} (${escapeHtml(characterName(p.characterId))})`).join(" vs ")}
+              ${summary.ports.map((p) => `${escapeHtml(p.playerName || `P${p.port + 1}`)} ${characterIconHtml(p.characterId)}`).join(" vs ")}
             </div>
             <div class="game-row-actions">
               <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
@@ -421,11 +422,11 @@ export class GameList {
             </div>
             <div class="game-row-players">
               <button class="inline-perspective-btn choose-btn" data-port="${port0.port}">
-                ${escapeHtml(tr.imPlayer(label0))} <span class="char-label">${escapeHtml(characterName(port0.characterId))}</span>
+                ${escapeHtml(tr.imPlayer(label0))} <span class="char-label">${characterIconHtml(port0.characterId)}</span>
               </button>
               <span class="vs-label">vs</span>
               <button class="inline-perspective-btn choose-btn" data-port="${port1.port}">
-                ${escapeHtml(tr.imPlayer(label1))} <span class="char-label">${escapeHtml(characterName(port1.characterId))}</span>
+                ${escapeHtml(tr.imPlayer(label1))} <span class="char-label">${characterIconHtml(port1.characterId)}</span>
               </button>
             </div>
             <div class="game-row-actions">
@@ -527,12 +528,12 @@ export class GameList {
           </div>
           <div class="game-row-players">
             <span class="player-entry ${yourWon ? "winner" : yourLost ? "loser" : ""}">
-              <strong class="char-name">${escapeHtml(characterName(yourP.characterId))}</strong>
+              <strong class="char-name">${characterIconHtml(yourP.characterId)}</strong>
             </span>
             <span class="vs-label">vs</span>
             <span class="player-entry ${oppWon ? "winner" : oppLost ? "loser" : ""}">
               <strong class="player-name">${escapeHtml(oppName)}</strong>
-              <span class="char-label">${escapeHtml(characterName(oppP.characterId))}</span>
+              <span class="char-label">${characterIconHtml(oppP.characterId)}</span>
             </span>
           </div>
           <div class="game-row-actions">

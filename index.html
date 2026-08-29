@@ -1360,6 +1360,16 @@
         color: var(--text-dim);
         font-size: 12px;
       }
+      .char-icon {
+        width: 20px;
+        height: 20px;
+        vertical-align: middle;
+      }
+      .char-icon-jp-badge {
+        font-size: 10px;
+        color: var(--text-dim);
+        margin-left: 2px;
+      }
       .vs-label {
         color: var(--text-dim);
         font-size: 11px;
@@ -1952,6 +1962,34 @@
         border-radius: 4px;
         letter-spacing: 0.02em;
       }
+      .offset-manual-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #fbbf24;
+        background: rgba(251, 191, 36, 0.15);
+        border: 1px solid rgba(251, 191, 36, 0.4);
+        border-radius: 4px;
+        padding: 3px 4px 3px 7px;
+      }
+      .clear-offset-btn {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font-size: 11px;
+        line-height: 1;
+        padding: 1px 2px;
+        opacity: 0.8;
+      }
+      .clear-offset-btn:hover {
+        opacity: 1;
+      }
       .video-sync-btn.sync-frame-btn {
         background: rgba(251, 191, 36, 0.15);
         border-color: rgba(251, 191, 36, 0.4);
@@ -2018,6 +2056,11 @@
         display: flex;
         align-items: center;
         gap: 6px;
+      }
+      .vod-edit-actions-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
       .vod-unlink-btn {
         background: none;
@@ -3701,6 +3744,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: 6px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -3709,6 +3753,15 @@
           border-color 0.12s,
           color 0.12s,
           box-shadow 0.12s;
+      }
+      .perspective-btn-icon {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+      }
+      .perspective-btn span {
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .perspective-btn:hover {
         background: #2c3040;
@@ -4501,6 +4554,21 @@
                   >
                     +1s
                   </button>
+                  <span
+                    id="offsetManualBadge"
+                    class="offset-manual-badge"
+                    hidden
+                  >
+                    <span id="offsetManualBadgeLabel">Manual</span>
+                    <button
+                      type="button"
+                      id="clearOffsetOverrideBtn"
+                      class="clear-offset-btn"
+                      aria-label="Clear manual offset"
+                    >
+                      ✕
+                    </button>
+                  </span>
                 </div>
               </div>
               <div class="vod-row vod-link-row" id="vodLinkDisplayRow">
@@ -4545,14 +4613,24 @@
                       Cancel
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    id="videoUnlinkBtn"
-                    class="vod-unlink-btn"
-                    hidden
-                  >
-                    Unlink video
-                  </button>
+                  <div class="vod-edit-actions-right">
+                    <button
+                      type="button"
+                      id="unlinkSessionBtn"
+                      class="vod-unlink-btn"
+                      hidden
+                    >
+                      Unlink from session
+                    </button>
+                    <button
+                      type="button"
+                      id="videoUnlinkBtn"
+                      class="vod-unlink-btn"
+                      hidden
+                    >
+                      Unlink video
+                    </button>
+                  </div>
                 </div>
               </div>
               <div
