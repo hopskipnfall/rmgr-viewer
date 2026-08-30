@@ -1915,7 +1915,7 @@ describe("computeLedgeGrabCandidates", () => {
 });
 
 describe("StageRenderer background themes", () => {
-  it("defaults to mountain theme and allows switching to grid theme", () => {
+  it("defaults to grid theme and allows switching to other themes", () => {
     const fakeCanvas = {
       getContext: () => ({
         save: () => {},
@@ -1939,7 +1939,7 @@ describe("StageRenderer background themes", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const renderer = new (StageRenderer as any)(fakeCanvas);
-    expect(renderer.getBackgroundTheme()).toBe("mountain");
+    expect(renderer.getBackgroundTheme()).toBe("grid");
 
     renderer.setBackgroundTheme("beach");
     expect(renderer.getBackgroundTheme()).toBe("beach");
@@ -1947,11 +1947,11 @@ describe("StageRenderer background themes", () => {
     renderer.setBackgroundTheme("autumn");
     expect(renderer.getBackgroundTheme()).toBe("autumn");
 
-    renderer.setBackgroundTheme("grid");
-    expect(renderer.getBackgroundTheme()).toBe("grid");
-
     renderer.setBackgroundTheme("mountain");
     expect(renderer.getBackgroundTheme()).toBe("mountain");
+
+    renderer.setBackgroundTheme("grid");
+    expect(renderer.getBackgroundTheme()).toBe("grid");
   });
 
   it("renders beach background scenery without crashing", () => {
