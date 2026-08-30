@@ -138,6 +138,7 @@ export class LibraryViewController {
         </div>
       </div>
       <div id="libraryMain" class="library-main">
+        <div id="disclaimerBanner" class="disclaimer-banner"></div>
         <div id="libraryFilterBar" class="library-filter-bar"></div>
         <div id="overallHeader" class="overall-header"></div>
         <div id="neutralScoreWrap" class="neutral-score-wrap"></div>
@@ -334,6 +335,21 @@ export class LibraryViewController {
 
   public render(): void {
     const tr = t();
+
+    // 0. Disclaimer banner
+    const disclaimerBanner = this.container.querySelector(
+      "#disclaimerBanner",
+    ) as HTMLElement;
+    if (disclaimerBanner) {
+      disclaimerBanner.innerHTML = `
+        <p>${tr.disclaimerNotice}</p>
+        <p>${tr.disclaimerPrototype.replace(
+          "{link}",
+          `<a href="https://github.com/hopskipnfall/RMG-K/actions" target="_blank" rel="noopener noreferrer">https://github.com/hopskipnfall/RMG-K/actions</a>`,
+        )}</p>
+        <p>${tr.disclaimerFormat}</p>
+      `;
+    }
 
     // 1. Identity panel
     this.identityPanel.setIdentity(this.identity);

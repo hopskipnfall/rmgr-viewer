@@ -373,6 +373,9 @@ export interface Translations {
   sessionVideoAttached: string;
   showFailedEdgeGuardsBtn: string;
   showFailedEdgeGuardsTitle: string;
+  disclaimerNotice: string;
+  disclaimerPrototype: string;
+  disclaimerFormat: string;
   searchTitle: string;
   searchTypeLabel: string;
   searchTypeEdgeGuards: string;
@@ -812,6 +815,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     showFailedEdgeGuardsBtn: "Failed Edge Guards",
     showFailedEdgeGuardsTitle:
       "Play a clip reel of every edge-guard attempt that failed to kill this session",
+    disclaimerNotice:
+      "Notice: This app is intended to help players optimize game analysis, identify weak areas, and track improvements over time.",
+    disclaimerPrototype:
+      'This is currently an early prototype, but if you want to try analyzing your own games, you can convert a krec file to a replay file by downloading the latest build from {link}, then using the "Export replays" button on the Playback screen. Do not use this version for netplay.',
+    disclaimerFormat:
+      "The replay file format is not finalized and backwards compatibility with future versions is not guaranteed.",
     searchTitle: "Search Clips",
     searchTypeLabel: "Type",
     searchTypeEdgeGuards: "Edge Guards",
@@ -1239,6 +1248,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     showFailedEdgeGuardsBtn: "崖狩り失敗集",
     showFailedEdgeGuardsTitle:
       "このセッションで撃墜に至らなかった崖狩りをまとめて再生します",
+    disclaimerNotice:
+      "お知らせ: このアプリは、プレイヤーが対戦の分析を最適化し、弱点を特定し、時間の経過に伴う上達を記録できるよう支援することを目的としています。",
+    disclaimerPrototype:
+      "現在これは初期プロトタイプですが、ご自身の対戦を分析してみたい場合は、{link} から最新ビルドをダウンロードして krec ファイルをリプレイファイルに変換し、Playback画面の「Export replays」ボタンを使用してください。このバージョンをネット対戦で使用しないでください。",
+    disclaimerFormat:
+      "リプレイファイル形式はまだ確定しておらず、将来のバージョンとの後方互換性は保証されません。",
     searchTitle: "クリップ検索",
     searchTypeLabel: "種類",
     searchTypeEdgeGuards: "崖狩り",

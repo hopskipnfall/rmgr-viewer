@@ -1725,7 +1725,7 @@ export class StageRenderer {
   private quickAttackOverlayPaths: QuickAttackPath[] | null = null;
   private hoveredQuickAttackIndex: number | null = null;
   private diEventsCache = new WeakMap<Replay, HitDIResult[]>();
-  private backgroundTheme: BackgroundTheme = "mountain";
+  private backgroundTheme: BackgroundTheme = "grid";
   private bgBufferCanvas: HTMLCanvasElement | null = null;
   private bgBufferDirty = true;
 
