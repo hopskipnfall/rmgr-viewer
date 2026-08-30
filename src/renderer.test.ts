@@ -62,12 +62,13 @@ import {
   LEDGE_GRAB_FADE_FRAMES,
   StageRenderer,
 } from "./renderer.js";
-import type {
-  Frame,
-  PortIndex,
-  PostFrameUpdate,
-  PreFrameUpdate,
-  Replay,
+import {
+  HazardFlag,
+  type Frame,
+  type PortIndex,
+  type PostFrameUpdate,
+  type PreFrameUpdate,
+  type Replay,
 } from "@rmg-k/rmgr";
 import {
   DREAM_LAND_BLAST_ZONE,
@@ -2973,5 +2974,129 @@ describe("StageRenderer background themes", () => {
     expect(fills).toContain("#dc2626"); // Crimson leaf
     expect(fills).toContain("#ea580c"); // Flame orange leaf
     expect(fills).toContain("#f59e0b"); // Golden amber leaf
+  });
+
+  describe("Whispy Woods Wind Zone Visuals", () => {
+    const createMockCanvas = () => {
+      const fills: unknown[] = [];
+      const strokes: unknown[] = [];
+      const fakeCanvas = {
+        getContext: () => ({
+          save: () => {},
+          restore: () => {},
+          beginPath: () => {},
+          closePath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          rect: () => {},
+          clip: () => {},
+          strokeRect: () => {},
+          fillRect: () => {},
+          ellipse: () => {},
+          arc: () => {},
+          translate: () => {},
+          rotate: () => {},
+          scale: () => {},
+          quadraticCurveTo: () => {},
+          bezierCurveTo: () => {},
+          setLineDash: () => {},
+          fill: function (this: { fillStyle: unknown }) {
+            fills.push(this.fillStyle);
+          },
+          stroke: function (this: { strokeStyle: unknown }) {
+            strokes.push(this.strokeStyle);
+          },
+          drawImage: () => {},
+          createLinearGradient: () => ({ addColorStop: () => {} }),
+        }),
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+      };
+
+      return { fakeCanvas, fakeCamera, fills, strokes };
+    };
+
+    it("draws wind zone with cherry blossom petals for mountain theme", () => {
+      const { fakeCanvas, fakeCamera, fills } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      renderer.setBackgroundTheme("mountain");
+
+      const frame = {
+        hazardFlags: HazardFlag.WhispyBlowing | HazardFlag.WhispyBlowingRight,
+      } as unknown as Frame;
+
+      expect(() => {
+        renderer["drawWindZone"](fakeCamera, DREAM_LAND_STAGE_ID, frame, 30);
+      }).not.toThrow();
+
+      expect(fills).toContain("#fbcfe8"); // Sakura pink
+      expect(fills).toContain("#f472b6"); // Vibrant cherry blossom pink
+    });
+
+    it("draws wind zone with autumn maple leaves for autumn theme", () => {
+      const { fakeCanvas, fakeCamera, fills } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      renderer.setBackgroundTheme("autumn");
+
+      const frame = {
+        hazardFlags: HazardFlag.WhispyBlowing, // Blowing left
+      } as unknown as Frame;
+
+      expect(() => {
+        renderer["drawWindZone"](fakeCamera, DREAM_LAND_STAGE_ID, frame, 20);
+      }).not.toThrow();
+
+      expect(fills).toContain("#dc2626"); // Crimson maple leaf
+      expect(fills).toContain("#f59e0b"); // Amber gold maple leaf
+    });
+
+    it("draws wind zone with cyber vector particles for grid theme", () => {
+      const { fakeCanvas, fakeCamera, fills, strokes } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      renderer.setBackgroundTheme("grid");
+
+      const frame = {
+        hazardFlags: HazardFlag.WhispyBlowing | HazardFlag.WhispyBlowingRight,
+      } as unknown as Frame;
+
+      expect(() => {
+        renderer["drawWindZone"](fakeCamera, DREAM_LAND_STAGE_ID, frame, 15);
+      }).not.toThrow();
+
+      expect(fills).toContain("#38bdf8"); // Cyan chevron
+      expect(strokes).toContain("#38bdf8"); // Cyan trailing vector streak
+    });
+
+    it("does not draw wind zone on non-Dream Land stages or when Whispy is not blowing", () => {
+      const { fakeCanvas, fakeCamera, fills } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+
+      const frameBlowing = {
+        hazardFlags: HazardFlag.WhispyBlowing,
+      } as unknown as Frame;
+
+      // Other stage (e.g. Peach's Castle 0x00) -> no-op
+      renderer["drawWindZone"](fakeCamera, 0x00, frameBlowing, 10);
+      expect(fills).toHaveLength(0);
+
+      // Dream Land but not blowing -> no-op
+      const frameNotBlowing = { hazardFlags: 0 } as unknown as Frame;
+      renderer["drawWindZone"](
+        fakeCamera,
+        DREAM_LAND_STAGE_ID,
+        frameNotBlowing,
+        10,
+      );
+      expect(fills).toHaveLength(0);
+    });
   });
 });
