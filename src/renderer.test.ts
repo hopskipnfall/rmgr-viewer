@@ -1940,11 +1940,260 @@ describe("StageRenderer background themes", () => {
     const renderer = new (StageRenderer as any)(fakeCanvas);
     expect(renderer.getBackgroundTheme()).toBe("mountain");
 
+    renderer.setBackgroundTheme("beach");
+    expect(renderer.getBackgroundTheme()).toBe("beach");
+
+    renderer.setBackgroundTheme("autumn");
+    expect(renderer.getBackgroundTheme()).toBe("autumn");
+
     renderer.setBackgroundTheme("grid");
     expect(renderer.getBackgroundTheme()).toBe("grid");
 
     renderer.setBackgroundTheme("mountain");
     expect(renderer.getBackgroundTheme()).toBe("mountain");
+  });
+
+  it("renders beach background scenery without crashing", () => {
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        setLineDash: () => {},
+        fillRect: () => {},
+        clearRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        drawImage: () => {},
+        createLinearGradient: () => ({
+          addColorStop: () => {},
+        }),
+        createRadialGradient: () => ({
+          addColorStop: () => {},
+        }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setBackgroundTheme("beach");
+    expect(() => {
+      renderer["drawBackground"]();
+    }).not.toThrow();
+  });
+
+  it("renders autumn background scenery without crashing", () => {
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        setLineDash: () => {},
+        fillRect: () => {},
+        clearRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        drawImage: () => {},
+        createLinearGradient: () => ({
+          addColorStop: () => {},
+        }),
+        createRadialGradient: () => ({
+          addColorStop: () => {},
+        }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setBackgroundTheme("autumn");
+    expect(() => {
+      renderer["drawBackground"]();
+    }).not.toThrow();
+  });
+
+  it("applies theme-specific styling to platforms for mountain, beach, autumn, and grid", () => {
+    const strokes: unknown[] = [];
+    const fakeGradient = { addColorStop: () => {} };
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        fill: () => {},
+        stroke: function (this: { strokeStyle: unknown }) {
+          strokes.push(this.strokeStyle);
+        },
+        drawImage: () => {},
+        createLinearGradient: () => fakeGradient,
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    const fakeCamera = {
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+    };
+
+    const platform = {
+      kind: "ground" as const,
+      leftX: -100,
+      rightX: 100,
+      y: 0,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+
+    // Mountain theme -> middle line is #a855f7
+    renderer.setBackgroundTheme("mountain");
+    strokes.length = 0;
+    renderer["drawPlatform"](fakeCamera, platform);
+    expect(strokes).toContain("#a855f7");
+
+    // Beach theme -> middle line is #14b8a6
+    renderer.setBackgroundTheme("beach");
+    strokes.length = 0;
+    renderer["drawPlatform"](fakeCamera, platform);
+    expect(strokes).toContain("#14b8a6");
+
+    // Autumn theme -> middle line is #f59e0b
+    renderer.setBackgroundTheme("autumn");
+    strokes.length = 0;
+    renderer["drawPlatform"](fakeCamera, platform);
+    expect(strokes).toContain("#f59e0b");
+
+    // Grid theme -> middle line is #93c5fd
+    renderer.setBackgroundTheme("grid");
+    strokes.length = 0;
+    renderer["drawPlatform"](fakeCamera, platform);
+    expect(strokes).toContain("#93c5fd");
+  });
+
+  it("draws stage palm trees on the beach theme without crashing", () => {
+    const strokes: unknown[] = [];
+    const fills: unknown[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        quadraticCurveTo: () => {},
+        setLineDash: () => {},
+        fill: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: function (this: { strokeStyle: unknown }) {
+          strokes.push(this.strokeStyle);
+        },
+        drawImage: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    const fakeCamera = {
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+      groundScreenY: () => 400,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setBackgroundTheme("beach");
+
+    expect(() => {
+      renderer["drawStage"](fakeCamera, 0x02); // Dream Land
+    }).not.toThrow();
+
+    expect(strokes).toContain("#451a03"); // Palm tree trunk
+    expect(strokes).toContain("#064e3b"); // Palm frond
+    expect(fills).toContain("#f59e0b"); // Sand root mound
+    expect(fills).toContain("#78350f"); // Coconut
+  });
+
+  it("draws stage autumn trees and lanterns on the autumn theme without crashing", () => {
+    const strokes: unknown[] = [];
+    const fills: unknown[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        fillRect: () => {},
+        quadraticCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        setLineDash: () => {},
+        fill: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: function (this: { strokeStyle: unknown }) {
+          strokes.push(this.strokeStyle);
+        },
+        drawImage: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    const fakeCamera = {
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+      groundScreenY: () => 400,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setBackgroundTheme("autumn");
+
+    expect(() => {
+      renderer["drawStage"](fakeCamera, 0x02); // Dream Land
+    }).not.toThrow();
+
+    expect(strokes).toContain("#292524"); // Maple trunk
+    expect(fills).toContain("#3f3f46"); // Stone base
+    expect(fills).toContain("#15803d"); // Moss
+    expect(fills).toContain("#7f1d1d"); // Crimson canopy
   });
 
   it("applies theme-specific colors to Donkey Kong for mountain vs grid backgrounds", () => {
@@ -2347,6 +2596,7 @@ describe("StageRenderer background themes", () => {
       defaultState,
     );
     expect(fills).toContain("#ec4899");
+    expect(fills).toContain("#818cf8");
     renderer.setBackgroundTheme("grid");
     fills.length = 0;
     renderer["drawNessPolygons"](
@@ -2361,6 +2611,7 @@ describe("StageRenderer background themes", () => {
       defaultState,
     );
     expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#92400e");
 
     // 11. Samus: Moonlit Magenta Armor #ec4899 vs Classic Orange #ea580c
     renderer.setBackgroundTheme("mountain");
@@ -2391,5 +2642,336 @@ describe("StageRenderer background themes", () => {
       defaultState,
     );
     expect(fills).toContain("#ea580c");
+  });
+
+  it("applies autumn-specific skins to Pikachu and Yoshi on the autumn theme", () => {
+    const fills: string[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        fill: function (this: { fillStyle: string }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: () => {},
+        drawImage: () => {},
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    const defaultState = {
+      taunting: false,
+      inCombo: false,
+      isRoll: false,
+      isOpponent: false,
+      actionFrameCounter: 0,
+    };
+
+    // Pikachu on autumn: Golden amber body #fbbf24, crimson cheeks #dc2626, chestnut stripes #991b1b, lacquer ear tips #1c1917
+    renderer.setBackgroundTheme("autumn");
+    fills.length = 0;
+    renderer["drawPikachuPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#fbbf24");
+    expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#991b1b");
+    expect(fills).toContain("#1c1917");
+
+    // Yoshi on autumn: Golden amber body #facc15, cream belly #fffbeb, vermilion boots #dc2626, crimson shell #991b1b
+    fills.length = 0;
+    renderer["drawYoshiPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#facc15");
+    expect(fills).toContain("#fffbeb");
+    expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#991b1b");
+
+    // Captain Falcon on autumn: Plum suit #4a044e, amber gold #f59e0b, vermilion helmet #991b1b
+    fills.length = 0;
+    renderer["drawFalconPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#4a044e");
+    expect(fills).toContain("#f59e0b");
+    expect(fills).toContain("#991b1b");
+
+    // Mario on autumn: Crimson #dc2626, dark lacquer overalls #292524, gold #f59e0b
+    fills.length = 0;
+    renderer["drawMarioPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#292524");
+    expect(fills).toContain("#f59e0b");
+
+    // Luigi on autumn: Bamboo green #15803d, dark lacquer overalls #292524
+    fills.length = 0;
+    renderer["drawLuigiPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#15803d");
+    expect(fills).toContain("#292524");
+
+    // Kirby on autumn: Golden apricot #fde68a, vermilion feet #dc2626
+    fills.length = 0;
+    renderer["drawKirbyPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#fde68a");
+    expect(fills).toContain("#dc2626");
+
+    // Jigglypuff on autumn: Apricot peach #fed7aa, amber forelock #f59e0b, jade eye #10b981
+    fills.length = 0;
+    renderer["drawJigglypuffPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#fed7aa");
+    expect(fills).toContain("#f59e0b");
+    expect(fills).toContain("#10b981");
+
+    // Fox on autumn: Red fox fur #ea580c, burgundy jacket #7f1d1d, vermilion boots #dc2626
+    fills.length = 0;
+    renderer["drawFoxPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#ea580c");
+    expect(fills).toContain("#7f1d1d");
+    expect(fills).toContain("#dc2626");
+
+    // Donkey Kong on autumn: Mahogany fur #451a03, golden chest #fde68a, crimson tie #dc2626
+    fills.length = 0;
+    renderer["drawDonkeyKongPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#451a03");
+    expect(fills).toContain("#fde68a");
+    expect(fills).toContain("#dc2626");
+
+    // Link on autumn: Crimson tunic #dc2626, golden hair #fbbf24, obsidian shield #1c1917
+    fills.length = 0;
+    renderer["drawLinkPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#fbbf24");
+    expect(fills).toContain("#1c1917");
+
+    // Ness on autumn: Crimson cap #dc2626, charcoal brim #292524, amber backpack #d97706
+    fills.length = 0;
+    renderer["drawNessPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#292524");
+    expect(fills).toContain("#d97706");
+
+    // Samus on autumn: Amber armor #f59e0b, vermilion chest #dc2626, jade visor #10b981
+    fills.length = 0;
+    renderer["drawSamusPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#f59e0b");
+    expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#10b981");
+  });
+
+  it("draws blooming Japanese Sakura trees on the mountain night theme without crashing", () => {
+    const strokes: unknown[] = [];
+    const fills: unknown[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        fillRect: () => {},
+        quadraticCurveTo: () => {},
+        setLineDash: () => {},
+        fill: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: function (this: { strokeStyle: unknown }) {
+          strokes.push(this.strokeStyle);
+        },
+        drawImage: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    const fakeCamera = {
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+      groundScreenY: () => 400,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setBackgroundTheme("mountain");
+
+    expect(() => {
+      renderer["drawStage"](fakeCamera, 0x02, 10); // Dream Land
+    }).not.toThrow();
+
+    expect(strokes).toContain("#1e1b4b"); // Indigo-tinted sakura trunk
+    expect(fills).toContain("#1e1b4b"); // Midnight stone base
+    expect(fills).toContain("#f472b6"); // Sakura blossom pink
+    expect(fills).toContain("#fbcfe8"); // Pale blossom petal
+  });
+
+  it("draws animated falling autumn leaves on stage without crashing", () => {
+    const fills: unknown[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        translate: () => {},
+        rotate: () => {},
+        fill: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: () => {},
+        drawImage: () => {},
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    const fakeCamera = {
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    expect(() => {
+      renderer["drawAnimatedAutumnLeaves"](fakeCamera, 45);
+    }).not.toThrow();
+
+    expect(fills).toContain("#dc2626"); // Crimson leaf
+    expect(fills).toContain("#ea580c"); // Flame orange leaf
+    expect(fills).toContain("#f59e0b"); // Golden amber leaf
   });
 });
