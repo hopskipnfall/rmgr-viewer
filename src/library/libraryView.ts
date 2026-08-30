@@ -25,6 +25,7 @@ import { StatCards } from "./statCards.js";
 import { BreakdownTable } from "./breakdownTable.js";
 import { GameList } from "./gameList.js";
 import { NeutralScorePanel } from "./neutralScorePanel.js";
+import type { SessionGroup } from "../data/session.js";
 
 function matchesFilters(
   summary: GameSummary,
@@ -104,6 +105,7 @@ export class LibraryViewController {
 
   private mobileSidebarExpanded = false;
   private onSelectGameCallback: (summary: GameSummary) => void;
+  private onShowFailedEdgeGuardsCallback: (session: SessionGroup) => void;
 
   /** Effort filter (§3.4): when false, the Neutral Score panel excludes "below"/"unknown" tier opponents. */
   private includeExperimentation = false;
@@ -112,9 +114,11 @@ export class LibraryViewController {
     container: HTMLElement,
     modalContainer: HTMLElement,
     onSelectGame: (summary: GameSummary) => void,
+    onShowFailedEdgeGuards: (session: SessionGroup) => void,
   ) {
     this.container = container;
     this.onSelectGameCallback = onSelectGame;
+    this.onShowFailedEdgeGuardsCallback = onShowFailedEdgeGuards;
     this.identity = loadIdentity();
 
     // Create sub-component mount points inside container
@@ -211,6 +215,9 @@ export class LibraryViewController {
       },
       (idToRemove) => {
         this.removeSummary(idToRemove);
+      },
+      (session) => {
+        this.onShowFailedEdgeGuardsCallback(session);
       },
     );
   }

@@ -371,6 +371,33 @@ export interface Translations {
   sessionRecord: (wins: number, losses: number) => string;
   sessionTotalDuration: (dur: string) => string;
   sessionVideoAttached: string;
+  showFailedEdgeGuardsBtn: string;
+  showFailedEdgeGuardsTitle: string;
+  searchTitle: string;
+  searchTypeLabel: string;
+  searchTypeEdgeGuards: string;
+  searchResultLabel: string;
+  searchResultAny: string;
+  searchResultSuccess: string;
+  searchResultFailure: string;
+  searchSessionLabel: string;
+  searchAnySession: string;
+  searchPlayerLabel: string;
+  searchAnyPlayer: string;
+  searchPlayerCharacterLabel: string;
+  searchOpponentCharacterLabel: string;
+  searchAnyCharacter: string;
+  searchJumpCountLabel: string;
+  searchAnyJumpCount: string;
+  searchStartingAreaLabel: string;
+  startingAreaFilterBtn: string;
+  startingAreaSet: string;
+  startingAreaModalTitle: string;
+  startingAreaModalSubtitle: string;
+  startingAreaModalClear: string;
+  searchInProgress: string;
+  searchResultsCount: (count: number) => string;
+  searchNoResults: string;
   sessionSoloGame: string;
   sessionVs: (opponent: string) => string;
 
@@ -782,6 +809,36 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sessionRecord: (wins: number, losses: number) => `${wins}W – ${losses}L`,
     sessionTotalDuration: (dur: string) => `Total: ${dur}`,
     sessionVideoAttached: "YouTube Video Attached",
+    showFailedEdgeGuardsBtn: "Failed Edge Guards",
+    showFailedEdgeGuardsTitle:
+      "Play a clip reel of every edge-guard attempt that failed to kill this session",
+    searchTitle: "Search Clips",
+    searchTypeLabel: "Type",
+    searchTypeEdgeGuards: "Edge Guards",
+    searchResultLabel: "Result",
+    searchResultAny: "Any",
+    searchResultSuccess: "Success (killed)",
+    searchResultFailure: "Failure (survived)",
+    searchSessionLabel: "Session",
+    searchAnySession: "Any session",
+    searchPlayerLabel: "By player",
+    searchAnyPlayer: "Any player",
+    searchPlayerCharacterLabel: "Player character",
+    searchOpponentCharacterLabel: "Opponent character",
+    searchAnyCharacter: "Any",
+    searchJumpCountLabel: "Jump count",
+    searchAnyJumpCount: "Any",
+    searchStartingAreaLabel: "Starting area",
+    startingAreaFilterBtn: "Filter starting area",
+    startingAreaSet: "Starting area set ✓",
+    startingAreaModalTitle: "Recovery Starting Area",
+    startingAreaModalSubtitle:
+      "Click and drag to draw the area where the recovery starts. Also matches the mirrored area on the other side of the stage.",
+    startingAreaModalClear: "Clear",
+    searchInProgress: "Searching…",
+    searchResultsCount: (count: number) =>
+      count === 1 ? "1 clip found" : `${count} clips found`,
+    searchNoResults: "No clips match these filters.",
     sessionSoloGame: "Practice / Solo Match",
     sessionVs: (opponent: string) => `vs ${opponent}`,
 
@@ -1179,6 +1236,36 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sessionRecord: (wins: number, losses: number) => `${wins}勝 – ${losses}敗`,
     sessionTotalDuration: (dur: string) => `合計時間: ${dur}`,
     sessionVideoAttached: "YouTube動画連携済み",
+    showFailedEdgeGuardsBtn: "崖狩り失敗集",
+    showFailedEdgeGuardsTitle:
+      "このセッションで撃墜に至らなかった崖狩りをまとめて再生します",
+    searchTitle: "クリップ検索",
+    searchTypeLabel: "種類",
+    searchTypeEdgeGuards: "崖狩り",
+    searchResultLabel: "結果",
+    searchResultAny: "すべて",
+    searchResultSuccess: "成功 (撃墜)",
+    searchResultFailure: "失敗 (復帰された)",
+    searchSessionLabel: "セッション",
+    searchAnySession: "すべてのセッション",
+    searchPlayerLabel: "プレイヤー",
+    searchAnyPlayer: "すべてのプレイヤー",
+    searchPlayerCharacterLabel: "自分のキャラ",
+    searchOpponentCharacterLabel: "相手のキャラ",
+    searchAnyCharacter: "すべて",
+    searchJumpCountLabel: "ジャンプ回数",
+    searchAnyJumpCount: "すべて",
+    searchStartingAreaLabel: "復帰開始位置",
+    startingAreaFilterBtn: "開始位置を絞り込む",
+    startingAreaSet: "開始位置設定済み ✓",
+    startingAreaModalTitle: "復帰開始位置の範囲",
+    startingAreaModalSubtitle:
+      "ドラッグして復帰が始まる範囲を描いてください。反対側も自動的に対象になります。",
+    startingAreaModalClear: "クリア",
+    searchInProgress: "検索中…",
+    searchResultsCount: (count: number) =>
+      `${count} 件のクリップが見つかりました`,
+    searchNoResults: "条件に一致するクリップはありません。",
     sessionSoloGame: "練習 / 単独マッチ",
     sessionVs: (opponent: string) => `vs ${opponent}`,
 

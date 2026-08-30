@@ -18,6 +18,7 @@ describe("GameList rendering", () => {
       () => {},
       () => {},
       () => {},
+      () => {},
     );
 
     const identity = {
@@ -122,6 +123,7 @@ describe("GameList rendering", () => {
       () => {},
       () => {},
       () => {},
+      () => {},
     );
 
     const identity = createDefaultIdentity();
@@ -167,6 +169,7 @@ describe("GameList rendering", () => {
       () => {},
       () => {},
       () => {},
+      () => {},
     );
 
     const identity = createDefaultIdentity();
@@ -201,6 +204,7 @@ describe("GameList rendering", () => {
 
     const gameList = new GameList(
       mockContainer,
+      () => {},
       () => {},
       () => {},
       () => {},
@@ -257,6 +261,7 @@ describe("GameList rendering", () => {
 
     const gameList = new GameList(
       mockContainer,
+      () => {},
       () => {},
       () => {},
       () => {},

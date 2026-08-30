@@ -2,6 +2,7 @@ import { initLanguage, setLanguage, t, type Language } from "./i18n.js";
 import {
   navigateToLibrary,
   navigateToMatch,
+  navigateToSearch,
   onRoute,
   type Route,
 } from "./router.js";
@@ -27,7 +28,9 @@ import {
   resolvePerspectivePort,
 } from "./data/identity.js";
 import { computeOverallBaseline, type DerivedRates } from "./data/aggregate.js";
-import { groupGamesIntoSessions } from "./data/session.js";
+import { groupGamesIntoSessions, type SessionGroup } from "./data/session.js";
+import type { PlaylistClip } from "./playlist.js";
+import { SearchViewController } from "./search/searchView.js";
 import {
   hasVideoLink,
   loadVideoLink,
@@ -45,6 +48,7 @@ import {
 const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
 const previewViewEl = document.getElementById("previewView") as HTMLDivElement;
 const matchViewEl = document.getElementById("matchView") as HTMLDivElement;
+const searchViewEl = document.getElementById("searchView") as HTMLDivElement;
 const matchFooterEl = document.getElementById("matchFooter") as HTMLElement;
 const modalContainerEl = document.getElementById(
   "modalContainer",
@@ -182,6 +186,7 @@ const shortcutsClose = document.getElementById(
 let matchController: MatchViewController;
 let libraryController: LibraryViewController;
 let previewController: CharacterPreviewController;
+let searchController: SearchViewController;
 
 const DEMO_REPLAY_URLS = DEMO_REPLAY_FILENAMES.map(
   (filename) => `${import.meta.env.BASE_URL}replays/${filename}`,
@@ -307,7 +312,76 @@ function computeMatchupBaselineForPort(
   return null;
 }
 
+/** Loads the actual `.rmgr` data for a `GameSummary` - from its bundled file reference, its URL, or (for the very first library-load fallback) the first demo file. Shared by route navigation and by anything that needs a game's full frame data, like a playlist. */
+async function loadReplayForSummary(
+  summary: GameSummary,
+): Promise<LoadedReplay> {
+  if (summary.fileRef) {
+    return loadReplayFromFile(summary.fileRef);
+  } else if (summary.url) {
+    return loadReplayFromUrl(summary.url);
+  }
+  return loadReplayFromUrl(DEMO_REPLAY_URLS[0]!);
+}
+
+/** A playlist queued by e.g. the search view's "play this clip" action, consumed once handleRouteChange() finishes loading its starting clip's game. */
+let pendingPlaylistClips: PlaylistClip[] | null = null;
+let pendingPlaylistStartIndex = 0;
+
+/**
+ * Queues a playlist and navigates to its starting clip's game -
+ * handleRouteChange() picks up `pendingPlaylistClips` once that game
+ * finishes loading and hands it (plus `startIndex`) to the match view.
+ */
+function playPlaylistClips(clips: PlaylistClip[], startIndex: number): void {
+  if (clips.length === 0) return;
+  pendingPlaylistClips = clips;
+  pendingPlaylistStartIndex = startIndex;
+  navigateToMatch(clips[startIndex]!.gameId);
+}
+
+/**
+ * The library's "Failed Edge Guards" session button: jumps to the search
+ * view, prepopulated to this session and "failure" (i.e. an edge-guard
+ * attempt that did NOT kill), for whichever player the current identity
+ * resolves to in this session's first game - a representative choice, not
+ * a guarantee every game in the session used the exact same display name.
+ */
+function handleShowFailedEdgeGuards(session: SessionGroup): void {
+  const identity = libraryController.getIdentity();
+  const firstGame = session.games[0];
+  let playerName: string | null = null;
+  if (firstGame) {
+    const yourPort =
+      firstGame.manualPerspectivePort ??
+      resolvePerspectivePort(firstGame, identity);
+    playerName =
+      firstGame.ports.find((p) => p.port === yourPort)?.playerName ?? null;
+  }
+  navigateToSearch({
+    result: "failure",
+    sessionId: session.id,
+    playerName,
+    playerCharacterId: null,
+    opponentCharacterId: null,
+    jumpCount: null,
+    startingAreaBox: null,
+  });
+}
+
+/**
+ * Bumped on every handleRouteChange() call and captured locally by each
+ * invocation - after its one async gap (loading the replay), a call checks
+ * this is still its own generation before touching the match view. Without
+ * this, clicking a second playlist clip (or any match) while an earlier
+ * one is still loading lets whichever load finishes LAST win, regardless
+ * of which the user actually clicked last - the earlier, now-stale load
+ * would flash its own clip on screen before the real one takes over.
+ */
+let routeGeneration = 0;
+
 async function handleRouteChange(route: Route): Promise<void> {
+  const myRouteGeneration = ++routeGeneration;
   if (route.view === "library") {
     currentMatchSummary = null;
     // Show Library View
@@ -316,6 +390,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchViewEl.hidden = true;
     matchFooterEl.hidden = true;
     previewViewEl.hidden = true;
+    searchViewEl.hidden = true;
     backToLibraryBtn.hidden = true;
     importContainer.hidden = false;
 
@@ -328,10 +403,37 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchViewEl.hidden = true;
     matchFooterEl.hidden = true;
     libraryViewEl.hidden = true;
+    searchViewEl.hidden = true;
     backToLibraryBtn.hidden = false;
     importContainer.hidden = true;
 
     previewController.activate();
+  } else if (route.view === "search") {
+    currentMatchSummary = null;
+    // Show Search View
+    matchController.deactivate();
+    previewController?.deactivate();
+    matchViewEl.hidden = true;
+    matchFooterEl.hidden = true;
+    previewViewEl.hidden = true;
+    libraryViewEl.hidden = true;
+    backToLibraryBtn.hidden = false;
+    importContainer.hidden = true;
+
+    searchViewEl.hidden = false;
+    searchController.setData(
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
+    searchController.setCriteria({
+      result: route.result,
+      sessionId: route.sessionId,
+      playerName: route.playerName,
+      playerCharacterId: route.playerCharacterId,
+      opponentCharacterId: route.opponentCharacterId,
+      jumpCount: route.jumpCount,
+      startingAreaBox: route.startingAreaBox,
+    });
   } else if (route.view === "match") {
     // Show Match View
     const summary = libraryController.getSummaryById(route.id);
@@ -345,6 +447,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     previewController?.deactivate();
     previewViewEl.hidden = true;
     libraryViewEl.hidden = true;
+    searchViewEl.hidden = true;
     matchViewEl.hidden = false;
     matchFooterEl.hidden = false;
     backToLibraryBtn.hidden = false;
@@ -352,14 +455,8 @@ async function handleRouteChange(route: Route): Promise<void> {
 
     loadStatus.textContent = "Loading replay...";
     try {
-      let loaded: LoadedReplay;
-      if (summary.fileRef) {
-        loaded = await loadReplayFromFile(summary.fileRef);
-      } else if (summary.url) {
-        loaded = await loadReplayFromUrl(summary.url);
-      } else {
-        loaded = await loadReplayFromUrl(DEMO_REPLAY_URLS[0]!);
-      }
+      const loaded = await loadReplayForSummary(summary);
+      if (myRouteGeneration !== routeGeneration) return; // a newer navigation superseded this one
 
       const identity = libraryController.getIdentity();
       const perspectivePort =
@@ -395,6 +492,32 @@ async function handleRouteChange(route: Route): Promise<void> {
       matchController.loadMatch(loaded, initialPort, matchupBaseline);
       matchController.activate();
       loadStatus.textContent = "";
+
+      // Every normal navigation into a match starts outside any playlist -
+      // clear whatever the previous match view left behind (its bar
+      // otherwise kept showing after leaving a playlist and opening an
+      // unrelated game). Immediately re-armed below if this navigation is
+      // actually itself a playlist's starting clip.
+      matchController.exitPlaylist();
+
+      // Pick up a playlist queued by playPlaylistClips() once its starting
+      // clip's game finishes loading here - only if this navigation is
+      // actually that clip's game, not some unrelated navigation that
+      // happened to occur while it was pending.
+      if (
+        pendingPlaylistClips &&
+        pendingPlaylistClips[pendingPlaylistStartIndex]?.gameId === summary.id
+      ) {
+        matchController.startPlaylist(
+          pendingPlaylistClips,
+          async (gameId) => {
+            const clipSummary = libraryController.getSummaryById(gameId);
+            return clipSummary ? loadReplayForSummary(clipSummary) : null;
+          },
+          pendingPlaylistStartIndex,
+        );
+        pendingPlaylistClips = null;
+      }
     } catch (err) {
       loadStatus.textContent = `Failed to load match: ${(err as Error).message}`;
     }
@@ -420,9 +543,20 @@ async function init(): Promise<void> {
     (selectedSummary) => {
       navigateToMatch(selectedSummary.id);
     },
+    (session) => {
+      handleShowFailedEdgeGuards(session);
+    },
   );
 
   previewController = new CharacterPreviewController(previewViewEl);
+  searchController = new SearchViewController(
+    searchViewEl,
+    modalContainerEl,
+    loadReplayForSummary,
+    (clips, startIndex) => {
+      playPlaylistClips(clips, startIndex);
+    },
+  );
 
   // 2. Wire Header controls
   backToLibraryBtn.addEventListener("click", () => {
@@ -613,7 +747,7 @@ async function init(): Promise<void> {
       videoId: TWELVE_CB_VIDEO_ID,
       url: TWELVE_CB_VIDEO_URL,
       offsetSeconds: 5.8,
-      viewMode: "canvas",
+      viewMode: "canvas-muted",
     };
     saveVideoLink(twelveCbSourceSummary.id, linkData);
     if (twelveCbSessionGames.length > 1) {
@@ -659,7 +793,7 @@ async function init(): Promise<void> {
       videoId: TWELVE_CB_VIDEO_ID,
       url: TWELVE_CB_VIDEO_URL,
       offsetSeconds,
-      viewMode: existing?.viewMode ?? "canvas",
+      viewMode: existing?.viewMode ?? "canvas-muted",
     });
   }
 

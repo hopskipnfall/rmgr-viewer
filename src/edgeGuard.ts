@@ -235,6 +235,16 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
       }
       if (recoveringInHitstun) {
         situation.safeFrameStreak = 0;
+        // A hit also undoes any earlier "touched ground" progress, not
+        // just the streak - otherwise a player launched again right after
+        // landing (e.g. onto a side platform, immediately re-hit) stays
+        // "touched" from that earlier landing, and once THIS hitstun
+        // happens to run out - even while still airborne and falling
+        // toward the blast zone, nowhere near safe - the 0.5s clock
+        // silently resumes and can resolve "recovery-success" without
+        // them ever having actually landed again. Require a fresh landing
+        // before the clock can restart.
+        situation.hasTouchedGround = false;
       } else if (situation.hasTouchedGround) {
         situation.safeFrameStreak++;
         if (situation.safeFrameStreak >= RECOVERY_GROUNDED_FRAMES) {

@@ -194,7 +194,7 @@ export function loadVideoLink(replayId: string): VideoLinkData | null {
         url: parsed.url || `https://www.youtube.com/watch?v=${parsed.videoId}`,
         offsetSeconds:
           typeof parsed.offsetSeconds === "number" ? parsed.offsetSeconds : 0,
-        viewMode: parsed.viewMode || "canvas",
+        viewMode: parsed.viewMode || "canvas-muted",
         // Preserve as-is (including absent/undefined) rather than
         // defaulting here - isOffsetManual()'s own "absent means manual"
         // logic is the single source of truth for that default.
@@ -658,7 +658,15 @@ export class YouTubeSyncController {
 
     if (this.linkData) {
       this.onViewModeChange(this.linkData.viewMode);
-      this.createOrUpdatePlayer();
+      // Replay 🔇 means YouTube shouldn't be involved at all, not just
+      // silent/paused - no iframe, no async postMessage traffic, nothing
+      // that can race with or "correct" the replay's own playback. See
+      // createOrUpdatePlayer()'s own guard for the other half of this.
+      if (this.linkData.viewMode === "canvas-muted") {
+        this.destroyPlayer();
+      } else {
+        this.createOrUpdatePlayer();
+      }
     } else {
       this.onViewModeChange("canvas");
       this.destroyPlayer();
@@ -671,14 +679,15 @@ export class YouTubeSyncController {
     if (this.currentReplayId) {
       saveVideoLink(this.currentReplayId, this.linkData);
     }
-    if (mode === "canvas-muted" && this.player && this.isPlayerReady) {
-      // Entering Replay 🔇: stop playback immediately rather than waiting
-      // for the next replay tick to notice the mode change.
-      try {
-        this.player.pauseVideo();
-      } catch {
-        // Ignore
-      }
+    if (mode === "canvas-muted") {
+      // Leaving any video-involved mode for Replay 🔇: tear the player
+      // down entirely rather than just pausing it - see createOrUpdatePlayer()'s
+      // doc comment for why "paused but still there" isn't good enough.
+      this.destroyPlayer();
+    } else if (!this.player) {
+      // Coming FROM Replay 🔇 (no player exists yet) into a video-involved
+      // mode - create it now, lazily.
+      this.createOrUpdatePlayer();
     }
     this.onViewModeChange(mode);
     this.onLinkDataChange(this.linkData);
@@ -758,18 +767,16 @@ export class YouTubeSyncController {
     );
 
     if (reason === "jump") {
+      // No "canvas-muted" branch needed here - createOrUpdatePlayer() never
+      // creates a player at all in that mode (see its own doc comment), so
+      // this.player is only ever non-null when a video-involved mode owns it.
       this.isSyncingFromReplay = true;
       try {
-        if (this.linkData.viewMode === "canvas-muted") {
-          // Replay 🔇: keep the video fully stopped, no background audio.
-          this.player.pauseVideo();
+        this.player.seekTo(targetTime, true);
+        if (playing) {
+          this.player.playVideo();
         } else {
-          this.player.seekTo(targetTime, true);
-          if (playing) {
-            this.player.playVideo();
-          } else {
-            this.player.pauseVideo();
-          }
+          this.player.pauseVideo();
         }
       } catch {
         // Player not ready
@@ -798,12 +805,12 @@ export class YouTubeSyncController {
     )
       return;
 
+    // No "canvas-muted" branch needed here - createOrUpdatePlayer() never
+    // creates a player at all in that mode (see its own doc comment), so
+    // this.player is only ever non-null when a video-involved mode owns it.
     this.isSyncingFromReplay = true;
     try {
-      if (this.linkData.viewMode === "canvas-muted") {
-        // Replay 🔇: keep the video fully stopped, no background audio.
-        this.player.pauseVideo();
-      } else if (playing) {
+      if (playing) {
         const targetTime = frameToVideoTime(
           currentFrame,
           this.linkData.offsetSeconds,
@@ -839,6 +846,12 @@ export class YouTubeSyncController {
 
   private createOrUpdatePlayer(): void {
     if (!this.linkData) return;
+    // Replay 🔇 means YouTube shouldn't be involved at all - no iframe, no
+    // async postMessage traffic to race with the replay's own playback.
+    // Redundant with setLinkData()/setViewMode()'s own guards, but this is
+    // also reachable from the global onYouTubeIframeAPIReady callback,
+    // which can fire well after either of those ran.
+    if (this.linkData.viewMode === "canvas-muted") return;
     if (typeof window !== "undefined" && window.YT && window.YT.Player) {
       this.isApiReady = true;
     }
@@ -885,6 +898,31 @@ export class YouTubeSyncController {
       events: {
         onReady: () => {
           this.isPlayerReady = true;
+          // The player just loaded sitting at its `start:` param (this
+          // game's own frame-0 video time) - any seek attempted before now
+          // (e.g. onReplayFrameChange() firing while a playlist clip
+          // seeks straight to a mid-game frame) was silently dropped,
+          // since it requires isPlayerReady. Without this resync, the
+          // player's next state-change event reads back that stale
+          // frame-0 position and "corrects" the replay to match it -
+          // yanking a correctly-seeked playlist clip back to frame 0 a
+          // moment after it started. Catch up to wherever the replay
+          // actually is right now before that can happen.
+          this.isSyncingFromReplay = true;
+          try {
+            if (this.linkData) {
+              const targetTime = frameToVideoTime(
+                this.getCurrentReplayFrame(),
+                this.linkData.offsetSeconds,
+              );
+              this.player?.seekTo(targetTime, true);
+            }
+          } catch {
+            // Player not ready
+          }
+          setTimeout(() => {
+            this.isSyncingFromReplay = false;
+          }, 300);
           this.startSyncLoop();
         },
         onStateChange: (event) => {
