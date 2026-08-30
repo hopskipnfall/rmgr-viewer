@@ -1924,7 +1924,7 @@ export class StageRenderer {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    this.drawBackground();
+    this.drawBackground(camera);
     this.drawBlastZone(camera, stageId);
     this.drawEdgeGuardZone(camera, stageId);
     this.drawStage(camera, stageId);
@@ -3235,11 +3235,11 @@ export class StageRenderer {
     drawZoneSide(-1); // left
   }
 
-  private drawBackground(): void {
+  private drawBackground(camera?: Camera): void {
     if (this.backgroundTheme === "grid") {
       this.drawGridBackground();
     } else {
-      this.drawMountainBackground();
+      this.drawMountainBackground(camera);
     }
   }
 
@@ -3267,32 +3267,52 @@ export class StageRenderer {
     }
   }
 
-  private drawMountainBackground(): void {
+  private drawMountainBackground(camera?: Camera): void {
     const { ctx, canvas } = this;
     const w = canvas.width;
     const h = canvas.height;
 
-    // Cache the drawn background into an offscreen canvas to guarantee maximum 60fps performance
+    // Generous buffer margin to prevent edge-transparency bleed during gaussian blurring
+    const margin = 32;
+    const bufW = w + margin * 2;
+    const bufH = h + margin * 2;
+
+    // Cache the pristine unblurred background into an offscreen canvas to guarantee maximum 60fps performance
     if (
       !this.bgBufferCanvas ||
-      this.bgBufferCanvas.width !== w ||
-      this.bgBufferCanvas.height !== h ||
+      this.bgBufferCanvas.width !== bufW ||
+      this.bgBufferCanvas.height !== bufH ||
       this.bgBufferDirty
     ) {
       if (!this.bgBufferCanvas) {
         this.bgBufferCanvas = document.createElement("canvas");
       }
-      this.bgBufferCanvas.width = w;
-      this.bgBufferCanvas.height = h;
+      this.bgBufferCanvas.width = bufW;
+      this.bgBufferCanvas.height = bufH;
       const bCtx = this.bgBufferCanvas.getContext("2d");
       if (bCtx) {
-        this.renderMountainScenery(bCtx, w, h);
+        this.renderMountainScenery(bCtx, bufW, bufH);
       }
       this.bgBufferDirty = false;
     }
 
+    // Dynamic depth-of-field lens blur based on camera distance:
+    // pxPerUnit represents current screen pixels per world unit.
+    // When the camera is close up (higher pxPerUnit), blur increases (up to ~5.5px) for creamy bokeh and punchy character contrast.
+    // When the camera pulls far back (lower pxPerUnit), blur reduces (down to ~0.5px) so the landscape stays clear in wide shots.
+    const pxPerUnit = camera ? camera.worldLengthToScreen(1) : 0.3;
+    const closeness = Math.max(0, Math.min(1, (pxPerUnit - 0.12) / 0.33));
+    const blurPx = 0.5 + closeness * 5.0;
+
     if (this.bgBufferCanvas) {
-      ctx.drawImage(this.bgBufferCanvas, 0, 0);
+      ctx.save();
+      try {
+        ctx.filter = `blur(${blurPx.toFixed(1)}px)`;
+      } catch {
+        // ignore if unsupported in current environment
+      }
+      ctx.drawImage(this.bgBufferCanvas, -margin, -margin);
+      ctx.restore();
     }
   }
 
@@ -3302,13 +3322,6 @@ export class StageRenderer {
     h: number,
   ): void {
     ctx.save();
-
-    // 0. Soft-focus lens blur for background depth of field
-    try {
-      ctx.filter = "blur(1.8px)";
-    } catch {
-      // ignore if unsupported in current environment
-    }
 
     // 1. Fixed Aspect Ratio Coordinate Transform:
     // Lock horizontal scaling to match the natural ~1.05 aspect ratio from the default
@@ -5569,12 +5582,22 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let bodyColor = resolveColor("#facc15", isOpponent);
-    let earTipColor = resolveColor("#1e1e24", isOpponent);
-    let cheekColor = resolveColor("#ef4444", isOpponent);
-    let stripeColor = resolveColor("#854d0e", isOpponent);
-    let tailBaseColor = resolveColor("#854d0e", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseBody = isMountainTheme ? "#38bdf8" : "#facc15";
+    const baseEarTip = isMountainTheme ? "#1e1b4b" : "#1e1e24";
+    const baseCheek = isMountainTheme ? "#ec4899" : "#ef4444";
+    const baseStripe = isMountainTheme ? "#6b21a8" : "#854d0e";
+    const baseTailBase = isMountainTheme ? "#6b21a8" : "#854d0e";
+    const baseOutline = isMountainTheme
+      ? "rgba(15, 23, 42, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let bodyColor = resolveColor(baseBody, isOpponent);
+    let earTipColor = resolveColor(baseEarTip, isOpponent);
+    let cheekColor = resolveColor(baseCheek, isOpponent);
+    let stripeColor = resolveColor(baseStripe, isOpponent);
+    let tailBaseColor = resolveColor(baseTailBase, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -5585,11 +5608,11 @@ export class StageRenderer {
         isOpponent,
       );
     } else if (isRoll) {
-      bodyColor = resolveColor("#facc15", isOpponent, 0.45);
-      earTipColor = resolveColor("#1e1e24", isOpponent, 0.45);
-      cheekColor = resolveColor("#ef4444", isOpponent, 0.45);
-      stripeColor = resolveColor("#854d0e", isOpponent, 0.45);
-      tailBaseColor = resolveColor("#854d0e", isOpponent, 0.45);
+      bodyColor = resolveColor(baseBody, isOpponent, 0.45);
+      earTipColor = resolveColor(baseEarTip, isOpponent, 0.45);
+      cheekColor = resolveColor(baseCheek, isOpponent, 0.45);
+      stripeColor = resolveColor(baseStripe, isOpponent, 0.45);
+      tailBaseColor = resolveColor(baseTailBase, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -5814,12 +5837,24 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let suitColor = resolveColor("#1e293b", isOpponent);
-    let goldColor = resolveColor("#fbbf24", isOpponent);
-    let whiteColor = resolveColor("#f8fafc", isOpponent);
-    let skinColor = resolveColor("#fed7aa", isOpponent);
-    let helmetColor = resolveColor("#1e3a8a", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseSuit = isMountainTheme ? "#4338ca" : "#1e293b";
+    const baseGold = isMountainTheme ? "#38bdf8" : "#fbbf24";
+    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
+    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
+    const baseHelmet = isMountainTheme ? "#312e81" : "#1e3a8a";
+    const baseScarf = isMountainTheme ? "#ec4899" : "#fbbf24";
+    const baseOutline = isMountainTheme
+      ? "rgba(15, 23, 42, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let suitColor = resolveColor(baseSuit, isOpponent);
+    let goldColor = resolveColor(baseGold, isOpponent);
+    let whiteColor = resolveColor(baseWhite, isOpponent);
+    let skinColor = resolveColor(baseSkin, isOpponent);
+    let helmetColor = resolveColor(baseHelmet, isOpponent);
+    let scarfColor = resolveColor(baseScarf, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -5833,12 +5868,17 @@ export class StageRenderer {
         `hsl(${(hue + 20) % 360}, 85%, 40%)`,
         isOpponent,
       );
+      scarfColor = resolveColor(
+        `hsl(${(hue + 60) % 360}, 90%, 55%)`,
+        isOpponent,
+      );
     } else if (isRoll) {
-      suitColor = resolveColor("#1e293b", isOpponent, 0.45);
-      goldColor = resolveColor("#fbbf24", isOpponent, 0.45);
-      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
-      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
-      helmetColor = resolveColor("#1e3a8a", isOpponent, 0.45);
+      suitColor = resolveColor(baseSuit, isOpponent, 0.45);
+      goldColor = resolveColor(baseGold, isOpponent, 0.45);
+      whiteColor = resolveColor(baseWhite, isOpponent, 0.45);
+      skinColor = resolveColor(baseSkin, isOpponent, 0.45);
+      helmetColor = resolveColor(baseHelmet, isOpponent, 0.45);
+      scarfColor = resolveColor(baseScarf, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -5855,7 +5895,7 @@ export class StageRenderer {
     ctx.lineTo(posX - 0.5 * dir * w, y - 0.84 * h);
     ctx.lineTo(posX - 0.08 * dir * w, y - 0.8 * h);
     ctx.closePath();
-    ctx.fillStyle = goldColor;
+    ctx.fillStyle = scarfColor;
     ctx.fill();
     ctx.strokeStyle = outlineColor;
     ctx.lineWidth = outlineWidth;
@@ -6083,14 +6123,26 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let redColor = resolveColor("#dc2626", isOpponent);
-    let blueColor = resolveColor("#2563eb", isOpponent);
-    let goldColor = resolveColor("#facc15", isOpponent);
-    let whiteColor = resolveColor("#f8fafc", isOpponent);
-    let skinColor = resolveColor("#fed7aa", isOpponent);
-    let brownColor = resolveColor("#78350f", isOpponent);
-    let hairColor = resolveColor("#1c1917", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseRed = isMountainTheme ? "#f43f5e" : "#dc2626";
+    const baseBlue = isMountainTheme ? "#4f46e5" : "#2563eb";
+    const baseGold = isMountainTheme ? "#38bdf8" : "#facc15";
+    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
+    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
+    const baseBrown = isMountainTheme ? "#311042" : "#78350f";
+    const baseHair = isMountainTheme ? "#1e1b4b" : "#1c1917";
+    const baseOutline = isMountainTheme
+      ? "rgba(15, 23, 42, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let redColor = resolveColor(baseRed, isOpponent);
+    let blueColor = resolveColor(baseBlue, isOpponent);
+    let goldColor = resolveColor(baseGold, isOpponent);
+    let whiteColor = resolveColor(baseWhite, isOpponent);
+    let skinColor = resolveColor(baseSkin, isOpponent);
+    let brownColor = resolveColor(baseBrown, isOpponent);
+    let hairColor = resolveColor(baseHair, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -6101,13 +6153,13 @@ export class StageRenderer {
         isOpponent,
       );
     } else if (isRoll) {
-      redColor = resolveColor("#dc2626", isOpponent, 0.45);
-      blueColor = resolveColor("#2563eb", isOpponent, 0.45);
-      goldColor = resolveColor("#facc15", isOpponent, 0.45);
-      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
-      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
-      brownColor = resolveColor("#78350f", isOpponent, 0.45);
-      hairColor = resolveColor("#1c1917", isOpponent, 0.45);
+      redColor = resolveColor(baseRed, isOpponent, 0.45);
+      blueColor = resolveColor(baseBlue, isOpponent, 0.45);
+      goldColor = resolveColor(baseGold, isOpponent, 0.45);
+      whiteColor = resolveColor(baseWhite, isOpponent, 0.45);
+      skinColor = resolveColor(baseSkin, isOpponent, 0.45);
+      brownColor = resolveColor(baseBrown, isOpponent, 0.45);
+      hairColor = resolveColor(baseHair, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -6351,14 +6403,26 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let greenColor = resolveColor("#16a34a", isOpponent);
-    let navyColor = resolveColor("#1e3a8a", isOpponent);
-    let goldColor = resolveColor("#facc15", isOpponent);
-    let whiteColor = resolveColor("#f8fafc", isOpponent);
-    let skinColor = resolveColor("#fed7aa", isOpponent);
-    let brownColor = resolveColor("#78350f", isOpponent);
-    let hairColor = resolveColor("#1c1917", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseGreen = isMountainTheme ? "#2dd4bf" : "#16a34a";
+    const baseNavy = isMountainTheme ? "#3730a3" : "#1e3a8a";
+    const baseGold = isMountainTheme ? "#ec4899" : "#facc15";
+    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
+    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
+    const baseBrown = isMountainTheme ? "#311042" : "#78350f";
+    const baseHair = isMountainTheme ? "#1e1b4b" : "#1c1917";
+    const baseOutline = isMountainTheme
+      ? "rgba(15, 23, 42, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let greenColor = resolveColor(baseGreen, isOpponent);
+    let navyColor = resolveColor(baseNavy, isOpponent);
+    let goldColor = resolveColor(baseGold, isOpponent);
+    let whiteColor = resolveColor(baseWhite, isOpponent);
+    let skinColor = resolveColor(baseSkin, isOpponent);
+    let brownColor = resolveColor(baseBrown, isOpponent);
+    let hairColor = resolveColor(baseHair, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -6369,13 +6433,13 @@ export class StageRenderer {
         isOpponent,
       );
     } else if (isRoll) {
-      greenColor = resolveColor("#16a34a", isOpponent, 0.45);
-      navyColor = resolveColor("#1e3a8a", isOpponent, 0.45);
-      goldColor = resolveColor("#facc15", isOpponent, 0.45);
-      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
-      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
-      brownColor = resolveColor("#78350f", isOpponent, 0.45);
-      hairColor = resolveColor("#1c1917", isOpponent, 0.45);
+      greenColor = resolveColor(baseGreen, isOpponent, 0.45);
+      navyColor = resolveColor(baseNavy, isOpponent, 0.45);
+      goldColor = resolveColor(baseGold, isOpponent, 0.45);
+      whiteColor = resolveColor(baseWhite, isOpponent, 0.45);
+      skinColor = resolveColor(baseSkin, isOpponent, 0.45);
+      brownColor = resolveColor(baseBrown, isOpponent, 0.45);
+      hairColor = resolveColor(baseHair, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -6618,12 +6682,22 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let pinkColor = resolveColor("#f472b6", isOpponent);
-    let redFootColor = resolveColor("#e11d48", isOpponent);
-    let cheekColor = resolveColor("#fb7185", isOpponent);
-    let eyeBlue = resolveColor("#3b82f6", isOpponent);
-    let mouthColor = resolveColor("#be123c", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const basePink = isMountainTheme ? "#fbcfe8" : "#f472b6";
+    const baseFoot = isMountainTheme ? "#c026d3" : "#e11d48";
+    const baseCheek = isMountainTheme ? "#f43f5e" : "#fb7185";
+    const baseEye = isMountainTheme ? "#38bdf8" : "#3b82f6";
+    const baseMouth = isMountainTheme ? "#701a75" : "#be123c";
+    const baseOutline = isMountainTheme
+      ? "rgba(49, 16, 66, 0.75)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let pinkColor = resolveColor(basePink, isOpponent);
+    let redFootColor = resolveColor(baseFoot, isOpponent);
+    let cheekColor = resolveColor(baseCheek, isOpponent);
+    let eyeBlue = resolveColor(baseEye, isOpponent);
+    let mouthColor = resolveColor(baseMouth, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -6634,11 +6708,11 @@ export class StageRenderer {
         isOpponent,
       );
     } else if (isRoll) {
-      pinkColor = resolveColor("#f472b6", isOpponent, 0.45);
-      redFootColor = resolveColor("#e11d48", isOpponent, 0.45);
-      cheekColor = resolveColor("#fb7185", isOpponent, 0.45);
-      eyeBlue = resolveColor("#3b82f6", isOpponent, 0.45);
-      mouthColor = resolveColor("#be123c", isOpponent, 0.45);
+      pinkColor = resolveColor(basePink, isOpponent, 0.45);
+      redFootColor = resolveColor(baseFoot, isOpponent, 0.45);
+      cheekColor = resolveColor(baseCheek, isOpponent, 0.45);
+      eyeBlue = resolveColor(baseEye, isOpponent, 0.45);
+      mouthColor = resolveColor(baseMouth, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -6883,11 +6957,20 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let lightPink = resolveColor("#f9a8d4", isOpponent);
-    let deepPink = resolveColor("#f472b6", isOpponent);
-    let innerEar = resolveColor("#3f3f46", isOpponent);
-    let tealEye = resolveColor("#14b8a6", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseLightPink = isMountainTheme ? "#fae8ff" : "#f9a8d4";
+    const baseDeepPink = isMountainTheme ? "#f0abfc" : "#f472b6";
+    const baseInnerEar = isMountainTheme ? "#3b0764" : "#3f3f46";
+    const baseTealEye = isMountainTheme ? "#22d3ee" : "#14b8a6";
+    const baseOutline = isMountainTheme
+      ? "rgba(49, 16, 66, 0.75)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let lightPink = resolveColor(baseLightPink, isOpponent);
+    let deepPink = resolveColor(baseDeepPink, isOpponent);
+    let innerEar = resolveColor(baseInnerEar, isOpponent);
+    let tealEye = resolveColor(baseTealEye, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -6895,10 +6978,10 @@ export class StageRenderer {
       lightPink = resolveColor(`hsl(${hue}, 85%, 75%)`, isOpponent);
       deepPink = resolveColor(`hsl(${(hue + 30) % 360}, 90%, 65%)`, isOpponent);
     } else if (isRoll) {
-      lightPink = resolveColor("#f9a8d4", isOpponent, 0.45);
-      deepPink = resolveColor("#f472b6", isOpponent, 0.45);
-      innerEar = resolveColor("#3f3f46", isOpponent, 0.45);
-      tealEye = resolveColor("#14b8a6", isOpponent, 0.45);
+      lightPink = resolveColor(baseLightPink, isOpponent, 0.45);
+      deepPink = resolveColor(baseDeepPink, isOpponent, 0.45);
+      innerEar = resolveColor(baseInnerEar, isOpponent, 0.45);
+      tealEye = resolveColor(baseTealEye, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -7132,15 +7215,28 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let furColor = resolveColor("#c8732a", isOpponent); // Muted amber fox fur
-    let whiteFur = resolveColor("#f8fafc", isOpponent);
-    let purpleJacket = resolveColor("#7c3aed", isOpponent); // Purple jacket / torso
-    let navyPants = resolveColor("#1e3a5f", isOpponent); // Dark navy blue pants
-    let purpleBoots = resolveColor("#a855f7", isOpponent); // Purple boots / feet
-    let darkEar = resolveColor("#18181b", isOpponent);
-    let beltColor = resolveColor("#3b1f6e", isOpponent); // Deep purple belt
-    let scouterColor = resolveColor("#06b6d4", isOpponent); // Cyan scouter
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseFur = isMountainTheme ? "#fbbf24" : "#c8732a";
+    const baseWhiteFur = isMountainTheme ? "#fdf4ff" : "#f8fafc";
+    const basePurpleJacket = isMountainTheme ? "#7c3aed" : "#7c3aed";
+    const baseNavyPants = isMountainTheme ? "#1e1b4b" : "#1e3a5f";
+    const basePurpleBoots = isMountainTheme ? "#ec4899" : "#a855f7";
+    const baseDarkEar = isMountainTheme ? "#1e1b4b" : "#18181b";
+    const baseBelt = isMountainTheme ? "#4c1d95" : "#3b1f6e";
+    const baseScouter = isMountainTheme ? "#38bdf8" : "#06b6d4";
+    const baseOutline = isMountainTheme
+      ? "rgba(15, 23, 42, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let furColor = resolveColor(baseFur, isOpponent);
+    let whiteFur = resolveColor(baseWhiteFur, isOpponent);
+    let purpleJacket = resolveColor(basePurpleJacket, isOpponent);
+    let navyPants = resolveColor(baseNavyPants, isOpponent);
+    let purpleBoots = resolveColor(basePurpleBoots, isOpponent);
+    let darkEar = resolveColor(baseDarkEar, isOpponent);
+    let beltColor = resolveColor(baseBelt, isOpponent);
+    let scouterColor = resolveColor(baseScouter, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -7159,14 +7255,14 @@ export class StageRenderer {
         isOpponent,
       );
     } else if (isRoll) {
-      furColor = resolveColor("#c8732a", isOpponent, 0.45);
-      whiteFur = resolveColor("#f8fafc", isOpponent, 0.45);
-      purpleJacket = resolveColor("#7c3aed", isOpponent, 0.45);
-      navyPants = resolveColor("#1e3a5f", isOpponent, 0.45);
-      purpleBoots = resolveColor("#a855f7", isOpponent, 0.45);
-      darkEar = resolveColor("#18181b", isOpponent, 0.45);
-      beltColor = resolveColor("#3b1f6e", isOpponent, 0.45);
-      scouterColor = resolveColor("#06b6d4", isOpponent, 0.45);
+      furColor = resolveColor(baseFur, isOpponent, 0.45);
+      whiteFur = resolveColor(baseWhiteFur, isOpponent, 0.45);
+      purpleJacket = resolveColor(basePurpleJacket, isOpponent, 0.45);
+      navyPants = resolveColor(baseNavyPants, isOpponent, 0.45);
+      purpleBoots = resolveColor(basePurpleBoots, isOpponent, 0.45);
+      darkEar = resolveColor(baseDarkEar, isOpponent, 0.45);
+      beltColor = resolveColor(baseBelt, isOpponent, 0.45);
+      scouterColor = resolveColor(baseScouter, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -7418,11 +7514,20 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let greenColor = resolveColor("#22c55e", isOpponent);
-    let whiteColor = resolveColor("#f8fafc", isOpponent);
-    let orangeBoot = resolveColor("#f97316", isOpponent);
-    let redShell = resolveColor("#ef4444", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseGreen = isMountainTheme ? "#38bdf8" : "#22c55e";
+    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
+    const baseOrangeBoot = isMountainTheme ? "#c084fc" : "#f97316";
+    const baseRedShell = isMountainTheme ? "#f43f5e" : "#ef4444";
+    const baseOutline = isMountainTheme
+      ? "rgba(15, 23, 42, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let greenColor = resolveColor(baseGreen, isOpponent);
+    let whiteColor = resolveColor(baseWhite, isOpponent);
+    let orangeBoot = resolveColor(baseOrangeBoot, isOpponent);
+    let redShell = resolveColor(baseRedShell, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -7433,10 +7538,10 @@ export class StageRenderer {
         isOpponent,
       );
     } else if (isRoll) {
-      greenColor = resolveColor("#22c55e", isOpponent, 0.45);
-      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
-      orangeBoot = resolveColor("#f97316", isOpponent, 0.45);
-      redShell = resolveColor("#ef4444", isOpponent, 0.45);
+      greenColor = resolveColor(baseGreen, isOpponent, 0.45);
+      whiteColor = resolveColor(baseWhite, isOpponent, 0.45);
+      orangeBoot = resolveColor(baseOrangeBoot, isOpponent, 0.45);
+      redShell = resolveColor(baseRedShell, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -7627,11 +7732,20 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let furColor = resolveColor("#78350f", isOpponent);
-    let skinColor = resolveColor("#fed7aa", isOpponent);
-    let tieRed = resolveColor("#dc2626", isOpponent);
-    let tieYellow = resolveColor("#facc15", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseFur = isMountainTheme ? "#6366f1" : "#78350f";
+    const baseSkin = isMountainTheme ? "#fdf4ff" : "#fed7aa";
+    const baseTie = isMountainTheme ? "#ec4899" : "#dc2626";
+    const baseEmblem = isMountainTheme ? "#38bdf8" : "#facc15";
+    const baseOutline = isMountainTheme
+      ? "rgba(30, 27, 75, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let furColor = resolveColor(baseFur, isOpponent);
+    let skinColor = resolveColor(baseSkin, isOpponent);
+    let tieRed = resolveColor(baseTie, isOpponent);
+    let tieYellow = resolveColor(baseEmblem, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -7639,10 +7753,10 @@ export class StageRenderer {
       furColor = resolveColor(`hsl(${hue}, 80%, 35%)`, isOpponent);
       tieRed = resolveColor(`hsl(${(hue + 60) % 360}, 90%, 55%)`, isOpponent);
     } else if (isRoll) {
-      furColor = resolveColor("#78350f", isOpponent, 0.45);
-      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
-      tieRed = resolveColor("#dc2626", isOpponent, 0.45);
-      tieYellow = resolveColor("#facc15", isOpponent, 0.45);
+      furColor = resolveColor(baseFur, isOpponent, 0.45);
+      skinColor = resolveColor(baseSkin, isOpponent, 0.45);
+      tieRed = resolveColor(baseTie, isOpponent, 0.45);
+      tieYellow = resolveColor(baseEmblem, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -7789,14 +7903,26 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let tunicGreen = resolveColor("#16a34a", isOpponent);
-    let blondeHair = resolveColor("#facc15", isOpponent);
-    let skinColor = resolveColor("#fed7aa", isOpponent);
-    let leatherBrown = resolveColor("#78350f", isOpponent);
-    let shieldBlue = resolveColor("#1e3a8a", isOpponent);
-    let shieldSilver = resolveColor("#cbd5e1", isOpponent);
-    let whiteColor = resolveColor("#f8fafc", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseTunic = isMountainTheme ? "#6366f1" : "#16a34a";
+    const baseHair = isMountainTheme ? "#fde047" : "#facc15";
+    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
+    const baseLeather = isMountainTheme ? "#3b0764" : "#78350f";
+    const baseShield = isMountainTheme ? "#38bdf8" : "#1e3a8a";
+    const baseShieldSilver = isMountainTheme ? "#f1f5f9" : "#cbd5e1";
+    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
+    const baseOutline = isMountainTheme
+      ? "rgba(15, 23, 42, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let tunicGreen = resolveColor(baseTunic, isOpponent);
+    let blondeHair = resolveColor(baseHair, isOpponent);
+    let skinColor = resolveColor(baseSkin, isOpponent);
+    let leatherBrown = resolveColor(baseLeather, isOpponent);
+    let shieldBlue = resolveColor(baseShield, isOpponent);
+    let shieldSilver = resolveColor(baseShieldSilver, isOpponent);
+    let whiteColor = resolveColor(baseWhite, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -7807,13 +7933,13 @@ export class StageRenderer {
         isOpponent,
       );
     } else if (isRoll) {
-      tunicGreen = resolveColor("#16a34a", isOpponent, 0.45);
-      blondeHair = resolveColor("#facc15", isOpponent, 0.45);
-      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
-      leatherBrown = resolveColor("#78350f", isOpponent, 0.45);
-      shieldBlue = resolveColor("#1e3a8a", isOpponent, 0.45);
-      shieldSilver = resolveColor("#cbd5e1", isOpponent, 0.45);
-      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
+      tunicGreen = resolveColor(baseTunic, isOpponent, 0.45);
+      blondeHair = resolveColor(baseHair, isOpponent, 0.45);
+      skinColor = resolveColor(baseSkin, isOpponent, 0.45);
+      leatherBrown = resolveColor(baseLeather, isOpponent, 0.45);
+      shieldBlue = resolveColor(baseShield, isOpponent, 0.45);
+      shieldSilver = resolveColor(baseShieldSilver, isOpponent, 0.45);
+      whiteColor = resolveColor(baseWhite, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -7966,14 +8092,26 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let capRed = resolveColor("#dc2626", isOpponent);
-    let brimBlue = resolveColor("#2563eb", isOpponent);
-    let stripeYellow = resolveColor("#facc15", isOpponent);
-    let stripeBlue = resolveColor("#1e3a8a", isOpponent);
-    let backpackBrown = resolveColor("#92400e", isOpponent);
-    let skinColor = resolveColor("#fed7aa", isOpponent);
-    let whiteColor = resolveColor("#f8fafc", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseCapRed = isMountainTheme ? "#ec4899" : "#dc2626";
+    const baseBrimBlue = isMountainTheme ? "#38bdf8" : "#2563eb";
+    const baseStripeYellow = isMountainTheme ? "#ec4899" : "#facc15";
+    const baseStripeBlue = isMountainTheme ? "#38bdf8" : "#1e3a8a";
+    const baseBackpackBrown = isMountainTheme ? "#1e1b4b" : "#92400e";
+    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
+    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
+    const baseOutline = isMountainTheme
+      ? "rgba(15, 23, 42, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let capRed = resolveColor(baseCapRed, isOpponent);
+    let brimBlue = resolveColor(baseBrimBlue, isOpponent);
+    let stripeYellow = resolveColor(baseStripeYellow, isOpponent);
+    let stripeBlue = resolveColor(baseStripeBlue, isOpponent);
+    let backpackBrown = resolveColor(baseBackpackBrown, isOpponent);
+    let skinColor = resolveColor(baseSkin, isOpponent);
+    let whiteColor = resolveColor(baseWhite, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -7984,13 +8122,13 @@ export class StageRenderer {
         isOpponent,
       );
     } else if (isRoll) {
-      capRed = resolveColor("#dc2626", isOpponent, 0.45);
-      brimBlue = resolveColor("#2563eb", isOpponent, 0.45);
-      stripeYellow = resolveColor("#facc15", isOpponent, 0.45);
-      stripeBlue = resolveColor("#1e3a8a", isOpponent, 0.45);
-      backpackBrown = resolveColor("#92400e", isOpponent, 0.45);
-      skinColor = resolveColor("#fed7aa", isOpponent, 0.45);
-      whiteColor = resolveColor("#f8fafc", isOpponent, 0.45);
+      capRed = resolveColor(baseCapRed, isOpponent, 0.45);
+      brimBlue = resolveColor(baseBrimBlue, isOpponent, 0.45);
+      stripeYellow = resolveColor(baseStripeYellow, isOpponent, 0.45);
+      stripeBlue = resolveColor(baseStripeBlue, isOpponent, 0.45);
+      backpackBrown = resolveColor(baseBackpackBrown, isOpponent, 0.45);
+      skinColor = resolveColor(baseSkin, isOpponent, 0.45);
+      whiteColor = resolveColor(baseWhite, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -8184,12 +8322,22 @@ export class StageRenderer {
       ctx.translate(-posX, -centerY);
     }
 
-    let armorOrange = resolveColor("#ea580c", isOpponent);
-    let armorRed = resolveColor("#c2410c", isOpponent);
-    let pauldronYellow = resolveColor("#eab308", isOpponent);
-    let visorGreen = resolveColor("#22c55e", isOpponent);
-    let cannonGreen = resolveColor("#15803d", isOpponent);
-    const outlineColor = resolveColor("rgba(0, 0, 0, 0.6)", isOpponent);
+    const isMountainTheme = this.backgroundTheme === "mountain";
+    const baseArmorOrange = isMountainTheme ? "#ec4899" : "#ea580c";
+    const baseArmorRed = isMountainTheme ? "#db2777" : "#c2410c";
+    const basePauldronYellow = isMountainTheme ? "#818cf8" : "#eab308";
+    const baseVisorGreen = isMountainTheme ? "#38bdf8" : "#22c55e";
+    const baseCannonGreen = isMountainTheme ? "#22d3ee" : "#15803d";
+    const baseOutline = isMountainTheme
+      ? "rgba(15, 23, 42, 0.85)"
+      : "rgba(0, 0, 0, 0.6)";
+
+    let armorOrange = resolveColor(baseArmorOrange, isOpponent);
+    let armorRed = resolveColor(baseArmorRed, isOpponent);
+    let pauldronYellow = resolveColor(basePauldronYellow, isOpponent);
+    let visorGreen = resolveColor(baseVisorGreen, isOpponent);
+    let cannonGreen = resolveColor(baseCannonGreen, isOpponent);
+    const outlineColor = resolveColor(baseOutline, isOpponent);
     const outlineWidth = 1.2;
 
     if (taunting) {
@@ -8204,11 +8352,11 @@ export class StageRenderer {
         isOpponent,
       );
     } else if (isRoll) {
-      armorOrange = resolveColor("#ea580c", isOpponent, 0.45);
-      armorRed = resolveColor("#c2410c", isOpponent, 0.45);
-      pauldronYellow = resolveColor("#eab308", isOpponent, 0.45);
-      visorGreen = resolveColor("#22c55e", isOpponent, 0.45);
-      cannonGreen = resolveColor("#15803d", isOpponent, 0.45);
+      armorOrange = resolveColor(baseArmorOrange, isOpponent, 0.45);
+      armorRed = resolveColor(baseArmorRed, isOpponent, 0.45);
+      pauldronYellow = resolveColor(basePauldronYellow, isOpponent, 0.45);
+      visorGreen = resolveColor(baseVisorGreen, isOpponent, 0.45);
+      cannonGreen = resolveColor(baseCannonGreen, isOpponent, 0.45);
     }
 
     const dir = effectiveDir;
@@ -10619,6 +10767,7 @@ export class StageRenderer {
   ): void {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
+    const isMountainTheme = this.backgroundTheme === "mountain";
 
     if (specialType === "spinning_kong") {
       ctx.save();
@@ -10631,11 +10780,13 @@ export class StageRenderer {
       ctx.ellipse(x, centerY, vortexR, heightPx * 0.35, 0, 0, Math.PI * 2);
       ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
       ctx.lineWidth = 2.4;
-      ctx.shadowColor = "#fbbf24";
+      ctx.shadowColor = isMountainTheme ? "#ec4899" : "#fbbf24";
       ctx.shadowBlur = 8;
       ctx.stroke();
 
       // 2. Spinning arm blur trails orbiting DK
+      const armFur = isMountainTheme ? "#6366f1" : "#92400e";
+      const armSkin = isMountainTheme ? "#fdf4ff" : "#fed7aa";
       for (let i = 0; i < 2; i++) {
         const angle = frameCounter * spinSpeed + i * Math.PI;
         const armX = x + Math.cos(angle) * vortexR;
@@ -10643,11 +10794,11 @@ export class StageRenderer {
 
         ctx.beginPath();
         ctx.arc(armX, armY, 8, 0, Math.PI * 2);
-        ctx.fillStyle = "#92400e"; // DK Fur Brown
+        ctx.fillStyle = armFur;
         ctx.fill();
         ctx.beginPath();
         ctx.arc(armX, armY, 5, 0, Math.PI * 2);
-        ctx.fillStyle = "#fed7aa"; // DK Palm skin
+        ctx.fillStyle = armSkin;
         ctx.fill();
       }
 
@@ -10662,25 +10813,30 @@ export class StageRenderer {
       const shockRadius = halfWidth * 1.4 + slamProg * 36;
       const alpha = 1 - slamProg;
 
+      const ripple1Color = isMountainTheme ? "#c084fc" : "#f59e0b";
+      const ripple1Glow = isMountainTheme ? "#a855f7" : "#d97706";
+      const ripple2Color = isMountainTheme ? "#38bdf8" : "#fbbf24";
+      const crackColor = isMountainTheme ? "#7e22ce" : "#b45309";
+
       // 1. Expanding earthquake floor ripple ellipse
       ctx.beginPath();
       ctx.ellipse(x, y, shockRadius, 6 + slamProg * 4, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = resolveColor("#f59e0b", false, alpha * 0.95);
+      ctx.strokeStyle = resolveColor(ripple1Color, false, alpha * 0.95);
       ctx.lineWidth = 2.8;
-      ctx.shadowColor = "#d97706";
+      ctx.shadowColor = ripple1Glow;
       ctx.shadowBlur = 10;
       ctx.stroke();
 
       // 2. Secondary inner shock ripple
       ctx.beginPath();
       ctx.ellipse(x, y, shockRadius * 0.6, 4, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = resolveColor("#fbbf24", false, alpha * 0.7);
+      ctx.strokeStyle = resolveColor(ripple2Color, false, alpha * 0.7);
       ctx.lineWidth = 1.8;
       ctx.stroke();
 
       // 3. Jagged floor fracture fissure lines radiating outwards
       ctx.lineWidth = 2;
-      ctx.strokeStyle = resolveColor("#b45309", false, alpha * 0.85);
+      ctx.strokeStyle = resolveColor(crackColor, false, alpha * 0.85);
       for (const side of [-1, 1]) {
         const crackX1 = x + side * (halfWidth * 0.5);
         const crackX2 = x + side * (shockRadius * 0.9);
@@ -10701,10 +10857,14 @@ export class StageRenderer {
       // Charged fist windup
       const pulse = 1 + 0.25 * Math.sin(frameCounter * 0.3);
       const fistX = x - dir * (halfWidth * 0.6);
+      const fistFill = isMountainTheme
+        ? "rgba(236, 72, 153, 0.45)"
+        : "rgba(251, 191, 36, 0.4)";
+      const fistGlow = isMountainTheme ? "#f43f5e" : "#f59e0b";
       ctx.beginPath();
       ctx.arc(fistX, centerY, 9 * pulse, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(251, 191, 36, 0.4)";
-      ctx.shadowColor = "#f59e0b";
+      ctx.fillStyle = fistFill;
+      ctx.shadowColor = fistGlow;
       ctx.shadowBlur = 8;
       ctx.fill();
       ctx.restore();
