@@ -4,6 +4,8 @@ import {
   WPKind,
   getItemKindName,
   getSeatedPorts,
+  HazardFlag,
+  hasHazardFlag,
   type Frame,
   type ItemUpdate,
   type PortIndex,
@@ -20,6 +22,7 @@ import {
   stageGeometry,
   stageBlastZone,
   stageLedges,
+  DREAM_LAND_STAGE_ID,
   type PlatformSpec,
   type LedgePoint,
 } from "./stageGeometry.js";
@@ -500,6 +503,16 @@ interface RecoveryJumpMark {
   readonly worldY: number;
   readonly jumpsRemaining: number;
 }
+
+// Whispy Woods' wind-affected box on Dream Land, in world units - see
+// smashremix docs/ram-map.md section 10.3.1. Whispy sits at WHISPY_X and
+// the box extends toward whichever edge the wind is currently blowing
+// toward.
+const WHISPY_WIND_X = -525.0;
+const WHISPY_WIND_BOX_TOP = 1000.0;
+const WHISPY_WIND_BOX_BOTTOM = -10.0;
+const WHISPY_WIND_BOX_EDGE_LEFT = -2325.0;
+const WHISPY_WIND_BOX_EDGE_RIGHT = 2275.0;
 
 /** Total frames at match start where player name tags are displayed (240 frames = 4.0s @ 60fps). */
 export const START_NAME_DISPLAY_FRAMES = 240;
@@ -1919,6 +1932,7 @@ export class StageRenderer {
     this.drawBackground(camera);
     this.drawBlastZone(camera, stageId);
     this.drawStage(camera, stageId, frameIndex);
+    this.drawWindZone(camera, stageId, frame, frameIndex);
 
     // If Quick Attack Overlay mode is active:
     if (
@@ -4939,6 +4953,107 @@ export class StageRenderer {
     for (const platform of platforms) {
       this.drawPlatform(camera, platform);
     }
+  }
+
+  /**
+   * Highlights Whispy Woods' current wind-affected area on Dream Land - a
+   * translucent box (strongest near Whispy, fading toward the box's outer
+   * edge, matching the real linear-decay push strength - see
+   * smashremix docs/ram-map.md section 10.3.1) with scrolling arrow
+   * streaks showing which way the wind is blowing.
+   */
+  private drawWindZone(
+    camera: Camera,
+    stageId: number | undefined,
+    frame: Frame | undefined,
+    frameIndex?: number,
+  ): void {
+    if (stageId !== DREAM_LAND_STAGE_ID || !frame) return;
+    const hazardFlags = frame.hazardFlags ?? 0;
+    if (!hasHazardFlag(hazardFlags, HazardFlag.WhispyBlowing)) return;
+
+    const blowingRight = hasHazardFlag(
+      hazardFlags,
+      HazardFlag.WhispyBlowingRight,
+    );
+    const boxLeftWorld = blowingRight
+      ? WHISPY_WIND_X
+      : WHISPY_WIND_BOX_EDGE_LEFT;
+    const boxRightWorld = blowingRight
+      ? WHISPY_WIND_BOX_EDGE_RIGHT
+      : WHISPY_WIND_X;
+
+    const topLeft = camera.worldToScreen(boxLeftWorld, WHISPY_WIND_BOX_TOP);
+    const bottomRight = camera.worldToScreen(
+      boxRightWorld,
+      WHISPY_WIND_BOX_BOTTOM,
+    );
+    const boxX = Math.min(topLeft.x, bottomRight.x);
+    const boxY = Math.min(topLeft.y, bottomRight.y);
+    const boxWidth = Math.abs(bottomRight.x - topLeft.x);
+    const boxHeight = Math.abs(bottomRight.y - topLeft.y);
+    if (boxWidth <= 0 || boxHeight <= 0) return;
+
+    const { ctx } = this;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(boxX, boxY, boxWidth, boxHeight);
+    ctx.clip();
+
+    // Fill: strongest right next to Whispy (whichever screen edge that is
+    // for the current direction), fading toward the box's far edge.
+    const whispyScreenX = camera.worldToScreen(
+      WHISPY_WIND_X,
+      WHISPY_WIND_BOX_TOP,
+    ).x;
+    const farEdgeScreenX = blowingRight ? boxX + boxWidth : boxX;
+    const grad = ctx.createLinearGradient(whispyScreenX, 0, farEdgeScreenX, 0);
+    grad.addColorStop(0, "rgba(191, 219, 254, 0.30)");
+    grad.addColorStop(1, "rgba(191, 219, 254, 0.04)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+    // Scrolling arrow streaks pointing the direction Whispy's currently blowing.
+    const animFrame =
+      frameIndex ??
+      (typeof performance !== "undefined"
+        ? Math.floor(performance.now() / 16.67)
+        : 0);
+    const dir = blowingRight ? 1 : -1;
+    const streakLength = 40;
+    const cycle = 90;
+    const scroll = (((animFrame * 3 * dir) % cycle) + cycle) % cycle;
+    const rows = 4;
+
+    ctx.strokeStyle = "rgba(224, 242, 254, 0.6)";
+    ctx.fillStyle = "rgba(224, 242, 254, 0.6)";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    for (let row = 0; row < rows; row++) {
+      const y = boxY + boxHeight * ((row + 0.5) / rows);
+      for (
+        let tailX = boxX - cycle + scroll;
+        tailX < boxX + boxWidth + cycle;
+        tailX += cycle
+      ) {
+        const headX = tailX + dir * streakLength;
+        ctx.beginPath();
+        ctx.moveTo(tailX, y);
+        ctx.lineTo(headX, y);
+        ctx.stroke();
+
+        // Arrowhead at the leading tip.
+        const arrowSize = 5;
+        ctx.beginPath();
+        ctx.moveTo(headX + dir * arrowSize, y);
+        ctx.lineTo(headX - dir * arrowSize, y - arrowSize);
+        ctx.lineTo(headX - dir * arrowSize, y + arrowSize);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
   }
 
   private drawAnimatedAutumnLeaves(camera: Camera, frameIndex?: number): void {
