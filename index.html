@@ -507,6 +507,66 @@
       }
 
       /* =========================================================================
+         Search View Layout
+         ========================================================================= */
+      #searchView {
+        flex-direction: column;
+        overflow-y: auto;
+        padding: 16px;
+      }
+      .search-view {
+        max-width: 800px;
+        margin: 0 auto;
+        width: 100%;
+      }
+      .search-title {
+        margin: 0 0 16px;
+      }
+      .search-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .search-filter {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: #94a3b8;
+      }
+      .search-filter select {
+        min-width: 160px;
+      }
+      .search-status {
+        font-size: 13px;
+        color: #94a3b8;
+        margin-bottom: 10px;
+      }
+      .search-results-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .search-result-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+      }
+      .search-result-row:hover {
+        background: rgba(255, 255, 255, 0.09);
+      }
+      .search-result-date {
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      /* =========================================================================
          Library View Layout
          ========================================================================= */
       #libraryView {
@@ -1092,6 +1152,22 @@
         color: #7dd3fc;
         font-weight: 600;
       }
+      .session-failed-edgeguards-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        padding: 2px 7px;
+        border-radius: 10px;
+        background: rgba(248, 113, 113, 0.12);
+        border: 1px solid rgba(248, 113, 113, 0.35);
+        color: #fca5a5;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .session-failed-edgeguards-btn:hover {
+        background: rgba(248, 113, 113, 0.22);
+      }
       .uneven-stocks-badge {
         display: inline-flex;
         align-items: center;
@@ -1570,6 +1646,13 @@
         flex-direction: column;
         gap: 12px;
         overflow-y: auto;
+      }
+      .starting-area-canvas {
+        cursor: crosshair;
+        border-radius: 6px;
+        margin: 0 auto;
+        display: block;
+        user-select: none;
       }
       .modal-selection-toolbar {
         display: flex;
@@ -2537,6 +2620,56 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
+      }
+      .playlist-bar {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 26;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: rgba(18, 20, 26, 0.9);
+        backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        padding: 6px 12px;
+        color: #fff;
+        font-size: 13px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+      }
+      .playlist-bar[hidden] {
+        display: none !important;
+      }
+      .playlist-label {
+        white-space: nowrap;
+        font-weight: 600;
+      }
+      .playlist-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .playlist-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        padding: 3px 8px;
+        cursor: pointer;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .playlist-btn:hover {
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .playlist-autoplay-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        white-space: nowrap;
       }
       .stage-bg-btn {
         position: absolute;
@@ -4394,6 +4527,9 @@
       <!-- Preview View -->
       <div id="previewView" class="view-container" hidden></div>
 
+      <!-- Search View -->
+      <div id="searchView" class="view-container" hidden></div>
+
       <!-- Match View -->
       <div id="matchView" class="view-container" hidden>
         <!-- Left Sidebar: Neutral Analysis -->
@@ -4448,6 +4584,36 @@
           </button>
           <div id="stageOverlay">
             <div id="stageOverlayList"></div>
+          </div>
+          <div id="playlistBar" class="playlist-bar" hidden>
+            <span id="playlistLabel" class="playlist-label"></span>
+            <div class="playlist-controls">
+              <button
+                id="playlistPrevBtn"
+                class="playlist-btn"
+                title="Previous clip"
+              >
+                ⏮
+              </button>
+              <button
+                id="playlistNextBtn"
+                class="playlist-btn"
+                title="Next clip"
+              >
+                ⏭
+              </button>
+              <label class="playlist-autoplay-label">
+                <input type="checkbox" id="playlistAutoplayToggle" checked />
+                Autoplay
+              </label>
+              <button
+                id="playlistCloseBtn"
+                class="playlist-btn"
+                title="Exit playlist"
+              >
+                ✕
+              </button>
+            </div>
           </div>
           <button
             id="stageBgBtn"

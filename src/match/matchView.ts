@@ -72,6 +72,7 @@ import {
 } from "../characterMeta.js";
 import type { LoadedReplay } from "../replaySource.js";
 import type { DerivedRates } from "../data/aggregate.js";
+import type { PlaylistClip } from "../playlist.js";
 import { summarizeReplay, type GameSummary } from "../data/gameSummary.js";
 import {
   compute12CbMatchState,
@@ -196,6 +197,17 @@ export class MatchViewController {
   private statsSidebarHeaderTitle: HTMLHeadingElement;
   private stageExpandBtn: HTMLButtonElement;
   private stageBgBtn: HTMLButtonElement;
+  private playlistBar: HTMLDivElement;
+  private playlistLabel: HTMLSpanElement;
+  private playlistPrevBtn: HTMLButtonElement;
+  private playlistNextBtn: HTMLButtonElement;
+  private playlistAutoplayToggle: HTMLInputElement;
+  private playlistCloseBtn: HTMLButtonElement;
+  private playlistClips: PlaylistClip[] | null = null;
+  private playlistIndex = 0;
+  private playlistLoader:
+    ((gameId: string) => Promise<LoadedReplay | null>) | null = null;
+  private playlistAutoplay = true;
   private neutralHitsWidgetTitleEl: HTMLHeadingElement;
   private neutralHitsList: HTMLDivElement;
   private neutralHitEvents: NeutralHitEvent[] = [];
@@ -497,6 +509,22 @@ export class MatchViewController {
     ) as HTMLButtonElement;
     this.stageBgBtn = document.getElementById(
       "stageBgBtn",
+    ) as HTMLButtonElement;
+    this.playlistBar = document.getElementById("playlistBar") as HTMLDivElement;
+    this.playlistLabel = document.getElementById(
+      "playlistLabel",
+    ) as HTMLSpanElement;
+    this.playlistPrevBtn = document.getElementById(
+      "playlistPrevBtn",
+    ) as HTMLButtonElement;
+    this.playlistNextBtn = document.getElementById(
+      "playlistNextBtn",
+    ) as HTMLButtonElement;
+    this.playlistAutoplayToggle = document.getElementById(
+      "playlistAutoplayToggle",
+    ) as HTMLInputElement;
+    this.playlistCloseBtn = document.getElementById(
+      "playlistCloseBtn",
     ) as HTMLButtonElement;
     this.neutralHitsWidgetTitleEl = document.getElementById(
       "neutralHitsWidgetTitle",
@@ -925,6 +953,18 @@ export class MatchViewController {
         this.toggleBackgroundTheme();
       });
     }
+    this.playlistPrevBtn.addEventListener("click", () => {
+      void this.goToPlaylistClip(this.playlistIndex - 1);
+    });
+    this.playlistNextBtn.addEventListener("click", () => {
+      void this.goToPlaylistClip(this.playlistIndex + 1);
+    });
+    this.playlistAutoplayToggle.addEventListener("change", () => {
+      this.playlistAutoplay = this.playlistAutoplayToggle.checked;
+    });
+    this.playlistCloseBtn.addEventListener("click", () => {
+      this.exitPlaylist();
+    });
 
     this.scrubber.addEventListener("input", () => {
       this.dismissQuickAttackOverlay();
@@ -3677,6 +3717,7 @@ export class MatchViewController {
     this.renderFrame(frame, index, reason === "jump");
     if (reason === "tick") {
       this.playSfxForFrameChange(previousFrame, frame, index);
+      this.checkPlaylistClipBoundary(index);
     }
     this.scrubber.value = String(index);
     this.playPauseBtn.textContent = isPlaying ? "⏸" : "▶";
@@ -3965,6 +4006,87 @@ export class MatchViewController {
     this.render12CbMatchWidget();
   }
 
+  /**
+   * Starts playing a cross-game playlist (e.g. "every failed edge guard
+   * this session"). `clips[startIndex]` must be the game already loaded
+   * via loadMatch() - this only seeks/plays within it, it doesn't reload
+   * it. `loader` fetches any OTHER clip's game on demand (returning null
+   * on failure, which skips that clip); playlist clips always use default
+   * perspective/no matchup baseline rather than the identity-aware
+   * resolution a normal match-view visit gets, to keep this decoupled from
+   * that logic.
+   */
+  public startPlaylist(
+    clips: PlaylistClip[],
+    loader: (gameId: string) => Promise<LoadedReplay | null>,
+    startIndex = 0,
+  ): void {
+    if (clips.length === 0) return;
+    this.playlistClips = clips;
+    this.playlistIndex = Math.max(0, Math.min(clips.length - 1, startIndex));
+    this.playlistLoader = loader;
+    this.playlistAutoplay = this.playlistAutoplayToggle.checked;
+    this.playlistBar.hidden = false;
+    this.applyCurrentPlaylistClip();
+  }
+
+  public exitPlaylist(): void {
+    this.playlistClips = null;
+    this.playlistLoader = null;
+    this.playlistBar.hidden = true;
+  }
+
+  private applyCurrentPlaylistClip(): void {
+    const clip = this.playlistClips?.[this.playlistIndex];
+    if (!clip) return;
+    this.playlistLabel.textContent = `${this.playlistIndex + 1} / ${this.playlistClips!.length} — ${clip.label}`;
+    this.playlistPrevBtn.disabled = this.playlistIndex === 0;
+    this.playlistNextBtn.disabled =
+      this.playlistIndex === this.playlistClips!.length - 1;
+    this.playback?.seek(clip.startFrameIndex);
+    this.playback?.play();
+  }
+
+  /**
+   * Jumps to playlist clip `index` (clamped to range), loading its game
+   * first if it isn't the currently-loaded one.
+   */
+  private async goToPlaylistClip(index: number): Promise<void> {
+    const clips = this.playlistClips;
+    if (!clips) return;
+    const clamped = Math.max(0, Math.min(clips.length - 1, index));
+    const clip = clips[clamped];
+    if (!clip) return;
+
+    if (clip.gameId !== this.currentReplayId) {
+      const loaded = await this.playlistLoader?.(clip.gameId);
+      // Bail if the playlist was closed (or moved on again) while this
+      // load was in flight, or the load itself failed.
+      if (!loaded || this.playlistClips !== clips) return;
+      this.setCurrentReplayId(clip.gameId);
+      this.loadMatch(loaded);
+    }
+    this.playlistIndex = clamped;
+    this.applyCurrentPlaylistClip();
+  }
+
+  /**
+   * Called on every natural playback tick (not scrub/seek) to see if we've
+   * reached the current playlist clip's end - pauses there, then advances
+   * to the next clip if autoplay is on.
+   */
+  private checkPlaylistClipBoundary(frameIndex: number): void {
+    const clip = this.playlistClips?.[this.playlistIndex];
+    if (!clip || frameIndex < clip.endFrameIndex) return;
+    this.playback?.pause();
+    if (
+      this.playlistAutoplay &&
+      this.playlistIndex < this.playlistClips!.length - 1
+    ) {
+      void this.goToPlaylistClip(this.playlistIndex + 1);
+    }
+  }
+
   private openLinkEdit(): void {
     const data = this.youtubeSync.getLinkData();
     this.videoUrlInput.value = data?.url ?? "";
@@ -4008,7 +4130,7 @@ export class MatchViewController {
       parsed.startSeconds > 0
         ? parsed.startSeconds
         : (currentData?.offsetSeconds ?? 0);
-    const viewMode = currentData?.viewMode ?? "video-only";
+    const viewMode = currentData?.viewMode ?? "canvas-muted";
 
     const linkData: VideoLinkData = {
       videoId: parsed.videoId,

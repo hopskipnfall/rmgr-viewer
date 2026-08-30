@@ -38,6 +38,7 @@ export class GameList {
     port: 0 | 1 | 2 | 3,
   ) => void;
   private onRemoveGame: (id: string) => void;
+  private onShowFailedEdgeGuards: (session: SessionGroup) => void;
 
   constructor(
     container: HTMLElement,
@@ -45,12 +46,14 @@ export class GameList {
     onSelectGame: (summary: GameSummary) => void,
     onManualPerspectiveSet: (summary: GameSummary, port: 0 | 1 | 2 | 3) => void,
     onRemoveGame: (id: string) => void,
+    onShowFailedEdgeGuards: (session: SessionGroup) => void,
   ) {
     this.container = container;
     this.onSortChanged = onSortChanged;
     this.onSelectGame = onSelectGame;
     this.onManualPerspectiveSet = onManualPerspectiveSet;
     this.onRemoveGame = onRemoveGame;
+    this.onShowFailedEdgeGuards = onShowFailedEdgeGuards;
   }
 
   public setSortOrder(sort: "newest" | "oldest"): void {
@@ -163,6 +166,20 @@ export class GameList {
           groupEl.classList.add("collapsed");
           header.setAttribute("aria-expanded", "false");
         }
+      });
+    });
+
+    // Failed-edge-guards playlist buttons, one per session group
+    const failedEdgeGuardsBtns = this.container.querySelectorAll<HTMLElement>(
+      ".session-failed-edgeguards-btn",
+    );
+    failedEdgeGuardsBtns.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const groupEl = btn.closest<HTMLElement>(".session-group");
+        const sessionId = groupEl?.dataset.sessionId;
+        const session = sessions.find((s) => s.id === sessionId);
+        if (session) this.onShowFailedEdgeGuards(session);
       });
     });
 
@@ -347,6 +364,13 @@ export class GameList {
             ${twelveCbPill}
             <span class="session-duration">⏱ ${duration}</span>
             ${videoBadge}
+            <button
+              type="button"
+              class="session-failed-edgeguards-btn"
+              title="${escapeHtml(tr.showFailedEdgeGuardsTitle)}"
+            >
+              🛟 ${escapeHtml(tr.showFailedEdgeGuardsBtn)}
+            </button>
           </div>
         </div>
         <div class="session-body">

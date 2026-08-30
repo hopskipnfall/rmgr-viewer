@@ -157,7 +157,7 @@ describe("localStorage persistence", () => {
     expect(loadVideoLink(replayId)).toBeNull();
   });
 
-  it("defaults to Replay 🔊 ('canvas') when stored data has no viewMode", () => {
+  it("defaults to Replay 🔇 ('canvas-muted') when stored data has no viewMode", () => {
     const replayId = "test-replay-no-mode";
     localStorage.setItem(
       "rmgr_yt_link_" + replayId,
@@ -167,7 +167,7 @@ describe("localStorage persistence", () => {
         offsetSeconds: 0,
       }),
     );
-    expect(loadVideoLink(replayId)?.viewMode).toBe("canvas");
+    expect(loadVideoLink(replayId)?.viewMode).toBe("canvas-muted");
     deleteVideoLink(replayId);
   });
 });
