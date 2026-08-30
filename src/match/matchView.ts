@@ -686,7 +686,6 @@ export class MatchViewController {
       if (
         savedBg === "grid" ||
         savedBg === "mountain" ||
-        savedBg === "beach" ||
         savedBg === "autumn"
       ) {
         this.stageRenderer.setBackgroundTheme(savedBg);
@@ -1143,7 +1142,7 @@ export class MatchViewController {
 
   public toggleBackgroundTheme(): void {
     const current = this.stageRenderer.getBackgroundTheme();
-    const themes: BackgroundTheme[] = ["mountain", "beach", "autumn", "grid"];
+    const themes: BackgroundTheme[] = ["mountain", "autumn", "grid"];
     const nextIndex = (themes.indexOf(current) + 1) % themes.length;
     const next: BackgroundTheme = themes[nextIndex] ?? "mountain";
     this.stageRenderer.setBackgroundTheme(next);
@@ -1165,9 +1164,6 @@ export class MatchViewController {
     if (theme === "mountain") {
       this.stageBgBtn.textContent = "🏔️";
       this.stageBgBtn.title = "Theme: Mountain Night Sky (b)";
-    } else if (theme === "beach") {
-      this.stageBgBtn.textContent = "🏖️";
-      this.stageBgBtn.title = "Theme: Tropical Beach (b)";
     } else if (theme === "autumn") {
       this.stageBgBtn.textContent = "🍁";
       this.stageBgBtn.title = "Theme: Enchanted Autumn (b)";

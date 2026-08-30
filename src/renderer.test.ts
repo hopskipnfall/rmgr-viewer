@@ -1940,9 +1940,6 @@ describe("StageRenderer background themes", () => {
     const renderer = new (StageRenderer as any)(fakeCanvas);
     expect(renderer.getBackgroundTheme()).toBe("mountain");
 
-    renderer.setBackgroundTheme("beach");
-    expect(renderer.getBackgroundTheme()).toBe("beach");
-
     renderer.setBackgroundTheme("autumn");
     expect(renderer.getBackgroundTheme()).toBe("autumn");
 
@@ -1951,46 +1948,6 @@ describe("StageRenderer background themes", () => {
 
     renderer.setBackgroundTheme("mountain");
     expect(renderer.getBackgroundTheme()).toBe("mountain");
-  });
-
-  it("renders beach background scenery without crashing", () => {
-    const fakeCanvas = {
-      getContext: () => ({
-        save: () => {},
-        restore: () => {},
-        beginPath: () => {},
-        closePath: () => {},
-        moveTo: () => {},
-        lineTo: () => {},
-        ellipse: () => {},
-        arc: () => {},
-        quadraticCurveTo: () => {},
-        bezierCurveTo: () => {},
-        translate: () => {},
-        rotate: () => {},
-        setLineDash: () => {},
-        fillRect: () => {},
-        clearRect: () => {},
-        fill: () => {},
-        stroke: () => {},
-        drawImage: () => {},
-        createLinearGradient: () => ({
-          addColorStop: () => {},
-        }),
-        createRadialGradient: () => ({
-          addColorStop: () => {},
-        }),
-      }),
-      width: 960,
-      height: 540,
-    } as unknown as HTMLCanvasElement;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const renderer = new (StageRenderer as any)(fakeCanvas);
-    renderer.setBackgroundTheme("beach");
-    expect(() => {
-      renderer["drawBackground"]();
-    }).not.toThrow();
   });
 
   it("renders autumn background scenery without crashing", () => {
@@ -2033,7 +1990,7 @@ describe("StageRenderer background themes", () => {
     }).not.toThrow();
   });
 
-  it("applies theme-specific styling to platforms for mountain, beach, autumn, and grid", () => {
+  it("applies theme-specific styling to platforms for mountain, autumn, and grid", () => {
     const strokes: unknown[] = [];
     const fakeGradient = { addColorStop: () => {} };
     const fakeCanvas = {
@@ -2078,12 +2035,6 @@ describe("StageRenderer background themes", () => {
     renderer["drawPlatform"](fakeCamera, platform);
     expect(strokes).toContain("#a855f7");
 
-    // Beach theme -> middle line is #14b8a6
-    renderer.setBackgroundTheme("beach");
-    strokes.length = 0;
-    renderer["drawPlatform"](fakeCamera, platform);
-    expect(strokes).toContain("#14b8a6");
-
     // Autumn theme -> middle line is #f59e0b
     renderer.setBackgroundTheme("autumn");
     strokes.length = 0;
@@ -2095,54 +2046,6 @@ describe("StageRenderer background themes", () => {
     strokes.length = 0;
     renderer["drawPlatform"](fakeCamera, platform);
     expect(strokes).toContain("#93c5fd");
-  });
-
-  it("draws stage palm trees on the beach theme without crashing", () => {
-    const strokes: unknown[] = [];
-    const fills: unknown[] = [];
-    const fakeCanvas = {
-      getContext: () => ({
-        save: () => {},
-        restore: () => {},
-        beginPath: () => {},
-        closePath: () => {},
-        moveTo: () => {},
-        lineTo: () => {},
-        ellipse: () => {},
-        arc: () => {},
-        quadraticCurveTo: () => {},
-        setLineDash: () => {},
-        fill: function (this: { fillStyle: unknown }) {
-          fills.push(this.fillStyle);
-        },
-        stroke: function (this: { strokeStyle: unknown }) {
-          strokes.push(this.strokeStyle);
-        },
-        drawImage: () => {},
-        createLinearGradient: () => ({ addColorStop: () => {} }),
-      }),
-      width: 960,
-      height: 540,
-    } as unknown as HTMLCanvasElement;
-
-    const fakeCamera = {
-      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
-      worldLengthToScreen: (len: number) => len,
-      groundScreenY: () => 400,
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const renderer = new (StageRenderer as any)(fakeCanvas);
-    renderer.setBackgroundTheme("beach");
-
-    expect(() => {
-      renderer["drawStage"](fakeCamera, 0x02); // Dream Land
-    }).not.toThrow();
-
-    expect(strokes).toContain("#451a03"); // Palm tree trunk
-    expect(strokes).toContain("#064e3b"); // Palm frond
-    expect(fills).toContain("#f59e0b"); // Sand root mound
-    expect(fills).toContain("#78350f"); // Coconut
   });
 
   it("draws stage autumn trees and lanterns on the autumn theme without crashing", () => {
