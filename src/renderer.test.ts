@@ -1946,4 +1946,450 @@ describe("StageRenderer background themes", () => {
     renderer.setBackgroundTheme("mountain");
     expect(renderer.getBackgroundTheme()).toBe("mountain");
   });
+
+  it("applies theme-specific colors to Donkey Kong for mountain vs grid backgrounds", () => {
+    const fills: string[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        fill: function (this: { fillStyle: string }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: () => {},
+        drawImage: () => {},
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+
+    // Mountain theme (Night Sky): Moonlit Indigo fur #6366f1, Moonlit Pearl chest #fdf4ff, Magenta tie #ec4899
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawDonkeyKongPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#ffffff",
+      {
+        taunting: false,
+        inCombo: false,
+        isRoll: false,
+        isOpponent: false,
+        actionFrameCounter: 0,
+      },
+    );
+    expect(fills).toContain("#6366f1");
+    expect(fills).toContain("#fdf4ff");
+    expect(fills).toContain("#ec4899");
+    expect(fills).toContain("#38bdf8");
+
+    // Grid theme: Classic Brown fur #78350f, Tan chest #fed7aa, Red tie #dc2626
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawDonkeyKongPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#ffffff",
+      {
+        taunting: false,
+        inCombo: false,
+        isRoll: false,
+        isOpponent: false,
+        actionFrameCounter: 0,
+      },
+    );
+    expect(fills).toContain("#78350f");
+    expect(fills).toContain("#fed7aa");
+    expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#facc15");
+  });
+
+  it("applies theme-specific moonlit skins to all 12 characters", () => {
+    const fills: string[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        setLineDash: () => {},
+        fillRect: () => {},
+        clearRect: () => {},
+        fill: function (this: { fillStyle: string }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: () => {},
+        drawImage: () => {},
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    const defaultState = {
+      taunting: false,
+      inCombo: false,
+      isRoll: false,
+      isOpponent: false,
+      actionFrameCounter: 0,
+    };
+
+    // 1. Pikachu: Moonlit Cyan #38bdf8 vs Classic Yellow #facc15
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawPikachuPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#38bdf8");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawPikachuPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#facc15");
+
+    // 2. Captain Falcon: Moonlit Indigo suit #4338ca vs Classic #1e293b
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawFalconPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#4338ca");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawFalconPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#1e293b");
+
+    // 3. Mario: Moonlit Rose #f43f5e vs Classic Red #dc2626
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawMarioPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#f43f5e");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawMarioPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#dc2626");
+
+    // 4. Luigi: Moonlit Mint #2dd4bf vs Classic Green #16a34a
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawLuigiPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#2dd4bf");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawLuigiPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#16a34a");
+
+    // 5. Kirby: Moonlit Pastel Pink #fbcfe8 vs Classic Pink #f472b6
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawKirbyPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#fbcfe8");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawKirbyPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#f472b6");
+
+    // 6. Jigglypuff: Moonlit Lilac #fae8ff vs Classic Light Pink #f9a8d4
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawJigglypuffPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#fae8ff");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawJigglypuffPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#f9a8d4");
+
+    // 7. Fox: Moonlit Gold #fbbf24 vs Classic Amber #c8732a
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawFoxPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#fbbf24");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawFoxPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#c8732a");
+
+    // 8. Yoshi: Moonlit Cyan #38bdf8 vs Classic Green #22c55e
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawYoshiPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#38bdf8");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawYoshiPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#22c55e");
+
+    // 9. Link: Moonlit Indigo #6366f1 vs Classic Green #16a34a
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawLinkPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#6366f1");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawLinkPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#16a34a");
+
+    // 10. Ness: Moonlit Magenta Cap #ec4899 vs Classic Red #dc2626
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawNessPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#ec4899");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawNessPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#dc2626");
+
+    // 11. Samus: Moonlit Magenta Armor #ec4899 vs Classic Orange #ea580c
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawSamusPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#ec4899");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawSamusPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#ea580c");
+  });
 });
