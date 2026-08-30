@@ -683,7 +683,12 @@ export class MatchViewController {
       const savedBg = localStorage.getItem(
         "rmgr-viewer-bg",
       ) as BackgroundTheme | null;
-      if (savedBg === "grid" || savedBg === "mountain") {
+      if (
+        savedBg === "grid" ||
+        savedBg === "mountain" ||
+        savedBg === "beach" ||
+        savedBg === "autumn"
+      ) {
         this.stageRenderer.setBackgroundTheme(savedBg);
       }
     } catch {
@@ -1138,7 +1143,9 @@ export class MatchViewController {
 
   public toggleBackgroundTheme(): void {
     const current = this.stageRenderer.getBackgroundTheme();
-    const next: BackgroundTheme = current === "mountain" ? "grid" : "mountain";
+    const themes: BackgroundTheme[] = ["mountain", "beach", "autumn", "grid"];
+    const nextIndex = (themes.indexOf(current) + 1) % themes.length;
+    const next: BackgroundTheme = themes[nextIndex] ?? "mountain";
     this.stageRenderer.setBackgroundTheme(next);
     try {
       localStorage.setItem("rmgr-viewer-bg", next);
@@ -1154,12 +1161,20 @@ export class MatchViewController {
   private updateBackgroundBtnState(): void {
     if (!this.stageBgBtn) return;
     const theme = this.stageRenderer.getBackgroundTheme();
-    const isMountain = theme === "mountain";
-    this.stageBgBtn.classList.toggle("active", isMountain);
-    this.stageBgBtn.textContent = isMountain ? "🏔️" : "⊞";
-    this.stageBgBtn.title = isMountain
-      ? "Switch to Grid background (b)"
-      : "Switch to Mountain scenery background (b)";
+    this.stageBgBtn.classList.toggle("active", theme !== "grid");
+    if (theme === "mountain") {
+      this.stageBgBtn.textContent = "🏔️";
+      this.stageBgBtn.title = "Theme: Mountain Night Sky (b)";
+    } else if (theme === "beach") {
+      this.stageBgBtn.textContent = "🏖️";
+      this.stageBgBtn.title = "Theme: Tropical Beach (b)";
+    } else if (theme === "autumn") {
+      this.stageBgBtn.textContent = "🍁";
+      this.stageBgBtn.title = "Theme: Enchanted Autumn (b)";
+    } else {
+      this.stageBgBtn.textContent = "⊞";
+      this.stageBgBtn.title = "Theme: Grid (b)";
+    }
   }
 
   private handleKeyDown(e: KeyboardEvent): void {

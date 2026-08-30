@@ -32,15 +32,7 @@ import {
   LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS,
 } from "./ledgeGrabRange.js";
 import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
-import {
-  EDGE_GUARD_STAGE_ID,
-  ZONE_Y_LO,
-  ZONE_Y_HI,
-  ZONE_X_AT_Y_LO,
-  ZONE_X_AT_Y_HI,
-  isHitstunState,
-  computeEdgeGuardEvents,
-} from "./edgeGuard.js";
+import { isHitstunState, computeEdgeGuardEvents } from "./edgeGuard.js";
 import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
 import { characterIconUrl } from "./characterIcons.js";
 
@@ -1713,7 +1705,7 @@ export interface CharacterAnimState {
   actionFrameCounter: number;
 }
 
-export type BackgroundTheme = "mountain" | "grid";
+export type BackgroundTheme = "mountain" | "beach" | "autumn" | "grid";
 
 export class StageRenderer {
   private readonly ctx: CanvasRenderingContext2D;
@@ -1926,8 +1918,7 @@ export class StageRenderer {
 
     this.drawBackground(camera);
     this.drawBlastZone(camera, stageId);
-    this.drawEdgeGuardZone(camera, stageId);
-    this.drawStage(camera, stageId);
+    this.drawStage(camera, stageId, frameIndex);
 
     // If Quick Attack Overlay mode is active:
     if (
@@ -3158,86 +3149,13 @@ export class StageRenderer {
     ctx.restore();
   }
 
-  /**
-   * Shades the edge-guard danger zone on stages where the zone is defined
-   * (currently Dream Land only). The zone boundary is a diagonal line from
-   * (ZONE_X_AT_Y_LO, ZONE_Y_LO) to (ZONE_X_AT_Y_HI, ZONE_Y_HI), mirrored
-   * on the left side. Everything outside this line is the danger zone.
-   *
-   * We draw the shaded area as a canvas polygon using world→screen transforms,
-   * so it tracks the camera automatically. We extend the polygon far off-screen
-   * (in world space) so the fill covers the blast-zone region without needing
-   * to know the actual blast-zone bounds.
-   */
-  private drawEdgeGuardZone(camera: Camera, stageId: number | undefined): void {
-    if (stageId !== EDGE_GUARD_STAGE_ID) return;
-
-    const { ctx } = this;
-    const FAR = 12000; // well past any realistic blast-zone coordinate
-
-    // Right danger zone: a quadrilateral whose left edge is the diagonal
-    // boundary and whose right/top/bottom edges extend to FAR.
-    // Points in world space (Y up), traversed clockwise:
-    //   top-left corner of zone = (ZONE_X_AT_Y_LO, ZONE_Y_LO)
-    //   top-right far corner    = (FAR, ZONE_Y_LO)
-    //   bottom-right far corner = (FAR, -FAR)
-    //   bottom-left far corner  = (ZONE_X_AT_Y_HI, -FAR)
-    //   then back up the diagonal to close.
-    // We also extend the zone above Y_LO (using X_AT_Y_LO as the fixed
-    // threshold) and below Y_HI (using X_AT_Y_HI as the fixed threshold).
-
-    const drawZoneSide = (sign: 1 | -1): void => {
-      const pts: Array<{ wx: number; wy: number }> = [
-        { wx: sign * ZONE_X_AT_Y_HI, wy: FAR },
-        { wx: sign * FAR, wy: FAR },
-        { wx: sign * FAR, wy: -FAR },
-        { wx: sign * ZONE_X_AT_Y_LO, wy: -FAR },
-        { wx: sign * ZONE_X_AT_Y_LO, wy: ZONE_Y_LO },
-        { wx: sign * ZONE_X_AT_Y_HI, wy: ZONE_Y_HI },
-      ];
-
-      ctx.beginPath();
-      for (let i = 0; i < pts.length; i++) {
-        const pt = pts[i];
-        if (!pt) continue;
-        const s = camera.worldToScreen(pt.wx, pt.wy);
-        if (i === 0) ctx.moveTo(s.x, s.y);
-        else ctx.lineTo(s.x, s.y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = "rgba(255, 140, 40, 0.08)";
-      ctx.fill();
-
-      // Draw the full boundary line (top vertical extension, diagonal, bottom vertical extension)
-      const boundaryPts: Array<{ wx: number; wy: number }> = [
-        { wx: sign * ZONE_X_AT_Y_HI, wy: FAR },
-        { wx: sign * ZONE_X_AT_Y_HI, wy: ZONE_Y_HI },
-        { wx: sign * ZONE_X_AT_Y_LO, wy: ZONE_Y_LO },
-        { wx: sign * ZONE_X_AT_Y_LO, wy: -FAR },
-      ];
-
-      ctx.beginPath();
-      for (let i = 0; i < boundaryPts.length; i++) {
-        const pt = boundaryPts[i];
-        if (!pt) continue;
-        const s = camera.worldToScreen(pt.wx, pt.wy);
-        if (i === 0) ctx.moveTo(s.x, s.y);
-        else ctx.lineTo(s.x, s.y);
-      }
-      ctx.strokeStyle = "rgba(255, 140, 40, 0.4)";
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([6, 4]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    };
-
-    drawZoneSide(1); // right
-    drawZoneSide(-1); // left
-  }
-
   private drawBackground(camera?: Camera): void {
     if (this.backgroundTheme === "grid") {
       this.drawGridBackground();
+    } else if (this.backgroundTheme === "beach") {
+      this.drawBeachBackground(camera);
+    } else if (this.backgroundTheme === "autumn") {
+      this.drawAutumnBackground(camera);
     } else {
       this.drawMountainBackground(camera);
     }
@@ -3284,14 +3202,16 @@ export class StageRenderer {
       this.bgBufferCanvas.height !== bufH ||
       this.bgBufferDirty
     ) {
-      if (!this.bgBufferCanvas) {
+      if (!this.bgBufferCanvas && typeof document !== "undefined") {
         this.bgBufferCanvas = document.createElement("canvas");
       }
-      this.bgBufferCanvas.width = bufW;
-      this.bgBufferCanvas.height = bufH;
-      const bCtx = this.bgBufferCanvas.getContext("2d");
-      if (bCtx) {
-        this.renderMountainScenery(bCtx, bufW, bufH);
+      if (this.bgBufferCanvas) {
+        this.bgBufferCanvas.width = bufW;
+        this.bgBufferCanvas.height = bufH;
+        const bCtx = this.bgBufferCanvas.getContext("2d");
+        if (bCtx) {
+          this.renderMountainScenery(bCtx, bufW, bufH);
+        }
       }
       this.bgBufferDirty = false;
     }
@@ -3313,6 +3233,8 @@ export class StageRenderer {
       }
       ctx.drawImage(this.bgBufferCanvas, -margin, -margin);
       ctx.restore();
+    } else {
+      this.renderMountainScenery(ctx, w, h);
     }
   }
 
@@ -3924,16 +3846,2201 @@ export class StageRenderer {
     ctx.restore();
   }
 
+  private drawBeachBackground(camera?: Camera): void {
+    const { ctx, canvas } = this;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // Generous buffer margin to prevent edge-transparency bleed during gaussian blurring
+    const margin = 32;
+    const bufW = w + margin * 2;
+    const bufH = h + margin * 2;
+
+    // Cache the pristine unblurred background into an offscreen canvas to guarantee maximum 60fps performance
+    if (
+      !this.bgBufferCanvas ||
+      this.bgBufferCanvas.width !== bufW ||
+      this.bgBufferCanvas.height !== bufH ||
+      this.bgBufferDirty
+    ) {
+      if (!this.bgBufferCanvas && typeof document !== "undefined") {
+        this.bgBufferCanvas = document.createElement("canvas");
+      }
+      if (this.bgBufferCanvas) {
+        this.bgBufferCanvas.width = bufW;
+        this.bgBufferCanvas.height = bufH;
+        const bCtx = this.bgBufferCanvas.getContext("2d");
+        if (bCtx) {
+          this.renderBeachScenery(bCtx, bufW, bufH);
+        }
+      }
+      this.bgBufferDirty = false;
+    }
+
+    // Dynamic depth-of-field lens blur based on camera distance:
+    // pxPerUnit represents current screen pixels per world unit.
+    const pxPerUnit = camera ? camera.worldLengthToScreen(1) : 0.3;
+    const closeness = Math.max(0, Math.min(1, (pxPerUnit - 0.12) / 0.33));
+    const blurPx = 0.5 + closeness * 5.0;
+
+    if (this.bgBufferCanvas) {
+      ctx.save();
+      try {
+        ctx.filter = `blur(${blurPx.toFixed(1)}px)`;
+      } catch {
+        // ignore if unsupported in current environment
+      }
+      ctx.drawImage(this.bgBufferCanvas, -margin, -margin);
+      ctx.restore();
+    } else {
+      this.renderBeachScenery(ctx, w, h);
+    }
+  }
+
+  private renderBeachScenery(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ): void {
+    ctx.save();
+
+    // 1. Fixed Aspect Ratio Coordinate Transform:
+    const baseAspect = 1.05;
+    const refW = h * baseAspect;
+    const offsetX = (w - refW) * 0.5;
+    const toX = (relX: number) => offsetX + relX * refW;
+
+    const drawPoly = (pts: [number, number][], fill: string) => {
+      const first = pts[0];
+      if (!first) return;
+      ctx.beginPath();
+      ctx.moveTo(first[0], first[1]);
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i];
+        if (pt) {
+          ctx.lineTo(pt[0], pt[1]);
+        }
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+
+    // 2. Warm Tropical Sunset Sky Gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.58);
+    skyGrad.addColorStop(0.0, "#1e1b4b"); // Deep twilight indigo
+    skyGrad.addColorStop(0.2, "#312e81"); // Sapphire
+    skyGrad.addColorStop(0.4, "#6d28d9"); // Royal purple
+    skyGrad.addColorStop(0.62, "#be185d"); // Tropical rose / magenta
+    skyGrad.addColorStop(0.82, "#f97316"); // Vibrant sunset orange
+    skyGrad.addColorStop(1.0, "#fde047"); // Luminous golden horizon glow
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // 3. Setting Sun & Atmospheric Corona Halos
+    const sunX = toX(0.72);
+    const sunY = h * 0.44;
+    const sunR = refW * 0.075;
+
+    // Outer glow halo
+    const glowGrad = ctx.createRadialGradient(
+      sunX,
+      sunY,
+      sunR * 0.5,
+      sunX,
+      sunY,
+      refW * 0.32,
+    );
+    glowGrad.addColorStop(0.0, "rgba(253, 224, 71, 0.45)");
+    glowGrad.addColorStop(0.3, "rgba(249, 115, 22, 0.25)");
+    glowGrad.addColorStop(0.7, "rgba(190, 24, 93, 0.1)");
+    glowGrad.addColorStop(1.0, "rgba(30, 27, 75, 0)");
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, refW * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Brilliant golden sun disc
+    const sunDiscGrad = ctx.createRadialGradient(
+      sunX,
+      sunY,
+      0,
+      sunX,
+      sunY,
+      sunR,
+    );
+    sunDiscGrad.addColorStop(0.0, "#ffffff");
+    sunDiscGrad.addColorStop(0.4, "#fffbeb");
+    sunDiscGrad.addColorStop(0.85, "#fde047");
+    sunDiscGrad.addColorStop(1.0, "#f59e0b");
+    ctx.fillStyle = sunDiscGrad;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Soft Pastel Sunset Clouds (Upper Sky)
+    const sunsetClouds: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.16],
+          [toX(0.2), h * 0.12],
+          [toX(0.45), h * 0.18],
+          [toX(0.8), h * 0.13],
+          [Math.max(w, toX(1.5)), h * 0.17],
+          [Math.max(w, toX(1.5)), h * 0.26],
+          [toX(0.65), h * 0.28],
+          [toX(0.3), h * 0.22],
+          [Math.min(0, toX(-0.5)), h * 0.28],
+        ],
+        color: "rgba(244, 114, 182, 0.12)",
+      },
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.26],
+          [toX(0.25), h * 0.22],
+          [toX(0.6), h * 0.28],
+          [Math.max(w, toX(1.5)), h * 0.24],
+          [Math.max(w, toX(1.5)), h * 0.35],
+          [toX(0.7), h * 0.38],
+          [toX(0.35), h * 0.32],
+          [Math.min(0, toX(-0.5)), h * 0.38],
+        ],
+        color: "rgba(251, 146, 60, 0.16)",
+      },
+      {
+        pts: [
+          [toX(0.4), h * 0.36],
+          [toX(0.6), h * 0.34],
+          [toX(0.85), h * 0.37],
+          [toX(0.8), h * 0.42],
+          [toX(0.55), h * 0.41],
+        ],
+        color: "rgba(253, 224, 71, 0.22)",
+      },
+    ];
+    for (const cloud of sunsetClouds) {
+      drawPoly(cloud.pts, cloud.color);
+    }
+
+    // 5. Distant Tropical Islands on Horizon
+    // Far island silhouette (Left/Center)
+    drawPoly(
+      [
+        [Math.min(0, toX(-0.5)), h * 0.52],
+        [toX(0.04), h * 0.48],
+        [toX(0.14), h * 0.44],
+        [toX(0.22), h * 0.41], // Volcano peak
+        [toX(0.26), h * 0.43],
+        [toX(0.34), h * 0.46],
+        [toX(0.44), h * 0.49],
+        [toX(0.52), h * 0.52],
+        [Math.min(0, toX(-0.5)), h * 0.52],
+      ],
+      "#2e1065", // Deep twilight purple
+    );
+    // Island ridge lighting facet
+    drawPoly(
+      [
+        [toX(0.14), h * 0.44],
+        [toX(0.22), h * 0.41],
+        [toX(0.26), h * 0.43],
+        [toX(0.3), h * 0.48],
+        [toX(0.18), h * 0.5],
+      ],
+      "#4c1d95", // Highlighted purple facet
+    );
+    // Distant right sea stack / rock
+    drawPoly(
+      [
+        [toX(0.86), h * 0.52],
+        [toX(0.9), h * 0.47],
+        [toX(0.93), h * 0.46],
+        [toX(0.97), h * 0.52],
+      ],
+      "#3b0764",
+    );
+
+    // 6. Layered Ocean Lagoon & Sun Reflection Beam
+    // Ocean base gradient
+    const oceanGrad = ctx.createLinearGradient(0, h * 0.5, 0, h * 0.74);
+    oceanGrad.addColorStop(0.0, "#1e3a8a"); // Deep navy blue near horizon
+    oceanGrad.addColorStop(0.2, "#0369a1"); // Ocean blue
+    oceanGrad.addColorStop(0.45, "#0284c7"); // Cerulean
+    oceanGrad.addColorStop(0.7, "#0891b2"); // Teal
+    oceanGrad.addColorStop(0.9, "#0d9488"); // Turquoise lagoon
+    oceanGrad.addColorStop(1.0, "#14b8a6"); // Shallow seafoam
+    ctx.fillStyle = oceanGrad;
+    ctx.fillRect(0, h * 0.5, w, h * 0.24);
+
+    // Golden Sunset Reflection Path down the water
+    const reflGrad = ctx.createLinearGradient(0, h * 0.5, 0, h * 0.72);
+    reflGrad.addColorStop(0.0, "rgba(253, 224, 71, 0.45)");
+    reflGrad.addColorStop(0.35, "rgba(249, 115, 22, 0.3)");
+    reflGrad.addColorStop(0.75, "rgba(244, 63, 94, 0.18)");
+    reflGrad.addColorStop(1.0, "rgba(253, 224, 71, 0)");
+    ctx.fillStyle = reflGrad;
+    ctx.beginPath();
+    ctx.moveTo(sunX - refW * 0.04, h * 0.5);
+    ctx.lineTo(sunX + refW * 0.04, h * 0.5);
+    ctx.lineTo(sunX + refW * 0.18, h * 0.72);
+    ctx.lineTo(sunX - refW * 0.18, h * 0.72);
+    ctx.closePath();
+    ctx.fill();
+
+    // Stylized horizontal wave reflection bands
+    const waveBands: Array<{ y: number; wFactor: number; color: string }> = [
+      { y: h * 0.53, wFactor: 0.06, color: "rgba(254, 240, 138, 0.5)" },
+      { y: h * 0.56, wFactor: 0.09, color: "rgba(253, 224, 71, 0.4)" },
+      { y: h * 0.6, wFactor: 0.12, color: "rgba(251, 146, 60, 0.35)" },
+      { y: h * 0.64, wFactor: 0.16, color: "rgba(254, 215, 170, 0.3)" },
+      { y: h * 0.68, wFactor: 0.22, color: "rgba(255, 255, 255, 0.35)" },
+    ];
+    for (const wb of waveBands) {
+      ctx.fillStyle = wb.color;
+      ctx.beginPath();
+      ctx.ellipse(sunX, wb.y, refW * wb.wFactor, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Shallow aquamarine wave crests along shoreline
+    drawPoly(
+      [
+        [Math.min(0, toX(-0.5)), h * 0.69],
+        [toX(0.2), h * 0.68],
+        [toX(0.5), h * 0.7],
+        [toX(0.8), h * 0.68],
+        [Math.max(w, toX(1.5)), h * 0.71],
+        [Math.max(w, toX(1.5)), h * 0.76],
+        [toX(0.7), h * 0.76],
+        [toX(0.3), h * 0.74],
+        [Math.min(0, toX(-0.5)), h * 0.75],
+      ],
+      "rgba(45, 212, 191, 0.45)", // Luminous mint/aquamarine
+    );
+
+    // White Surf Foam Line
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.65)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(Math.min(0, toX(-0.5)), h * 0.72);
+    ctx.bezierCurveTo(
+      toX(0.25),
+      h * 0.7,
+      toX(0.6),
+      h * 0.75,
+      toX(0.85),
+      h * 0.71,
+    );
+    ctx.lineTo(Math.max(w, toX(1.5)), h * 0.74);
+    ctx.stroke();
+
+    // 7. Golden Sandy Beach & Foreground Dunes
+    const sandGrad = ctx.createLinearGradient(0, h * 0.72, 0, h);
+    sandGrad.addColorStop(0.0, "#d97706"); // Wet reflective sand
+    sandGrad.addColorStop(0.2, "#f59e0b"); // Warm amber sand
+    sandGrad.addColorStop(0.5, "#fbbf24"); // Bright golden sand
+    sandGrad.addColorStop(0.8, "#fef08a"); // Highlighted dunes
+    sandGrad.addColorStop(1.0, "#fde047"); // Warm base
+    ctx.fillStyle = sandGrad;
+    ctx.beginPath();
+    ctx.moveTo(Math.min(0, toX(-0.5)), h * 0.72);
+    ctx.bezierCurveTo(
+      toX(0.25),
+      h * 0.7,
+      toX(0.6),
+      h * 0.75,
+      toX(0.85),
+      h * 0.71,
+    );
+    ctx.lineTo(Math.max(w, toX(1.5)), h * 0.74);
+    ctx.lineTo(Math.max(w, toX(1.5)), h);
+    ctx.lineTo(Math.min(0, toX(-0.5)), h);
+    ctx.closePath();
+    ctx.fill();
+
+    // Dune Shadow / Shading Facets
+    drawPoly(
+      [
+        [toX(0.15), h * 0.85],
+        [toX(0.4), h * 0.82],
+        [toX(0.65), h * 0.89],
+        [toX(0.35), h * 0.94],
+      ],
+      "rgba(180, 83, 9, 0.22)", // Warm amber dune shadow
+    );
+    drawPoly(
+      [
+        [toX(0.6), h * 0.88],
+        [toX(0.9), h * 0.85],
+        [toX(1.1), h * 0.95],
+        [toX(0.75), h * 0.97],
+      ],
+      "rgba(180, 83, 9, 0.18)",
+    );
+
+    // 8. Graceful Coconut Palm Trees
+    // Left Main Palm Tree Trunk
+    const trunkStartX = toX(0.08);
+    const trunkStartY = h * 1.02;
+    const trunkCtrlX = toX(0.18);
+    const trunkCtrlY = h * 0.65;
+    const palmHeadX = toX(0.26);
+    const palmHeadY = h * 0.32;
+
+    ctx.strokeStyle = "#451a03"; // Rich dark wood
+    ctx.lineWidth = 14;
+    ctx.beginPath();
+    ctx.moveTo(trunkStartX, trunkStartY);
+    ctx.quadraticCurveTo(trunkCtrlX, trunkCtrlY, palmHeadX, palmHeadY);
+    ctx.stroke();
+
+    // Trunk Bark Highlights / Ring segments
+    ctx.strokeStyle = "#78350f";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(trunkStartX + 2, trunkStartY);
+    ctx.quadraticCurveTo(trunkCtrlX + 2, trunkCtrlY, palmHeadX + 1, palmHeadY);
+    ctx.stroke();
+
+    // Coconuts under crown
+    ctx.fillStyle = "#78350f";
+    ctx.beginPath();
+    ctx.arc(palmHeadX - 4, palmHeadY + 4, 6, 0, Math.PI * 2);
+    ctx.arc(palmHeadX + 5, palmHeadY + 5, 5.5, 0, Math.PI * 2);
+    ctx.arc(palmHeadX + 1, palmHeadY + 8, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    interface PalmFrond {
+      tipX: number;
+      tipY: number;
+      ctrlX: number;
+      ctrlY: number;
+      color: string;
+      w: number;
+    }
+
+    const fronds: PalmFrond[] = [
+      // Sweeping Left
+      {
+        tipX: palmHeadX - refW * 0.18,
+        tipY: palmHeadY + h * 0.05,
+        ctrlX: palmHeadX - refW * 0.12,
+        ctrlY: palmHeadY - h * 0.08,
+        color: "#064e3b",
+        w: 18,
+      },
+      {
+        tipX: palmHeadX - refW * 0.22,
+        tipY: palmHeadY - h * 0.02,
+        ctrlX: palmHeadX - refW * 0.14,
+        ctrlY: palmHeadY - h * 0.14,
+        color: "#047857",
+        w: 16,
+      },
+      // Up & Arching
+      {
+        tipX: palmHeadX - refW * 0.08,
+        tipY: palmHeadY - h * 0.16,
+        ctrlX: palmHeadX - refW * 0.04,
+        ctrlY: palmHeadY - h * 0.18,
+        color: "#059669",
+        w: 16,
+      },
+      {
+        tipX: palmHeadX + refW * 0.08,
+        tipY: palmHeadY - h * 0.15,
+        ctrlX: palmHeadX + refW * 0.05,
+        ctrlY: palmHeadY - h * 0.17,
+        color: "#10b981",
+        w: 15,
+      },
+      // Sweeping Right
+      {
+        tipX: palmHeadX + refW * 0.2,
+        tipY: palmHeadY - h * 0.04,
+        ctrlX: palmHeadX + refW * 0.12,
+        ctrlY: palmHeadY - h * 0.12,
+        color: "#059669",
+        w: 18,
+      },
+      {
+        tipX: palmHeadX + refW * 0.18,
+        tipY: palmHeadY + h * 0.07,
+        ctrlX: palmHeadX + refW * 0.11,
+        ctrlY: palmHeadY - h * 0.03,
+        color: "#047857",
+        w: 16,
+      },
+      {
+        tipX: palmHeadX + refW * 0.12,
+        tipY: palmHeadY + h * 0.14,
+        ctrlX: palmHeadX + refW * 0.06,
+        ctrlY: palmHeadY + h * 0.06,
+        color: "#064e3b",
+        w: 14,
+      },
+    ];
+
+    for (const fr of fronds) {
+      ctx.strokeStyle = fr.color;
+      ctx.lineWidth = fr.w;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(palmHeadX, palmHeadY);
+      ctx.quadraticCurveTo(fr.ctrlX, fr.ctrlY, fr.tipX, fr.tipY);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#34d399";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(palmHeadX, palmHeadY);
+      ctx.quadraticCurveTo(fr.ctrlX, fr.ctrlY, fr.tipX, fr.tipY);
+      ctx.stroke();
+    }
+
+    // Right Overhanging Tropical Palm Crown (Framing top-right)
+    const rightHeadX = toX(0.98);
+    const rightHeadY = h * 0.12;
+    const rightFronds: PalmFrond[] = [
+      {
+        tipX: rightHeadX - refW * 0.24,
+        tipY: rightHeadY + h * 0.12,
+        ctrlX: rightHeadX - refW * 0.14,
+        ctrlY: rightHeadY + h * 0.02,
+        color: "#064e3b",
+        w: 18,
+      },
+      {
+        tipX: rightHeadX - refW * 0.28,
+        tipY: rightHeadY + h * 0.03,
+        ctrlX: rightHeadX - refW * 0.16,
+        ctrlY: rightHeadY - h * 0.06,
+        color: "#047857",
+        w: 16,
+      },
+      {
+        tipX: rightHeadX - refW * 0.18,
+        tipY: rightHeadY - h * 0.08,
+        ctrlX: rightHeadX - refW * 0.08,
+        ctrlY: rightHeadY - h * 0.12,
+        color: "#059669",
+        w: 15,
+      },
+      {
+        tipX: rightHeadX - refW * 0.14,
+        tipY: rightHeadY + h * 0.2,
+        ctrlX: rightHeadX - refW * 0.06,
+        ctrlY: rightHeadY + h * 0.1,
+        color: "#065f46",
+        w: 16,
+      },
+    ];
+    for (const fr of rightFronds) {
+      ctx.strokeStyle = fr.color;
+      ctx.lineWidth = fr.w;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(rightHeadX, rightHeadY);
+      ctx.quadraticCurveTo(fr.ctrlX, fr.ctrlY, fr.tipX, fr.tipY);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#34d399";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rightHeadX, rightHeadY);
+      ctx.quadraticCurveTo(fr.ctrlX, fr.ctrlY, fr.tipX, fr.tipY);
+      ctx.stroke();
+    }
+
+    // 9. Seabirds soaring near sunset
+    const birds: [number, number, number][] = [
+      [toX(0.52), h * 0.32, 7],
+      [toX(0.58), h * 0.28, 9],
+      [toX(0.64), h * 0.34, 6],
+    ];
+    ctx.strokeStyle = "rgba(49, 46, 129, 0.75)";
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = "round";
+    for (const [bx, by, bSize] of birds) {
+      ctx.beginPath();
+      ctx.moveTo(bx - bSize, by + bSize * 0.3);
+      ctx.quadraticCurveTo(bx - bSize * 0.4, by - bSize * 0.4, bx, by);
+      ctx.quadraticCurveTo(
+        bx + bSize * 0.4,
+        by - bSize * 0.4,
+        bx + bSize,
+        by + bSize * 0.3,
+      );
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  private drawAutumnBackground(camera?: Camera): void {
+    const { ctx, canvas } = this;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // Generous buffer margin to prevent edge-transparency bleed during gaussian blurring
+    const margin = 32;
+    const bufW = w + margin * 2;
+    const bufH = h + margin * 2;
+
+    // Cache the pristine unblurred background into an offscreen canvas to guarantee maximum 60fps performance
+    if (
+      !this.bgBufferCanvas ||
+      this.bgBufferCanvas.width !== bufW ||
+      this.bgBufferCanvas.height !== bufH ||
+      this.bgBufferDirty
+    ) {
+      if (!this.bgBufferCanvas && typeof document !== "undefined") {
+        this.bgBufferCanvas = document.createElement("canvas");
+      }
+      if (this.bgBufferCanvas) {
+        this.bgBufferCanvas.width = bufW;
+        this.bgBufferCanvas.height = bufH;
+        const bCtx = this.bgBufferCanvas.getContext("2d");
+        if (bCtx) {
+          this.renderAutumnScenery(bCtx, bufW, bufH);
+        }
+      }
+      this.bgBufferDirty = false;
+    }
+
+    // Dynamic depth-of-field lens blur based on camera distance:
+    const pxPerUnit = camera ? camera.worldLengthToScreen(1) : 0.3;
+    const closeness = Math.max(0, Math.min(1, (pxPerUnit - 0.12) / 0.33));
+    const blurPx = 0.5 + closeness * 5.0;
+
+    if (this.bgBufferCanvas) {
+      ctx.save();
+      try {
+        ctx.filter = `blur(${blurPx.toFixed(1)}px)`;
+      } catch {
+        // ignore if unsupported in current environment
+      }
+      ctx.drawImage(this.bgBufferCanvas, -margin, -margin);
+      ctx.restore();
+    } else {
+      this.renderAutumnScenery(ctx, w, h);
+    }
+  }
+
+  private renderAutumnScenery(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ): void {
+    ctx.save();
+
+    // 1. Fixed Aspect Ratio Coordinate Transform:
+    const baseAspect = 1.05;
+    const refW = h * baseAspect;
+    const offsetX = (w - refW) * 0.5;
+    const toX = (relX: number) => offsetX + relX * refW;
+
+    const drawPoly = (pts: [number, number][], fill: string) => {
+      const first = pts[0];
+      if (!first) return;
+      ctx.beginPath();
+      ctx.moveTo(first[0], first[1]);
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i];
+        if (pt) {
+          ctx.lineTo(pt[0], pt[1]);
+        }
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+
+    // 2. Dusky Plum & Apricot Twilight Sky Gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.65);
+    skyGrad.addColorStop(0.0, "#2a0845"); // Deep cosmic violet
+    skyGrad.addColorStop(0.22, "#4a044e"); // Deep royal plum
+    skyGrad.addColorStop(0.45, "#701a75"); // Luminous magenta-plum
+    skyGrad.addColorStop(0.68, "#9f1239"); // Imperial rose / crimson
+    skyGrad.addColorStop(0.86, "#ea580c"); // Sunset amber-orange
+    skyGrad.addColorStop(1.0, "#fed7aa"); // Warm soft apricot horizon glow
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // 3. Serene Sun & Ambient Corona Halos
+    const sunX = toX(0.32);
+    const sunY = h * 0.42;
+    const sunR = refW * 0.08;
+
+    // Outer glow halo
+    const glowGrad = ctx.createRadialGradient(
+      sunX,
+      sunY,
+      sunR * 0.5,
+      sunX,
+      sunY,
+      refW * 0.35,
+    );
+    glowGrad.addColorStop(0.0, "rgba(254, 215, 170, 0.4)");
+    glowGrad.addColorStop(0.35, "rgba(251, 146, 60, 0.25)");
+    glowGrad.addColorStop(0.7, "rgba(159, 18, 57, 0.12)");
+    glowGrad.addColorStop(1.0, "rgba(42, 8, 69, 0)");
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, refW * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pale golden sun disc
+    const sunDiscGrad = ctx.createRadialGradient(
+      sunX,
+      sunY,
+      0,
+      sunX,
+      sunY,
+      sunR,
+    );
+    sunDiscGrad.addColorStop(0.0, "#fff7ed");
+    sunDiscGrad.addColorStop(0.4, "#ffedd5");
+    sunDiscGrad.addColorStop(0.85, "#fef08a");
+    sunDiscGrad.addColorStop(1.0, "#f59e0b");
+    ctx.fillStyle = sunDiscGrad;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Soft Pastel Sunset Clouds (Upper Sky)
+    const autumnClouds: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.14],
+          [toX(0.25), h * 0.1],
+          [toX(0.55), h * 0.16],
+          [toX(0.85), h * 0.11],
+          [Math.max(w, toX(1.5)), h * 0.15],
+          [Math.max(w, toX(1.5)), h * 0.24],
+          [toX(0.7), h * 0.26],
+          [toX(0.35), h * 0.2],
+          [Math.min(0, toX(-0.5)), h * 0.26],
+        ],
+        color: "rgba(253, 164, 175, 0.15)",
+      },
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.25],
+          [toX(0.3), h * 0.2],
+          [toX(0.65), h * 0.26],
+          [Math.max(w, toX(1.5)), h * 0.22],
+          [Math.max(w, toX(1.5)), h * 0.33],
+          [toX(0.75), h * 0.36],
+          [toX(0.4), h * 0.3],
+          [Math.min(0, toX(-0.5)), h * 0.35],
+        ],
+        color: "rgba(251, 146, 60, 0.18)",
+      },
+    ];
+    for (const cloud of autumnClouds) {
+      drawPoly(cloud.pts, cloud.color);
+    }
+
+    // 5. Distant Mountain Ridges & Shinto Shrine Pagoda Silhouette
+    // Far misty mountain range
+    drawPoly(
+      [
+        [Math.min(0, toX(-0.5)), h * 0.52],
+        [toX(-0.1), h * 0.44],
+        [toX(0.12), h * 0.38],
+        [toX(0.28), h * 0.42],
+        [toX(0.45), h * 0.36],
+        [toX(0.62), h * 0.42],
+        [toX(0.78), h * 0.35],
+        [toX(0.95), h * 0.41],
+        [Math.max(w, toX(1.5)), h * 0.46],
+        [Math.max(w, toX(1.5)), h * 0.55],
+        [Math.min(0, toX(-0.5)), h * 0.55],
+      ],
+      "#3b0764", // Deep twilight plum
+    );
+
+    // Mid mountain range with lighting facets
+    drawPoly(
+      [
+        [Math.min(0, toX(-0.5)), h * 0.56],
+        [toX(0.18), h * 0.46],
+        [toX(0.38), h * 0.42],
+        [toX(0.55), h * 0.47],
+        [toX(0.75), h * 0.39], // Ridge holding the pagoda
+        [toX(0.92), h * 0.45],
+        [Math.max(w, toX(1.5)), h * 0.48],
+        [Math.max(w, toX(1.5)), h * 0.6],
+        [Math.min(0, toX(-0.5)), h * 0.6],
+      ],
+      "#4c1d95",
+    );
+
+    // Shinto Shrine Pagoda (Multi-tiered tower on right ridge)
+    const pagX = toX(0.75);
+    const pagY = h * 0.39;
+    const pagW = refW * 0.045;
+
+    // Spire
+    ctx.strokeStyle = "#1c1917";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pagX, pagY - h * 0.045);
+    ctx.lineTo(pagX, pagY - h * 0.02);
+    ctx.stroke();
+
+    // Top roof tier
+    drawPoly(
+      [
+        [pagX, pagY - h * 0.022],
+        [pagX - pagW * 0.5, pagY - h * 0.015],
+        [pagX + pagW * 0.5, pagY - h * 0.015],
+      ],
+      "#1c1917",
+    );
+    // Mid roof tier
+    drawPoly(
+      [
+        [pagX, pagY - h * 0.015],
+        [pagX - pagW * 0.75, pagY - h * 0.007],
+        [pagX + pagW * 0.75, pagY - h * 0.007],
+      ],
+      "#1c1917",
+    );
+    // Base roof tier & structure
+    drawPoly(
+      [
+        [pagX, pagY - h * 0.007],
+        [pagX - pagW, pagY + h * 0.003],
+        [pagX - pagW * 0.7, pagY + h * 0.02],
+        [pagX + pagW * 0.7, pagY + h * 0.02],
+        [pagX + pagW, pagY + h * 0.003],
+      ],
+      "#1c1917",
+    );
+    // Subtle warm lantern window glow in pagoda
+    ctx.fillStyle = "rgba(245, 158, 11, 0.85)";
+    ctx.fillRect(pagX - 2.5, pagY - h * 0.002, 5, 4);
+
+    // Distant Torii Gate on mid ridge slope
+    const toriiX = toX(0.45);
+    const toriiY = h * 0.44;
+    const toriiW = refW * 0.022;
+    const toriiH = h * 0.02;
+    ctx.strokeStyle = "#991b1b"; // Vermilion torii gate
+    ctx.lineWidth = 2.5;
+    // Crossbars
+    ctx.beginPath();
+    ctx.moveTo(toriiX - toriiW * 0.65, toriiY);
+    ctx.lineTo(toriiX + toriiW * 0.65, toriiY);
+    ctx.moveTo(toriiX - toriiW * 0.55, toriiY + 3);
+    ctx.lineTo(toriiX + toriiW * 0.55, toriiY + 3);
+    // Pillars
+    ctx.moveTo(toriiX - toriiW * 0.35, toriiY);
+    ctx.lineTo(toriiX - toriiW * 0.35, toriiY + toriiH);
+    ctx.moveTo(toriiX + toriiW * 0.35, toriiY);
+    ctx.lineTo(toriiX + toriiW * 0.35, toriiY + toriiH);
+    ctx.stroke();
+
+    // 6. Misty Valley River / Lake (reflecting sunset apricot)
+    const riverGrad = ctx.createLinearGradient(0, h * 0.48, 0, h * 0.7);
+    riverGrad.addColorStop(0.0, "#334155"); // Deep slate blue
+    riverGrad.addColorStop(0.35, "#475569");
+    riverGrad.addColorStop(0.7, "#64748b");
+    riverGrad.addColorStop(1.0, "#94a3b8");
+    ctx.fillStyle = riverGrad;
+    ctx.fillRect(0, h * 0.48, w, h * 0.22);
+
+    // Warm Sunset Reflection Beam on the river
+    const reflGrad = ctx.createLinearGradient(0, h * 0.48, 0, h * 0.68);
+    reflGrad.addColorStop(0.0, "rgba(254, 215, 170, 0.45)");
+    reflGrad.addColorStop(0.4, "rgba(251, 146, 60, 0.3)");
+    reflGrad.addColorStop(0.8, "rgba(225, 29, 72, 0.15)");
+    reflGrad.addColorStop(1.0, "rgba(254, 215, 170, 0)");
+    ctx.fillStyle = reflGrad;
+    ctx.beginPath();
+    ctx.moveTo(sunX - refW * 0.03, h * 0.48);
+    ctx.lineTo(sunX + refW * 0.03, h * 0.48);
+    ctx.lineTo(sunX + refW * 0.14, h * 0.68);
+    ctx.lineTo(sunX - refW * 0.14, h * 0.68);
+    ctx.closePath();
+    ctx.fill();
+
+    // Shimmering river ripples
+    const ripples: Array<{ y: number; wFactor: number; color: string }> = [
+      { y: h * 0.51, wFactor: 0.05, color: "rgba(254, 240, 138, 0.5)" },
+      { y: h * 0.54, wFactor: 0.08, color: "rgba(253, 224, 71, 0.4)" },
+      { y: h * 0.58, wFactor: 0.11, color: "rgba(251, 146, 60, 0.35)" },
+      { y: h * 0.62, wFactor: 0.15, color: "rgba(254, 215, 170, 0.3)" },
+    ];
+    for (const rip of ripples) {
+      ctx.fillStyle = rip.color;
+      ctx.beginPath();
+      ctx.ellipse(sunX, rip.y, refW * rip.wFactor, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 7. Layered Rolling Forest Hills with Autumn Foliage
+    // Background Autumn Tree Canopies (Deep Crimson & Burnt Orange)
+    const autumnHillsBack: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.62],
+          [toX(0.1), h * 0.57],
+          [toX(0.28), h * 0.63],
+          [toX(0.48), h * 0.58],
+          [toX(0.68), h * 0.64],
+          [toX(0.88), h * 0.59],
+          [Math.max(w, toX(1.5)), h * 0.63],
+          [Math.max(w, toX(1.5)), h * 0.78],
+          [Math.min(0, toX(-0.5)), h * 0.78],
+        ],
+        color: "#7f1d1d", // Deep crimson
+      },
+      {
+        pts: [
+          [toX(0.02), h * 0.61],
+          [toX(0.16), h * 0.56],
+          [toX(0.32), h * 0.62],
+          [toX(0.24), h * 0.72],
+          [toX(0.08), h * 0.72],
+        ],
+        color: "#991b1b", // Scarlet
+      },
+      {
+        pts: [
+          [toX(0.42), h * 0.62],
+          [toX(0.56), h * 0.57],
+          [toX(0.72), h * 0.63],
+          [toX(0.64), h * 0.73],
+          [toX(0.48), h * 0.73],
+        ],
+        color: "#c2410c", // Burnt copper
+      },
+    ];
+    for (const hill of autumnHillsBack) drawPoly(hill.pts, hill.color);
+
+    // Midground Autumn Canopy Hills (Warm Vermilion & Golden Amber)
+    const autumnHillsMid: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.71],
+          [toX(0.18), h * 0.66],
+          [toX(0.42), h * 0.72],
+          [toX(0.68), h * 0.67],
+          [toX(0.92), h * 0.73],
+          [Math.max(w, toX(1.5)), h * 0.69],
+          [Math.max(w, toX(1.5)), h * 0.86],
+          [Math.min(0, toX(-0.5)), h * 0.86],
+        ],
+        color: "#b45309", // Warm golden amber hill base
+      },
+      {
+        pts: [
+          [toX(0.12), h * 0.7],
+          [toX(0.26), h * 0.65],
+          [toX(0.38), h * 0.71],
+          [toX(0.32), h * 0.8],
+          [toX(0.18), h * 0.8],
+        ],
+        color: "#dc2626", // Vermilion canopy cluster
+      },
+      {
+        pts: [
+          [toX(0.58), h * 0.7],
+          [toX(0.72), h * 0.65],
+          [toX(0.86), h * 0.72],
+          [toX(0.78), h * 0.82],
+          [toX(0.62), h * 0.82],
+        ],
+        color: "#ea580c", // Bright orange-amber canopy
+      },
+      {
+        pts: [
+          [toX(0.34), h * 0.73],
+          [toX(0.46), h * 0.68],
+          [toX(0.58), h * 0.74],
+          [toX(0.5), h * 0.82],
+          [toX(0.38), h * 0.82],
+        ],
+        color: "#f59e0b", // Gold canopy cluster
+      },
+    ];
+    for (const hill of autumnHillsMid) drawPoly(hill.pts, hill.color);
+
+    // Foreground Slope & Mossy Earth
+    const earthGrad = ctx.createLinearGradient(0, h * 0.78, 0, h);
+    earthGrad.addColorStop(0.0, "#451a03"); // Dark rich soil
+    earthGrad.addColorStop(0.4, "#292524"); // Stone & earth
+    earthGrad.addColorStop(0.8, "#1c1917"); // Dark base
+    earthGrad.addColorStop(1.0, "#0c0a09");
+    ctx.fillStyle = earthGrad;
+    ctx.beginPath();
+    ctx.moveTo(Math.min(0, toX(-0.5)), h * 0.8);
+    ctx.bezierCurveTo(
+      toX(0.25),
+      h * 0.78,
+      toX(0.6),
+      h * 0.82,
+      toX(0.85),
+      h * 0.79,
+    );
+    ctx.lineTo(Math.max(w, toX(1.5)), h * 0.82);
+    ctx.lineTo(Math.max(w, toX(1.5)), h);
+    ctx.lineTo(Math.min(0, toX(-0.5)), h);
+    ctx.closePath();
+    ctx.fill();
+
+    // 8. Foreground Japanese Maple Branches (Framing top-left & top-right)
+    // Left Maple Branch & Leaves
+    ctx.strokeStyle = "#292524";
+    ctx.lineWidth = 10;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(toX(-0.1), h * 0.05);
+    ctx.quadraticCurveTo(toX(0.12), h * 0.12, toX(0.25), h * 0.22);
+    ctx.stroke();
+
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(toX(0.08), h * 0.11);
+    ctx.quadraticCurveTo(toX(0.18), h * 0.06, toX(0.3), h * 0.12);
+    ctx.stroke();
+
+    // Left Leaf Clusters
+    const leftLeafClusters: Array<{
+      x: number;
+      y: number;
+      r: number;
+      color: string;
+    }> = [
+      { x: toX(0.25), y: h * 0.22, r: refW * 0.045, color: "#dc2626" },
+      { x: toX(0.28), y: h * 0.25, r: refW * 0.038, color: "#ea580c" },
+      { x: toX(0.2), y: h * 0.24, r: refW * 0.035, color: "#991b1b" },
+      { x: toX(0.3), y: h * 0.12, r: refW * 0.042, color: "#ef4444" },
+      { x: toX(0.34), y: h * 0.15, r: refW * 0.034, color: "#f59e0b" },
+      { x: toX(0.15), y: h * 0.14, r: refW * 0.04, color: "#b91c1c" },
+    ];
+    for (const lc of leftLeafClusters) {
+      ctx.fillStyle = lc.color;
+      ctx.beginPath();
+      ctx.arc(lc.x, lc.y, lc.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Right Maple Branch & Leaves
+    ctx.strokeStyle = "#292524";
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(toX(1.1), h * 0.06);
+    ctx.quadraticCurveTo(toX(0.92), h * 0.14, toX(0.78), h * 0.24);
+    ctx.stroke();
+
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(toX(0.95), h * 0.12);
+    ctx.quadraticCurveTo(toX(0.85), h * 0.08, toX(0.72), h * 0.15);
+    ctx.stroke();
+
+    // Right Leaf Clusters
+    const rightLeafClusters: Array<{
+      x: number;
+      y: number;
+      r: number;
+      color: string;
+    }> = [
+      { x: toX(0.78), y: h * 0.24, r: refW * 0.045, color: "#ea580c" },
+      { x: toX(0.74), y: h * 0.27, r: refW * 0.038, color: "#dc2626" },
+      { x: toX(0.82), y: h * 0.26, r: refW * 0.035, color: "#f59e0b" },
+      { x: toX(0.72), y: h * 0.15, r: refW * 0.042, color: "#dc2626" },
+      { x: toX(0.68), y: h * 0.18, r: refW * 0.034, color: "#991b1b" },
+      { x: toX(0.86), y: h * 0.16, r: refW * 0.04, color: "#ef4444" },
+    ];
+    for (const lc of rightLeafClusters) {
+      ctx.fillStyle = lc.color;
+      ctx.beginPath();
+      ctx.arc(lc.x, lc.y, lc.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 9. Floating Autumn Maple Leaves in the Breeze
+    const floatingLeaves: Array<{
+      x: number;
+      y: number;
+      rot: number;
+      color: string;
+      size: number;
+    }> = [
+      { x: toX(0.22), y: h * 0.35, rot: 0.4, color: "#dc2626", size: 6 },
+      { x: toX(0.38), y: h * 0.28, rot: -0.6, color: "#ea580c", size: 5 },
+      { x: toX(0.48), y: h * 0.42, rot: 1.1, color: "#f59e0b", size: 5.5 },
+      { x: toX(0.62), y: h * 0.32, rot: -0.3, color: "#ef4444", size: 6.5 },
+      { x: toX(0.74), y: h * 0.45, rot: 0.8, color: "#dc2626", size: 5 },
+      { x: toX(0.84), y: h * 0.38, rot: -1.2, color: "#ea580c", size: 5.5 },
+    ];
+
+    for (const fl of floatingLeaves) {
+      ctx.save();
+      ctx.translate(fl.x, fl.y);
+      ctx.rotate(fl.rot);
+      ctx.fillStyle = fl.color;
+      ctx.beginPath();
+      ctx.moveTo(0, -fl.size);
+      ctx.lineTo(fl.size * 0.7, -fl.size * 0.3);
+      ctx.lineTo(fl.size * 0.9, fl.size * 0.5);
+      ctx.lineTo(0, fl.size * 0.3);
+      ctx.lineTo(-fl.size * 0.9, fl.size * 0.5);
+      ctx.lineTo(-fl.size * 0.7, -fl.size * 0.3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 10. Soft Valley Mist across bottom
+    const mistGrad = ctx.createLinearGradient(0, h * 0.75, 0, h);
+    mistGrad.addColorStop(0.0, "rgba(251, 146, 60, 0.0)");
+    mistGrad.addColorStop(0.4, "rgba(244, 63, 94, 0.08)");
+    mistGrad.addColorStop(0.8, "rgba(112, 26, 117, 0.12)");
+    mistGrad.addColorStop(1.0, "rgba(28, 25, 23, 0.3)");
+    ctx.fillStyle = mistGrad;
+    ctx.fillRect(0, h * 0.75, w, h * 0.25);
+
+    ctx.restore();
+  }
+
   /** Real platform/ground geometry for stages we've measured (see stageGeometry.ts); a plain Y=0 reference line otherwise. */
-  private drawStage(camera: Camera, stageId: number | undefined): void {
+  private drawStage(
+    camera: Camera,
+    stageId: number | undefined,
+    frameIndex?: number,
+  ): void {
     const platforms = stageGeometry(stageId);
     if (!platforms) {
       this.drawFallbackGroundLine(camera);
+      if (this.backgroundTheme === "beach") {
+        this.drawStagePalmTrees(camera, stageId);
+      } else if (this.backgroundTheme === "autumn") {
+        this.drawStageAutumnTrees(camera, stageId);
+        this.drawAnimatedAutumnLeaves(camera, frameIndex);
+      } else if (this.backgroundTheme === "mountain") {
+        this.drawStageSakuraTrees(camera, stageId, frameIndex);
+      }
       return;
+    }
+    if (this.backgroundTheme === "beach") {
+      this.drawStagePalmTrees(camera, stageId);
+    } else if (this.backgroundTheme === "autumn") {
+      this.drawStageAutumnTrees(camera, stageId);
+      this.drawAnimatedAutumnLeaves(camera, frameIndex);
+    } else if (this.backgroundTheme === "mountain") {
+      this.drawStageSakuraTrees(camera, stageId, frameIndex);
     }
     for (const platform of platforms) {
       this.drawPlatform(camera, platform);
     }
+  }
+
+  private drawAnimatedAutumnLeaves(camera: Camera, frameIndex?: number): void {
+    const { ctx } = this;
+    const animFrame =
+      frameIndex ??
+      (typeof performance !== "undefined"
+        ? Math.floor(performance.now() / 16.67)
+        : 0);
+
+    const leafPalette = [
+      "#dc2626", // Crimson
+      "#ea580c", // Flame orange
+      "#f59e0b", // Amber gold
+      "#991b1b", // Deep scarlet
+      "#c2410c", // Burnt copper
+      "#facc15", // Bright gold
+    ];
+
+    const numLeaves = 14;
+    const heightRange = 2600;
+
+    ctx.save();
+    for (let i = 0; i < numLeaves; i++) {
+      // Deterministic pseudo-random seed per leaf index
+      const seedX = -2300 + ((i * 357) % 4600);
+      const seedY = ((i * 593) % heightRange) + 200;
+      const speed = 1.6 + (i % 4) * 0.5;
+
+      // Current world coordinates
+      const worldY =
+        ((((seedY - animFrame * speed) % heightRange) + heightRange) %
+          heightRange) -
+        200;
+      const sway = Math.sin(animFrame * 0.03 + i * 1.6) * (70 + (i % 3) * 30);
+      const worldX = seedX + sway;
+
+      const screenPos = camera.worldToScreen(worldX, worldY);
+      const worldRadius = 18 + (i % 3) * 6;
+      const radiusPx = Math.max(1.8, camera.worldLengthToScreen(worldRadius));
+      const rot =
+        animFrame * (0.02 + (i % 3) * 0.015) +
+        i * 1.2 +
+        Math.sin(animFrame * 0.04 + i);
+
+      const color = leafPalette[i % leafPalette.length] ?? "#dc2626";
+
+      ctx.save();
+      ctx.translate(screenPos.x, screenPos.y);
+      ctx.rotate(rot);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      // 5-point maple leaf polygon
+      ctx.moveTo(0, -radiusPx);
+      ctx.lineTo(radiusPx * 0.35, -radiusPx * 0.35);
+      ctx.lineTo(radiusPx * 0.9, -radiusPx * 0.25);
+      ctx.lineTo(radiusPx * 0.45, radiusPx * 0.2);
+      ctx.lineTo(radiusPx * 0.7, radiusPx * 0.85);
+      ctx.lineTo(0, radiusPx * 0.45);
+      ctx.lineTo(-radiusPx * 0.7, radiusPx * 0.85);
+      ctx.lineTo(-radiusPx * 0.45, radiusPx * 0.2);
+      ctx.lineTo(-radiusPx * 0.9, -radiusPx * 0.25);
+      ctx.lineTo(-radiusPx * 0.35, -radiusPx * 0.35);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  private drawStageSakuraTrees(
+    camera: Camera,
+    stageId: number | undefined,
+    frameIndex?: number,
+  ): void {
+    const platforms = stageGeometry(stageId);
+    const ground = platforms?.find((p) => p.kind === "ground");
+    const groundY = ground ? ground.y : 0;
+
+    // Single grand, ancient flowering Japanese cherry tree close to middle of stage
+    this.drawStageMatureSakuraTree(camera, -40, groundY, frameIndex);
+  }
+
+  private drawStageMatureSakuraTree(
+    camera: Camera,
+    rootWorldX: number,
+    rootWorldY: number,
+    frameIndex?: number,
+  ): void {
+    const { ctx } = this;
+
+    ctx.save();
+
+    // 1. Broad ancient mossy stone shrine pedestal & spreading buttress roots base
+    const baseWorld = { x: rootWorldX, y: rootWorldY };
+    const baseScreen = camera.worldToScreen(baseWorld.x, baseWorld.y);
+    const stoneRadiusPx = Math.max(5, camera.worldLengthToScreen(180));
+
+    // Weathered ancient midnight stone dais
+    ctx.beginPath();
+    ctx.ellipse(
+      baseScreen.x,
+      baseScreen.y,
+      stoneRadiusPx,
+      stoneRadiusPx * 0.32,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "#1e1b4b"; // Deep midnight indigo slate
+    ctx.fill();
+
+    // Moonlit royal moss patches
+    ctx.beginPath();
+    ctx.ellipse(
+      baseScreen.x - stoneRadiusPx * 0.4,
+      baseScreen.y,
+      stoneRadiusPx * 0.45,
+      stoneRadiusPx * 0.18,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "#3730a3";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(
+      baseScreen.x + stoneRadiusPx * 0.35,
+      baseScreen.y,
+      stoneRadiusPx * 0.5,
+      stoneRadiusPx * 0.2,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "#4338ca";
+    ctx.fill();
+
+    // 2. Traditional Shinto Stone Lantern (Tōrō) nestled beside the ancient roots
+    const lanternX = baseScreen.x + stoneRadiusPx * 0.75;
+    const lanternY = baseScreen.y;
+    const lW = Math.max(3, camera.worldLengthToScreen(36));
+    const lH = Math.max(6, camera.worldLengthToScreen(75));
+
+    // Lantern base & pillar
+    ctx.fillStyle = "#312e81";
+    ctx.fillRect(
+      lanternX - lW * 0.25,
+      lanternY - lH * 0.55,
+      lW * 0.5,
+      lH * 0.55,
+    );
+    // Lantern glowing firebox (Moonlit cyan glow)
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillRect(
+      lanternX - lW * 0.42,
+      lanternY - lH * 0.85,
+      lW * 0.84,
+      lH * 0.3,
+    );
+    ctx.fillStyle = "#fdf4ff";
+    ctx.fillRect(
+      lanternX - lW * 0.22,
+      lanternY - lH * 0.78,
+      lW * 0.44,
+      lH * 0.18,
+    );
+    // Lantern wide flared pagoda roof cap
+    ctx.fillStyle = "#1e1b4b";
+    ctx.beginPath();
+    ctx.moveTo(lanternX - lW * 0.75, lanternY - lH * 0.85);
+    ctx.lineTo(lanternX + lW * 0.75, lanternY - lH * 0.85);
+    ctx.lineTo(lanternX, lanternY - lH);
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. Thick, gnarled ancient trunk & buttress root flares
+    const mainTrunkGirthPx = Math.max(6, camera.worldLengthToScreen(135));
+    const boughWidthPx = Math.max(4, camera.worldLengthToScreen(75));
+    const branchWidthPx = Math.max(2.5, camera.worldLengthToScreen(42));
+
+    const trunkMidWorld = { x: rootWorldX - 30, y: rootWorldY + 700 };
+    const forkWorld = { x: rootWorldX + 20, y: rootWorldY + 1100 };
+
+    const trunkMidScreen = camera.worldToScreen(
+      trunkMidWorld.x,
+      trunkMidWorld.y,
+    );
+    const forkScreen = camera.worldToScreen(forkWorld.x, forkWorld.y);
+
+    // Buttress root flares spreading outwards into the soil
+    const leftRootTip = camera.worldToScreen(rootWorldX - 160, rootWorldY);
+    const rightRootTip = camera.worldToScreen(rootWorldX + 130, rootWorldY);
+
+    ctx.strokeStyle = "#1e1b4b";
+    ctx.lineWidth = mainTrunkGirthPx * 0.65;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(leftRootTip.x, leftRootTip.y);
+    ctx.quadraticCurveTo(
+      baseScreen.x - stoneRadiusPx * 0.2,
+      baseScreen.y - 15,
+      trunkMidScreen.x,
+      trunkMidScreen.y,
+    );
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(rightRootTip.x, rightRootTip.y);
+    ctx.quadraticCurveTo(
+      baseScreen.x + stoneRadiusPx * 0.2,
+      baseScreen.y - 15,
+      trunkMidScreen.x,
+      trunkMidScreen.y,
+    );
+    ctx.stroke();
+
+    // Main massive ancient trunk body
+    ctx.strokeStyle = "#1e1b4b"; // Deepest bark crevice
+    ctx.lineWidth = mainTrunkGirthPx;
+    ctx.beginPath();
+    ctx.moveTo(baseScreen.x, baseScreen.y);
+    ctx.quadraticCurveTo(
+      trunkMidScreen.x - 20,
+      trunkMidScreen.y,
+      forkScreen.x,
+      forkScreen.y,
+    );
+    ctx.stroke();
+
+    // Inner bark rich indigo tone
+    ctx.strokeStyle = "#312e81";
+    ctx.lineWidth = mainTrunkGirthPx * 0.65;
+    ctx.beginPath();
+    ctx.moveTo(baseScreen.x, baseScreen.y);
+    ctx.quadraticCurveTo(
+      trunkMidScreen.x - 20,
+      trunkMidScreen.y,
+      forkScreen.x,
+      forkScreen.y,
+    );
+    ctx.stroke();
+
+    // Gnarled woodgrain ridge highlights (Moonlit lilac)
+    ctx.strokeStyle = "#6366f1";
+    ctx.lineWidth = mainTrunkGirthPx * 0.18;
+    ctx.beginPath();
+    ctx.moveTo(baseScreen.x - 4, baseScreen.y);
+    ctx.quadraticCurveTo(
+      trunkMidScreen.x - 22,
+      trunkMidScreen.y,
+      forkScreen.x - 3,
+      forkScreen.y,
+    );
+    ctx.stroke();
+
+    // 4. Massive Ancient Sprawling Boughs & Limbs
+    // Left massive bough
+    const leftBoughMid = camera.worldToScreen(
+      rootWorldX - 340,
+      rootWorldY + 1320,
+    );
+    const leftBoughTip = camera.worldToScreen(
+      rootWorldX - 680,
+      rootWorldY + 1520,
+    );
+    ctx.strokeStyle = "#1e1b4b";
+    ctx.lineWidth = boughWidthPx;
+    ctx.beginPath();
+    ctx.moveTo(forkScreen.x, forkScreen.y);
+    ctx.quadraticCurveTo(
+      leftBoughMid.x,
+      leftBoughMid.y,
+      leftBoughTip.x,
+      leftBoughTip.y,
+    );
+    ctx.stroke();
+
+    ctx.strokeStyle = "#312e81";
+    ctx.lineWidth = boughWidthPx * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(forkScreen.x, forkScreen.y);
+    ctx.quadraticCurveTo(
+      leftBoughMid.x,
+      leftBoughMid.y,
+      leftBoughTip.x,
+      leftBoughTip.y,
+    );
+    ctx.stroke();
+
+    // Left sub-branch
+    const leftSubTip = camera.worldToScreen(
+      rootWorldX - 920,
+      rootWorldY + 1620,
+    );
+    ctx.strokeStyle = "#1e1b4b";
+    ctx.lineWidth = branchWidthPx;
+    ctx.beginPath();
+    ctx.moveTo(leftBoughTip.x, leftBoughTip.y);
+    ctx.quadraticCurveTo(
+      leftBoughTip.x - 20,
+      leftBoughTip.y - 10,
+      leftSubTip.x,
+      leftSubTip.y,
+    );
+    ctx.stroke();
+
+    // Right massive bough
+    const rightBoughMid = camera.worldToScreen(
+      rootWorldX + 320,
+      rootWorldY + 1280,
+    );
+    const rightBoughTip = camera.worldToScreen(
+      rootWorldX + 660,
+      rootWorldY + 1480,
+    );
+    ctx.strokeStyle = "#1e1b4b";
+    ctx.lineWidth = boughWidthPx;
+    ctx.beginPath();
+    ctx.moveTo(forkScreen.x, forkScreen.y);
+    ctx.quadraticCurveTo(
+      rightBoughMid.x,
+      rightBoughMid.y,
+      rightBoughTip.x,
+      rightBoughTip.y,
+    );
+    ctx.stroke();
+
+    ctx.strokeStyle = "#312e81";
+    ctx.lineWidth = boughWidthPx * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(forkScreen.x, forkScreen.y);
+    ctx.quadraticCurveTo(
+      rightBoughMid.x,
+      rightBoughMid.y,
+      rightBoughTip.x,
+      rightBoughTip.y,
+    );
+    ctx.stroke();
+
+    // Right sub-branch
+    const rightSubTip = camera.worldToScreen(
+      rootWorldX + 900,
+      rootWorldY + 1580,
+    );
+    ctx.strokeStyle = "#1e1b4b";
+    ctx.lineWidth = branchWidthPx;
+    ctx.beginPath();
+    ctx.moveTo(rightBoughTip.x, rightBoughTip.y);
+    ctx.quadraticCurveTo(
+      rightBoughTip.x + 20,
+      rightBoughTip.y - 10,
+      rightSubTip.x,
+      rightSubTip.y,
+    );
+    ctx.stroke();
+
+    // Central crown upright bough
+    const centerBoughTip = camera.worldToScreen(
+      rootWorldX + 20,
+      rootWorldY + 1750,
+    );
+    ctx.strokeStyle = "#1e1b4b";
+    ctx.lineWidth = boughWidthPx * 0.85;
+    ctx.beginPath();
+    ctx.moveTo(forkScreen.x, forkScreen.y);
+    ctx.quadraticCurveTo(
+      forkScreen.x - 10,
+      forkScreen.y - 50,
+      centerBoughTip.x,
+      centerBoughTip.y,
+    );
+    ctx.stroke();
+
+    ctx.strokeStyle = "#312e81";
+    ctx.lineWidth = boughWidthPx * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(forkScreen.x, forkScreen.y);
+    ctx.quadraticCurveTo(
+      forkScreen.x - 10,
+      forkScreen.y - 50,
+      centerBoughTip.x,
+      centerBoughTip.y,
+    );
+    ctx.stroke();
+
+    // 5. Grand Multi-tiered Flowering Sakura Canopy Clouds
+    interface SakuraBlossomCluster {
+      worldX: number;
+      worldY: number;
+      radiusWorld: number;
+      color: string;
+    }
+
+    const blossomClusters: SakuraBlossomCluster[] = [
+      // Base shadow / deep plum blossom backing
+      {
+        worldX: rootWorldX - 680,
+        worldY: rootWorldY + 1460,
+        radiusWorld: 420,
+        color: "#4a044e",
+      },
+      {
+        worldX: rootWorldX + 650,
+        worldY: rootWorldY + 1430,
+        radiusWorld: 420,
+        color: "#4a044e",
+      },
+      {
+        worldX: rootWorldX + 20,
+        worldY: rootWorldY + 1680,
+        radiusWorld: 480,
+        color: "#4a044e",
+      },
+      {
+        worldX: rootWorldX - 320,
+        worldY: rootWorldY + 1620,
+        radiusWorld: 440,
+        color: "#581c87",
+      },
+      {
+        worldX: rootWorldX + 340,
+        worldY: rootWorldY + 1580,
+        radiusWorld: 440,
+        color: "#581c87",
+      },
+
+      // Rich Deep Magenta & Sakura Rose Tier
+      {
+        worldX: rootWorldX - 750,
+        worldY: rootWorldY + 1540,
+        radiusWorld: 380,
+        color: "#831843",
+      },
+      {
+        worldX: rootWorldX - 480,
+        worldY: rootWorldY + 1480,
+        radiusWorld: 390,
+        color: "#9d174d",
+      },
+      {
+        worldX: rootWorldX + 460,
+        worldY: rootWorldY + 1450,
+        radiusWorld: 390,
+        color: "#9d174d",
+      },
+      {
+        worldX: rootWorldX + 730,
+        worldY: rootWorldY + 1520,
+        radiusWorld: 380,
+        color: "#831843",
+      },
+      {
+        worldX: rootWorldX - 160,
+        worldY: rootWorldY + 1750,
+        radiusWorld: 420,
+        color: "#db2777",
+      },
+      {
+        worldX: rootWorldX + 180,
+        worldY: rootWorldY + 1720,
+        radiusWorld: 420,
+        color: "#db2777",
+      },
+      {
+        worldX: rootWorldX + 10,
+        worldY: rootWorldY + 1880,
+        radiusWorld: 430,
+        color: "#ec4899",
+      },
+
+      // Mid-layer Luminous Cherry Pink
+      {
+        worldX: rootWorldX - 840,
+        worldY: rootWorldY + 1600,
+        radiusWorld: 320,
+        color: "#f472b6",
+      },
+      {
+        worldX: rootWorldX - 580,
+        worldY: rootWorldY + 1620,
+        radiusWorld: 340,
+        color: "#f472b6",
+      },
+      {
+        worldX: rootWorldX - 280,
+        worldY: rootWorldY + 1790,
+        radiusWorld: 360,
+        color: "#f472b6",
+      },
+      {
+        worldX: rootWorldX + 280,
+        worldY: rootWorldY + 1760,
+        radiusWorld: 360,
+        color: "#f472b6",
+      },
+      {
+        worldX: rootWorldX + 590,
+        worldY: rootWorldY + 1590,
+        radiusWorld: 340,
+        color: "#f472b6",
+      },
+      {
+        worldX: rootWorldX + 820,
+        worldY: rootWorldY + 1570,
+        radiusWorld: 310,
+        color: "#f472b6",
+      },
+      {
+        worldX: rootWorldX - 30,
+        worldY: rootWorldY + 1950,
+        radiusWorld: 380,
+        color: "#f472b6",
+      },
+
+      // Foreground Pale Cherry Blossom Highlights
+      {
+        worldX: rootWorldX - 780,
+        worldY: rootWorldY + 1660,
+        radiusWorld: 260,
+        color: "#fbcfe8",
+      },
+      {
+        worldX: rootWorldX - 440,
+        worldY: rootWorldY + 1690,
+        radiusWorld: 290,
+        color: "#fbcfe8",
+      },
+      {
+        worldX: rootWorldX - 120,
+        worldY: rootWorldY + 1880,
+        radiusWorld: 320,
+        color: "#fbcfe8",
+      },
+      {
+        worldX: rootWorldX + 130,
+        worldY: rootWorldY + 1850,
+        radiusWorld: 320,
+        color: "#fbcfe8",
+      },
+      {
+        worldX: rootWorldX + 450,
+        worldY: rootWorldY + 1670,
+        radiusWorld: 290,
+        color: "#fbcfe8",
+      },
+      {
+        worldX: rootWorldX + 760,
+        worldY: rootWorldY + 1640,
+        radiusWorld: 250,
+        color: "#fbcfe8",
+      },
+      {
+        worldX: rootWorldX + 0,
+        worldY: rootWorldY + 2040,
+        radiusWorld: 300,
+        color: "#fbcfe8",
+      },
+
+      // Moonlight Frosted Bloom Crowns
+      {
+        worldX: rootWorldX - 620,
+        worldY: rootWorldY + 1720,
+        radiusWorld: 210,
+        color: "#fdf4ff",
+      },
+      {
+        worldX: rootWorldX - 220,
+        worldY: rootWorldY + 1940,
+        radiusWorld: 240,
+        color: "#fdf4ff",
+      },
+      {
+        worldX: rootWorldX + 220,
+        worldY: rootWorldY + 1910,
+        radiusWorld: 240,
+        color: "#fdf4ff",
+      },
+      {
+        worldX: rootWorldX + 600,
+        worldY: rootWorldY + 1690,
+        radiusWorld: 210,
+        color: "#fdf4ff",
+      },
+      {
+        worldX: rootWorldX + 10,
+        worldY: rootWorldY + 2100,
+        radiusWorld: 230,
+        color: "#fdf4ff",
+      },
+    ];
+
+    for (const b of blossomClusters) {
+      const pos = camera.worldToScreen(b.worldX, b.worldY);
+      const rPx = Math.max(2.5, camera.worldLengthToScreen(b.radiusWorld));
+
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, rPx, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 6. Fluttering Falling Sakura Petals drifting gently across the arena
+    const anim =
+      frameIndex ??
+      (typeof performance !== "undefined"
+        ? Math.floor(performance.now() / 16.67)
+        : 0);
+
+    const petals: Array<{
+      baseOffX: number;
+      baseOffY: number;
+      color: string;
+      size: number;
+    }> = [
+      { baseOffX: -450, baseOffY: 1380, color: "#fbcfe8", size: 4.5 },
+      { baseOffX: -260, baseOffY: 920, color: "#fdf4ff", size: 3.8 },
+      { baseOffX: -80, baseOffY: 650, color: "#f472b6", size: 4.2 },
+      { baseOffX: 160, baseOffY: 820, color: "#fbcfe8", size: 4.0 },
+      { baseOffX: 380, baseOffY: 1250, color: "#fdf4ff", size: 3.8 },
+      { baseOffX: 580, baseOffY: 960, color: "#f472b6", size: 4.5 },
+      { baseOffX: -620, baseOffY: 580, color: "#fbcfe8", size: 3.5 },
+      { baseOffX: 280, baseOffY: 420, color: "#fdf4ff", size: 4.0 },
+    ];
+
+    for (let pi = 0; pi < petals.length; pi++) {
+      const p = petals[pi];
+      if (!p) continue;
+      const sway = Math.sin(anim * 0.035 + pi * 1.5) * 45;
+      const fall = ((anim * (1.2 + (pi % 3) * 0.4)) % 1400) - 200;
+      const petalPos = camera.worldToScreen(
+        rootWorldX + p.baseOffX + sway,
+        rootWorldY + p.baseOffY - fall,
+      );
+      const s = Math.max(1.8, camera.worldLengthToScreen(p.size * 5));
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.ellipse(
+        petalPos.x,
+        petalPos.y,
+        s,
+        s * 0.55,
+        0.3 + Math.sin(anim * 0.05 + pi) * 0.4,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  private drawStageAutumnTrees(
+    camera: Camera,
+    stageId: number | undefined,
+  ): void {
+    const platforms = stageGeometry(stageId);
+    const ground = platforms?.find((p) => p.kind === "ground");
+    const groundLeftX = ground ? ground.leftX : -2318;
+    const groundRightX = ground ? ground.rightX : 2318;
+    const groundY = ground ? ground.y : 0;
+
+    // Left Japanese maple tree & stone lantern
+    this.drawStageAutumnTree(camera, groundLeftX + 280, groundY, -1);
+    // Right Japanese maple tree & stone lantern
+    this.drawStageAutumnTree(camera, groundRightX - 280, groundY, 1);
+  }
+
+  private drawStageAutumnTree(
+    camera: Camera,
+    rootWorldX: number,
+    rootWorldY: number,
+    curveDirection: 1 | -1,
+  ): void {
+    const { ctx } = this;
+    const dir = curveDirection;
+
+    const baseWorld = { x: rootWorldX, y: rootWorldY };
+    const ctrlWorld = {
+      x: rootWorldX + dir * 160,
+      y: rootWorldY + 600,
+    };
+    const headWorld = {
+      x: rootWorldX + dir * 100,
+      y: rootWorldY + 1200,
+    };
+
+    const baseScreen = camera.worldToScreen(baseWorld.x, baseWorld.y);
+    const ctrlScreen = camera.worldToScreen(ctrlWorld.x, ctrlWorld.y);
+    const headScreen = camera.worldToScreen(headWorld.x, headWorld.y);
+
+    const trunkWidthPx = Math.max(2, camera.worldLengthToScreen(50));
+    const innerWidthPx = Math.max(1, trunkWidthPx * 0.5);
+
+    ctx.save();
+
+    // 1. Mossy Stone Pedestal & Shinto Stone Lantern (Tōrō) next to the tree
+    const stoneRadiusPx = Math.max(3, camera.worldLengthToScreen(65));
+    ctx.beginPath();
+    ctx.ellipse(
+      baseScreen.x,
+      baseScreen.y,
+      stoneRadiusPx,
+      stoneRadiusPx * 0.35,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "#3f3f46"; // Weathered stone base
+    ctx.fill();
+
+    // Moss accent
+    ctx.beginPath();
+    ctx.ellipse(
+      baseScreen.x + dir * stoneRadiusPx * 0.3,
+      baseScreen.y,
+      stoneRadiusPx * 0.5,
+      stoneRadiusPx * 0.2,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "#15803d"; // Lush green moss
+    ctx.fill();
+
+    // Small Traditional Stone Lantern (Tōrō) on stage
+    const lanternX = baseScreen.x - dir * stoneRadiusPx * 0.7;
+    const lanternY = baseScreen.y;
+    const lW = Math.max(2, camera.worldLengthToScreen(26));
+    const lH = Math.max(4, camera.worldLengthToScreen(55));
+
+    // Lantern base & pillar
+    ctx.fillStyle = "#52525b";
+    ctx.fillRect(lanternX - lW * 0.2, lanternY - lH * 0.6, lW * 0.4, lH * 0.6);
+    // Lantern light box with warm glowing amber
+    ctx.fillStyle = "#f59e0b";
+    ctx.fillRect(
+      lanternX - lW * 0.35,
+      lanternY - lH * 0.85,
+      lW * 0.7,
+      lH * 0.25,
+    );
+    ctx.fillStyle = "#fef08a";
+    ctx.fillRect(lanternX - lW * 0.2, lanternY - lH * 0.8, lW * 0.4, lH * 0.15);
+    // Lantern curved roof cap
+    ctx.fillStyle = "#27272a";
+    ctx.beginPath();
+    ctx.moveTo(lanternX - lW * 0.6, lanternY - lH * 0.85);
+    ctx.lineTo(lanternX + lW * 0.6, lanternY - lH * 0.85);
+    ctx.lineTo(lanternX, lanternY - lH);
+    ctx.closePath();
+    ctx.fill();
+
+    // 2. Trunk main dark woody bark
+    ctx.strokeStyle = "#292524";
+    ctx.lineWidth = trunkWidthPx;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(baseScreen.x, baseScreen.y);
+    ctx.quadraticCurveTo(
+      ctrlScreen.x,
+      ctrlScreen.y,
+      headScreen.x,
+      headScreen.y,
+    );
+    ctx.stroke();
+
+    // 3. Trunk bark highlight
+    ctx.strokeStyle = "#44403c";
+    ctx.lineWidth = innerWidthPx;
+    ctx.beginPath();
+    ctx.moveTo(baseScreen.x + dir * 1.5, baseScreen.y);
+    ctx.quadraticCurveTo(
+      ctrlScreen.x + dir * 1.5,
+      ctrlScreen.y,
+      headScreen.x + dir * 1,
+      headScreen.y,
+    );
+    ctx.stroke();
+
+    // 4. Secondary gnarled branch
+    const branchCtrl = camera.worldToScreen(
+      rootWorldX + dir * 80,
+      rootWorldY + 850,
+    );
+    const branchTip = camera.worldToScreen(
+      rootWorldX - dir * 280,
+      rootWorldY + 1050,
+    );
+    ctx.strokeStyle = "#292524";
+    ctx.lineWidth = Math.max(1.5, trunkWidthPx * 0.6);
+    ctx.beginPath();
+    ctx.moveTo(
+      camera.worldToScreen(rootWorldX + dir * 120, rootWorldY + 700).x,
+      camera.worldToScreen(rootWorldX + dir * 120, rootWorldY + 700).y,
+    );
+    ctx.quadraticCurveTo(branchCtrl.x, branchCtrl.y, branchTip.x, branchTip.y);
+    ctx.stroke();
+
+    // 5. Multi-tiered Crimson & Golden Autumn Canopy Clusters
+    interface StageCanopyCluster {
+      offsetX: number;
+      offsetY: number;
+      radiusWorld: number;
+      color: string;
+    }
+
+    const clusters: StageCanopyCluster[] = [
+      // Main Crown
+      { offsetX: dir * 100, offsetY: 0, radiusWorld: 340, color: "#7f1d1d" },
+      { offsetX: dir * 220, offsetY: 80, radiusWorld: 280, color: "#991b1b" },
+      { offsetX: dir * 40, offsetY: 120, radiusWorld: 290, color: "#dc2626" },
+      { offsetX: -dir * 120, offsetY: 40, radiusWorld: 260, color: "#b91c1c" },
+      { offsetX: dir * 150, offsetY: 180, radiusWorld: 240, color: "#ea580c" },
+      { offsetX: dir * 60, offsetY: 220, radiusWorld: 210, color: "#f59e0b" },
+      // Secondary branch crown
+      {
+        offsetX: -dir * 280,
+        offsetY: -120,
+        radiusWorld: 260,
+        color: "#991b1b",
+      },
+      { offsetX: -dir * 320, offsetY: -80, radiusWorld: 220, color: "#dc2626" },
+      { offsetX: -dir * 240, offsetY: -40, radiusWorld: 190, color: "#f59e0b" },
+    ];
+
+    for (const cl of clusters) {
+      const clWorld = {
+        x: headWorld.x + cl.offsetX,
+        y: headWorld.y + cl.offsetY,
+      };
+      const clScreen = camera.worldToScreen(clWorld.x, clWorld.y);
+      const clRadiusPx = Math.max(
+        2,
+        camera.worldLengthToScreen(cl.radiusWorld),
+      );
+
+      ctx.fillStyle = cl.color;
+      ctx.beginPath();
+      ctx.arc(clScreen.x, clScreen.y, clRadiusPx, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 6. Fluttering Fallen Autumn Leaves near the tree base
+    const fallingLeaves: Array<{
+      offX: number;
+      offY: number;
+      color: string;
+      size: number;
+    }> = [
+      { offX: dir * 120, offY: 180, color: "#dc2626", size: 4 },
+      { offX: dir * 220, offY: 120, color: "#ea580c", size: 3.5 },
+      { offX: -dir * 80, offY: 80, color: "#f59e0b", size: 4 },
+    ];
+
+    for (const fl of fallingLeaves) {
+      const flPos = camera.worldToScreen(
+        rootWorldX + fl.offX,
+        rootWorldY + fl.offY,
+      );
+      const s = Math.max(1.5, camera.worldLengthToScreen(fl.size * 6));
+      ctx.fillStyle = fl.color;
+      ctx.beginPath();
+      ctx.ellipse(flPos.x, flPos.y, s, s * 0.5, 0.5 * dir, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  private drawStagePalmTrees(
+    camera: Camera,
+    stageId: number | undefined,
+  ): void {
+    const platforms = stageGeometry(stageId);
+    const ground = platforms?.find((p) => p.kind === "ground");
+    const groundLeftX = ground ? ground.leftX : -2318;
+    const groundRightX = ground ? ground.rightX : 2318;
+    const groundY = ground ? ground.y : 0;
+
+    // Left palm tree rooted near stage left edge, curving outward
+    this.drawStagePalmTree(camera, groundLeftX + 280, groundY, -1);
+    // Right palm tree rooted near stage right edge, curving outward
+    this.drawStagePalmTree(camera, groundRightX - 280, groundY, 1);
+  }
+
+  private drawStagePalmTree(
+    camera: Camera,
+    rootWorldX: number,
+    rootWorldY: number,
+    curveDirection: 1 | -1,
+  ): void {
+    const { ctx } = this;
+    const dir = curveDirection;
+
+    const baseWorld = { x: rootWorldX, y: rootWorldY };
+    const ctrlWorld = {
+      x: rootWorldX + dir * 180,
+      y: rootWorldY + 650,
+    };
+    const headWorld = {
+      x: rootWorldX + dir * 120,
+      y: rootWorldY + 1300,
+    };
+
+    const baseScreen = camera.worldToScreen(baseWorld.x, baseWorld.y);
+    const ctrlScreen = camera.worldToScreen(ctrlWorld.x, ctrlWorld.y);
+    const headScreen = camera.worldToScreen(headWorld.x, headWorld.y);
+
+    const trunkWidthPx = Math.max(2, camera.worldLengthToScreen(55));
+    const innerWidthPx = Math.max(1, trunkWidthPx * 0.55);
+
+    ctx.save();
+
+    // 1. Root base mound (small tropical sand footing on stage)
+    const moundRadiusPx = Math.max(3, camera.worldLengthToScreen(60));
+    ctx.beginPath();
+    ctx.ellipse(
+      baseScreen.x,
+      baseScreen.y,
+      moundRadiusPx,
+      moundRadiusPx * 0.4,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "#f59e0b"; // Warm golden sand footing
+    ctx.fill();
+
+    // 2. Trunk main dark bark
+    ctx.strokeStyle = "#451a03";
+    ctx.lineWidth = trunkWidthPx;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(baseScreen.x, baseScreen.y);
+    ctx.quadraticCurveTo(
+      ctrlScreen.x,
+      ctrlScreen.y,
+      headScreen.x,
+      headScreen.y,
+    );
+    ctx.stroke();
+
+    // 3. Trunk warm inner bark highlight / ring texture
+    ctx.strokeStyle = "#78350f";
+    ctx.lineWidth = innerWidthPx;
+    ctx.beginPath();
+    ctx.moveTo(baseScreen.x + dir * 1.5, baseScreen.y);
+    ctx.quadraticCurveTo(
+      ctrlScreen.x + dir * 1.5,
+      ctrlScreen.y,
+      headScreen.x + dir * 1,
+      headScreen.y,
+    );
+    ctx.stroke();
+
+    // 4. Coconut cluster under the crown
+    const coconutRadiusPx = Math.max(1.5, camera.worldLengthToScreen(24));
+    ctx.fillStyle = "#78350f";
+    ctx.beginPath();
+    ctx.arc(
+      headScreen.x - dir * coconutRadiusPx * 0.7,
+      headScreen.y + coconutRadiusPx * 0.8,
+      coconutRadiusPx,
+      0,
+      Math.PI * 2,
+    );
+    ctx.arc(
+      headScreen.x + dir * coconutRadiusPx * 0.7,
+      headScreen.y + coconutRadiusPx * 0.9,
+      coconutRadiusPx * 0.9,
+      0,
+      Math.PI * 2,
+    );
+    ctx.arc(
+      headScreen.x,
+      headScreen.y + coconutRadiusPx * 1.3,
+      coconutRadiusPx * 0.85,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+
+    // 5. Crown Palm Fronds (in world offsets from headWorld)
+    interface StageFrondSpec {
+      tipOffsetX: number;
+      tipOffsetY: number;
+      ctrlOffsetX: number;
+      ctrlOffsetY: number;
+      color: string;
+      widthWorld: number;
+    }
+
+    const frondSpecs: StageFrondSpec[] = [
+      // Outward sweeping fronds
+      {
+        tipOffsetX: dir * 550,
+        tipOffsetY: -120,
+        ctrlOffsetX: dir * 320,
+        ctrlOffsetY: 280,
+        color: "#064e3b",
+        widthWorld: 65,
+      },
+      {
+        tipOffsetX: dir * 620,
+        tipOffsetY: 100,
+        ctrlOffsetX: dir * 380,
+        ctrlOffsetY: 400,
+        color: "#047857",
+        widthWorld: 60,
+      },
+      {
+        tipOffsetX: dir * 480,
+        tipOffsetY: -350,
+        ctrlOffsetX: dir * 280,
+        ctrlOffsetY: 80,
+        color: "#065f46",
+        widthWorld: 55,
+      },
+      // Upward arching fronds
+      {
+        tipOffsetX: dir * 220,
+        tipOffsetY: 520,
+        ctrlOffsetX: dir * 120,
+        ctrlOffsetY: 580,
+        color: "#059669",
+        widthWorld: 55,
+      },
+      {
+        tipOffsetX: -dir * 180,
+        tipOffsetY: 500,
+        ctrlOffsetX: -dir * 80,
+        ctrlOffsetY: 560,
+        color: "#10b981",
+        widthWorld: 50,
+      },
+      // Inward / stage-facing fronds
+      {
+        tipOffsetX: -dir * 480,
+        tipOffsetY: 120,
+        ctrlOffsetX: -dir * 280,
+        ctrlOffsetY: 350,
+        color: "#059669",
+        widthWorld: 58,
+      },
+      {
+        tipOffsetX: -dir * 420,
+        tipOffsetY: -200,
+        ctrlOffsetX: -dir * 240,
+        ctrlOffsetY: 150,
+        color: "#047857",
+        widthWorld: 52,
+      },
+    ];
+
+    for (const fr of frondSpecs) {
+      const tipWorld = {
+        x: headWorld.x + fr.tipOffsetX,
+        y: headWorld.y + fr.tipOffsetY,
+      };
+      const ctrlWorldFr = {
+        x: headWorld.x + fr.ctrlOffsetX,
+        y: headWorld.y + fr.ctrlOffsetY,
+      };
+
+      const tipScreen = camera.worldToScreen(tipWorld.x, tipWorld.y);
+      const ctrlScreenFr = camera.worldToScreen(ctrlWorldFr.x, ctrlWorldFr.y);
+      const frondWidthPx = Math.max(
+        1,
+        camera.worldLengthToScreen(fr.widthWorld),
+      );
+
+      // Leafy frond stroke
+      ctx.strokeStyle = fr.color;
+      ctx.lineWidth = frondWidthPx;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(headScreen.x, headScreen.y);
+      ctx.quadraticCurveTo(
+        ctrlScreenFr.x,
+        ctrlScreenFr.y,
+        tipScreen.x,
+        tipScreen.y,
+      );
+      ctx.stroke();
+
+      // Bright leaf spine highlight
+      ctx.strokeStyle = "#34d399";
+      ctx.lineWidth = Math.max(1, frondWidthPx * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(headScreen.x, headScreen.y);
+      ctx.quadraticCurveTo(
+        ctrlScreenFr.x,
+        ctrlScreenFr.y,
+        tipScreen.x,
+        tipScreen.y,
+      );
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   private drawPlatform(camera: Camera, platform: PlatformSpec): void {
@@ -3959,20 +6066,43 @@ export class StageRenderer {
     const lineWidth = lineSpacing * 1.3;
 
     // Linear gradient for the outer lines:
-    // - Inner third (1/3 to 2/3): solid #334ba3
-    // - Both outer thirds (0 to 1/3 and 2/3 to 1): gradient from #334ba3 to #8bcaf0
     const outerGrad = ctx.createLinearGradient(
       left.x,
       left.y,
       right.x,
       right.y,
     );
-    outerGrad.addColorStop(0.0, "#8bcaf0");
-    outerGrad.addColorStop(1 / 3, "#334ba3");
-    outerGrad.addColorStop(2 / 3, "#334ba3");
-    outerGrad.addColorStop(1.0, "#8bcaf0");
 
-    const purpleColor = "#a855f7";
+    let middleColor: string;
+    if (this.backgroundTheme === "beach") {
+      // Warm golden edges with sunset orange center and vibrant turquoise core
+      outerGrad.addColorStop(0.0, "#fde047");
+      outerGrad.addColorStop(1 / 3, "#f97316");
+      outerGrad.addColorStop(2 / 3, "#f97316");
+      outerGrad.addColorStop(1.0, "#fde047");
+      middleColor = "#14b8a6";
+    } else if (this.backgroundTheme === "autumn") {
+      // Polished dark lacquer wood with imperial vermilion and warm golden amber trim
+      outerGrad.addColorStop(0.0, "#fbbf24");
+      outerGrad.addColorStop(1 / 3, "#dc2626");
+      outerGrad.addColorStop(2 / 3, "#dc2626");
+      outerGrad.addColorStop(1.0, "#fbbf24");
+      middleColor = "#f59e0b";
+    } else if (this.backgroundTheme === "grid") {
+      // Classic clean tech cyan/blue palette
+      outerGrad.addColorStop(0.0, "#38bdf8");
+      outerGrad.addColorStop(1 / 3, "#1d4ed8");
+      outerGrad.addColorStop(2 / 3, "#1d4ed8");
+      outerGrad.addColorStop(1.0, "#38bdf8");
+      middleColor = "#93c5fd";
+    } else {
+      // Mountain: Cyan-to-royal-blue-to-cyan outer lines with aurora purple center
+      outerGrad.addColorStop(0.0, "#8bcaf0");
+      outerGrad.addColorStop(1 / 3, "#334ba3");
+      outerGrad.addColorStop(2 / 3, "#334ba3");
+      outerGrad.addColorStop(1.0, "#8bcaf0");
+      middleColor = "#a855f7";
+    }
 
     ctx.save();
     // lineCap = "butt" guarantees the line strictly ends at left.x and right.x without
@@ -3980,21 +6110,21 @@ export class StageRenderer {
     ctx.lineCap = "butt";
     ctx.lineWidth = lineWidth;
 
-    // 1. Top outer line (cyan-to-royal-blue-to-cyan gradient)
+    // 1. Top outer line
     ctx.strokeStyle = outerGrad;
     ctx.beginPath();
     ctx.moveTo(left.x, left.y - lineSpacing);
     ctx.lineTo(right.x, right.y - lineSpacing);
     ctx.stroke();
 
-    // 2. Middle inner line (purple color from sky drawing)
-    ctx.strokeStyle = purpleColor;
+    // 2. Middle inner line
+    ctx.strokeStyle = middleColor;
     ctx.beginPath();
     ctx.moveTo(left.x, left.y);
     ctx.lineTo(right.x, right.y);
     ctx.stroke();
 
-    // 3. Bottom outer line (cyan-to-royal-blue-to-cyan gradient)
+    // 3. Bottom outer line
     ctx.strokeStyle = outerGrad;
     ctx.beginPath();
     ctx.moveTo(left.x, left.y + lineSpacing);
@@ -4004,7 +6134,7 @@ export class StageRenderer {
     ctx.restore();
   }
 
-  /** Highlights the grabbable 800-unit ledge strip (see ledgeGrabRange.ts) in luminous bright purple for any edge a candidate is near. */
+  /** Highlights the grabbable 800-unit ledge strip (see ledgeGrabRange.ts) for any edge a candidate is near. */
   private drawLedgeGrabZoneHighlight(
     camera: Camera,
     stageId: number | undefined,
@@ -4036,8 +6166,16 @@ export class StageRenderer {
       const outer = camera.worldToScreen(ledge.x, ledge.y);
       const inner = camera.worldToScreen(innerX, ledge.y);
 
-      // Bright luminous purple highlight harmonizing with the stage palette
-      ctx.strokeStyle = `rgba(216, 180, 254, ${0.95 * alpha})`;
+      // Highlight harmonizing with the active theme palette
+      let ledgeColorRgba = `rgba(216, 180, 254, ${0.95 * alpha})`;
+      if (this.backgroundTheme === "beach") {
+        ledgeColorRgba = `rgba(253, 224, 71, ${0.95 * alpha})`;
+      } else if (this.backgroundTheme === "autumn") {
+        ledgeColorRgba = `rgba(251, 191, 36, ${0.95 * alpha})`;
+      } else if (this.backgroundTheme === "grid") {
+        ledgeColorRgba = `rgba(147, 197, 253, ${0.95 * alpha})`;
+      }
+      ctx.strokeStyle = ledgeColorRgba;
       ctx.lineWidth = 10;
       ctx.lineCap = "butt";
       ctx.beginPath();
@@ -4047,7 +6185,7 @@ export class StageRenderer {
     }
   }
 
-  /** The luminous bright purple ledge-grab check-point dot(s) - see computeLedgeGrabCandidates(). Drawn on top of everything else so it's never hidden behind a player marker. */
+  /** The luminous ledge-grab check-point dot(s) - see computeLedgeGrabCandidates(). Drawn on top of everything else so it's never hidden behind a player marker. */
   private drawLedgeGrabDots(
     camera: Camera,
     candidates: readonly LedgeGrabCandidate[],
@@ -4061,6 +6199,14 @@ export class StageRenderer {
       LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS,
     );
     const strokeWidthPx = Math.max(1, radiusPx * 0.25);
+    let dotFill = "#d8b4fe";
+    if (this.backgroundTheme === "beach") {
+      dotFill = "#fde047";
+    } else if (this.backgroundTheme === "autumn") {
+      dotFill = "#fbbf24";
+    } else if (this.backgroundTheme === "grid") {
+      dotFill = "#93c5fd";
+    }
     for (const candidate of candidates) {
       const { x, y } = camera.worldToScreen(
         candidate.dotWorldX,
@@ -4069,7 +6215,7 @@ export class StageRenderer {
       ctx.globalAlpha = candidate.alpha;
       ctx.beginPath();
       ctx.arc(x, y, radiusPx, 0, Math.PI * 2);
-      ctx.fillStyle = "#d8b4fe";
+      ctx.fillStyle = dotFill;
       ctx.fill();
       ctx.lineWidth = strokeWidthPx;
       ctx.strokeStyle = "rgba(255,255,255,0.85)";
@@ -4082,7 +6228,15 @@ export class StageRenderer {
     const { ctx, canvas } = this;
     const groundY = camera.groundScreenY();
     if (groundY < 0 || groundY > canvas.height) return;
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    if (this.backgroundTheme === "beach") {
+      ctx.strokeStyle = "rgba(253, 224, 71, 0.3)";
+    } else if (this.backgroundTheme === "autumn") {
+      ctx.strokeStyle = "rgba(245, 158, 11, 0.35)";
+    } else if (this.backgroundTheme === "grid") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+    } else {
+      ctx.strokeStyle = "rgba(168, 85, 247, 0.3)";
+    }
     ctx.setLineDash([6, 6]);
     ctx.beginPath();
     ctx.moveTo(0, groundY);
@@ -5583,14 +7737,37 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseBody = isMountainTheme ? "#38bdf8" : "#facc15";
-    const baseEarTip = isMountainTheme ? "#1e1b4b" : "#1e1e24";
-    const baseCheek = isMountainTheme ? "#ec4899" : "#ef4444";
-    const baseStripe = isMountainTheme ? "#6b21a8" : "#854d0e";
-    const baseTailBase = isMountainTheme ? "#6b21a8" : "#854d0e";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseBody = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#fbbf24"
+        : "#facc15";
+    const baseEarTip = isMountainTheme
+      ? "#1e1b4b"
+      : isAutumnTheme
+        ? "#1c1917"
+        : "#1e1e24";
+    const baseCheek = isMountainTheme
+      ? "#ec4899"
+      : isAutumnTheme
+        ? "#dc2626"
+        : "#ef4444";
+    const baseStripe = isMountainTheme
+      ? "#6b21a8"
+      : isAutumnTheme
+        ? "#991b1b"
+        : "#854d0e";
+    const baseTailBase = isMountainTheme
+      ? "#6b21a8"
+      : isAutumnTheme
+        ? "#991b1b"
+        : "#854d0e";
     const baseOutline = isMountainTheme
       ? "rgba(15, 23, 42, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let bodyColor = resolveColor(baseBody, isOpponent);
     let earTipColor = resolveColor(baseEarTip, isOpponent);
@@ -5838,15 +8015,42 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseSuit = isMountainTheme ? "#4338ca" : "#1e293b";
-    const baseGold = isMountainTheme ? "#38bdf8" : "#fbbf24";
-    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
-    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
-    const baseHelmet = isMountainTheme ? "#312e81" : "#1e3a8a";
-    const baseScarf = isMountainTheme ? "#ec4899" : "#fbbf24";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseSuit = isMountainTheme
+      ? "#4338ca"
+      : isAutumnTheme
+        ? "#4a044e"
+        : "#1e293b";
+    const baseGold = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#f59e0b"
+        : "#fbbf24";
+    const baseWhite = isMountainTheme
+      ? "#fdf4ff"
+      : isAutumnTheme
+        ? "#fffbeb"
+        : "#f8fafc";
+    const baseSkin = isMountainTheme
+      ? "#fce7f3"
+      : isAutumnTheme
+        ? "#fed7aa"
+        : "#fed7aa";
+    const baseHelmet = isMountainTheme
+      ? "#312e81"
+      : isAutumnTheme
+        ? "#991b1b"
+        : "#1e3a8a";
+    const baseScarf = isMountainTheme
+      ? "#ec4899"
+      : isAutumnTheme
+        ? "#f97316"
+        : "#fbbf24";
     const baseOutline = isMountainTheme
       ? "rgba(15, 23, 42, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let suitColor = resolveColor(baseSuit, isOpponent);
     let goldColor = resolveColor(baseGold, isOpponent);
@@ -6124,16 +8328,47 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseRed = isMountainTheme ? "#f43f5e" : "#dc2626";
-    const baseBlue = isMountainTheme ? "#4f46e5" : "#2563eb";
-    const baseGold = isMountainTheme ? "#38bdf8" : "#facc15";
-    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
-    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
-    const baseBrown = isMountainTheme ? "#311042" : "#78350f";
-    const baseHair = isMountainTheme ? "#1e1b4b" : "#1c1917";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseRed = isMountainTheme
+      ? "#f43f5e"
+      : isAutumnTheme
+        ? "#dc2626"
+        : "#dc2626";
+    const baseBlue = isMountainTheme
+      ? "#4f46e5"
+      : isAutumnTheme
+        ? "#292524"
+        : "#2563eb";
+    const baseGold = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#f59e0b"
+        : "#facc15";
+    const baseWhite = isMountainTheme
+      ? "#fdf4ff"
+      : isAutumnTheme
+        ? "#fffbeb"
+        : "#f8fafc";
+    const baseSkin = isMountainTheme
+      ? "#fce7f3"
+      : isAutumnTheme
+        ? "#fed7aa"
+        : "#fed7aa";
+    const baseBrown = isMountainTheme
+      ? "#311042"
+      : isAutumnTheme
+        ? "#78350f"
+        : "#78350f";
+    const baseHair = isMountainTheme
+      ? "#1e1b4b"
+      : isAutumnTheme
+        ? "#1c1917"
+        : "#1c1917";
     const baseOutline = isMountainTheme
       ? "rgba(15, 23, 42, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let redColor = resolveColor(baseRed, isOpponent);
     let blueColor = resolveColor(baseBlue, isOpponent);
@@ -6404,16 +8639,47 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseGreen = isMountainTheme ? "#2dd4bf" : "#16a34a";
-    const baseNavy = isMountainTheme ? "#3730a3" : "#1e3a8a";
-    const baseGold = isMountainTheme ? "#ec4899" : "#facc15";
-    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
-    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
-    const baseBrown = isMountainTheme ? "#311042" : "#78350f";
-    const baseHair = isMountainTheme ? "#1e1b4b" : "#1c1917";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseGreen = isMountainTheme
+      ? "#2dd4bf"
+      : isAutumnTheme
+        ? "#15803d"
+        : "#16a34a";
+    const baseNavy = isMountainTheme
+      ? "#3730a3"
+      : isAutumnTheme
+        ? "#292524"
+        : "#1e3a8a";
+    const baseGold = isMountainTheme
+      ? "#ec4899"
+      : isAutumnTheme
+        ? "#f59e0b"
+        : "#facc15";
+    const baseWhite = isMountainTheme
+      ? "#fdf4ff"
+      : isAutumnTheme
+        ? "#fffbeb"
+        : "#f8fafc";
+    const baseSkin = isMountainTheme
+      ? "#fce7f3"
+      : isAutumnTheme
+        ? "#fed7aa"
+        : "#fed7aa";
+    const baseBrown = isMountainTheme
+      ? "#311042"
+      : isAutumnTheme
+        ? "#78350f"
+        : "#78350f";
+    const baseHair = isMountainTheme
+      ? "#1e1b4b"
+      : isAutumnTheme
+        ? "#1c1917"
+        : "#1c1917";
     const baseOutline = isMountainTheme
       ? "rgba(15, 23, 42, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let greenColor = resolveColor(baseGreen, isOpponent);
     let navyColor = resolveColor(baseNavy, isOpponent);
@@ -6683,14 +8949,37 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const basePink = isMountainTheme ? "#fbcfe8" : "#f472b6";
-    const baseFoot = isMountainTheme ? "#c026d3" : "#e11d48";
-    const baseCheek = isMountainTheme ? "#f43f5e" : "#fb7185";
-    const baseEye = isMountainTheme ? "#38bdf8" : "#3b82f6";
-    const baseMouth = isMountainTheme ? "#701a75" : "#be123c";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const basePink = isMountainTheme
+      ? "#fbcfe8"
+      : isAutumnTheme
+        ? "#fde68a"
+        : "#f472b6";
+    const baseFoot = isMountainTheme
+      ? "#c026d3"
+      : isAutumnTheme
+        ? "#dc2626"
+        : "#e11d48";
+    const baseCheek = isMountainTheme
+      ? "#f43f5e"
+      : isAutumnTheme
+        ? "#f87171"
+        : "#fb7185";
+    const baseEye = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#f59e0b"
+        : "#3b82f6";
+    const baseMouth = isMountainTheme
+      ? "#701a75"
+      : isAutumnTheme
+        ? "#991b1b"
+        : "#be123c";
     const baseOutline = isMountainTheme
       ? "rgba(49, 16, 66, 0.75)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let pinkColor = resolveColor(basePink, isOpponent);
     let redFootColor = resolveColor(baseFoot, isOpponent);
@@ -6958,13 +9247,32 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseLightPink = isMountainTheme ? "#fae8ff" : "#f9a8d4";
-    const baseDeepPink = isMountainTheme ? "#f0abfc" : "#f472b6";
-    const baseInnerEar = isMountainTheme ? "#3b0764" : "#3f3f46";
-    const baseTealEye = isMountainTheme ? "#22d3ee" : "#14b8a6";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseLightPink = isMountainTheme
+      ? "#fae8ff"
+      : isAutumnTheme
+        ? "#fed7aa"
+        : "#f9a8d4";
+    const baseDeepPink = isMountainTheme
+      ? "#f0abfc"
+      : isAutumnTheme
+        ? "#f59e0b"
+        : "#f472b6";
+    const baseInnerEar = isMountainTheme
+      ? "#3b0764"
+      : isAutumnTheme
+        ? "#4a044e"
+        : "#3f3f46";
+    const baseTealEye = isMountainTheme
+      ? "#22d3ee"
+      : isAutumnTheme
+        ? "#10b981"
+        : "#14b8a6";
     const baseOutline = isMountainTheme
       ? "rgba(49, 16, 66, 0.75)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let lightPink = resolveColor(baseLightPink, isOpponent);
     let deepPink = resolveColor(baseDeepPink, isOpponent);
@@ -7216,17 +9524,52 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseFur = isMountainTheme ? "#fbbf24" : "#c8732a";
-    const baseWhiteFur = isMountainTheme ? "#fdf4ff" : "#f8fafc";
-    const basePurpleJacket = isMountainTheme ? "#7c3aed" : "#7c3aed";
-    const baseNavyPants = isMountainTheme ? "#1e1b4b" : "#1e3a5f";
-    const basePurpleBoots = isMountainTheme ? "#ec4899" : "#a855f7";
-    const baseDarkEar = isMountainTheme ? "#1e1b4b" : "#18181b";
-    const baseBelt = isMountainTheme ? "#4c1d95" : "#3b1f6e";
-    const baseScouter = isMountainTheme ? "#38bdf8" : "#06b6d4";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseFur = isMountainTheme
+      ? "#fbbf24"
+      : isAutumnTheme
+        ? "#ea580c"
+        : "#c8732a";
+    const baseWhiteFur = isMountainTheme
+      ? "#fdf4ff"
+      : isAutumnTheme
+        ? "#fffbeb"
+        : "#f8fafc";
+    const basePurpleJacket = isMountainTheme
+      ? "#7c3aed"
+      : isAutumnTheme
+        ? "#7f1d1d"
+        : "#7c3aed";
+    const baseNavyPants = isMountainTheme
+      ? "#1e1b4b"
+      : isAutumnTheme
+        ? "#292524"
+        : "#1e3a5f";
+    const basePurpleBoots = isMountainTheme
+      ? "#ec4899"
+      : isAutumnTheme
+        ? "#dc2626"
+        : "#a855f7";
+    const baseDarkEar = isMountainTheme
+      ? "#1e1b4b"
+      : isAutumnTheme
+        ? "#1c1917"
+        : "#18181b";
+    const baseBelt = isMountainTheme
+      ? "#4c1d95"
+      : isAutumnTheme
+        ? "#451a03"
+        : "#3b1f6e";
+    const baseScouter = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#f59e0b"
+        : "#06b6d4";
     const baseOutline = isMountainTheme
       ? "rgba(15, 23, 42, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let furColor = resolveColor(baseFur, isOpponent);
     let whiteFur = resolveColor(baseWhiteFur, isOpponent);
@@ -7515,13 +9858,32 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseGreen = isMountainTheme ? "#38bdf8" : "#22c55e";
-    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
-    const baseOrangeBoot = isMountainTheme ? "#c084fc" : "#f97316";
-    const baseRedShell = isMountainTheme ? "#f43f5e" : "#ef4444";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseGreen = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#facc15"
+        : "#22c55e";
+    const baseWhite = isMountainTheme
+      ? "#fdf4ff"
+      : isAutumnTheme
+        ? "#fffbeb"
+        : "#f8fafc";
+    const baseOrangeBoot = isMountainTheme
+      ? "#c084fc"
+      : isAutumnTheme
+        ? "#dc2626"
+        : "#f97316";
+    const baseRedShell = isMountainTheme
+      ? "#f43f5e"
+      : isAutumnTheme
+        ? "#991b1b"
+        : "#ef4444";
     const baseOutline = isMountainTheme
       ? "rgba(15, 23, 42, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let greenColor = resolveColor(baseGreen, isOpponent);
     let whiteColor = resolveColor(baseWhite, isOpponent);
@@ -7733,13 +10095,32 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseFur = isMountainTheme ? "#6366f1" : "#78350f";
-    const baseSkin = isMountainTheme ? "#fdf4ff" : "#fed7aa";
-    const baseTie = isMountainTheme ? "#ec4899" : "#dc2626";
-    const baseEmblem = isMountainTheme ? "#38bdf8" : "#facc15";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseFur = isMountainTheme
+      ? "#6366f1"
+      : isAutumnTheme
+        ? "#451a03"
+        : "#78350f";
+    const baseSkin = isMountainTheme
+      ? "#fdf4ff"
+      : isAutumnTheme
+        ? "#fde68a"
+        : "#fed7aa";
+    const baseTie = isMountainTheme
+      ? "#ec4899"
+      : isAutumnTheme
+        ? "#dc2626"
+        : "#dc2626";
+    const baseEmblem = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#facc15"
+        : "#facc15";
     const baseOutline = isMountainTheme
       ? "rgba(30, 27, 75, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let furColor = resolveColor(baseFur, isOpponent);
     let skinColor = resolveColor(baseSkin, isOpponent);
@@ -7904,16 +10285,47 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseTunic = isMountainTheme ? "#6366f1" : "#16a34a";
-    const baseHair = isMountainTheme ? "#fde047" : "#facc15";
-    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
-    const baseLeather = isMountainTheme ? "#3b0764" : "#78350f";
-    const baseShield = isMountainTheme ? "#38bdf8" : "#1e3a8a";
-    const baseShieldSilver = isMountainTheme ? "#f1f5f9" : "#cbd5e1";
-    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseTunic = isMountainTheme
+      ? "#6366f1"
+      : isAutumnTheme
+        ? "#dc2626"
+        : "#16a34a";
+    const baseHair = isMountainTheme
+      ? "#fde047"
+      : isAutumnTheme
+        ? "#fbbf24"
+        : "#facc15";
+    const baseSkin = isMountainTheme
+      ? "#fce7f3"
+      : isAutumnTheme
+        ? "#fed7aa"
+        : "#fed7aa";
+    const baseLeather = isMountainTheme
+      ? "#3b0764"
+      : isAutumnTheme
+        ? "#451a03"
+        : "#78350f";
+    const baseShield = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#1c1917"
+        : "#1e3a8a";
+    const baseShieldSilver = isMountainTheme
+      ? "#f1f5f9"
+      : isAutumnTheme
+        ? "#f59e0b"
+        : "#cbd5e1";
+    const baseWhite = isMountainTheme
+      ? "#fdf4ff"
+      : isAutumnTheme
+        ? "#fffbeb"
+        : "#f8fafc";
     const baseOutline = isMountainTheme
       ? "rgba(15, 23, 42, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let tunicGreen = resolveColor(baseTunic, isOpponent);
     let blondeHair = resolveColor(baseHair, isOpponent);
@@ -8093,16 +10505,47 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseCapRed = isMountainTheme ? "#ec4899" : "#dc2626";
-    const baseBrimBlue = isMountainTheme ? "#38bdf8" : "#2563eb";
-    const baseStripeYellow = isMountainTheme ? "#ec4899" : "#facc15";
-    const baseStripeBlue = isMountainTheme ? "#38bdf8" : "#1e3a8a";
-    const baseBackpackBrown = isMountainTheme ? "#1e1b4b" : "#92400e";
-    const baseSkin = isMountainTheme ? "#fce7f3" : "#fed7aa";
-    const baseWhite = isMountainTheme ? "#fdf4ff" : "#f8fafc";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseCapRed = isMountainTheme
+      ? "#ec4899"
+      : isAutumnTheme
+        ? "#dc2626"
+        : "#dc2626";
+    const baseBrimBlue = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#292524"
+        : "#2563eb";
+    const baseStripeYellow = isMountainTheme
+      ? "#ec4899"
+      : isAutumnTheme
+        ? "#f59e0b"
+        : "#facc15";
+    const baseStripeBlue = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#991b1b"
+        : "#1e3a8a";
+    const baseBackpackBrown = isMountainTheme
+      ? "#818cf8"
+      : isAutumnTheme
+        ? "#d97706"
+        : "#92400e";
+    const baseSkin = isMountainTheme
+      ? "#fce7f3"
+      : isAutumnTheme
+        ? "#fed7aa"
+        : "#fed7aa";
+    const baseWhite = isMountainTheme
+      ? "#fdf4ff"
+      : isAutumnTheme
+        ? "#fffbeb"
+        : "#f8fafc";
     const baseOutline = isMountainTheme
       ? "rgba(15, 23, 42, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let capRed = resolveColor(baseCapRed, isOpponent);
     let brimBlue = resolveColor(baseBrimBlue, isOpponent);
@@ -8323,14 +10766,37 @@ export class StageRenderer {
     }
 
     const isMountainTheme = this.backgroundTheme === "mountain";
-    const baseArmorOrange = isMountainTheme ? "#ec4899" : "#ea580c";
-    const baseArmorRed = isMountainTheme ? "#db2777" : "#c2410c";
-    const basePauldronYellow = isMountainTheme ? "#818cf8" : "#eab308";
-    const baseVisorGreen = isMountainTheme ? "#38bdf8" : "#22c55e";
-    const baseCannonGreen = isMountainTheme ? "#22d3ee" : "#15803d";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
+    const baseArmorOrange = isMountainTheme
+      ? "#ec4899"
+      : isAutumnTheme
+        ? "#f59e0b"
+        : "#ea580c";
+    const baseArmorRed = isMountainTheme
+      ? "#db2777"
+      : isAutumnTheme
+        ? "#dc2626"
+        : "#c2410c";
+    const basePauldronYellow = isMountainTheme
+      ? "#818cf8"
+      : isAutumnTheme
+        ? "#fbbf24"
+        : "#eab308";
+    const baseVisorGreen = isMountainTheme
+      ? "#38bdf8"
+      : isAutumnTheme
+        ? "#10b981"
+        : "#22c55e";
+    const baseCannonGreen = isMountainTheme
+      ? "#22d3ee"
+      : isAutumnTheme
+        ? "#059669"
+        : "#15803d";
     const baseOutline = isMountainTheme
       ? "rgba(15, 23, 42, 0.85)"
-      : "rgba(0, 0, 0, 0.6)";
+      : isAutumnTheme
+        ? "rgba(41, 37, 36, 0.85)"
+        : "rgba(0, 0, 0, 0.6)";
 
     let armorOrange = resolveColor(baseArmorOrange, isOpponent);
     let armorRed = resolveColor(baseArmorRed, isOpponent);
@@ -10768,6 +13234,7 @@ export class StageRenderer {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
     const isMountainTheme = this.backgroundTheme === "mountain";
+    const isAutumnTheme = this.backgroundTheme === "autumn";
 
     if (specialType === "spinning_kong") {
       ctx.save();
@@ -10780,13 +13247,25 @@ export class StageRenderer {
       ctx.ellipse(x, centerY, vortexR, heightPx * 0.35, 0, 0, Math.PI * 2);
       ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
       ctx.lineWidth = 2.4;
-      ctx.shadowColor = isMountainTheme ? "#ec4899" : "#fbbf24";
+      ctx.shadowColor = isMountainTheme
+        ? "#ec4899"
+        : isAutumnTheme
+          ? "#f59e0b"
+          : "#fbbf24";
       ctx.shadowBlur = 8;
       ctx.stroke();
 
       // 2. Spinning arm blur trails orbiting DK
-      const armFur = isMountainTheme ? "#6366f1" : "#92400e";
-      const armSkin = isMountainTheme ? "#fdf4ff" : "#fed7aa";
+      const armFur = isMountainTheme
+        ? "#6366f1"
+        : isAutumnTheme
+          ? "#451a03"
+          : "#92400e";
+      const armSkin = isMountainTheme
+        ? "#fdf4ff"
+        : isAutumnTheme
+          ? "#fde68a"
+          : "#fed7aa";
       for (let i = 0; i < 2; i++) {
         const angle = frameCounter * spinSpeed + i * Math.PI;
         const armX = x + Math.cos(angle) * vortexR;
@@ -10813,10 +13292,26 @@ export class StageRenderer {
       const shockRadius = halfWidth * 1.4 + slamProg * 36;
       const alpha = 1 - slamProg;
 
-      const ripple1Color = isMountainTheme ? "#c084fc" : "#f59e0b";
-      const ripple1Glow = isMountainTheme ? "#a855f7" : "#d97706";
-      const ripple2Color = isMountainTheme ? "#38bdf8" : "#fbbf24";
-      const crackColor = isMountainTheme ? "#7e22ce" : "#b45309";
+      const ripple1Color = isMountainTheme
+        ? "#c084fc"
+        : isAutumnTheme
+          ? "#f97316"
+          : "#f59e0b";
+      const ripple1Glow = isMountainTheme
+        ? "#a855f7"
+        : isAutumnTheme
+          ? "#ea580c"
+          : "#d97706";
+      const ripple2Color = isMountainTheme
+        ? "#38bdf8"
+        : isAutumnTheme
+          ? "#facc15"
+          : "#fbbf24";
+      const crackColor = isMountainTheme
+        ? "#7e22ce"
+        : isAutumnTheme
+          ? "#78350f"
+          : "#b45309";
 
       // 1. Expanding earthquake floor ripple ellipse
       ctx.beginPath();
@@ -10859,8 +13354,14 @@ export class StageRenderer {
       const fistX = x - dir * (halfWidth * 0.6);
       const fistFill = isMountainTheme
         ? "rgba(236, 72, 153, 0.45)"
-        : "rgba(251, 191, 36, 0.4)";
-      const fistGlow = isMountainTheme ? "#f43f5e" : "#f59e0b";
+        : isAutumnTheme
+          ? "rgba(249, 115, 22, 0.45)"
+          : "rgba(251, 191, 36, 0.4)";
+      const fistGlow = isMountainTheme
+        ? "#f43f5e"
+        : isAutumnTheme
+          ? "#ea580c"
+          : "#f59e0b";
       ctx.beginPath();
       ctx.arc(fistX, centerY, 9 * pulse, 0, Math.PI * 2);
       ctx.fillStyle = fistFill;
