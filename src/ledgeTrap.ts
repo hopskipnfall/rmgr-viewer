@@ -119,8 +119,8 @@ export function buildRecoveryMap(
   for (let i = 0; i < replay.frames.length; i++) {
     const frame = replay.frames[i];
     if (!frame) continue;
-    const postA = frame.ports[portA]?.post;
-    const postB = frame.ports[portB]?.post;
+    const postA = frame.ports[portA]?.state;
+    const postB = frame.ports[portB]?.state;
     if (!postA || !postB) continue;
 
     const aInHitstun = isHitstunState(
@@ -235,7 +235,7 @@ export function computeLedgeTrapEvents(replay: Replay): LedgeTrapEvent[] {
   const events: LedgeTrapEvent[] = [];
 
   // Only meaningful on Dream Land, 2-player matches.
-  if (replay.gameStart.stageId !== DREAM_LAND_STAGE_ID) return events;
+  if (replay.matchSettings?.stageId !== DREAM_LAND_STAGE_ID) return events;
   const seated = getSeatedPorts(replay);
   if (seated.length !== 2) return events;
 
@@ -247,8 +247,8 @@ export function computeLedgeTrapEvents(replay: Replay): LedgeTrapEvent[] {
   for (let i = 0; i < replay.frames.length; i++) {
     const frame = replay.frames[i];
     if (!frame) continue;
-    const postA = frame.ports[portA]?.post;
-    const postB = frame.ports[portB]?.post;
+    const postA = frame.ports[portA]?.state;
+    const postB = frame.ports[portB]?.state;
     if (!postA || !postB) continue;
 
     const frameNumber = frame.frame;
@@ -426,7 +426,9 @@ export function computeLedgeTrapEvents(replay: Replay): LedgeTrapEvent[] {
     });
   }
 
-  if (situation !== null && replay.isComplete) {
+  // format v5 always parses a complete match (docs/RMGR_SPEC.md §2) - no
+  // "truncated recording" case to exclude here anymore.
+  if (situation !== null) {
     const lastFrame = replay.frames[replay.frames.length - 1];
     if (lastFrame) {
       events.push({

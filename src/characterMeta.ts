@@ -66,7 +66,7 @@ export function computeJigglypuffFThrowEvents(
   const [port0, port1] = seated as [PortIndex, PortIndex];
 
   for (const puffPort of [port0, port1]) {
-    const charId = replay.gameStart.ports[puffPort]?.characterId;
+    const charId = replay.matchSettings?.characterId[puffPort];
     if (!isJigglypuffCharacter(charId ?? -1)) continue;
 
     const oppPort = puffPort === port0 ? port1 : port0;
@@ -77,8 +77,8 @@ export function computeJigglypuffFThrowEvents(
     let resetFrame: number | null = null;
 
     for (let f = 0; f < replay.frames.length; f++) {
-      const puffPost = replay.frames[f]?.ports[puffPort]?.post;
-      const oppPost = replay.frames[f]?.ports[oppPort]?.post;
+      const puffPost = replay.frames[f]?.ports[puffPort]?.state;
+      const oppPost = replay.frames[f]?.ports[oppPort]?.state;
       if (!puffPost || !oppPost) continue;
 
       const isThrowF = puffPost.actionStateId === ActionStateId.ThrowF;
@@ -361,7 +361,7 @@ export function computeShieldPressureEvents(
   const [port0, port1] = seated as [PortIndex, PortIndex];
 
   for (const attackerPort of [port0, port1]) {
-    const charId = replay.gameStart.ports[attackerPort]?.characterId;
+    const charId = replay.matchSettings?.characterId[attackerPort];
     if (!isNessCharacter(charId ?? -1) && !isYoshiCharacter(charId ?? -1)) {
       continue;
     }
@@ -375,8 +375,8 @@ export function computeShieldPressureEvents(
     let resolved = false;
 
     for (let f = 0; f < replay.frames.length; f++) {
-      const attPost = replay.frames[f]?.ports[attackerPort]?.post;
-      const defPost = replay.frames[f]?.ports[defenderPort]?.post;
+      const attPost = replay.frames[f]?.ports[attackerPort]?.state;
+      const defPost = replay.frames[f]?.ports[defenderPort]?.state;
       if (!attPost || !defPost) continue;
 
       const defInShieldStun = isShieldStunState(defPost.actionStateId);

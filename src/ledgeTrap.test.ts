@@ -12,14 +12,19 @@ import { computeNeutralHitEvents } from "./neutralHits.js";
 function makeMockReplay(frames: Frame[]): Replay {
   return {
     header: {
-      version: 4,
-      streamLength: 1000,
+      version: 5,
+      gameFamily: "smash64",
       goodName: "Super Smash Bros. (U) (V1.0) [!]",
       recorderSchemaVersion: 1,
       recordedAtEpochMillis: 1724300000000,
-      recordedAtNanosOffset: 0,
+      uncompressedLength: 0,
+      compressedLength: 0,
     },
-    gameStart: {
+    matchStart: {
+      playerNames: ["kusora", "nue", "", ""],
+      slotType: ["human", "human", "empty", "empty"],
+    },
+    matchSettings: {
       stageId: DREAM_LAND_STAGE_ID,
       gameType: 2,
       stockCountSetting: 3,
@@ -28,52 +33,21 @@ function makeMockReplay(frames: Frame[]): Replay {
       itemFrequency: 0,
       teamsEnabled: false,
       handicapMode: "off",
-      ports: [
-        {
-          slotType: "human",
-          characterId: 41,
-          costumeId: 0,
-          teamColor: 0,
-          team: 0,
-          handicap: 0,
-          cpuLevel: 0,
-        },
-        {
-          slotType: "human",
-          characterId: 39,
-          costumeId: 0,
-          teamColor: 0,
-          team: 1,
-          handicap: 0,
-          cpuLevel: 0,
-        },
-        {
-          slotType: "empty",
-          characterId: 0,
-          costumeId: 0,
-          teamColor: 0,
-          team: 0,
-          handicap: 0,
-          cpuLevel: 0,
-        },
-        {
-          slotType: "empty",
-          characterId: 0,
-          costumeId: 0,
-          teamColor: 0,
-          team: 0,
-          handicap: 0,
-          cpuLevel: 0,
-        },
-      ],
-      playerNames: ["kusora", "nue", "", ""],
+      characterId: [41, 39, 0, 0],
+      costumeId: [0, 0, 0, 0],
+      teamColor: [0, 0, 0, 0],
+      portTeam: [0, 1, 0, 0],
+      portHandicap: [0, 0, 0, 0],
+      portCpuLevel: [0, 0, 0, 0],
     },
     frames,
-    gameEnd: {
+    matchEnd: {
+      finalFrame: frames.at(-1)?.frame ?? 0,
       endReason: "normal",
+    },
+    matchResult: {
       placements: [2, 1, -1, -1],
     },
-    isComplete: true,
   };
 }
 
@@ -104,14 +78,14 @@ function makeFrame(
     frame: frameNumber,
     ports: [
       {
-        pre: {
+        input: {
           frame: frameNumber,
           port: 0 as PortIndex,
           buttons: 0,
           stickX: 0,
           stickY: 0,
         },
-        post: {
+        state: {
           frame: frameNumber,
           port: 0 as PortIndex,
           characterId: 41,
@@ -132,14 +106,14 @@ function makeFrame(
         },
       },
       {
-        pre: {
+        input: {
           frame: frameNumber,
           port: 1 as PortIndex,
           buttons: 0,
           stickX: 0,
           stickY: 0,
         },
-        post: {
+        state: {
           frame: frameNumber,
           port: 1 as PortIndex,
           characterId: 39,

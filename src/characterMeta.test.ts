@@ -21,37 +21,25 @@ function makeReplay(
   }>,
 ): Replay {
   return {
-    gameStart: {
+    matchSettings: {
       stageId: 0x03,
-      ports: {
-        0: {
-          characterId: 0x0a,
-          costumeIndex: 0,
-          slotType: 0,
-          stocksRemaining: 4,
-        },
-        1: {
-          characterId: 0x01,
-          costumeIndex: 0,
-          slotType: 0,
-          stocksRemaining: 4,
-        },
-      },
-      playerNames: { 0: "Puff", 1: "Fox" },
+      characterId: [0x0a, 0x01],
     },
-    gameEnd: { gameEndType: 1 },
+    matchStart: {
+      playerNames: ["Puff", "Fox", "", ""],
+    },
+    matchEnd: { endReason: "normal" },
     frames: frames.map((f, idx) => ({
       frame: idx,
       ports: {
         0: {
-          pre: {
+          input: {
             actionStateId: f.p0State,
             stickX: 0,
             stickY: 0,
             buttons: 0,
-            trigger: 0,
           },
-          post: {
+          state: {
             actionStateId: f.p0State,
             actionFrameCounter: 0,
             characterId: 0x0a,
@@ -59,7 +47,6 @@ function makeReplay(
             positionY: 0,
             facingDirection: 1,
             damagePercent: 0,
-            shieldSize: 50,
             comboHitCount: 0,
             hitstunCounter: 0,
             stocksRemaining: 3,
@@ -67,14 +54,13 @@ function makeReplay(
           },
         },
         1: {
-          pre: {
+          input: {
             actionStateId: f.p1State,
             stickX: 0,
             stickY: 0,
             buttons: 0,
-            trigger: 0,
           },
-          post: {
+          state: {
             actionStateId: f.p1State,
             actionFrameCounter: 0,
             characterId: 0x01,
@@ -82,7 +68,6 @@ function makeReplay(
             positionY: 50,
             facingDirection: -1,
             damagePercent: 20,
-            shieldSize: 50,
             comboHitCount: f.p1Combo,
             hitstunCounter: 0,
             stocksRemaining: 3,
@@ -262,37 +247,25 @@ function makeNessReplay(
   }>,
 ): Replay {
   return {
-    gameStart: {
+    matchSettings: {
       stageId: 0x06,
-      ports: {
-        0: {
-          characterId: 0x0b, // Ness
-          costumeIndex: 0,
-          slotType: 0,
-          stocksRemaining: 4,
-        },
-        1: {
-          characterId: 0x01, // Fox
-          costumeIndex: 0,
-          slotType: 0,
-          stocksRemaining: 4,
-        },
-      },
-      playerNames: { 0: "Ness", 1: "Fox" },
+      characterId: [0x0b, 0x01], // Ness, Fox
     },
-    gameEnd: { gameEndType: 1 },
+    matchStart: {
+      playerNames: ["Ness", "Fox", "", ""],
+    },
+    matchEnd: { endReason: "normal" },
     frames: frames.map((f, idx) => ({
       frame: idx,
       ports: {
         0: {
-          pre: {
+          input: {
             actionStateId: f.p0State,
             stickX: 0,
             stickY: 0,
             buttons: 0,
-            trigger: 0,
           },
-          post: {
+          state: {
             actionStateId: f.p0State,
             actionFrameCounter: 0,
             characterId: 0x08,
@@ -300,7 +273,6 @@ function makeNessReplay(
             positionY: 0,
             facingDirection: 1,
             damagePercent: 0,
-            shieldSize: 50,
             comboHitCount: 0,
             hitstunCounter: 0,
             stocksRemaining: 3,
@@ -308,14 +280,13 @@ function makeNessReplay(
           },
         },
         1: {
-          pre: {
+          input: {
             actionStateId: f.p1State,
             stickX: 0,
             stickY: 0,
             buttons: 0,
-            trigger: 0,
           },
-          post: {
+          state: {
             actionStateId: f.p1State,
             actionFrameCounter: f.p1ActionFrame ?? 0,
             characterId: 0x01,
@@ -323,7 +294,6 @@ function makeNessReplay(
             positionY: 0,
             facingDirection: -1,
             damagePercent: 20,
-            shieldSize: 50,
             comboHitCount: 0,
             hitstunCounter: 0,
             stocksRemaining: 3,

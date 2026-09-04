@@ -978,7 +978,7 @@ export class MatchViewController {
       this.stageRenderer.render(
         this.camera,
         this.lastFrame,
-        this.currentReplay.gameStart.stageId,
+        this.currentReplay.matchSettings?.stageId,
         this.hoverScreen,
         this.currentReplay,
         this.playback?.currentIndex ?? 0,
@@ -992,7 +992,7 @@ export class MatchViewController {
       this.stageRenderer.render(
         this.camera,
         this.lastFrame,
-        this.currentReplay.gameStart.stageId,
+        this.currentReplay.matchSettings?.stageId,
         this.hoverScreen,
         this.currentReplay,
         this.playback?.currentIndex ?? 0,
@@ -1496,16 +1496,16 @@ export class MatchViewController {
     const tr = t();
 
     this.panels = getSeatedPorts(replay).map((port) => {
-      const settings = replay.gameStart.ports[port];
+      const characterId = replay.matchSettings?.characterId[port] ?? 0;
       const color = getPlayerColor(port, this.perspectivePort);
 
       const panel = document.createElement("div");
       panel.className = "player-panel";
       panel.style.setProperty("--player-color", color);
 
-      const name = replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
+      const name = replay.matchStart.playerNames[port] || PORT_LABELS[port];
       panel.innerHTML = `
-        <div class="player-name">${escapeHtml(name)} <span class="character">— ${escapeHtml(characterName(settings.characterId))} (${escapeHtml(PORT_LABELS[port])})</span></div>
+        <div class="player-name">${escapeHtml(name)} <span class="character">— ${escapeHtml(characterName(characterId))} (${escapeHtml(PORT_LABELS[port])})</span></div>
         <div class="player-stats">
           <div>${escapeHtml(tr.damage)} <strong class="stat-damage">—</strong></div>
           <div>${escapeHtml(tr.stocks)} <strong class="stat-stocks">—</strong></div>
@@ -1554,7 +1554,7 @@ export class MatchViewController {
       targets.push({ x: -400, y: 0 }, { x: 400, y: 0 }, { x: 0, y: 250 });
     } else {
       for (const panel of this.panels) {
-        const post = frame?.ports[panel.port]?.post;
+        const post = frame?.ports[panel.port]?.state;
         if (
           !post ||
           isDeadState(post.actionStateId) ||
@@ -1581,7 +1581,7 @@ export class MatchViewController {
     this.stageRenderer.render(
       this.camera,
       frame,
-      this.currentReplay?.gameStart.stageId,
+      this.currentReplay?.matchSettings?.stageId,
       this.hoverScreen,
       this.currentReplay,
       _frameIndex,
@@ -1596,7 +1596,7 @@ export class MatchViewController {
     const tr = t();
     for (const panel of this.panels) {
       const portData = frame?.ports[panel.port];
-      if (!portData) {
+      if (!portData || !portData.state) {
         panel.damageEl.textContent = "—";
         panel.stocksEl.textContent = "—";
         panel.jumpsEl.textContent = "—";
@@ -1604,10 +1604,10 @@ export class MatchViewController {
         panel.positionEl.textContent = "—";
         panel.comboHitsEl.textContent = "—";
         panel.comboHitsEl.className = "stat-combo-hits";
-        panel.pad.render(undefined);
+        panel.pad.render(portData?.input);
         continue;
       }
-      const { post, pre } = portData;
+      const { state: post, input: pre } = portData;
       panel.damageEl.textContent = `${post.damagePercent}%`;
       panel.stocksEl.textContent = String(post.stocksRemaining + 1);
       panel.jumpsEl.textContent = String(post.jumpsRemaining);
@@ -1641,7 +1641,7 @@ export class MatchViewController {
   } {
     const tr = t();
     const name = (port: PortIndex) =>
-      replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
+      replay.matchStart.playerNames[port] || PORT_LABELS[port];
 
     if (ev.kind === "neutral-hit") {
       let reasonLabel: string;
@@ -1957,9 +1957,9 @@ export class MatchViewController {
     for (const port of seated) {
       const btn = document.createElement("button");
       btn.className = "perspective-btn";
-      const name = replay.gameStart?.playerNames?.[port] || PORT_LABELS[port];
+      const name = replay.matchStart.playerNames[port] || PORT_LABELS[port];
       const iconUrl = characterIconUrl(
-        replay.gameStart.ports[port]?.characterId ?? -1,
+        replay.matchSettings?.characterId[port] ?? -1,
       );
       btn.innerHTML = `${iconUrl ? `<img class="perspective-btn-icon" src="${iconUrl}" alt="" />` : ""}<span>${escapeHtml(name)}</span>`;
 
@@ -1967,7 +1967,7 @@ export class MatchViewController {
         const wasOverlayActive =
           this.stageRenderer.isQuickAttackOverlayActive();
         this.perspectivePort = port;
-        const newCharId = replay.gameStart.ports[port]?.characterId;
+        const newCharId = replay.matchSettings?.characterId[port] ?? -1;
         if (wasOverlayActive && isPikachuCharacter(newCharId)) {
           const newPaths = extractAllQuickAttackPaths(replay, port, true);
           this.stageRenderer.setQuickAttackOverlay(newPaths);
@@ -2435,7 +2435,7 @@ export class MatchViewController {
     if (
       this.perspectivePort === null ||
       this.matchEvents.length === 0 ||
-      replay.gameStart.stageId !== DREAM_LAND_STAGE_ID
+      replay.matchSettings?.stageId !== DREAM_LAND_STAGE_ID
     ) {
       this.recoveryWidget.hidden = true;
       this.edgeGuardWidget.hidden = true;
@@ -3205,16 +3205,16 @@ export class MatchViewController {
       detail.hidden = this.selectedDIHitId !== h.id;
 
       const victimCharId =
-        this.currentReplay?.frames[0]?.ports[h.victimPort]?.post.characterId ??
-        0;
+        this.currentReplay?.frames[0]?.ports[h.victimPort]?.state
+          ?.characterId ?? 0;
       const victimChar = characterName(victimCharId);
       const victimName = `${PORT_LABELS[h.victimPort]} (${victimChar})`;
 
       let attackerName = "Opponent";
       if (h.attackerPort !== null) {
         const attackerCharId =
-          this.currentReplay?.frames[0]?.ports[h.attackerPort]?.post
-            .characterId ?? 0;
+          this.currentReplay?.frames[0]?.ports[h.attackerPort]?.state
+            ?.characterId ?? 0;
         const attackerChar = characterName(attackerCharId);
         attackerName = `${PORT_LABELS[h.attackerPort]} (${attackerChar})`;
       }
@@ -3379,7 +3379,7 @@ export class MatchViewController {
       return;
     }
 
-    const charId = replay.gameStart.ports[this.perspectivePort]?.characterId;
+    const charId = replay.matchSettings?.characterId[this.perspectivePort];
     if (charId === undefined) {
       this.characterMetaWidget.hidden = true;
       return;
@@ -3773,8 +3773,8 @@ export class MatchViewController {
 
     for (const key of Object.keys(frame.ports)) {
       const port = Number(key) as PortIndex;
-      const prevPost = previousFrame.ports[port]?.post;
-      const post = frame.ports[port]?.post;
+      const prevPost = previousFrame.ports[port]?.state;
+      const post = frame.ports[port]?.state;
       if (!prevPost || !post) continue;
 
       // jumpsRemaining decreasing is unambiguously "this port just
@@ -4375,7 +4375,7 @@ export class MatchViewController {
       return summarizeReplay(loaded).id;
     }
     const epoch = replay.header.recordedAtEpochMillis;
-    const stageId = replay.gameStart.stageId;
+    const stageId = replay.matchSettings?.stageId;
     return `replay_${stageId}_${epoch}_${replay.frames.length}`;
   }
 }

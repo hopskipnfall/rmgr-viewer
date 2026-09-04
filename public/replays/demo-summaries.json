@@ -216,8 +216,8 @@
     ],
     "statsByPort": {
       "0": {
-        "recoverySituations": 11,
-        "recoverySuccesses": 10,
+        "recoverySituations": 10,
+        "recoverySuccesses": 9,
         "edgeGuardSituations": 7,
         "edgeGuardSuccesses": 3,
         "ledgeGetupSituations": 8,
@@ -250,7 +250,7 @@
       "1": {
         "recoverySituations": 7,
         "recoverySuccesses": 4,
-        "edgeGuardSituations": 11,
+        "edgeGuardSituations": 10,
         "edgeGuardSuccesses": 1,
         "ledgeGetupSituations": 4,
         "ledgeGetupSuccesses": 4,
@@ -421,7 +421,7 @@
       "0": {
         "recoverySituations": 7,
         "recoverySuccesses": 4,
-        "edgeGuardSituations": 4,
+        "edgeGuardSituations": 3,
         "edgeGuardSuccesses": 3,
         "ledgeGetupSituations": 3,
         "ledgeGetupSuccesses": 3,
@@ -454,8 +454,8 @@
         "openingsConvertedToKill": 4
       },
       "1": {
-        "recoverySituations": 4,
-        "recoverySuccesses": 1,
+        "recoverySituations": 3,
+        "recoverySuccesses": 0,
         "edgeGuardSituations": 7,
         "edgeGuardSuccesses": 3,
         "ledgeGetupSituations": 1,
@@ -612,7 +612,7 @@
         "recoverySituations": 1,
         "recoverySuccesses": 1,
         "edgeGuardSituations": 2,
-        "edgeGuardSuccesses": 0,
+        "edgeGuardSuccesses": 1,
         "ledgeGetupSituations": 0,
         "ledgeGetupSuccesses": 0,
         "ledgeTrapSituations": 0,
@@ -639,7 +639,7 @@
       },
       "1": {
         "recoverySituations": 2,
-        "recoverySuccesses": 2,
+        "recoverySuccesses": 1,
         "edgeGuardSituations": 1,
         "edgeGuardSuccesses": 0,
         "ledgeGetupSituations": 0,
@@ -1341,7 +1341,7 @@
       "0": {
         "recoverySituations": 4,
         "recoverySuccesses": 3,
-        "edgeGuardSituations": 9,
+        "edgeGuardSituations": 7,
         "edgeGuardSuccesses": 1,
         "ledgeGetupSituations": 1,
         "ledgeGetupSuccesses": 1,
@@ -1376,8 +1376,8 @@
         "openingsConvertedToKill": 4
       },
       "1": {
-        "recoverySituations": 9,
-        "recoverySuccesses": 8,
+        "recoverySituations": 7,
+        "recoverySuccesses": 6,
         "edgeGuardSituations": 4,
         "edgeGuardSuccesses": 1,
         "ledgeGetupSituations": 5,
@@ -1434,8 +1434,8 @@
     ],
     "statsByPort": {
       "0": {
-        "recoverySituations": 5,
-        "recoverySuccesses": 4,
+        "recoverySituations": 4,
+        "recoverySuccesses": 3,
         "edgeGuardSituations": 3,
         "edgeGuardSuccesses": 2,
         "ledgeGetupSituations": 1,
@@ -1468,7 +1468,7 @@
       "1": {
         "recoverySituations": 3,
         "recoverySuccesses": 1,
-        "edgeGuardSituations": 5,
+        "edgeGuardSituations": 4,
         "edgeGuardSuccesses": 1,
         "ledgeGetupSituations": 1,
         "ledgeGetupSuccesses": 1,
@@ -1527,7 +1527,7 @@
       "0": {
         "recoverySituations": 3,
         "recoverySuccesses": 2,
-        "edgeGuardSituations": 2,
+        "edgeGuardSituations": 1,
         "edgeGuardSuccesses": 0,
         "ledgeGetupSituations": 1,
         "ledgeGetupSuccesses": 1,
@@ -1554,8 +1554,8 @@
         "openingsConvertedToKill": 0
       },
       "1": {
-        "recoverySituations": 2,
-        "recoverySuccesses": 2,
+        "recoverySituations": 1,
+        "recoverySuccesses": 1,
         "edgeGuardSituations": 3,
         "edgeGuardSuccesses": 1,
         "ledgeGetupSituations": 0,
@@ -2086,7 +2086,7 @@
       "0": {
         "recoverySituations": 5,
         "recoverySuccesses": 3,
-        "edgeGuardSituations": 3,
+        "edgeGuardSituations": 2,
         "edgeGuardSuccesses": 1,
         "ledgeGetupSituations": 1,
         "ledgeGetupSuccesses": 1,
@@ -2115,8 +2115,8 @@
         "openingsConvertedToKill": 2
       },
       "1": {
-        "recoverySituations": 3,
-        "recoverySuccesses": 2,
+        "recoverySituations": 2,
+        "recoverySuccesses": 1,
         "edgeGuardSituations": 5,
         "edgeGuardSuccesses": 2,
         "ledgeGetupSituations": 0,

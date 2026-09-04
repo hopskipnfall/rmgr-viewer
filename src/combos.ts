@@ -87,8 +87,8 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
   for (let i = 0; i < replay.frames.length; i++) {
     const frame = replay.frames[i];
     if (!frame) continue;
-    const postA = frame.ports[portA]?.post;
-    const postB = frame.ports[portB]?.post;
+    const postA = frame.ports[portA]?.state;
+    const postB = frame.ports[portB]?.state;
     if (!postA || !postB) continue;
 
     const frameNumber = frame.frame;
@@ -212,7 +212,7 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
 
           // Look at previous frame's damage if possible to capture pre-hit damage
           const prevPost =
-            i > 0 ? replay.frames[i - 1]?.ports[victimPort]?.post : null;
+            i > 0 ? replay.frames[i - 1]?.ports[victimPort]?.state : null;
           const initialDamage = prevPost
             ? prevPost.damagePercent
             : victimPost.damagePercent;

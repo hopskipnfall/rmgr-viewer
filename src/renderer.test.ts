@@ -67,8 +67,8 @@ import {
   HazardFlag,
   type Frame,
   type PortIndex,
-  type PostFrameUpdate,
-  type PreFrameUpdate,
+  type StateFrame,
+  type InputFrame,
   type Replay,
 } from "@rmg-k/rmgr";
 import {
@@ -321,70 +321,75 @@ describe("isQuickAttackState", () => {
 describe("extractAllQuickAttackPaths", () => {
   it("extracts all Quick Attack path segments for Pikachu", () => {
     const replay = {
-      gameStart: {
+      matchSettings: {
         stageId: DREAM_LAND_STAGE_ID,
-        ports: [
-          { characterId: 0x09 }, // Pikachu
-          { characterId: 0x01 }, // Fox
-        ],
+        characterId: [0x09, 0x01], // Pikachu, Fox
       },
       frames: [
         // Frame 0: Idle
         {
           frame: 0,
           ports: [
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         // Frame 1-3: Quick Attack 1 (Startup -> Zip 1 -> End)
         {
           frame: 1,
           ports: [
-            { post: { actionStateId: 0x0e8, positionX: 10, positionY: 0 } },
+            { state: { actionStateId: 0x0e8, positionX: 10, positionY: 0 } },
           ],
         },
         {
           frame: 2,
           ports: [
-            { post: { actionStateId: 0x0ec, positionX: 100, positionY: 50 } },
+            { state: { actionStateId: 0x0ec, positionX: 100, positionY: 50 } },
           ],
         },
         {
           frame: 3,
           ports: [
-            { post: { actionStateId: 0x0e9, positionX: 150, positionY: 50 } },
+            { state: { actionStateId: 0x0e9, positionX: 150, positionY: 50 } },
           ],
         },
         // Frame 4: Landed / Idle
         {
           frame: 4,
           ports: [
-            { post: { actionStateId: 0x0a, positionX: 150, positionY: 0 } },
+            { state: { actionStateId: 0x0a, positionX: 150, positionY: 0 } },
           ],
         },
         // Frame 5-8: Quick Attack 2 (Startup -> Zip 1 -> Zip 2 -> End)
         {
           frame: 5,
           ports: [
-            { post: { actionStateId: 0x0eb, positionX: 200, positionY: 100 } },
+            {
+              state: { actionStateId: 0x0eb, positionX: 200, positionY: 100 },
+            },
           ],
         },
         {
           frame: 6,
           ports: [
-            { post: { actionStateId: 0x0ec, positionX: 300, positionY: 200 } },
+            {
+              state: { actionStateId: 0x0ec, positionX: 300, positionY: 200 },
+            },
           ],
         },
         {
           frame: 7,
           ports: [
-            { post: { actionStateId: 0x0ed, positionX: 400, positionY: 250 } },
+            {
+              state: { actionStateId: 0x0ed, positionX: 400, positionY: 250 },
+            },
           ],
         },
         {
           frame: 8,
           ports: [
-            { post: { actionStateId: 0x0ea, positionX: 450, positionY: 250 } },
+            {
+              state: { actionStateId: 0x0ea, positionX: 450, positionY: 250 },
+            },
           ],
         },
       ],
@@ -409,17 +414,19 @@ describe("extractAllQuickAttackPaths", () => {
   it("filters Quick Attacks to only those during recovery situations by default", () => {
     // Replay with port 0 (Pikachu) in a recovery situation (offstage outside danger zone)
     const replay = {
-      gameStart: {
+      matchSettings: {
         stageId: DREAM_LAND_STAGE_ID,
-        ports: [{ characterId: 0x09 }, { characterId: 0x01 }],
+        characterId: [0x09, 0x01],
       },
       frames: [
         // Frame 0: Offstage outside danger zone (starts recovery situation)
         {
           frame: 0,
           ports: [
-            { post: { actionStateId: 0x18, positionX: -3500, positionY: 500 } },
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            {
+              state: { actionStateId: 0x18, positionX: -3500, positionY: 500 },
+            },
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         // Frame 1-3: Quick Attack during recovery
@@ -427,25 +434,35 @@ describe("extractAllQuickAttackPaths", () => {
           frame: 1,
           ports: [
             {
-              post: { actionStateId: 0x0e8, positionX: -3500, positionY: 500 },
+              state: {
+                actionStateId: 0x0e8,
+                positionX: -3500,
+                positionY: 500,
+              },
             },
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         {
           frame: 2,
           ports: [
             {
-              post: { actionStateId: 0x0ec, positionX: -2000, positionY: 500 },
+              state: {
+                actionStateId: 0x0ec,
+                positionX: -2000,
+                positionY: 500,
+              },
             },
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         {
           frame: 3,
           ports: [
-            { post: { actionStateId: 0x0e9, positionX: -500, positionY: 500 } },
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            {
+              state: { actionStateId: 0x0e9, positionX: -500, positionY: 500 },
+            },
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
       ],
@@ -463,41 +480,49 @@ describe("extractAllQuickAttackPaths", () => {
 
   it("breaks out white jump segment between jump in air and Up-B start", () => {
     const replay = {
-      gameStart: {
+      matchSettings: {
         stageId: DREAM_LAND_STAGE_ID,
-        ports: [{ characterId: 0x09 }, { characterId: 0x01 }],
+        characterId: [0x09, 0x01],
       },
       frames: [
         // Frame 0: Offstage falling (starts recovery)
         {
           frame: 0,
           ports: [
-            { post: { actionStateId: 0x1a, positionX: -3600, positionY: 300 } }, // Fall
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            {
+              state: { actionStateId: 0x1a, positionX: -3600, positionY: 300 },
+            }, // Fall
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         // Frame 1: Still falling
         {
           frame: 1,
           ports: [
-            { post: { actionStateId: 0x1a, positionX: -3500, positionY: 200 } }, // Fall
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            {
+              state: { actionStateId: 0x1a, positionX: -3500, positionY: 200 },
+            }, // Fall
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         // Frame 2: Mid-air jump
         {
           frame: 2,
           ports: [
-            { post: { actionStateId: 0x18, positionX: -3400, positionY: 350 } }, // JumpAerialF
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            {
+              state: { actionStateId: 0x18, positionX: -3400, positionY: 350 },
+            }, // JumpAerialF
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         // Frame 3: Mid-air jump rising
         {
           frame: 3,
           ports: [
-            { post: { actionStateId: 0x18, positionX: -3300, positionY: 500 } }, // JumpAerialF
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            {
+              state: { actionStateId: 0x18, positionX: -3300, positionY: 500 },
+            }, // JumpAerialF
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         // Frame 4-5: Up-B
@@ -505,18 +530,26 @@ describe("extractAllQuickAttackPaths", () => {
           frame: 4,
           ports: [
             {
-              post: { actionStateId: 0x0e8, positionX: -3300, positionY: 500 },
+              state: {
+                actionStateId: 0x0e8,
+                positionX: -3300,
+                positionY: 500,
+              },
             },
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
         {
           frame: 5,
           ports: [
             {
-              post: { actionStateId: 0x0ec, positionX: -1500, positionY: 500 },
+              state: {
+                actionStateId: 0x0ec,
+                positionX: -1500,
+                positionY: 500,
+              },
             },
-            { post: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
+            { state: { actionStateId: 0x0a, positionX: 0, positionY: 0 } },
           ],
         },
       ],
@@ -549,9 +582,9 @@ describe("extractAllQuickAttackPaths", () => {
 
   it("returns empty array for non-Pikachu characters", () => {
     const replay = {
-      gameStart: {
+      matchSettings: {
         stageId: DREAM_LAND_STAGE_ID,
-        ports: [{ characterId: 0x01 }], // Fox
+        characterId: [0x01], // Fox
       },
       frames: [],
     } as unknown as Replay;
@@ -886,8 +919,8 @@ describe("getFoxFlightAngle", () => {
     const replay = {
       gameStart: { ports: { 0: { characterId: 0x01 } } },
       frames: [
-        { ports: { 0: { post: { positionX: 0, positionY: 0 } } } },
-        { ports: { 0: { post: { positionX: 0, positionY: 5 } } } },
+        { ports: { 0: { state: { positionX: 0, positionY: 0 } } } },
+        { ports: { 0: { state: { positionX: 0, positionY: 5 } } } },
       ],
     } as unknown as Replay;
     const angle = getFoxFlightAngle(replay, 1, 0, {
@@ -902,8 +935,8 @@ describe("getFoxFlightAngle", () => {
     const replay = {
       gameStart: { ports: { 0: { characterId: 0x01 } } },
       frames: [
-        { ports: { 0: { post: { positionX: 0, positionY: 0 } } } },
-        { ports: { 0: { post: { positionX: 5, positionY: 0 } } } },
+        { ports: { 0: { state: { positionX: 0, positionY: 0 } } } },
+        { ports: { 0: { state: { positionX: 5, positionY: 0 } } } },
       ],
     } as unknown as Replay;
     const angle = getFoxFlightAngle(replay, 1, 0, {
@@ -918,8 +951,8 @@ describe("getFoxFlightAngle", () => {
     const replay = {
       gameStart: { ports: { 0: { characterId: 0x01 } } },
       frames: [
-        { ports: { 0: { post: { positionX: 0, positionY: 0 } } } },
-        { ports: { 0: { post: { positionX: 5, positionY: 5 } } } },
+        { ports: { 0: { state: { positionX: 0, positionY: 0 } } } },
+        { ports: { 0: { state: { positionX: 5, positionY: 5 } } } },
       ],
     } as unknown as Replay;
     const angle = getFoxFlightAngle(replay, 1, 0, {
@@ -1535,13 +1568,13 @@ describe("Fox Blaster and Yoshi Egg Throw", () => {
 });
 
 describe("computeLedgeGrabCandidates", () => {
-  function makePre(port: PortIndex, frameNum: number): PreFrameUpdate {
+  function makePre(port: PortIndex, frameNum: number): InputFrame {
     return { frame: frameNum, port, buttons: 0, stickX: 0, stickY: 0 };
   }
 
   function makePost(
-    overrides: Partial<PostFrameUpdate> & { port: PortIndex },
-  ): PostFrameUpdate {
+    overrides: Partial<StateFrame> & { port: PortIndex },
+  ): StateFrame {
     return {
       frame: 0,
       characterId: 0x01, // Fox
@@ -1564,10 +1597,10 @@ describe("computeLedgeGrabCandidates", () => {
     };
   }
 
-  function makeFrame(frameNum: number, posts: PostFrameUpdate[]): Frame {
+  function makeFrame(frameNum: number, posts: StateFrame[]): Frame {
     const ports: { -readonly [K in PortIndex]?: Frame["ports"][K] } = {};
     for (const post of posts) {
-      ports[post.port] = { pre: makePre(post.port, frameNum), post };
+      ports[post.port] = { input: makePre(post.port, frameNum), state: post };
     }
     return { frame: frameNum, ports };
   }
@@ -1580,7 +1613,7 @@ describe("computeLedgeGrabCandidates", () => {
   /** A replay where every frame has the same single port/post (constant condition), for fade-ramp tests. */
   function makeSteadyReplay(
     frameCount: number,
-    post: Omit<PostFrameUpdate, "frame">,
+    post: Omit<StateFrame, "frame">,
   ): Replay {
     return makeReplay(
       Array.from({ length: frameCount }, (_, i) =>
@@ -1592,7 +1625,7 @@ describe("computeLedgeGrabCandidates", () => {
   // Dream Land ground: leftX -2318, rightX 2318, y 0 (see stageGeometry.ts)
   const RIGHT_EDGE_X = 2318;
   const LEFT_EDGE_X = -2318;
-  const FOX_OFF_RIGHT_EDGE: Omit<PostFrameUpdate, "frame"> = {
+  const FOX_OFF_RIGHT_EDGE: Omit<StateFrame, "frame"> = {
     port: 0 as PortIndex,
     characterId: 0x01, // Fox: reachX 400, heightY 400
     actionStateId: 0x01a, // Fall
