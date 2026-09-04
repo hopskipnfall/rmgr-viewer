@@ -68,6 +68,13 @@ export interface GameSummary {
   recordedAt: Date;
   stageId: number;
   frameCount: number;
+  /**
+   * Always true as of format v5 - the parser throws rather than returning a
+   * partial Replay for a truncated file (docs/RMGR_SPEC.md §2/§3.4), so
+   * there's no "truncated recording" case to represent. Kept as a field
+   * (rather than removed) to avoid rippling through every fixture/serialized
+   * summary that still sets it.
+   */
   isComplete: boolean;
   ports: GamePortSummary[];
   statsByPort: Partial<Record<PortIndex, RawCounters>>;
@@ -277,36 +284,36 @@ export function summarizeReplay(
   const seated = getSeatedPorts(replay);
 
   const ports: GamePortSummary[] = seated.map((port) => {
-    const settings = replay.gameStart.ports[port];
-    const name = replay.gameStart?.playerNames?.[port] || "";
+    const name = replay.matchStart.playerNames[port] || "";
     let finalStocks = 0;
-    if (replay.gameEnd) {
-      const p = replay.gameEnd.placements[port];
+    if (replay.matchResult) {
+      const p = replay.matchResult.placements[port];
       finalStocks = p !== undefined && p >= 0 ? p + 1 : 0;
     } else if (replay.frames.length > 0) {
       const lastFrame = replay.frames[replay.frames.length - 1];
-      const post = lastFrame?.ports[port]?.post;
-      if (post) {
-        finalStocks = post.stocksRemaining >= 0 ? post.stocksRemaining + 1 : 0;
+      const state = lastFrame?.ports[port]?.state;
+      if (state) {
+        finalStocks =
+          state.stocksRemaining >= 0 ? state.stocksRemaining + 1 : 0;
       }
     }
 
     let startStocks: number | undefined;
     for (let fIdx = 0; fIdx < Math.min(replay.frames.length, 30); fIdx++) {
-      const post = replay.frames[fIdx]?.ports[port]?.post;
-      if (post && post.stocksRemaining >= 0) {
-        startStocks = post.stocksRemaining + 1;
+      const state = replay.frames[fIdx]?.ports[port]?.state;
+      if (state && state.stocksRemaining >= 0) {
+        startStocks = state.stocksRemaining + 1;
         break;
       }
     }
     if (startStocks === undefined) {
-      startStocks = (replay.gameStart?.stockCountSetting ?? 3) + 1;
+      startStocks = (replay.matchSettings?.stockCountSetting ?? 3) + 1;
     }
 
     return {
       port,
       playerName: name,
-      characterId: settings.characterId,
+      characterId: replay.matchSettings?.characterId[port] ?? 0,
       finalStocks,
       startStocks,
     };
@@ -327,10 +334,11 @@ export function summarizeReplay(
     }
   }
 
+  const stageId = replay.matchSettings?.stageId ?? 0;
   const id = generateGameId(
     sourceName,
     replay.header.recordedAtEpochMillis,
-    replay.gameStart.stageId,
+    stageId,
     replay.frames.length,
     ports.map((p) => ({
       port: p.port,
@@ -343,9 +351,9 @@ export function summarizeReplay(
     id,
     sourceName,
     recordedAt,
-    stageId: replay.gameStart.stageId,
+    stageId,
     frameCount: replay.frames.length,
-    isComplete: replay.isComplete,
+    isComplete: true,
     ports,
     statsByPort,
     fileRef,

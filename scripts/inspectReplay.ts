@@ -1,9 +1,9 @@
 /**
  * Reports what's actually encoded in one or more `.rmgr` files: header
- * version/schema, frame count, and per-event-type presence (items, hitboxes,
- * hurtboxes, stage hazards) - the events this format makes optional or
- * opt-in (see docs/RMGR_SPEC.md §5/§8 in the RMG-K repo), so "does this file
- * actually have X" isn't always obvious from the file alone.
+ * version/game-family/schema, frame count, and per-event-type presence
+ * (items, stage hazards) - the events this format makes optional (see
+ * docs/RMGR_SPEC.md §5 in the RMG-K repo), so "does this file actually have
+ * X" isn't always obvious from the file alone.
  *
  * Usage: `npm run inspect:replay -- <file-or-directory> [...more]`
  * A directory argument is expanded to every `*.rmgr` file directly inside it
@@ -16,13 +16,11 @@ import { parseReplay, type Replay } from "@rmg-k/rmgr";
 interface ReplayReport {
   file: string;
   version: number;
+  gameFamily: string;
   recorderSchemaVersion: number;
   recordedAt: string;
   frameCount: number;
-  isComplete: boolean;
   itemFrames: number;
-  hitboxFrames: number;
-  hurtboxFrames: number;
   hazardFrames: number;
 }
 
@@ -35,31 +33,25 @@ function expandArgToFiles(arg: string): string[] {
     .map((name) => path.join(arg, name));
 }
 
-function inspect(file: string): ReplayReport {
+async function inspect(file: string): Promise<ReplayReport> {
   const bytes = new Uint8Array(readFileSync(file));
-  const replay: Replay = parseReplay(bytes);
+  const replay: Replay = await parseReplay(bytes);
 
   let itemFrames = 0;
-  let hitboxFrames = 0;
-  let hurtboxFrames = 0;
   let hazardFrames = 0;
   for (const frame of replay.frames) {
     if (frame.items && frame.items.length > 0) itemFrames++;
-    if (frame.hitboxes && frame.hitboxes.length > 0) hitboxFrames++;
-    if (frame.hurtboxes && frame.hurtboxes.length > 0) hurtboxFrames++;
     if (frame.hazardFlags) hazardFrames++;
   }
 
   return {
     file: path.basename(file),
     version: replay.header.version,
+    gameFamily: replay.header.gameFamily || "(unrecognized)",
     recorderSchemaVersion: replay.header.recorderSchemaVersion,
     recordedAt: new Date(replay.header.recordedAtEpochMillis).toISOString(),
     frameCount: replay.frames.length,
-    isComplete: replay.isComplete,
     itemFrames,
-    hitboxFrames,
-    hurtboxFrames,
     hazardFrames,
   };
 }
@@ -70,7 +62,7 @@ function presence(count: number, total: number): string {
   return count > 0 ? `${count}/${total} frames` : "none";
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.length === 0) {
     console.error(
@@ -85,7 +77,7 @@ function main(): void {
   for (const file of files) {
     let report: ReplayReport;
     try {
-      report = inspect(file);
+      report = await inspect(file);
     } catch (err) {
       console.error(
         `${path.basename(file)}: FAILED TO PARSE - ${(err as Error).message}`,
@@ -96,19 +88,11 @@ function main(): void {
 
     console.log(report.file);
     console.log(
-      `  format v${report.version}, recorder schema v${report.recorderSchemaVersion}, recorded ${report.recordedAt}`,
+      `  format v${report.version}, family ${report.gameFamily}, recorder schema v${report.recorderSchemaVersion}, recorded ${report.recordedAt}`,
     );
-    console.log(
-      `  ${report.frameCount} frames${report.isComplete ? "" : " (truncated - no GameEnd)"}`,
-    );
+    console.log(`  ${report.frameCount} frames`);
     console.log(
       `  items:    ${presence(report.itemFrames, report.frameCount)}`,
-    );
-    console.log(
-      `  hitboxes: ${presence(report.hitboxFrames, report.frameCount)}`,
-    );
-    console.log(
-      `  hurtboxes: ${presence(report.hurtboxFrames, report.frameCount)}`,
     );
     console.log(
       `  hazards:  ${presence(report.hazardFrames, report.frameCount)}`,

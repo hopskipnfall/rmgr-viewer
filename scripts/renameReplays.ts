@@ -1,6 +1,6 @@
 /**
  * Rewrites a batch of `.rmgr` replay files: renames one or more player
- * names (both the header's `gameStart.playerNames` and the resulting
+ * names (both the header's `matchStart.playerNames` and the resulting
  * filename) and/or shifts every file's `recordedAtEpochMillis` by a fixed
  * number of days - e.g. to bring a freshly re-recorded demo session back
  * onto the date range some other part of the app (like main.ts's
@@ -87,7 +87,7 @@ function formatLocalFilenameStamp(epochMillis: number): string {
 }
 
 function renamePlayers(
-  playerNames: Replay["gameStart"]["playerNames"],
+  playerNames: Replay["matchStart"]["playerNames"],
   renames: Map<string, string>,
 ): [string, string, string, string] {
   return playerNames.map((name) => renames.get(name) ?? name) as [
@@ -98,7 +98,7 @@ function renamePlayers(
   ];
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const { inputDir, outputDir, renames, shiftDays } = parseArgs(
     process.argv.slice(2),
   );
@@ -112,10 +112,10 @@ function main(): void {
 
   for (const file of files) {
     const bytes = new Uint8Array(readFileSync(path.join(inputDir, file)));
-    const replay = parseReplay(bytes);
+    const replay = await parseReplay(bytes);
 
     const renamedPlayerNames = renamePlayers(
-      replay.gameStart.playerNames,
+      replay.matchStart.playerNames,
       renames,
     );
     const shiftedEpochMillis =
@@ -137,14 +137,16 @@ function main(): void {
     }
     usedNames.add(outputName);
 
-    const out = serializeReplay({
+    const out = await serializeReplay({
+      gameFamily: replay.header.gameFamily,
       goodName: replay.header.goodName,
       recorderSchemaVersion: replay.header.recorderSchemaVersion,
       recordedAtEpochMillis: shiftedEpochMillis,
-      recordedAtNanosOffset: replay.header.recordedAtNanosOffset,
-      gameStart: { ...replay.gameStart, playerNames: renamedPlayerNames },
+      matchStart: { ...replay.matchStart, playerNames: renamedPlayerNames },
+      matchSettings: replay.matchSettings,
       frames: replay.frames,
-      gameEnd: replay.gameEnd,
+      matchEnd: replay.matchEnd,
+      matchResult: replay.matchResult,
     });
 
     writeFileSync(path.join(outputDir, outputName), out);
