@@ -95,6 +95,92 @@ const JIGGLYPUFF_SIZE: CharacterSize = {
   width: PIKACHU_HEIGHT * 0.88,
 };
 
+// 8. Bowser: massive, wide spiked shell, heavy stance
+const BOWSER_SIZE: CharacterSize = {
+  height: CAPTAIN_FALCON_HEIGHT * 1.04,
+  width: CAPTAIN_FALCON_HEIGHT * 1.04 * 1.05,
+};
+
+const GIGA_BOWSER_SIZE: CharacterSize = {
+  height: BOWSER_SIZE.height * 1.18,
+  width: BOWSER_SIZE.width * 1.18,
+};
+
+const GANONDORF_SIZE: CharacterSize = {
+  height: CAPTAIN_FALCON_HEIGHT * 1.05,
+  width: CAPTAIN_FALCON_SIZE.width * 1.06,
+};
+
+const WARIO_SIZE: CharacterSize = {
+  height: MARIO_SIZE.height * 0.98,
+  width: MARIO_SIZE.width * 1.16,
+};
+
+const DEDEDE_SIZE: CharacterSize = {
+  height: DONKEY_KONG_SIZE.height * 0.96,
+  width: DONKEY_KONG_SIZE.width * 1.02,
+};
+
+const MEWTWO_SIZE: CharacterSize = {
+  height: CAPTAIN_FALCON_HEIGHT * 1.02,
+  width: CAPTAIN_FALCON_SIZE.width * 0.88,
+};
+
+const SONIC_SIZE: CharacterSize = {
+  height: MARIO_SIZE.height * 0.96,
+  width: MARIO_SIZE.width * 0.9,
+};
+
+const PEACH_SIZE: CharacterSize = {
+  height: SAMUS_SIZE.height * 0.98,
+  width: MARIO_SIZE.width * 0.96,
+};
+
+const MARTH_SIZE: CharacterSize = {
+  height: LINK_SIZE.height * 1.02,
+  width: LINK_SIZE.width * 0.95,
+};
+
+const BANJO_SIZE: CharacterSize = {
+  height: DONKEY_KONG_SIZE.height * 0.92,
+  width: DONKEY_KONG_SIZE.width * 0.92,
+};
+
+const LANKY_KONG_SIZE: CharacterSize = {
+  height: DONKEY_KONG_SIZE.height * 0.94,
+  width: DONKEY_KONG_SIZE.width * 1.22,
+};
+
+const SANDBAG_SIZE: CharacterSize = {
+  height: MARIO_SIZE.height * 0.85,
+  width: MARIO_SIZE.width * 0.65,
+};
+
+const PIANO_SIZE: CharacterSize = {
+  height: MARIO_SIZE.height * 0.95,
+  width: MARIO_SIZE.width * 1.25,
+};
+
+const CONKER_SIZE: CharacterSize = {
+  height: NESS_SIZE.height * 0.92,
+  width: NESS_SIZE.width,
+};
+
+const CRASH_SIZE: CharacterSize = {
+  height: MARIO_SIZE.height * 1.02,
+  width: MARIO_SIZE.width * 0.9,
+};
+
+const SHEIK_SIZE: CharacterSize = {
+  height: LINK_SIZE.height * 0.98,
+  width: LINK_SIZE.width * 0.88,
+};
+
+const WOLF_SIZE: CharacterSize = {
+  height: FOX_SIZE.height * 1.02,
+  width: FOX_SIZE.width,
+};
+
 const CHARACTER_SIZES: Partial<Record<number, CharacterSize>> = {
   0x00: MARIO_SIZE, // Mario
   0x01: FOX_SIZE, // Fox
@@ -108,6 +194,24 @@ const CHARACTER_SIZES: Partial<Record<number, CharacterSize>> = {
   0x09: PIKACHU_SIZE, // Pikachu
   0x0a: JIGGLYPUFF_SIZE, // Jigglypuff
   0x0b: NESS_SIZE, // Ness
+  0x1e: GANONDORF_SIZE, // Ganondorf
+  0x21: WARIO_SIZE, // Wario
+  0x34: BOWSER_SIZE, // Bowser
+  0x35: GIGA_BOWSER_SIZE, // Giga Bowser
+  0x36: PIANO_SIZE, // Mad Piano
+  0x37: WOLF_SIZE, // Wolf
+  0x38: CONKER_SIZE, // Conker
+  0x39: MEWTWO_SIZE, // Mewtwo
+  0x3a: MARTH_SIZE, // Marth
+  0x3b: SONIC_SIZE, // Sonic
+  0x3c: SANDBAG_SIZE, // Sandbag
+  0x3d: SONIC_SIZE, // Super Sonic
+  0x3e: SHEIK_SIZE, // Sheik
+  0x40: DEDEDE_SIZE, // King Dedede
+  0x44: BANJO_SIZE, // Banjo
+  0x48: CRASH_SIZE, // Crash
+  0x49: PEACH_SIZE, // Peach
+  0x4c: LANKY_KONG_SIZE, // Lanky Kong
 };
 
 // Map variants (Polygon, JP, EU, Boss/Metal) to base character IDs
@@ -129,8 +233,31 @@ export const VARIANT_TO_BASE_ID: Partial<Record<number, number>> = {
   // Special Variants
   0x0d: 0x00, // Metal Mario
   0x1a: 0x02, // Giant DK
-  0x26: 0x06, // Giant Yoshi
+  0x26: 0x0b, // Lucas
+  0x35: 0x34, // Giga Bowser
   0x45: 0x04, // Metal Luigi
+  0x4f: 0x34, // Polygon Bowser
+
+  // Remix Clones & Semi-Clones
+  0x1d: 0x01, // Falco -> Fox
+  0x1e: 0x07, // Ganondorf -> Falcon
+  0x1f: 0x05, // Young Link -> Link
+  0x20: 0x00, // Dr. Mario -> Mario
+  0x21: 0x00, // Wario -> Mario
+  0x22: 0x03, // Dark Samus -> Samus
+  0x37: 0x01, // Wolf -> Fox
+  0x4a: 0x05, // Roy -> Link
+  0x4b: 0x04, // Dr. Luigi -> Luigi
+
+  // Remix Polygons
+  0x4d: 0x00, // Polygon Wario -> Mario
+  0x4e: 0x0b, // Polygon Lucas -> Ness
+  0x50: 0x01, // Polygon Wolf -> Fox
+  0x51: 0x00, // Polygon Dr. Mario -> Mario
+  0x55: 0x01, // Polygon Falco -> Fox
+  0x56: 0x07, // Polygon Ganondorf -> Falcon
+  0x57: 0x03, // Polygon Dark Samus -> Samus
+  0x5b: 0x05, // Polygon Young Link -> Link
 
   // JP Region Variants
   0x24: 0x03, // Samus (JP)
@@ -173,6 +300,27 @@ export const CHARACTER_ICONIC_COLORS: Readonly<Record<number, string>> = {
   0x0b: "#ef4444", // Ness - Red
   0x0c: "#a855f7", // Master Hand - Purple
   0x0d: "#94a3b8", // Metal Mario - Steel
+  0x1d: "#0284c7", // Falco - Cyan / Sky Blue
+  0x1e: "#581c87", // Ganondorf - Dark Purple
+  0x1f: "#65a30d", // Young Link - Kokiri Green
+  0x20: "#f8fafc", // Dr. Mario - White Coat
+  0x21: "#eab308", // Wario - Yellow
+  0x22: "#3b0764", // Dark Samus - Phazon Indigo
+  0x26: "#f59e0b", // Lucas - Amber / Orange
+  0x34: "#15803d", // Bowser - Forest Green
+  0x35: "#7f1d1d", // Giga Bowser - Blood Red
+  0x37: "#64748b", // Wolf - Slate Gray
+  0x38: "#f97316", // Conker - Squirrel Orange
+  0x39: "#c084fc", // Mewtwo - Psychic Purple
+  0x3a: "#2563eb", // Marth - Royal Blue
+  0x3b: "#0284c7", // Sonic - Cobalt Blue
+  0x3e: "#6366f1", // Sheik - Indigo
+  0x3f: "#06b6d4", // Marina - Cyan
+  0x40: "#dc2626", // King Dedede - Regal Red
+  0x44: "#b45309", // Banjo - Honey Bear Brown
+  0x48: "#ea580c", // Crash - Bandicoot Orange
+  0x49: "#f472b6", // Peach - Princess Pink
+  0x4a: "#dc2626", // Roy - Crimson Fire
 };
 
 export function getCharacterIconicColor(characterId: number): string {

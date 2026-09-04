@@ -18,6 +18,7 @@ import {
   getYoshiSpecialType,
   START_NAME_DISPLAY_FRAMES,
   START_NAME_SOLID_FRAMES,
+  isBowserCharacter,
   isCrouchState,
   isDeadState,
   isDizzyState,
@@ -1075,6 +1076,13 @@ describe("Original 12 Character Classifiers", () => {
     expect(isNessCharacter(0x26)).toBe(true);
     expect(isNessCharacter(0x4e)).toBe(true);
     expect(isNessCharacter(0x00)).toBe(false);
+  });
+
+  it("identifies Bowser variants correctly", () => {
+    expect(isBowserCharacter(0x34)).toBe(true);
+    expect(isBowserCharacter(0x35)).toBe(true);
+    expect(isBowserCharacter(0x4f)).toBe(true);
+    expect(isBowserCharacter(0x00)).toBe(false);
   });
 });
 
@@ -2643,6 +2651,38 @@ describe("StageRenderer background themes", () => {
       defaultState,
     );
     expect(fills).toContain("#ea580c");
+
+    // 12. Bowser: Moonlit Midnight Shell #1e1b4b, Magenta Hair #ec4899 vs Classic Shell #14532d, Fiery Red Hair #dc2626
+    renderer.setBackgroundTheme("mountain");
+    fills.length = 0;
+    renderer["drawBowserPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#1e1b4b");
+    expect(fills).toContain("#ec4899");
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawBowserPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#14532d");
+    expect(fills).toContain("#dc2626");
   });
 
   it("applies autumn-specific skins to Pikachu and Yoshi on the autumn theme", () => {
@@ -2885,6 +2925,23 @@ describe("StageRenderer background themes", () => {
     expect(fills).toContain("#f59e0b");
     expect(fills).toContain("#dc2626");
     expect(fills).toContain("#10b981");
+
+    // Bowser on autumn: Forest shell #365314, crimson hair #dc2626, golden amber belly #f59e0b
+    fills.length = 0;
+    renderer["drawBowserPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#365314");
+    expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#f59e0b");
   });
 
   it("draws blooming Japanese Sakura trees on the mountain night theme without crashing", () => {
@@ -3098,5 +3155,141 @@ describe("StageRenderer background themes", () => {
       );
       expect(fills).toHaveLength(0);
     });
+  });
+
+  describe("Remix Fighters Polygon Rendering", () => {
+    const createMockCanvas = () => {
+      const fills: unknown[] = [];
+      const strokes: unknown[] = [];
+      const fakeCanvas = {
+        getContext: () => ({
+          save: () => {},
+          restore: () => {},
+          beginPath: () => {},
+          closePath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          rect: () => {},
+          clip: () => {},
+          strokeRect: () => {},
+          fillRect: () => {},
+          ellipse: () => {},
+          arc: () => {},
+          translate: () => {},
+          rotate: () => {},
+          scale: () => {},
+          quadraticCurveTo: () => {},
+          bezierCurveTo: () => {},
+          setLineDash: () => {},
+          fill: function (this: { fillStyle: unknown }) {
+            fills.push(this.fillStyle);
+          },
+          stroke: function (this: { strokeStyle: unknown }) {
+            strokes.push(this.strokeStyle);
+          },
+          drawImage: () => {},
+          createLinearGradient: () => ({ addColorStop: () => {} }),
+        }),
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      return { fakeCanvas, fills, strokes };
+    };
+
+    const remixCharacters = [
+      { id: 0x1d, name: "Falco", method: "drawFalcoPolygons" },
+      { id: 0x1e, name: "Ganondorf", method: "drawGanondorfPolygons" },
+      { id: 0x1f, name: "Young Link", method: "drawYoungLinkPolygons" },
+      { id: 0x20, name: "Dr. Mario", method: "drawDrMarioPolygons" },
+      { id: 0x21, name: "Wario", method: "drawWarioPolygons" },
+      { id: 0x22, name: "Dark Samus", method: "drawDarkSamusPolygons" },
+      { id: 0x26, name: "Lucas", method: "drawLucasPolygons" },
+      { id: 0x35, name: "Giga Bowser", method: "drawGigaBowserPolygons" },
+      { id: 0x36, name: "Mad Piano", method: "drawPianoPolygons" },
+      { id: 0x37, name: "Wolf", method: "drawWolfPolygons" },
+      { id: 0x38, name: "Conker", method: "drawConkerPolygons" },
+      { id: 0x39, name: "Mewtwo", method: "drawMewtwoPolygons" },
+      { id: 0x3a, name: "Marth", method: "drawMarthPolygons" },
+      { id: 0x3b, name: "Sonic", method: "drawSonicPolygons" },
+      { id: 0x3c, name: "Sandbag", method: "drawSandbagPolygons" },
+      { id: 0x3d, name: "Super Sonic", method: "drawSuperSonicPolygons" },
+      { id: 0x3e, name: "Sheik", method: "drawSheikPolygons" },
+      { id: 0x3f, name: "Marina", method: "drawMarinaPolygons" },
+      { id: 0x40, name: "King Dedede", method: "drawDededePolygons" },
+      { id: 0x41, name: "Goemon", method: "drawGoemonPolygons" },
+      { id: 0x42, name: "Peppy Hare", method: "drawPeppyPolygons" },
+      { id: 0x43, name: "Slippy Toad", method: "drawSlippyPolygons" },
+      { id: 0x44, name: "Banjo & Kazooie", method: "drawBanjoPolygons" },
+      { id: 0x45, name: "Metal Luigi", method: "drawMetalLuigiPolygons" },
+      { id: 0x46, name: "Ebisumaru", method: "drawEbisumaruPolygons" },
+      { id: 0x47, name: "Dragon King", method: "drawDragonKingPolygons" },
+      { id: 0x48, name: "Crash Bandicoot", method: "drawCrashPolygons" },
+      { id: 0x49, name: "Peach", method: "drawPeachPolygons" },
+      { id: 0x4a, name: "Roy", method: "drawRoyPolygons" },
+      { id: 0x4b, name: "Dr. Luigi", method: "drawDrLuigiPolygons" },
+      { id: 0x4c, name: "Lanky Kong", method: "drawLankyKongPolygons" },
+    ];
+
+    for (const char of remixCharacters) {
+      it(`renders ${char.name} across themes without throwing`, () => {
+        const { fakeCanvas, fills } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        for (const theme of ["mountain", "autumn", "grid"] as const) {
+          renderer.setBackgroundTheme(theme);
+          expect(() => {
+            renderer[char.method](50, 100, 20, 60, 25, 80, 1, "#ef4444", {
+              taunting: false,
+              inCombo: false,
+              isRoll: false,
+              isTechRoll: false,
+              isTechInPlace: false,
+              isTumble: false,
+              isProne: false,
+              isDownBound: false,
+              isInvulnerable: false,
+              isSpecial: false,
+              isLanding: false,
+              isHeavyLanding: false,
+              isDizzy: false,
+              isSleep: false,
+              isOpponent: false,
+              actionFrameCounter: 0,
+            });
+          }).not.toThrow();
+        }
+
+        expect(fills.length).toBeGreaterThan(0);
+      });
+
+      it(`renders ${char.name} opponent desaturation without throwing`, () => {
+        const { fakeCanvas } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        expect(() => {
+          renderer[char.method](50, 100, 20, 60, 25, 80, 1, "#ef4444", {
+            taunting: true,
+            inCombo: true,
+            isRoll: false,
+            isTechRoll: false,
+            isTechInPlace: false,
+            isTumble: false,
+            isProne: false,
+            isDownBound: false,
+            isInvulnerable: false,
+            isSpecial: false,
+            isLanding: false,
+            isHeavyLanding: false,
+            isDizzy: false,
+            isSleep: false,
+            isOpponent: true,
+            actionFrameCounter: 10,
+          });
+        }).not.toThrow();
+      });
+    }
   });
 });
