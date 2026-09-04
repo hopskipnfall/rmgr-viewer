@@ -1,13 +1,22 @@
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
 import { StageRenderer } from "../renderer.js";
 import { Camera } from "../camera.js";
-import { getGameDefinitions } from "../lookups.js";
+import {
+  CHARACTER_NAMES,
+  CHARACTER_NAMES_JA,
+  getGameDefinitions,
+} from "../lookups.js";
 import { characterSize } from "../characterSizes.js";
 
-interface CharacterOption {
+export interface CharacterOption {
   id: number;
   name: string;
   nameJa: string;
+}
+
+export interface CharacterGroupOption {
+  groupName: string;
+  characters: CharacterOption[];
 }
 
 interface StateOption {
@@ -16,24 +25,81 @@ interface StateOption {
   category: "special" | "movement" | "crouch" | "defense" | "damage" | "attack";
 }
 
-const ORIGINAL_CHARACTERS: CharacterOption[] = [
-  { id: 0x00, name: "Mario", nameJa: "マリオ" },
-  { id: 0x01, name: "Fox", nameJa: "フォックス" },
-  { id: 0x02, name: "Donkey Kong", nameJa: "ドンキーコング" },
-  { id: 0x03, name: "Samus", nameJa: "サムス" },
-  { id: 0x04, name: "Luigi", nameJa: "ルイージ" },
-  { id: 0x05, name: "Link", nameJa: "リンク" },
-  { id: 0x06, name: "Yoshi", nameJa: "ヨッシー" },
-  { id: 0x07, name: "Captain Falcon", nameJa: "キャプテン・ファルコン" },
-  { id: 0x08, name: "Kirby", nameJa: "カービィ" },
-  { id: 0x09, name: "Pikachu", nameJa: "ピカチュウ" },
-  { id: 0x0a, name: "Jigglypuff", nameJa: "プリン" },
-  { id: 0x0b, name: "Ness", nameJa: "ネス" },
-  { id: 0x0e, name: "Polygon Mario", nameJa: "謎のザコ敵 (マリオ)" },
-  { id: 0x0f, name: "Polygon Fox", nameJa: "謎のザコ敵 (フォックス)" },
-  { id: 0x15, name: "Polygon Falcon", nameJa: "謎のザコ敵 (ファルコン)" },
-  { id: 0x17, name: "Polygon Pikachu", nameJa: "謎のザコ敵 (ピカチュウ)" },
+function makeCharacterOption(id: number): CharacterOption {
+  const name =
+    CHARACTER_NAMES[id] ?? `Unknown (0x${id.toString(16).padStart(2, "0")})`;
+  const nameJa = CHARACTER_NAMES_JA[id] ?? "";
+  return { id, name, nameJa };
+}
+
+export const CHARACTER_GROUPS: CharacterGroupOption[] = [
+  {
+    groupName: "Original 12",
+    characters: [
+      0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
+    ].map(makeCharacterOption),
+  },
+  {
+    groupName: "Remix Fighters",
+    characters: [
+      0x34, // Bowser
+      0x1d, // Falco
+      0x1e, // Ganondorf
+      0x1f, // Young Link
+      0x20, // Dr. Mario
+      0x21, // Wario
+      0x22, // Dark Samus
+      0x26, // Lucas
+      0x35, // Giga Bowser
+      0x36, // Piano
+      0x37, // Wolf
+      0x38, // Conker
+      0x39, // Mewtwo
+      0x3a, // Marth
+      0x3b, // Sonic
+      0x3c, // Sandbag
+      0x3d, // Super Sonic
+      0x3e, // Sheik
+      0x3f, // Marina
+      0x40, // King Dedede
+      0x41, // Goemon
+      0x42, // Peppy
+      0x43, // Slippy
+      0x44, // Banjo
+      0x45, // Metal Luigi
+      0x46, // Ebisumaru
+      0x47, // Dragon King
+      0x48, // Crash
+      0x49, // Peach
+      0x4a, // Roy
+      0x4b, // Dr. Luigi
+      0x4c, // Lanky Kong
+    ].map(makeCharacterOption),
+  },
+  {
+    groupName: "Fighting Polygon Team",
+    characters: [
+      0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+      0x4d, 0x4e, 0x4f, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58,
+      0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60,
+    ].map(makeCharacterOption),
+  },
+  {
+    groupName: "Bosses & Specials",
+    characters: [0x0c, 0x0d, 0x1a].map(makeCharacterOption),
+  },
+  {
+    groupName: "Regional Variants",
+    characters: [
+      0x2a, 0x2b, 0x2c, 0x24, 0x27, 0x31, 0x28, 0x30, 0x29, 0x32, 0x2e, 0x25,
+      0x23, 0x2d, 0x2f, 0x33,
+    ].map(makeCharacterOption),
+  },
 ];
+
+export const ORIGINAL_CHARACTERS: CharacterOption[] = CHARACTER_GROUPS.flatMap(
+  (g) => g.characters,
+);
 
 const COMMON_STATES: StateOption[] = [
   // Movement
@@ -262,6 +328,135 @@ function getCharacterSpecialStates(characterId: number): StateOption[] {
     ];
   }
 
+  // Bowser / Giga Bowser / Polygon Bowser
+  if (characterId === 0x34 || characterId === 0x35 || characterId === 0x4f) {
+    return [
+      { id: 0x0dc, name: "Flame Breath (Neutral-B)", category: "special" },
+      {
+        id: 0x0e5,
+        name: "Whirling Fortress Ground (Up-B)",
+        category: "special",
+      },
+      {
+        id: 0x0e6,
+        name: "Whirling Fortress Air (Up-B)",
+        category: "special",
+      },
+      { id: 0x0e9, name: "Bowser Bomb Start (Down-B)", category: "special" },
+      { id: 0x0ea, name: "Bowser Bomb Drop (Down-B)", category: "special" },
+      { id: 0x0eb, name: "Bowser Bomb Landing", category: "special" },
+    ];
+  }
+
+  // Falco
+  if (characterId === 0x1d || characterId === 0x55) {
+    return [
+      { id: 0x0e4, name: "Fire Bird Charge (Up-B)", category: "special" },
+      { id: 0x0e8, name: "Fire Bird Flight (Up-B)", category: "special" },
+      { id: 0x0ed, name: "Reflector / Shine", category: "special" },
+      { id: 0x0e1, name: "Blaster (Laser Shot)", category: "special" },
+    ];
+  }
+
+  // Ganondorf
+  if (characterId === 0x1e || characterId === 0x56) {
+    return [
+      { id: 0x0e6, name: "Warlock Punch (Neutral-B)", category: "special" },
+      { id: 0x0e8, name: "Dark Dive (Up-B)", category: "special" },
+      { id: 0x0eb, name: "Wizard's Foot (Down-B)", category: "special" },
+    ];
+  }
+
+  // Young Link
+  if (characterId === 0x1f || characterId === 0x5b) {
+    return [
+      { id: 0x0dc, name: "Fire Bow (Neutral-B)", category: "special" },
+      { id: 0x0e5, name: "Spin Attack (Up-B)", category: "special" },
+      { id: 0x0e9, name: "Bomb (Down-B)", category: "special" },
+    ];
+  }
+
+  // Dr. Mario
+  if (characterId === 0x20 || characterId === 0x51) {
+    return [
+      { id: 0x0dc, name: "Megavitamin (Neutral-B)", category: "special" },
+      { id: 0x0e0, name: "Super Jump Punch (Up-B)", category: "special" },
+      { id: 0x0e4, name: "Dr. Tornado (Down-B)", category: "special" },
+    ];
+  }
+
+  // Wario
+  if (characterId === 0x21 || characterId === 0x4d) {
+    return [
+      { id: 0x0dc, name: "Chomp / Bite (Neutral-B)", category: "special" },
+      { id: 0x0e0, name: "Corkscrew (Up-B)", category: "special" },
+      { id: 0x0e4, name: "Ground Pound (Down-B)", category: "special" },
+    ];
+  }
+
+  // Dark Samus
+  if (characterId === 0x22 || characterId === 0x57) {
+    return [
+      { id: 0x0dc, name: "Charge Shot (Neutral-B)", category: "special" },
+      { id: 0x0e5, name: "Screw Attack (Up-B)", category: "special" },
+      { id: 0x0e8, name: "Bomb (Down-B)", category: "special" },
+    ];
+  }
+
+  // Lucas
+  if (characterId === 0x26 || characterId === 0x4e) {
+    return [
+      { id: 0x0e6, name: "PK Freeze (Neutral-B)", category: "special" },
+      { id: 0x0e8, name: "PK Thunder (Up-B)", category: "special" },
+      { id: 0x0eb, name: "PSI Magnet (Down-B)", category: "special" },
+    ];
+  }
+
+  // Marth / Roy
+  if (characterId === 0x3a || characterId === 0x4a || characterId === 0x58) {
+    return [
+      { id: 0x0dc, name: "Shield Breaker (Neutral-B)", category: "special" },
+      { id: 0x0e5, name: "Dolphin Slash (Up-B)", category: "special" },
+      { id: 0x0e8, name: "Counter (Down-B)", category: "special" },
+    ];
+  }
+
+  // Mewtwo
+  if (characterId === 0x39 || characterId === 0x59) {
+    return [
+      { id: 0x0dc, name: "Shadow Ball (Neutral-B)", category: "special" },
+      { id: 0x0e5, name: "Teleport (Up-B)", category: "special" },
+      { id: 0x0e8, name: "Disable (Down-B)", category: "special" },
+    ];
+  }
+
+  // Sonic
+  if (characterId === 0x3b || characterId === 0x3d || characterId === 0x52) {
+    return [
+      { id: 0x0dc, name: "Homing Attack (Neutral-B)", category: "special" },
+      { id: 0x0e5, name: "Spring Jump (Up-B)", category: "special" },
+      { id: 0x0e8, name: "Spin Dash (Down-B)", category: "special" },
+    ];
+  }
+
+  // King Dedede
+  if (characterId === 0x40 || characterId === 0x5a) {
+    return [
+      { id: 0x0dc, name: "Inhale (Neutral-B)", category: "special" },
+      { id: 0x0e5, name: "Super Dedede Jump (Up-B)", category: "special" },
+      { id: 0x0e8, name: "Jet Hammer (Down-B)", category: "special" },
+    ];
+  }
+
+  // Peach
+  if (characterId === 0x49 || characterId === 0x5f) {
+    return [
+      { id: 0x0dc, name: "Toad (Neutral-B)", category: "special" },
+      { id: 0x0e5, name: "Peach Parasol (Up-B)", category: "special" },
+      { id: 0x0e8, name: "Vegetable Pluck (Down-B)", category: "special" },
+    ];
+  }
+
   return [];
 }
 
@@ -333,9 +528,16 @@ export class CharacterPreviewController {
         <div class="preview-control-group">
           <label class="preview-control-label">Character</label>
           <select id="previewCharSelect" class="preview-select">
-            ${ORIGINAL_CHARACTERS.map(
-              (c) =>
-                `<option value="${c.id}" ${c.id === this.characterId ? "selected" : ""}>0x${c.id.toString(16).padStart(2, "0")} - ${c.name} (${c.nameJa})</option>`,
+            ${CHARACTER_GROUPS.map(
+              (group) => `
+              <optgroup label="${group.groupName}">
+                ${group.characters
+                  .map(
+                    (c) =>
+                      `<option value="${c.id}" ${c.id === this.characterId ? "selected" : ""}>0x${c.id.toString(16).padStart(2, "0")} - ${c.name} (${c.nameJa})</option>`,
+                  )
+                  .join("")}
+              </optgroup>`,
             ).join("")}
           </select>
         </div>
@@ -691,11 +893,16 @@ export class CharacterPreviewController {
   }
 
   private updateAngleControlVisibility(): void {
-    // Show angle slider for Fire Fox flight (0x0e8 / 0x0ec on Fox)
-    const isFox = this.characterId === 0x01 || this.characterId === 0x0f;
+    // Show angle slider for Fire Fox / Fire Bird flight (0x0e8 / 0x0ec on Fox/Falco)
+    const isFoxOrFalco =
+      this.characterId === 0x01 ||
+      this.characterId === 0x0f ||
+      this.characterId === 0x1d ||
+      this.characterId === 0x29 ||
+      this.characterId === 0x55;
     const isFireFox =
       this.actionStateId === 0x0e8 || this.actionStateId === 0x0ec;
-    this.angleControlWrap.hidden = !(isFox && isFireFox);
+    this.angleControlWrap.hidden = !(isFoxOrFalco && isFireFox);
   }
 
   private getAllStatesForCurrentChar(): StateOption[] {

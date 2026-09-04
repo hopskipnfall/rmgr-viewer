@@ -38,6 +38,40 @@ import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
 import { isHitstunState, computeEdgeGuardEvents } from "./edgeGuard.js";
 import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
 import { characterIconUrl } from "./characterIcons.js";
+import {
+  drawBowserPolygons,
+  drawFalcoPolygons,
+  drawGanondorfPolygons,
+  drawYoungLinkPolygons,
+  drawDrMarioPolygons,
+  drawWarioPolygons,
+  drawDarkSamusPolygons,
+  drawLucasPolygons,
+  drawGigaBowserPolygons,
+  drawMarthPolygons,
+  drawRoyPolygons,
+  drawMewtwoPolygons,
+  drawSheikPolygons,
+  drawPeachPolygons,
+  drawSonicPolygons,
+  drawSuperSonicPolygons,
+  drawWolfPolygons,
+  drawDededePolygons,
+  drawBanjoPolygons,
+  drawCrashPolygons,
+  drawConkerPolygons,
+  drawSandbagPolygons,
+  drawPianoPolygons,
+  drawMarinaPolygons,
+  drawGoemonPolygons,
+  drawPeppyPolygons,
+  drawSlippyPolygons,
+  drawMetalLuigiPolygons,
+  drawDrLuigiPolygons,
+  drawEbisumaruPolygons,
+  drawDragonKingPolygons,
+  drawLankyKongPolygons,
+} from "./characters/remix/index.js";
 
 /**
  * Weapon kinds that represent a hitbox attached to the attacker's own body
@@ -1563,6 +1597,14 @@ export function isNessCharacter(characterId: number): boolean {
   );
 }
 
+export function isBowserCharacter(characterId: number): boolean {
+  return (
+    characterId === 0x34 || // Bowser
+    characterId === 0x35 || // Giga Bowser
+    characterId === 0x4f // Polygon Bowser
+  );
+}
+
 export function toGrayscale(colorStr: string, overrideAlpha?: number): string {
   if (colorStr.startsWith("#")) {
     let hex = colorStr.slice(1);
@@ -1677,7 +1719,7 @@ export function toBlandPalette(
   return colorStr;
 }
 
-function resolveColor(
+export function resolveColor(
   hexOrCss: string,
   isOpponent: boolean,
   alpha?: number,
@@ -1691,7 +1733,7 @@ function resolveColor(
   return hexOrCss;
 }
 
-function hexToRgba(hex: string, alpha: number): string {
+export function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
   const g = parseInt(clean.substring(2, 4), 16);
@@ -6916,6 +6958,378 @@ export class StageRenderer {
 
     if (isEggEncasedState(post.actionStateId)) {
       this.drawYoshiEggShell(x, centerY, halfWidth, heightPx);
+    } else if (post.characterId === 0x1d) {
+      this.drawFalcoPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x1e) {
+      this.drawGanondorfPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x1f) {
+      this.drawYoungLinkPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x20) {
+      this.drawDrMarioPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x21) {
+      this.drawWarioPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x22) {
+      this.drawDarkSamusPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x26) {
+      this.drawLucasPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x35) {
+      this.drawGigaBowserPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x36) {
+      this.drawPianoPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x37) {
+      this.drawWolfPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x38) {
+      this.drawConkerPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x39) {
+      this.drawMewtwoPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3a) {
+      this.drawMarthPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3b) {
+      this.drawSonicPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3c) {
+      this.drawSandbagPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3d) {
+      this.drawSuperSonicPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3e) {
+      this.drawSheikPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3f) {
+      this.drawMarinaPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x40) {
+      this.drawDededePolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x41) {
+      this.drawGoemonPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x42) {
+      this.drawPeppyPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x43) {
+      this.drawSlippyPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x44) {
+      this.drawBanjoPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x45) {
+      this.drawMetalLuigiPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x46) {
+      this.drawEbisumaruPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x47) {
+      this.drawDragonKingPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x48) {
+      this.drawCrashPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x49) {
+      this.drawPeachPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x4a) {
+      this.drawRoyPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x4b) {
+      this.drawDrLuigiPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x4c) {
+      this.drawLankyKongPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
     } else if (isPikachuCharacter(post.characterId)) {
       this.drawPikachuPolygons(
         x,
@@ -7050,6 +7464,18 @@ export class StageRenderer {
       );
     } else if (isSamusCharacter(post.characterId)) {
       this.drawSamusPolygons(
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isBowserCharacter(post.characterId)) {
+      this.drawBowserPolygons(
         x,
         y,
         topY,
@@ -11316,6 +11742,843 @@ export class StageRenderer {
 
     this.drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
     ctx.restore();
+  }
+
+  /**
+   * 13. BOWSER: Heavy reptilian King of the Koopas with spiked green carapace, padded cream rim,
+   * conical shell spikes, segmented yellow underbelly, spiked armbands, curved bull horns,
+   * sharp fangs, and fiery crimson hair mane.
+   */
+  private drawBowserPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawBowserPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawFalcoPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawFalcoPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawGanondorfPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawGanondorfPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawYoungLinkPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawYoungLinkPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawDrMarioPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawDrMarioPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawWarioPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawWarioPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawDarkSamusPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawDarkSamusPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawLucasPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawLucasPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawGigaBowserPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawGigaBowserPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawMarthPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawMarthPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawRoyPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawRoyPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawMewtwoPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawMewtwoPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawSheikPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawSheikPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawPeachPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawPeachPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawSonicPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawSonicPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawSuperSonicPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawSuperSonicPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawWolfPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawWolfPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawDededePolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawDededePolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawBanjoPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawBanjoPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawCrashPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawCrashPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawConkerPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawConkerPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawSandbagPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawSandbagPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawPianoPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawPianoPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawMarinaPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawMarinaPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawGoemonPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawGoemonPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawPeppyPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawPeppyPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawSlippyPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawSlippyPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawMetalLuigiPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawMetalLuigiPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawDrLuigiPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawDrLuigiPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawEbisumaruPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawEbisumaruPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawDragonKingPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawDragonKingPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
+  }
+
+  private drawLankyKongPolygons(
+    x: number,
+    y: number,
+    topY: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    playerColor: string,
+    state: CharacterAnimState,
+  ): void {
+    drawLankyKongPolygons(
+      this.ctx,
+      this.backgroundTheme,
+      x,
+      y,
+      topY,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      playerColor,
+      state,
+    );
   }
 
   /**
