@@ -1,0 +1,284 @@
+import { describe, it, expect } from "vitest";
+import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
+import { collectHeatmapPoints } from "./positionHeatmap.js";
+import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
+
+function makeMockReplay(frames: Frame[], seated: PortIndex[] = [0, 1]): Replay {
+  const slotType = ([0, 1, 2, 3] as PortIndex[]).map((p) =>
+    seated.includes(p) ? "human" : "empty",
+  ) as [
+    "human" | "cpu" | "empty",
+    "human" | "cpu" | "empty",
+    "human" | "cpu" | "empty",
+    "human" | "cpu" | "empty",
+  ];
+  return {
+    header: {
+      version: 5,
+      gameFamily: "smash64",
+      goodName: "Super Smash Bros. (U) (V1.0) [!]",
+      recorderSchemaVersion: 1,
+      recordedAtEpochMillis: 1724300000000,
+      uncompressedLength: 0,
+      compressedLength: 0,
+    },
+    matchStart: {
+      playerNames: ["nue", "Kurabba", "", ""],
+      slotType,
+    },
+    matchSettings: {
+      stageId: DREAM_LAND_STAGE_ID,
+      gameType: 2,
+      stockCountSetting: 4,
+      timeLimitMinutes: 100,
+      damageRatio: 100,
+      itemFrequency: 0,
+      teamsEnabled: false,
+      handicapMode: "off",
+      characterId: [5, 9, 0, 0], // Link, Pikachu
+      costumeId: [0, 0, 0, 0],
+      teamColor: [0, 0, 0, 0],
+      portTeam: [0, 1, 0, 0],
+      portHandicap: [0, 0, 0, 0],
+      portCpuLevel: [0, 0, 0, 0],
+    },
+    frames,
+    matchEnd: {
+      finalFrame: frames.at(-1)?.frame ?? 0,
+      endReason: "normal",
+    },
+    matchResult: {
+      placements: [1, 2, -1, -1],
+    },
+  };
+}
+
+interface PortState {
+  state: number;
+  x: number;
+  y: number;
+}
+
+function makeFrame(
+  frameNumber: number,
+  p0: PortState | undefined,
+  p1: PortState | undefined,
+): Frame {
+  const post = (port: PortIndex, characterId: number, p: PortState) => ({
+    input: { frame: frameNumber, port, buttons: 0, stickX: 0, stickY: 0 },
+    state: {
+      frame: frameNumber,
+      port,
+      characterId,
+      actionStateId: p.state,
+      positionX: p.x,
+      positionY: p.y,
+      facingDirection: 1 as const,
+      velocityX: 0,
+      velocityY: 0,
+      damagePercent: 0,
+      stocksRemaining: 3,
+      jumpsRemaining: 0,
+      grounded: true,
+      hurtboxState: 0,
+      hitstunCounter: 0,
+      actionFrameCounter: 0,
+      comboHitCount: 0,
+      comboDamage: 0,
+    },
+  });
+
+  const ports: Record<number, unknown> = {};
+  if (p0) ports[0] = post(0 as PortIndex, 5, p0);
+  if (p1) ports[1] = post(1 as PortIndex, 9, p1);
+
+  return {
+    frame: frameNumber,
+    ports: ports as unknown as Frame["ports"],
+  };
+}
+
+// Action state 0x005 = Entry (spawn descent) — see RESPAWN_STATES in
+// src/angelInvincibility.ts. A single frame in this state, followed by a
+// frame out of it, produces one "angel-entered" event at the entry frame
+// plus a resolve event 120 frames later; we only need the entry frame here.
+const IDLE = 0x00a;
+const ENTRY = 0x005;
+
+describe("collectHeatmapPoints", () => {
+  it("collects both ports' positions for every frame when the toggle is off", () => {
+    const frames = [
+      makeFrame(0, { state: IDLE, x: 0, y: 0 }, { state: IDLE, x: 100, y: 0 }),
+      makeFrame(1, { state: IDLE, x: 10, y: 0 }, { state: IDLE, x: 110, y: 0 }),
+    ];
+    const replay = makeMockReplay(frames);
+
+    const result = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      false,
+    );
+
+    expect(result.perspective).toEqual([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+    ]);
+    expect(result.opponent).toEqual([
+      { x: 100, y: 0 },
+      { x: 110, y: 0 },
+    ]);
+  });
+
+  it("skips a frame where a port has no state (not seated yet that frame)", () => {
+    const frames = [
+      makeFrame(0, { state: IDLE, x: 0, y: 0 }, undefined),
+      makeFrame(1, { state: IDLE, x: 10, y: 0 }, { state: IDLE, x: 110, y: 0 }),
+    ];
+    const replay = makeMockReplay(frames);
+
+    const result = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      false,
+    );
+
+    expect(result.perspective).toEqual([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+    ]);
+    expect(result.opponent).toEqual([{ x: 110, y: 0 }]);
+  });
+
+  it("with the toggle on, only includes frames within 300 frames of an angel-entered event for the opponent port", () => {
+    const frames: Frame[] = [];
+    // Frames 0-4: opponent (port 1) not respawning - outside any window.
+    for (let f = 0; f < 5; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: IDLE, x: 0, y: 0 },
+          { state: IDLE, x: 999, y: 999 },
+        ),
+      );
+    }
+    // Frame 5: opponent enters respawn platform - "angel-entered" fires here.
+    frames.push(
+      makeFrame(5, { state: IDLE, x: 1, y: 0 }, { state: ENTRY, x: 200, y: 0 }),
+    );
+    // Frame 6: still within the 300-frame window (5 to 304 inclusive-exclusive).
+    frames.push(
+      makeFrame(6, { state: IDLE, x: 2, y: 0 }, { state: IDLE, x: 201, y: 0 }),
+    );
+    // Frame 305: outside the window (5 + 300 = 305).
+    frames.push(
+      makeFrame(
+        305,
+        { state: IDLE, x: 3, y: 0 },
+        { state: IDLE, x: 999, y: 999 },
+      ),
+    );
+    const replay = makeMockReplay(frames);
+
+    const result = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      true,
+    );
+
+    // Frame indices 5 and 6 are within the window (frames array index ==
+    // frame number here since every frame number 0..6 is present in order,
+    // then index 7 holds frame number 305 which is excluded).
+    expect(result.perspective).toEqual([
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    expect(result.opponent).toEqual([
+      { x: 200, y: 0 },
+      { x: 201, y: 0 },
+    ]);
+  });
+
+  it("does not double-count a frame covered by two overlapping angel-invincibility windows", () => {
+    const frames: Frame[] = [];
+    // Frame 0: opponent enters respawn (window A: frames 0-299).
+    frames.push(
+      makeFrame(0, { state: IDLE, x: 1, y: 0 }, { state: ENTRY, x: 200, y: 0 }),
+    );
+    // Frame 1: opponent drops off platform then immediately re-enters
+    // (window B: frames 2-301) - overlaps window A over frames 2-299.
+    frames.push(
+      makeFrame(1, { state: IDLE, x: 2, y: 0 }, { state: IDLE, x: 201, y: 0 }),
+    );
+    frames.push(
+      makeFrame(2, { state: IDLE, x: 3, y: 0 }, { state: ENTRY, x: 202, y: 0 }),
+    );
+
+    const replay = makeMockReplay(frames);
+    const result = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      true,
+    );
+
+    // Frame index 2 must appear exactly once, not twice.
+    expect(result.perspective).toEqual([
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 3, y: 0 },
+    ]);
+  });
+
+  it("returns empty arrays for a non-1v1 replay (3 seated ports) regardless of the toggle", () => {
+    const frames = [
+      {
+        frame: 0,
+        ports: {
+          0: {
+            input: { frame: 0, port: 0, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
+              frame: 0,
+              port: 0,
+              characterId: 5,
+              actionStateId: IDLE,
+              positionX: 0,
+              positionY: 0,
+              facingDirection: 1 as const,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 0,
+              stocksRemaining: 3,
+              jumpsRemaining: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: 0,
+              actionFrameCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+            },
+          },
+        },
+      } as unknown as Frame,
+    ];
+    const replay = makeMockReplay(frames, [0, 1, 2] as PortIndex[]);
+
+    const resultOff = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      false,
+    );
+    const resultOn = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      true,
+    );
+
+    expect(resultOff).toEqual({ perspective: [], opponent: [] });
+    expect(resultOn).toEqual({ perspective: [], opponent: [] });
+  });
+});
