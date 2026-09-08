@@ -30,7 +30,7 @@ import {
 } from "../renderer.js";
 import { characterSize } from "../characterSizes.js";
 import { characterIconUrl } from "../characterIcons.js";
-import { ActionStateId, actionStateName, characterName } from "../lookups.js";
+import { ActionStateId, characterName } from "../lookups.js";
 import { DREAM_LAND_STAGE_ID, stageBlastZone } from "../stageGeometry.js";
 import { t, getLanguage } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
@@ -112,8 +112,6 @@ interface PlayerPanel {
   damageEl: HTMLElement;
   stocksEl: HTMLElement;
   jumpsEl: HTMLElement;
-  stateEl: HTMLElement;
-  positionEl: HTMLElement;
   comboHitsEl: HTMLElement;
 }
 
@@ -1065,6 +1063,7 @@ export class MatchViewController {
         this.currentReplay,
         this.playback?.currentIndex ?? 0,
         this.perspectivePort,
+        this.isPausedMidMatch(this.playback?.currentIndex ?? 0),
       );
     });
 
@@ -1079,6 +1078,7 @@ export class MatchViewController {
         this.currentReplay,
         this.playback?.currentIndex ?? 0,
         this.perspectivePort,
+        this.isPausedMidMatch(this.playback?.currentIndex ?? 0),
       );
     });
 
@@ -1600,8 +1600,6 @@ export class MatchViewController {
           <div>${escapeHtml(tr.damage)} <strong class="stat-damage">—</strong></div>
           <div>${escapeHtml(tr.stocks)} <strong class="stat-stocks">—</strong></div>
           <div>${escapeHtml(tr.jumps)} <strong class="stat-jumps">—</strong></div>
-          <div class="full-row">${escapeHtml(tr.state)} <strong class="stat-state">—</strong></div>
-          <div class="full-row">${escapeHtml(tr.position)} <strong class="stat-position">—</strong></div>
           <div class="full-row">${escapeHtml(tr.comboHits)} <strong class="stat-combo-hits">0</strong></div>
         </div>
         <canvas class="controller-pad" width="140" height="84"></canvas>
@@ -1617,11 +1615,19 @@ export class MatchViewController {
         damageEl: panel.querySelector(".stat-damage") as HTMLElement,
         stocksEl: panel.querySelector(".stat-stocks") as HTMLElement,
         jumpsEl: panel.querySelector(".stat-jumps") as HTMLElement,
-        stateEl: panel.querySelector(".stat-state") as HTMLElement,
-        positionEl: panel.querySelector(".stat-position") as HTMLElement,
         comboHitsEl: panel.querySelector(".stat-combo-hits") as HTMLElement,
       };
     });
+  }
+
+  /**
+   * True only when playback is stopped somewhere mid-match (not playing,
+   * and not sitting at the untouched frame 0) - the on-stage state/position
+   * readout (see StageRenderer.render's isPaused param) is meant for
+   * "I paused to inspect this moment," not the initial unstarted load.
+   */
+  private isPausedMidMatch(index: number): boolean {
+    return !(this.playback?.isPlaying ?? false) && index > 0;
   }
 
   private renderFrame(
@@ -1676,6 +1682,7 @@ export class MatchViewController {
       this.currentReplay,
       _frameIndex,
       this.perspectivePort,
+      this.isPausedMidMatch(_frameIndex),
     );
 
     if (this.qaOverlayExitBtn) {
@@ -1690,8 +1697,6 @@ export class MatchViewController {
         panel.damageEl.textContent = "—";
         panel.stocksEl.textContent = "—";
         panel.jumpsEl.textContent = "—";
-        panel.stateEl.textContent = tr.notOnScreen;
-        panel.positionEl.textContent = "—";
         panel.comboHitsEl.textContent = "—";
         panel.comboHitsEl.className = "stat-combo-hits";
         panel.pad.render(portData?.input);
@@ -1701,8 +1706,6 @@ export class MatchViewController {
       panel.damageEl.textContent = `${post.damagePercent}%`;
       panel.stocksEl.textContent = String(post.stocksRemaining + 1);
       panel.jumpsEl.textContent = String(post.jumpsRemaining);
-      panel.stateEl.textContent = actionStateName(post.actionStateId);
-      panel.positionEl.textContent = `(${post.positionX.toFixed(1)}, ${post.positionY.toFixed(1)})`;
 
       const inHitstun = isHitstunState(post.actionStateId, post.hitstunCounter);
       const comboCount = post.comboHitCount;

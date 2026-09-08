@@ -27,6 +27,7 @@ import {
   type LedgePoint,
 } from "./stageGeometry.js";
 import { characterSize } from "./characterSizes.js";
+import { actionStateName } from "./lookups.js";
 import {
   ledgeGrabOffset,
   LEDGE_GRAB_ZONE_WIDTH,
@@ -1969,6 +1970,7 @@ export class StageRenderer {
     replay?: Replay | null,
     frameIndex?: number,
     perspectivePort?: PortIndex | null,
+    isPaused?: boolean,
   ): void {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -2040,6 +2042,7 @@ export class StageRenderer {
           perspectivePort,
           replay,
           frameIndex,
+          isPaused,
         );
       }
       this.drawItemObjects(camera, frame.items ?? [], replay, frame);
@@ -6656,6 +6659,7 @@ export class StageRenderer {
     perspectivePort?: PortIndex | null,
     replay?: Replay | null,
     frameIndex?: number,
+    isPaused?: boolean,
   ): void {
     const { ctx } = this;
     // positionY is the character's foot position, not their center - Teeter
@@ -7848,12 +7852,13 @@ export class StageRenderer {
 
     // Player name + stock tag, shown at match start and again (for every
     // player, not just the one who respawned) for a few seconds after any
-    // respawn (fades out after initial frames).
+    // respawn (fades out after initial frames) - and persistently, at full
+    // opacity, whenever playback is paused.
     const framesSinceSpawn =
       replay && frameIndex !== undefined
         ? this.getFramesSinceSpawn(replay, frameIndex)
         : frameIndex;
-    const nameAlpha = getStartNameAlpha(framesSinceSpawn);
+    const nameAlpha = isPaused ? 1 : getStartNameAlpha(framesSinceSpawn);
     if (nameAlpha > 0) {
       const rawName = replay?.matchStart.playerNames[port]?.trim();
       const playerName =
@@ -7877,6 +7882,23 @@ export class StageRenderer {
         nameAlpha,
         post.characterId,
         post.stocksRemaining + 1,
+      );
+    }
+
+    // Action state name/ID + position readout, shown below the character
+    // only while playback is paused - a paused frame is exactly when this
+    // level of detail (otherwise only in the sidebar panel) is useful to
+    // read without it constantly changing underneath you.
+    if (isPaused) {
+      const tagColor = getPlayerColor(port, perspectivePort);
+      this.drawPlayerStateInfo(
+        x,
+        y,
+        actionStateName(post.actionStateId),
+        post.actionStateId,
+        post.positionX,
+        post.positionY,
+        tagColor,
       );
     }
 
@@ -8061,6 +8083,67 @@ export class StageRenderer {
       ctx.textAlign = "center";
       ctx.fillText(`⭐${stockText}`, x, stockY);
     }
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws a small two-line readout (action state name + hex ID, then
+   * world-space position) below the character's feet. Only ever called
+   * while playback is paused - see the isPaused check at its call site -
+   * so there's no fade/alpha handling here, unlike drawPlayerNameTag.
+   */
+  private drawPlayerStateInfo(
+    x: number,
+    y: number,
+    stateName: string,
+    stateId: number,
+    posX: number,
+    posY: number,
+    tagColor: string,
+  ): void {
+    const { ctx } = this;
+    ctx.save();
+
+    const font = "bold 11px system-ui, -apple-system, sans-serif";
+    const stateText = `${stateName} (0x${stateId.toString(16)})`;
+    const positionText = `(${posX.toFixed(1)}, ${posY.toFixed(1)})`;
+
+    ctx.font = font;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const contentWidth = Math.max(
+      ctx.measureText(stateText).width,
+      ctx.measureText(positionText).width,
+    );
+
+    const paddingX = 8;
+    const pillWidth = Math.max(contentWidth + paddingX * 2, 40);
+    const lineHeight = 15;
+    const paddingY = 5;
+    const pillHeight = lineHeight * 2 + paddingY;
+    const pillX = x - pillWidth / 2;
+    const pillY = y + 8; // just below the character's feet
+    const borderRadius = 5;
+
+    ctx.beginPath();
+    ctx.roundRect(pillX, pillY, pillWidth, pillHeight, borderRadius);
+    ctx.fillStyle = "rgba(15, 17, 23, 0.85)";
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = tagColor;
+    ctx.stroke();
+
+    ctx.fillStyle = "#e5e7eb";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 2;
+    ctx.fillText(stateText, x, pillY + paddingY / 2 + lineHeight / 2);
+    ctx.fillText(
+      positionText,
+      x,
+      pillY + paddingY / 2 + lineHeight + lineHeight / 2,
+    );
     ctx.shadowBlur = 0;
 
     ctx.restore();
