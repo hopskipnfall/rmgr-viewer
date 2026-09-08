@@ -4178,17 +4178,59 @@
         flex: 1;
         display: flex;
         flex-direction: column;
-        gap: 2px;
+      }
+      #scrubberBar {
+        position: relative;
+        height: 20px;
+        cursor: pointer;
+        touch-action: none;
       }
       #matchTimelineCanvas {
+        position: absolute;
+        top: 7px;
+        left: 0;
         width: 100%;
         height: 6px;
         border-radius: 3px;
         display: block;
+        pointer-events: none;
       }
-      #scrubber {
-        width: 100%;
-        accent-color: var(--accent);
+      #scrubberThumb {
+        position: absolute;
+        top: 2px;
+        width: 3px;
+        height: 16px;
+        margin-left: -1.5px;
+        border-radius: 1.5px;
+        background: var(--text);
+        box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+        pointer-events: none;
+      }
+      #scrubberPreviewTooltip {
+        position: fixed;
+        z-index: 500;
+        background: #14161c;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 6px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        pointer-events: none;
+        transform: translate(-50%, -100%);
+      }
+      #scrubberPreviewTooltip[hidden] {
+        display: none !important;
+      }
+      #scrubberPreviewCanvas {
+        display: block;
+        border-radius: 4px;
+        background: #0b0c10;
+      }
+      #scrubberPreviewFrameLabel {
+        margin-top: 4px;
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        color: var(--text-dim);
+        text-align: center;
       }
       #frameLabel {
         font-variant-numeric: tabular-nums;
@@ -5378,11 +5420,25 @@
         LOG
       </button>
       <div id="scrubberContainer">
-        <canvas id="matchTimelineCanvas" width="600" height="6"></canvas>
-        <input type="range" id="scrubber" min="0" max="0" value="0" />
+        <div
+          id="scrubberBar"
+          role="slider"
+          tabindex="0"
+          aria-label="Playback position"
+          aria-valuemin="0"
+          aria-valuemax="0"
+          aria-valuenow="0"
+        >
+          <canvas id="matchTimelineCanvas"></canvas>
+          <div id="scrubberThumb"></div>
+        </div>
       </div>
       <span id="frameLabel"></span>
     </footer>
+    <div id="scrubberPreviewTooltip" hidden>
+      <canvas id="scrubberPreviewCanvas" width="240" height="144"></canvas>
+      <div id="scrubberPreviewFrameLabel"></div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -11,7 +11,7 @@ import { PORT_LABELS, getPlayerColor } from "../players.js";
 import { collectHeatmapPoints } from "../positionHeatmap.js";
 import { renderPositionHeatmap } from "../positionHeatmapRenderer.js";
 import { classifyMatchFrames } from "../matchTimeline.js";
-import { renderMatchTimeline } from "../matchTimelineRenderer.js";
+import { ScrubberBar } from "../scrubberBar.js";
 import {
   playAttackSfx,
   playGrabSfx,
@@ -138,8 +138,13 @@ export class MatchViewController {
   private stepBackBtn: HTMLButtonElement;
   private playPauseBtn: HTMLButtonElement;
   private stepForwardBtn: HTMLButtonElement;
-  private scrubber: HTMLInputElement;
-  private matchTimelineCanvas: HTMLCanvasElement;
+  private scrubberBar: ScrubberBar;
+  private scrubberBarEl: HTMLElement;
+  private scrubberPreviewTooltip: HTMLElement;
+  private scrubberPreviewCanvas: HTMLCanvasElement;
+  private scrubberPreviewFrameLabel: HTMLElement;
+  private scrubberPreviewRenderer: StageRenderer | null = null;
+  private scrubberPreviewCamera: Camera | null = null;
   private frameLabel: HTMLSpanElement;
   private speedMenuContainer: HTMLElement;
   private speedToggleBtn: HTMLButtonElement;
@@ -332,10 +337,41 @@ export class MatchViewController {
     this.stepForwardBtn = document.getElementById(
       "stepForward",
     ) as HTMLButtonElement;
-    this.scrubber = document.getElementById("scrubber") as HTMLInputElement;
-    this.matchTimelineCanvas = document.getElementById(
+    this.scrubberBarEl = document.getElementById("scrubberBar") as HTMLElement;
+    const scrubberTimelineCanvas = document.getElementById(
       "matchTimelineCanvas",
     ) as HTMLCanvasElement;
+    const scrubberThumb = document.getElementById(
+      "scrubberThumb",
+    ) as HTMLElement;
+    this.scrubberPreviewTooltip = document.getElementById(
+      "scrubberPreviewTooltip",
+    ) as HTMLElement;
+    this.scrubberPreviewCanvas = document.getElementById(
+      "scrubberPreviewCanvas",
+    ) as HTMLCanvasElement;
+    this.scrubberPreviewFrameLabel = document.getElementById(
+      "scrubberPreviewFrameLabel",
+    ) as HTMLElement;
+    this.scrubberBar = new ScrubberBar(
+      this.scrubberBarEl,
+      scrubberTimelineCanvas,
+      scrubberThumb,
+      {
+        onSeek: (index) => {
+          this.dismissQuickAttackOverlay();
+          this.playback?.pause();
+          this.playback?.seek(index);
+        },
+        onPreview: (index, clientX) => {
+          if (index === null) {
+            this.hideScrubberPreview();
+          } else {
+            this.showScrubberPreview(index, clientX);
+          }
+        },
+      },
+    );
     this.frameLabel = document.getElementById("frameLabel") as HTMLSpanElement;
     this.speedMenuContainer = document.getElementById(
       "speedMenuContainer",
@@ -1016,12 +1052,6 @@ export class MatchViewController {
     });
     this.playlistCloseBtn.addEventListener("click", () => {
       this.exitPlaylist();
-    });
-
-    this.scrubber.addEventListener("input", () => {
-      this.dismissQuickAttackOverlay();
-      this.playback?.pause();
-      this.playback?.seek(Number(this.scrubber.value));
     });
 
     this.stageCanvas.addEventListener("mousemove", (e) => {
@@ -2241,7 +2271,7 @@ export class MatchViewController {
   private renderMatchTimelinePanel(replay: Replay): void {
     const seated = getSeatedPorts(replay);
     if (seated.length !== 2 || this.perspectivePort === null) {
-      renderMatchTimeline(this.matchTimelineCanvas, []);
+      this.scrubberBar.setClassifications([]);
       return;
     }
     const opponentPort = seated.find((p) => p !== this.perspectivePort)!;
@@ -2250,7 +2280,73 @@ export class MatchViewController {
       this.perspectivePort,
       opponentPort,
     );
-    renderMatchTimeline(this.matchTimelineCanvas, classifications);
+    this.scrubberBar.setClassifications(classifications);
+  }
+
+  private showScrubberPreview(frameIndex: number, clientX: number): void {
+    const replay = this.currentReplay;
+    if (!replay) return;
+    const frame = replay.frames[frameIndex];
+    if (!frame) return;
+
+    if (!this.scrubberPreviewRenderer) {
+      this.scrubberPreviewRenderer = new StageRenderer(
+        this.scrubberPreviewCanvas,
+      );
+      // Always the default grid theme, independent of the main view's
+      // current theme, so the small tooltip stays legible regardless.
+      this.scrubberPreviewRenderer.setBackgroundTheme("grid");
+      this.scrubberPreviewCamera = new Camera(
+        this.scrubberPreviewCanvas.width,
+        this.scrubberPreviewCanvas.height,
+      );
+    }
+
+    const targets: Array<{ x: number; y: number }> = [];
+    for (const panel of this.panels) {
+      const post = frame.ports[panel.port]?.state;
+      if (
+        !post ||
+        isDeadState(post.actionStateId) ||
+        post.stocksRemaining < 0
+      ) {
+        continue;
+      }
+      const size = characterSize(post.characterId);
+      const crouching = isCrouchState(post.actionStateId);
+      const height = size.height * (crouching ? 0.5 : 1.0);
+      const halfWidth = size.width / 2;
+      targets.push(
+        { x: post.positionX - halfWidth, y: post.positionY },
+        { x: post.positionX + halfWidth, y: post.positionY + height },
+      );
+    }
+    this.scrubberPreviewCamera!.update(targets, true);
+    this.scrubberPreviewRenderer.render(
+      this.scrubberPreviewCamera!,
+      frame,
+      replay.matchSettings?.stageId,
+      undefined,
+      replay,
+      frameIndex,
+      this.perspectivePort,
+    );
+
+    this.scrubberPreviewFrameLabel.textContent = `${formatElapsed(frameIndex)} (Frame ${frameIndex})`;
+
+    const barRect = this.scrubberBarEl.getBoundingClientRect();
+    const tooltipHalfWidth = this.scrubberPreviewCanvas.width / 2 + 6;
+    const clampedX = Math.max(
+      barRect.left + tooltipHalfWidth,
+      Math.min(clientX, barRect.right - tooltipHalfWidth),
+    );
+    this.scrubberPreviewTooltip.style.left = `${clampedX}px`;
+    this.scrubberPreviewTooltip.style.top = `${barRect.top - 8}px`;
+    this.scrubberPreviewTooltip.hidden = false;
+  }
+
+  private hideScrubberPreview(): void {
+    this.scrubberPreviewTooltip.hidden = true;
   }
 
   private renderStatsPanel(replay: Replay): void {
@@ -3823,7 +3919,7 @@ export class MatchViewController {
       this.playSfxForFrameChange(previousFrame, frame, index);
       this.checkPlaylistClipBoundary(index);
     }
-    this.scrubber.value = String(index);
+    this.scrubberBar.setValue(index);
     this.playPauseBtn.textContent = isPlaying ? "⏸" : "▶";
 
     const totalFrames = this.currentReplay?.frames.length ?? 0;
@@ -3939,6 +4035,7 @@ export class MatchViewController {
       height = Math.max(150, Math.floor(rect.height));
     }
     this.stageRenderer.resize(width, height);
+    this.scrubberBar.resize();
     if (this.currentReplay) {
       this.camera.resize(width, height);
       this.onFrameChange(
@@ -4022,8 +4119,9 @@ export class MatchViewController {
     const replayId = this.getReplayIdentifier(replay, loaded);
     this.youtubeSync.setReplay(replayId);
 
-    this.scrubber.max = String(Math.max(0, replay.frames.length - 1));
-    this.scrubber.value = "0";
+    this.scrubberBar.setRange(Math.max(0, replay.frames.length - 1));
+    this.scrubberBar.setValue(0);
+    this.scrubberBar.resize();
 
     this.playback = new PlaybackController(
       replay.frames.length,
