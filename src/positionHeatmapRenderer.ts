@@ -53,7 +53,12 @@ function drawLayer(
     for (let col = 0; col < GRID_COLS; col++) {
       const count = counts[row * GRID_COLS + col]!;
       if (count === 0) continue;
-      const alpha = Math.max(MIN_CELL_ALPHA, count / max);
+      // Position data is heavily long-tailed (spawn points, ledges, center
+      // stage dominate), so a linear count/max ratio clamps almost every
+      // cell to MIN_CELL_ALPHA. Compress with sqrt so mid-frequency cells
+      // stay visually distinct instead of reading as a near-binary map.
+      const alpha =
+        MIN_CELL_ALPHA + (1 - MIN_CELL_ALPHA) * Math.sqrt(count / max);
       ctx.globalAlpha = alpha;
       ctx.fillRect(col * cellWidth, row * cellHeight, cellWidth, cellHeight);
     }
