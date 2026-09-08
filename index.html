@@ -2804,6 +2804,56 @@
       #characterMetaCollapseBtn:hover h2 {
         color: var(--text);
       }
+      #positionHeatmapSection {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      #positionHeatmapSection[hidden] {
+        display: none !important;
+      }
+      #positionHeatmapHeader {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--panel-border);
+        flex-shrink: 0;
+        flex-wrap: wrap;
+      }
+      #positionHeatmapCollapseBtn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: var(--text-dim);
+      }
+      #positionHeatmapCollapseBtn:hover {
+        color: var(--text);
+      }
+      #positionHeatmapCollapseBtn:hover h2 {
+        color: var(--text);
+      }
+      #positionHeatmapCollapseBtn.collapsed .collapse-icon {
+        transform: rotate(-90deg);
+      }
+      #positionHeatmapHeader h2 {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0;
+        flex-shrink: 0;
+      }
       #characterMetaWidget {
         flex-shrink: 0;
         display: flex;
@@ -3980,6 +4030,30 @@
       #statsPanel[hidden] {
         display: none !important;
       }
+      #positionHeatmapPanelBody {
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 12px;
+      }
+      #positionHeatmapPanelBody[hidden] {
+        display: none !important;
+      }
+      #positionHeatmapAngelToggleLabel {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        color: var(--text-dim);
+      }
+      #positionHeatmapCanvas {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 600 / 360;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.15);
+      }
       #statsEmpty {
         font-size: 12px;
         color: var(--text-dim);
@@ -4100,9 +4174,62 @@
       footer button:active {
         background: var(--accent);
       }
-      #scrubber {
+      #scrubberContainer {
         flex: 1;
-        accent-color: var(--accent);
+        display: flex;
+        flex-direction: column;
+      }
+      #scrubberBar {
+        position: relative;
+        height: 20px;
+        cursor: pointer;
+        touch-action: none;
+      }
+      #matchTimelineCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        pointer-events: none;
+      }
+      #scrubberThumb {
+        position: absolute;
+        top: 2px;
+        width: 3px;
+        height: 16px;
+        margin-left: -1.5px;
+        border-radius: 1.5px;
+        background: var(--text);
+        box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+        pointer-events: none;
+      }
+      #scrubberPreviewTooltip {
+        position: fixed;
+        z-index: 500;
+        background: #14161c;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 6px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        pointer-events: none;
+        transform: translate(-50%, -100%);
+      }
+      #scrubberPreviewTooltip[hidden] {
+        display: none !important;
+      }
+      #scrubberPreviewCanvas {
+        display: block;
+        border-radius: 4px;
+        background: #0b0c10;
+      }
+      #scrubberPreviewFrameLabel {
+        margin-top: 4px;
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        color: var(--text-dim);
+        text-align: center;
       }
       #frameLabel {
         font-variant-numeric: tabular-nums;
@@ -4915,6 +5042,31 @@
               </p>
             </div>
           </section>
+          <section id="positionHeatmapSection" hidden>
+            <div id="positionHeatmapHeader">
+              <button
+                id="positionHeatmapCollapseBtn"
+                title="Collapse / expand Position Heatmap"
+              >
+                <span class="collapse-icon">▼</span>
+                <h2>Position Heatmap</h2>
+              </button>
+            </div>
+            <div id="positionHeatmapPanelBody">
+              <label id="positionHeatmapAngelToggleLabel">
+                <input type="checkbox" id="positionHeatmapAngelToggle" />
+                <span
+                  >Only first 5s after opponent respawns (angel
+                  invincibility)</span
+                >
+              </label>
+              <canvas
+                id="positionHeatmapCanvas"
+                width="600"
+                height="360"
+              ></canvas>
+            </div>
+          </section>
           <section id="characterMetaWidget" hidden>
             <div id="characterMetaHeader">
               <button
@@ -5266,9 +5418,26 @@
       >
         LOG
       </button>
-      <input type="range" id="scrubber" min="0" max="0" value="0" />
+      <div id="scrubberContainer">
+        <div
+          id="scrubberBar"
+          role="slider"
+          tabindex="0"
+          aria-label="Playback position"
+          aria-valuemin="0"
+          aria-valuemax="0"
+          aria-valuenow="0"
+        >
+          <canvas id="matchTimelineCanvas"></canvas>
+          <div id="scrubberThumb"></div>
+        </div>
+      </div>
       <span id="frameLabel"></span>
     </footer>
+    <div id="scrubberPreviewTooltip" hidden>
+      <canvas id="scrubberPreviewCanvas" width="240" height="144"></canvas>
+      <div id="scrubberPreviewFrameLabel"></div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

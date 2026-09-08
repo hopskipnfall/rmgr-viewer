@@ -28,6 +28,9 @@ export interface Translations {
   perspectiveTitle: string;
   matchStats: string;
   statsCollapseTitle: string;
+  positionHeatmapTitle: string;
+  positionHeatmapCollapseTitle: string;
+  positionHeatmapAngelToggleLabel: string;
   statsEmpty: string;
   recovery: string;
   edgeGuard: string;
@@ -463,6 +466,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     perspectiveTitle: "Perspective",
     matchStats: "Match Stats",
     statsCollapseTitle: "Collapse / expand Match Stats",
+    positionHeatmapTitle: "Position Heatmap",
+    positionHeatmapCollapseTitle: "Collapse / expand Position Heatmap",
+    positionHeatmapAngelToggleLabel:
+      "Only first 5s after opponent respawns (angel invincibility)",
     statsEmpty: "No stats — load a Dream Land 2-player replay.",
     recovery: "Recovery",
     edgeGuard: "Edge guard",
@@ -910,6 +917,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     perspectiveTitle: "視点",
     matchStats: "対戦データ",
     statsCollapseTitle: "対戦データの折りたたみ / 展開",
+    positionHeatmapTitle: "ポジションヒートマップ",
+    positionHeatmapCollapseTitle: "ポジションヒートマップの折りたたみ / 展開",
+    positionHeatmapAngelToggleLabel:
+      "相手のリスポーン無敵時間の最初の5秒のみ表示",
     statsEmpty:
       "データなし — プププランドの2人対戦リプレイを読み込んでください。",
     recovery: "復帰",

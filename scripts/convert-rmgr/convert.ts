@@ -22,7 +22,13 @@
  * Requires Node 22.6+ (native .ts execution) or run via `node
  * --experimental-strip-types convert.ts` on Node 22.
  */
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
 import { join, basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -98,7 +104,9 @@ function toFrames(legacy: LegacyReplay): Frame[] {
 }
 
 /** Infers final placements from the last recorded frame's stocksRemaining, for a truncated old recording with no real GameEnd. -1 for a port that was never seated at all. */
-function inferPlacements(legacy: LegacyReplay): readonly [number, number, number, number] {
+function inferPlacements(
+  legacy: LegacyReplay,
+): readonly [number, number, number, number] {
   const placements: [number, number, number, number] = [-1, -1, -1, -1];
   const lastFrame = legacy.frames[legacy.frames.length - 1];
   if (!lastFrame) return placements;
@@ -112,7 +120,10 @@ function inferPlacements(legacy: LegacyReplay): readonly [number, number, number
 
 function toSerializableReplay(legacy: LegacyReplay): SerializableReplay {
   const frames = toFrames(legacy);
-  const finalFrame = legacy.frames.length > 0 ? legacy.frames[legacy.frames.length - 1]!.frame : 0;
+  const finalFrame =
+    legacy.frames.length > 0
+      ? legacy.frames[legacy.frames.length - 1]!.frame
+      : 0;
 
   return {
     gameFamily: SMASH_64_FAMILY,
@@ -126,7 +137,9 @@ function toSerializableReplay(legacy: LegacyReplay): SerializableReplay {
       ? { finalFrame, endReason: legacy.gameEnd.endReason }
       : { finalFrame, endReason: "aborted" },
     matchResult: {
-      placements: legacy.gameEnd ? legacy.gameEnd.placements : inferPlacements(legacy),
+      placements: legacy.gameEnd
+        ? legacy.gameEnd.placements
+        : inferPlacements(legacy),
     },
   };
 }
@@ -147,7 +160,10 @@ function findDefaultInputFiles(): string[] {
     .filter((path) => statSync(path).isFile());
 }
 
-async function convertOne(inputPath: string, outputDir: string): Promise<ConversionStat> {
+async function convertOne(
+  inputPath: string,
+  outputDir: string,
+): Promise<ConversionStat> {
   const oldBytes = readFileSync(inputPath);
 
   const parseStart = performance.now();
@@ -178,13 +194,20 @@ async function convertOne(inputPath: string, outputDir: string): Promise<Convers
 }
 
 function formatBytes(n: number): string {
-  return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)} MB` : `${(n / 1000).toFixed(1)} KB`;
+  return n >= 1_000_000
+    ? `${(n / 1_000_000).toFixed(2)} MB`
+    : `${(n / 1000).toFixed(1)} KB`;
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const outputDir = args[0] ? join(process.cwd(), args[0]) : join(SCRIPT_DIR, "converted");
-  const inputFiles = args.length > 1 ? args.slice(1).map((p) => join(process.cwd(), p)) : findDefaultInputFiles();
+  const outputDir = args[0]
+    ? join(process.cwd(), args[0])
+    : join(SCRIPT_DIR, "converted");
+  const inputFiles =
+    args.length > 1
+      ? args.slice(1).map((p) => join(process.cwd(), p))
+      : findDefaultInputFiles();
 
   if (inputFiles.length === 0) {
     console.error("No .rmgr files found to convert.");

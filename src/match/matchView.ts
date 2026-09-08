@@ -8,6 +8,10 @@ import { Camera } from "../camera.js";
 import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_LABELS, getPlayerColor } from "../players.js";
+import { collectHeatmapPoints } from "../positionHeatmap.js";
+import { renderPositionHeatmap } from "../positionHeatmapRenderer.js";
+import { classifyMatchFrames, findStockLossFrames } from "../matchTimeline.js";
+import { ScrubberBar } from "../scrubberBar.js";
 import {
   playAttackSfx,
   playGrabSfx,
@@ -26,8 +30,8 @@ import {
 } from "../renderer.js";
 import { characterSize } from "../characterSizes.js";
 import { characterIconUrl } from "../characterIcons.js";
-import { ActionStateId, actionStateName, characterName } from "../lookups.js";
-import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
+import { ActionStateId, characterName } from "../lookups.js";
+import { DREAM_LAND_STAGE_ID, stageBlastZone } from "../stageGeometry.js";
 import { t, getLanguage } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
 import {
@@ -43,7 +47,6 @@ import {
 import {
   computeEdgeGuardEvents,
   computeEdgeGuardStats,
-  isHitstunState,
   type EdgeGuardEvent,
 } from "../edgeGuard.js";
 import {
@@ -105,12 +108,7 @@ export type MatchEvent =
 interface PlayerPanel {
   port: PortIndex;
   pad: ControllerPad;
-  damageEl: HTMLElement;
-  stocksEl: HTMLElement;
-  jumpsEl: HTMLElement;
-  stateEl: HTMLElement;
-  positionEl: HTMLElement;
-  comboHitsEl: HTMLElement;
+  panelEl: HTMLElement;
 }
 
 function formatElapsed(frameIndex: number): string {
@@ -134,7 +132,13 @@ export class MatchViewController {
   private stepBackBtn: HTMLButtonElement;
   private playPauseBtn: HTMLButtonElement;
   private stepForwardBtn: HTMLButtonElement;
-  private scrubber: HTMLInputElement;
+  private scrubberBar: ScrubberBar;
+  private scrubberBarEl: HTMLElement;
+  private scrubberPreviewTooltip: HTMLElement;
+  private scrubberPreviewCanvas: HTMLCanvasElement;
+  private scrubberPreviewFrameLabel: HTMLElement;
+  private scrubberPreviewRenderer: StageRenderer | null = null;
+  private scrubberPreviewCamera: Camera | null = null;
   private frameLabel: HTMLSpanElement;
   private speedMenuContainer: HTMLElement;
   private speedToggleBtn: HTMLButtonElement;
@@ -155,6 +159,14 @@ export class MatchViewController {
   private perspectiveToggleEl: HTMLDivElement;
   private statsCollapseBtn: HTMLButtonElement;
   private statsPanel: HTMLDivElement;
+  private positionHeatmapSection: HTMLElement;
+  private positionHeatmapCollapseBtn: HTMLButtonElement;
+  private positionHeatmapHeaderTitle: HTMLHeadingElement;
+  private positionHeatmapPanelBody: HTMLDivElement;
+  private positionHeatmapAngelToggleLabelText: HTMLSpanElement;
+  private positionHeatmapAngelToggle: HTMLInputElement;
+  private positionHeatmapCanvas: HTMLCanvasElement;
+  private positionHeatmapCollapsed = false;
   private statsEmpty: HTMLParagraphElement;
   private characterMetaWidget: HTMLElement;
   private characterMetaHeaderTitle: HTMLHeadingElement;
@@ -319,7 +331,41 @@ export class MatchViewController {
     this.stepForwardBtn = document.getElementById(
       "stepForward",
     ) as HTMLButtonElement;
-    this.scrubber = document.getElementById("scrubber") as HTMLInputElement;
+    this.scrubberBarEl = document.getElementById("scrubberBar") as HTMLElement;
+    const scrubberTimelineCanvas = document.getElementById(
+      "matchTimelineCanvas",
+    ) as HTMLCanvasElement;
+    const scrubberThumb = document.getElementById(
+      "scrubberThumb",
+    ) as HTMLElement;
+    this.scrubberPreviewTooltip = document.getElementById(
+      "scrubberPreviewTooltip",
+    ) as HTMLElement;
+    this.scrubberPreviewCanvas = document.getElementById(
+      "scrubberPreviewCanvas",
+    ) as HTMLCanvasElement;
+    this.scrubberPreviewFrameLabel = document.getElementById(
+      "scrubberPreviewFrameLabel",
+    ) as HTMLElement;
+    this.scrubberBar = new ScrubberBar(
+      this.scrubberBarEl,
+      scrubberTimelineCanvas,
+      scrubberThumb,
+      {
+        onSeek: (index) => {
+          this.dismissQuickAttackOverlay();
+          this.playback?.pause();
+          this.playback?.seek(index);
+        },
+        onPreview: (index, clientX) => {
+          if (index === null) {
+            this.hideScrubberPreview();
+          } else {
+            this.showScrubberPreview(index, clientX);
+          }
+        },
+      },
+    );
     this.frameLabel = document.getElementById("frameLabel") as HTMLSpanElement;
     this.speedMenuContainer = document.getElementById(
       "speedMenuContainer",
@@ -378,6 +424,27 @@ export class MatchViewController {
       "statsCollapseBtn",
     ) as HTMLButtonElement;
     this.statsPanel = document.getElementById("statsPanel") as HTMLDivElement;
+    this.positionHeatmapSection = document.getElementById(
+      "positionHeatmapSection",
+    ) as HTMLElement;
+    this.positionHeatmapCollapseBtn = document.getElementById(
+      "positionHeatmapCollapseBtn",
+    ) as HTMLButtonElement;
+    this.positionHeatmapHeaderTitle = document.querySelector(
+      "#positionHeatmapHeader h2",
+    ) as HTMLHeadingElement;
+    this.positionHeatmapPanelBody = document.getElementById(
+      "positionHeatmapPanelBody",
+    ) as HTMLDivElement;
+    this.positionHeatmapAngelToggleLabelText = document.querySelector(
+      "#positionHeatmapAngelToggleLabel span",
+    ) as HTMLSpanElement;
+    this.positionHeatmapAngelToggle = document.getElementById(
+      "positionHeatmapAngelToggle",
+    ) as HTMLInputElement;
+    this.positionHeatmapCanvas = document.getElementById(
+      "positionHeatmapCanvas",
+    ) as HTMLCanvasElement;
     this.statsEmpty = document.getElementById(
       "statsEmpty",
     ) as HTMLParagraphElement;
@@ -781,6 +848,21 @@ export class MatchViewController {
       this.statsCollapseBtn.classList.toggle("collapsed", this.statsCollapsed);
     });
 
+    this.positionHeatmapCollapseBtn.addEventListener("click", () => {
+      this.positionHeatmapCollapsed = !this.positionHeatmapCollapsed;
+      this.positionHeatmapPanelBody.hidden = this.positionHeatmapCollapsed;
+      this.positionHeatmapCollapseBtn.classList.toggle(
+        "collapsed",
+        this.positionHeatmapCollapsed,
+      );
+    });
+
+    this.positionHeatmapAngelToggle.addEventListener("change", () => {
+      if (this.currentReplay) {
+        this.renderPositionHeatmapPanel(this.currentReplay);
+      }
+    });
+
     this.recoveryCollapseBtn.addEventListener("click", () => {
       this.recoveryCollapsed = !this.recoveryCollapsed;
       this.recoveryList.hidden = this.recoveryCollapsed;
@@ -966,12 +1048,6 @@ export class MatchViewController {
       this.exitPlaylist();
     });
 
-    this.scrubber.addEventListener("input", () => {
-      this.dismissQuickAttackOverlay();
-      this.playback?.pause();
-      this.playback?.seek(Number(this.scrubber.value));
-    });
-
     this.stageCanvas.addEventListener("mousemove", (e) => {
       if (!this.currentReplay) return;
       this.hoverScreen = { x: e.offsetX, y: e.offsetY };
@@ -983,6 +1059,7 @@ export class MatchViewController {
         this.currentReplay,
         this.playback?.currentIndex ?? 0,
         this.perspectivePort,
+        this.isPausedMidMatch(this.playback?.currentIndex ?? 0),
       );
     });
 
@@ -997,6 +1074,7 @@ export class MatchViewController {
         this.currentReplay,
         this.playback?.currentIndex ?? 0,
         this.perspectivePort,
+        this.isPausedMidMatch(this.playback?.currentIndex ?? 0),
       );
     });
 
@@ -1319,6 +1397,13 @@ export class MatchViewController {
     if (this.statsEmpty) this.statsEmpty.textContent = tr.statsEmpty;
     if (this.statsCollapseBtn)
       this.statsCollapseBtn.title = tr.statsCollapseTitle;
+    if (this.positionHeatmapCollapseBtn)
+      this.positionHeatmapCollapseBtn.title = tr.positionHeatmapCollapseTitle;
+    if (this.positionHeatmapHeaderTitle)
+      this.positionHeatmapHeaderTitle.textContent = tr.positionHeatmapTitle;
+    if (this.positionHeatmapAngelToggleLabelText)
+      this.positionHeatmapAngelToggleLabelText.textContent =
+        tr.positionHeatmapAngelToggleLabel;
     if (this.recoveryWidgetTitleEl)
       this.recoveryWidgetTitleEl.textContent = tr.recoveryWidgetTitle;
     if (this.recoveryCollapseBtn)
@@ -1451,6 +1536,7 @@ export class MatchViewController {
       this.buildPlayerPanels(this.currentReplay);
       this.buildPerspectiveToggle(this.currentReplay);
       this.renderStatsPanel(this.currentReplay);
+      this.renderPositionHeatmapPanel(this.currentReplay);
       this.buildEventLog();
       this.onFrameChange(
         this.playback?.currentIndex ?? 0,
@@ -1479,21 +1565,15 @@ export class MatchViewController {
 
   private updatePlayerPanelColors(): void {
     for (const panel of this.panels) {
-      const panelEl = panel.damageEl.closest(
-        ".player-panel",
-      ) as HTMLElement | null;
-      if (panelEl) {
-        panelEl.style.setProperty(
-          "--player-color",
-          getPlayerColor(panel.port, this.perspectivePort),
-        );
-      }
+      panel.panelEl.style.setProperty(
+        "--player-color",
+        getPlayerColor(panel.port, this.perspectivePort),
+      );
     }
   }
 
   private buildPlayerPanels(replay: Replay): void {
     this.playersEl.innerHTML = "";
-    const tr = t();
 
     this.panels = getSeatedPorts(replay).map((port) => {
       const characterId = replay.matchSettings?.characterId[port] ?? 0;
@@ -1506,14 +1586,6 @@ export class MatchViewController {
       const name = replay.matchStart.playerNames[port] || PORT_LABELS[port];
       panel.innerHTML = `
         <div class="player-name">${escapeHtml(name)} <span class="character">— ${escapeHtml(characterName(characterId))} (${escapeHtml(PORT_LABELS[port])})</span></div>
-        <div class="player-stats">
-          <div>${escapeHtml(tr.damage)} <strong class="stat-damage">—</strong></div>
-          <div>${escapeHtml(tr.stocks)} <strong class="stat-stocks">—</strong></div>
-          <div>${escapeHtml(tr.jumps)} <strong class="stat-jumps">—</strong></div>
-          <div class="full-row">${escapeHtml(tr.state)} <strong class="stat-state">—</strong></div>
-          <div class="full-row">${escapeHtml(tr.position)} <strong class="stat-position">—</strong></div>
-          <div class="full-row">${escapeHtml(tr.comboHits)} <strong class="stat-combo-hits">0</strong></div>
-        </div>
         <canvas class="controller-pad" width="140" height="84"></canvas>
       `;
       this.playersEl.appendChild(panel);
@@ -1524,14 +1596,19 @@ export class MatchViewController {
       return {
         port,
         pad: new ControllerPad(padCanvas),
-        damageEl: panel.querySelector(".stat-damage") as HTMLElement,
-        stocksEl: panel.querySelector(".stat-stocks") as HTMLElement,
-        jumpsEl: panel.querySelector(".stat-jumps") as HTMLElement,
-        stateEl: panel.querySelector(".stat-state") as HTMLElement,
-        positionEl: panel.querySelector(".stat-position") as HTMLElement,
-        comboHitsEl: panel.querySelector(".stat-combo-hits") as HTMLElement,
+        panelEl: panel,
       };
     });
+  }
+
+  /**
+   * True only when playback is stopped somewhere mid-match (not playing,
+   * and not sitting at the untouched frame 0) - the on-stage state/position
+   * readout (see StageRenderer.render's isPaused param) is meant for
+   * "I paused to inspect this moment," not the initial unstarted load.
+   */
+  private isPausedMidMatch(index: number): boolean {
+    return !(this.playback?.isPlaying ?? false) && index > 0;
   }
 
   private renderFrame(
@@ -1586,6 +1663,7 @@ export class MatchViewController {
       this.currentReplay,
       _frameIndex,
       this.perspectivePort,
+      this.isPausedMidMatch(_frameIndex),
     );
 
     if (this.qaOverlayExitBtn) {
@@ -1593,41 +1671,9 @@ export class MatchViewController {
         !this.stageRenderer.isQuickAttackOverlayActive();
     }
 
-    const tr = t();
     for (const panel of this.panels) {
       const portData = frame?.ports[panel.port];
-      if (!portData || !portData.state) {
-        panel.damageEl.textContent = "—";
-        panel.stocksEl.textContent = "—";
-        panel.jumpsEl.textContent = "—";
-        panel.stateEl.textContent = tr.notOnScreen;
-        panel.positionEl.textContent = "—";
-        panel.comboHitsEl.textContent = "—";
-        panel.comboHitsEl.className = "stat-combo-hits";
-        panel.pad.render(portData?.input);
-        continue;
-      }
-      const { state: post, input: pre } = portData;
-      panel.damageEl.textContent = `${post.damagePercent}%`;
-      panel.stocksEl.textContent = String(post.stocksRemaining + 1);
-      panel.jumpsEl.textContent = String(post.jumpsRemaining);
-      panel.stateEl.textContent = actionStateName(post.actionStateId);
-      panel.positionEl.textContent = `(${post.positionX.toFixed(1)}, ${post.positionY.toFixed(1)})`;
-
-      const inHitstun = isHitstunState(post.actionStateId, post.hitstunCounter);
-      const comboCount = post.comboHitCount;
-      if (comboCount > 0) {
-        const hitstunSuffix = inHitstun
-          ? tr.hitstunUnit(post.hitstunCounter)
-          : "";
-        panel.comboHitsEl.textContent = `${tr.hitUnit(comboCount)}${hitstunSuffix}`;
-        panel.comboHitsEl.className = "stat-combo-hits in-combo";
-      } else {
-        panel.comboHitsEl.textContent = "0";
-        panel.comboHitsEl.className = "stat-combo-hits";
-      }
-
-      panel.pad.render(pre);
+      panel.pad.render(portData?.input);
     }
   }
 
@@ -1979,6 +2025,8 @@ export class MatchViewController {
         this.onPerspectiveChangedCb?.(port);
         this.updatePlayerPanelColors();
         this.renderStatsPanel(replay);
+        this.renderPositionHeatmapPanel(replay);
+        this.renderMatchTimelinePanel(replay);
         this.renderCharacterMetaPanel(replay);
         this.render12CbMatchWidget();
         this.buildEventLog();
@@ -2147,6 +2195,119 @@ export class MatchViewController {
         this.stageOverlayList.appendChild(entry);
       }
     }
+  }
+
+  private renderPositionHeatmapPanel(replay: Replay): void {
+    const seated = getSeatedPorts(replay);
+    if (
+      seated.length !== 2 ||
+      this.perspectivePort === null ||
+      !stageBlastZone(replay.matchSettings?.stageId)
+    ) {
+      this.positionHeatmapSection.hidden = true;
+      return;
+    }
+
+    this.positionHeatmapSection.hidden = false;
+    const opponentPort = seated.find((p) => p !== this.perspectivePort)!;
+
+    const points = collectHeatmapPoints(
+      replay,
+      this.perspectivePort,
+      opponentPort,
+      this.positionHeatmapAngelToggle.checked,
+    );
+    renderPositionHeatmap(
+      this.positionHeatmapCanvas,
+      replay.matchSettings?.stageId,
+      points,
+    );
+  }
+
+  private renderMatchTimelinePanel(replay: Replay): void {
+    const seated = getSeatedPorts(replay);
+    if (seated.length !== 2 || this.perspectivePort === null) {
+      this.scrubberBar.setClassifications([]);
+      return;
+    }
+    const opponentPort = seated.find((p) => p !== this.perspectivePort)!;
+    const classifications = classifyMatchFrames(
+      replay,
+      this.perspectivePort,
+      opponentPort,
+    );
+    const stockLossMarkers = findStockLossFrames(
+      replay,
+      this.perspectivePort,
+      opponentPort,
+    );
+    this.scrubberBar.setClassifications(classifications, stockLossMarkers);
+  }
+
+  private showScrubberPreview(frameIndex: number, clientX: number): void {
+    const replay = this.currentReplay;
+    if (!replay) return;
+    const frame = replay.frames[frameIndex];
+    if (!frame) return;
+
+    if (!this.scrubberPreviewRenderer) {
+      this.scrubberPreviewRenderer = new StageRenderer(
+        this.scrubberPreviewCanvas,
+      );
+      // Always the default grid theme, independent of the main view's
+      // current theme, so the small tooltip stays legible regardless.
+      this.scrubberPreviewRenderer.setBackgroundTheme("grid");
+      this.scrubberPreviewCamera = new Camera(
+        this.scrubberPreviewCanvas.width,
+        this.scrubberPreviewCanvas.height,
+      );
+    }
+
+    const targets: Array<{ x: number; y: number }> = [];
+    for (const panel of this.panels) {
+      const post = frame.ports[panel.port]?.state;
+      if (
+        !post ||
+        isDeadState(post.actionStateId) ||
+        post.stocksRemaining < 0
+      ) {
+        continue;
+      }
+      const size = characterSize(post.characterId);
+      const crouching = isCrouchState(post.actionStateId);
+      const height = size.height * (crouching ? 0.5 : 1.0);
+      const halfWidth = size.width / 2;
+      targets.push(
+        { x: post.positionX - halfWidth, y: post.positionY },
+        { x: post.positionX + halfWidth, y: post.positionY + height },
+      );
+    }
+    this.scrubberPreviewCamera!.update(targets, true);
+    this.scrubberPreviewRenderer.render(
+      this.scrubberPreviewCamera!,
+      frame,
+      replay.matchSettings?.stageId,
+      undefined,
+      replay,
+      frameIndex,
+      this.perspectivePort,
+    );
+
+    this.scrubberPreviewFrameLabel.textContent = `${formatElapsed(frameIndex)} (Frame ${frameIndex})`;
+
+    const barRect = this.scrubberBarEl.getBoundingClientRect();
+    const tooltipHalfWidth = this.scrubberPreviewCanvas.width / 2 + 6;
+    const clampedX = Math.max(
+      barRect.left + tooltipHalfWidth,
+      Math.min(clientX, barRect.right - tooltipHalfWidth),
+    );
+    this.scrubberPreviewTooltip.style.left = `${clampedX}px`;
+    this.scrubberPreviewTooltip.style.top = `${barRect.top - 8}px`;
+    this.scrubberPreviewTooltip.hidden = false;
+  }
+
+  private hideScrubberPreview(): void {
+    this.scrubberPreviewTooltip.hidden = true;
   }
 
   private renderStatsPanel(replay: Replay): void {
@@ -3719,7 +3880,7 @@ export class MatchViewController {
       this.playSfxForFrameChange(previousFrame, frame, index);
       this.checkPlaylistClipBoundary(index);
     }
-    this.scrubber.value = String(index);
+    this.scrubberBar.setValue(index);
     this.playPauseBtn.textContent = isPlaying ? "⏸" : "▶";
 
     const totalFrames = this.currentReplay?.frames.length ?? 0;
@@ -3835,6 +3996,7 @@ export class MatchViewController {
       height = Math.max(150, Math.floor(rect.height));
     }
     this.stageRenderer.resize(width, height);
+    this.scrubberBar.resize();
     if (this.currentReplay) {
       this.camera.resize(width, height);
       this.onFrameChange(
@@ -3905,6 +4067,8 @@ export class MatchViewController {
     this.buildPlayerPanels(replay);
     this.buildPerspectiveToggle(replay);
     this.renderStatsPanel(replay);
+    this.renderPositionHeatmapPanel(replay);
+    this.renderMatchTimelinePanel(replay);
     this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
     this.render12CbMatchWidget();
@@ -3916,8 +4080,9 @@ export class MatchViewController {
     const replayId = this.getReplayIdentifier(replay, loaded);
     this.youtubeSync.setReplay(replayId);
 
-    this.scrubber.max = String(Math.max(0, replay.frames.length - 1));
-    this.scrubber.value = "0";
+    this.scrubberBar.setRange(Math.max(0, replay.frames.length - 1));
+    this.scrubberBar.setValue(0);
+    this.scrubberBar.resize();
 
     this.playback = new PlaybackController(
       replay.frames.length,
