@@ -10,6 +10,8 @@ import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_LABELS, getPlayerColor } from "../players.js";
 import { collectHeatmapPoints } from "../positionHeatmap.js";
 import { renderPositionHeatmap } from "../positionHeatmapRenderer.js";
+import { classifyMatchFrames } from "../matchTimeline.js";
+import { renderMatchTimeline } from "../matchTimelineRenderer.js";
 import {
   playAttackSfx,
   playGrabSfx,
@@ -137,6 +139,7 @@ export class MatchViewController {
   private playPauseBtn: HTMLButtonElement;
   private stepForwardBtn: HTMLButtonElement;
   private scrubber: HTMLInputElement;
+  private matchTimelineCanvas: HTMLCanvasElement;
   private frameLabel: HTMLSpanElement;
   private speedMenuContainer: HTMLElement;
   private speedToggleBtn: HTMLButtonElement;
@@ -330,6 +333,9 @@ export class MatchViewController {
       "stepForward",
     ) as HTMLButtonElement;
     this.scrubber = document.getElementById("scrubber") as HTMLInputElement;
+    this.matchTimelineCanvas = document.getElementById(
+      "matchTimelineCanvas",
+    ) as HTMLCanvasElement;
     this.frameLabel = document.getElementById("frameLabel") as HTMLSpanElement;
     this.speedMenuContainer = document.getElementById(
       "speedMenuContainer",
@@ -2034,6 +2040,7 @@ export class MatchViewController {
         this.updatePlayerPanelColors();
         this.renderStatsPanel(replay);
         this.renderPositionHeatmapPanel(replay);
+        this.renderMatchTimelinePanel(replay);
         this.renderCharacterMetaPanel(replay);
         this.render12CbMatchWidget();
         this.buildEventLog();
@@ -2229,6 +2236,21 @@ export class MatchViewController {
       replay.matchSettings?.stageId,
       points,
     );
+  }
+
+  private renderMatchTimelinePanel(replay: Replay): void {
+    const seated = getSeatedPorts(replay);
+    if (seated.length !== 2 || this.perspectivePort === null) {
+      renderMatchTimeline(this.matchTimelineCanvas, []);
+      return;
+    }
+    const opponentPort = seated.find((p) => p !== this.perspectivePort)!;
+    const classifications = classifyMatchFrames(
+      replay,
+      this.perspectivePort,
+      opponentPort,
+    );
+    renderMatchTimeline(this.matchTimelineCanvas, classifications);
   }
 
   private renderStatsPanel(replay: Replay): void {
@@ -3988,6 +4010,7 @@ export class MatchViewController {
     this.buildPerspectiveToggle(replay);
     this.renderStatsPanel(replay);
     this.renderPositionHeatmapPanel(replay);
+    this.renderMatchTimelinePanel(replay);
     this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
     this.render12CbMatchWidget();

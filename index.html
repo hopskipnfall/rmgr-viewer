@@ -4174,8 +4174,20 @@
       footer button:active {
         background: var(--accent);
       }
-      #scrubber {
+      #scrubberContainer {
         flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      #matchTimelineCanvas {
+        width: 100%;
+        height: 6px;
+        border-radius: 3px;
+        display: block;
+      }
+      #scrubber {
+        width: 100%;
         accent-color: var(--accent);
       }
       #frameLabel {
@@ -5365,7 +5377,10 @@
       >
         LOG
       </button>
-      <input type="range" id="scrubber" min="0" max="0" value="0" />
+      <div id="scrubberContainer">
+        <canvas id="matchTimelineCanvas" width="600" height="6"></canvas>
+        <input type="range" id="scrubber" min="0" max="0" value="0" />
+      </div>
       <span id="frameLabel"></span>
     </footer>
 
