@@ -1,4 +1,4 @@
-import type { FrameClassification } from "./matchTimeline.js";
+import type { FrameClassification, StockLossMarker } from "./matchTimeline.js";
 import { renderMatchTimeline } from "./matchTimelineRenderer.js";
 
 export interface ScrubberBarCallbacks {
@@ -12,8 +12,6 @@ export interface ScrubberBarCallbacks {
    */
   onPreview: (index: number | null, clientX: number) => void;
 }
-
-const TIMELINE_HEIGHT_CSS_PX = 6;
 
 /**
  * A custom playback-position bar: replaces `<input type="range">` so the
@@ -30,6 +28,7 @@ export class ScrubberBar {
   private maxIndex = 0;
   private value = 0;
   private classifications: readonly FrameClassification[] = [];
+  private stockLossMarkers: readonly StockLossMarker[] = [];
   private dragging = false;
 
   constructor(
@@ -53,8 +52,12 @@ export class ScrubberBar {
     this.thumb.style.left = `${fraction * 100}%`;
   }
 
-  setClassifications(classifications: readonly FrameClassification[]): void {
+  setClassifications(
+    classifications: readonly FrameClassification[],
+    stockLossMarkers: readonly StockLossMarker[] = [],
+  ): void {
     this.classifications = classifications;
+    this.stockLossMarkers = stockLossMarkers;
     this.redrawTimeline();
   }
 
@@ -63,7 +66,7 @@ export class ScrubberBar {
     const rect = this.bar.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     const width = Math.max(1, Math.round(rect.width * dpr));
-    const height = Math.max(1, Math.round(TIMELINE_HEIGHT_CSS_PX * dpr));
+    const height = Math.max(1, Math.round(rect.height * dpr));
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
       this.canvas.height = height;
@@ -72,7 +75,11 @@ export class ScrubberBar {
   }
 
   private redrawTimeline(): void {
-    renderMatchTimeline(this.canvas, this.classifications);
+    renderMatchTimeline(
+      this.canvas,
+      this.classifications,
+      this.stockLossMarkers,
+    );
   }
 
   private indexFromClientX(clientX: number): number {

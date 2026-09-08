@@ -1,8 +1,5 @@
 import { getSeatedPorts, type PortIndex, type Replay } from "@rmg-k/rmgr";
-import {
-  computeNeutralHitEvents,
-  DEAD_OR_RESPAWNING_STATES,
-} from "./neutralHits.js";
+import { computeNeutralHitEvents } from "./neutralHits.js";
 import { buildRecoveryMap, buildLedgeMap } from "./ledgeTrap.js";
 
 /**
@@ -11,10 +8,11 @@ import { buildRecoveryMap, buildLedgeMap } from "./ledgeTrap.js";
  *   winning, is edge-guarding the opponent, or is ledge-trapping them.
  * - "disadvantage": the mirror image — perspective is on the losing side
  *   of one of those same three situations.
- * - "neutral": neither player is in any of the above, and neither is in a
- *   dead/respawning state.
- * - "other": anything else (e.g. a dead/respawn state without an active
- *   advantage/disadvantage situation, or missing frame data).
+ * - "neutral": neither player is in any of the above - including a
+ *   dead/respawning state with no active advantage/disadvantage situation
+ *   (e.g. riding the spawn platform), since that's brief enough not to
+ *   warrant its own color.
+ * - "other": frame data missing for one of the two ports.
  */
 export type FrameClassification =
   "neutral" | "advantage" | "disadvantage" | "other";
@@ -70,17 +68,58 @@ export function classifyMatchFrames(
     const frame = replay.frames[i];
     const pState = frame?.ports[perspectivePort]?.state;
     const oState = frame?.ports[opponentPort]?.state;
-    if (
-      pState &&
-      oState &&
-      !DEAD_OR_RESPAWNING_STATES.has(pState.actionStateId) &&
-      !DEAD_OR_RESPAWNING_STATES.has(oState.actionStateId)
-    ) {
-      result[i] = "neutral";
-    } else {
-      result[i] = "other";
-    }
+    result[i] = pState && oState ? "neutral" : "other";
   }
 
   return result;
+}
+
+/** A frame at which one side lost a stock, for the timeline's vertical stock-loss markers. */
+export interface StockLossMarker {
+  readonly frameIndex: number;
+  readonly side: "perspective" | "opponent";
+}
+
+/**
+ * Finds every frame at which `perspectivePort` or `opponentPort`'s
+ * `stocksRemaining` decreased from the previous frame it had data for.
+ * Empty for any replay that isn't exactly 1v1.
+ */
+export function findStockLossFrames(
+  replay: Replay,
+  perspectivePort: PortIndex,
+  opponentPort: PortIndex,
+): StockLossMarker[] {
+  if (getSeatedPorts(replay).length !== 2) {
+    return [];
+  }
+
+  const markers: StockLossMarker[] = [];
+  let prevPerspectiveStocks: number | undefined;
+  let prevOpponentStocks: number | undefined;
+
+  for (let i = 0; i < replay.frames.length; i++) {
+    const frame = replay.frames[i];
+    const pStocks = frame?.ports[perspectivePort]?.state?.stocksRemaining;
+    const oStocks = frame?.ports[opponentPort]?.state?.stocksRemaining;
+
+    if (pStocks !== undefined) {
+      if (
+        prevPerspectiveStocks !== undefined &&
+        pStocks < prevPerspectiveStocks
+      ) {
+        markers.push({ frameIndex: i, side: "perspective" });
+      }
+      prevPerspectiveStocks = pStocks;
+    }
+
+    if (oStocks !== undefined) {
+      if (prevOpponentStocks !== undefined && oStocks < prevOpponentStocks) {
+        markers.push({ frameIndex: i, side: "opponent" });
+      }
+      prevOpponentStocks = oStocks;
+    }
+  }
+
+  return markers;
 }

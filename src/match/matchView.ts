@@ -10,7 +10,7 @@ import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_LABELS, getPlayerColor } from "../players.js";
 import { collectHeatmapPoints } from "../positionHeatmap.js";
 import { renderPositionHeatmap } from "../positionHeatmapRenderer.js";
-import { classifyMatchFrames } from "../matchTimeline.js";
+import { classifyMatchFrames, findStockLossFrames } from "../matchTimeline.js";
 import { ScrubberBar } from "../scrubberBar.js";
 import {
   playAttackSfx,
@@ -2283,7 +2283,12 @@ export class MatchViewController {
       this.perspectivePort,
       opponentPort,
     );
-    this.scrubberBar.setClassifications(classifications);
+    const stockLossMarkers = findStockLossFrames(
+      replay,
+      this.perspectivePort,
+      opponentPort,
+    );
+    this.scrubberBar.setClassifications(classifications, stockLossMarkers);
   }
 
   private showScrubberPreview(frameIndex: number, clientX: number): void {
