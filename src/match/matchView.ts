@@ -29,7 +29,7 @@ import {
 import { characterSize } from "../characterSizes.js";
 import { characterIconUrl } from "../characterIcons.js";
 import { ActionStateId, actionStateName, characterName } from "../lookups.js";
-import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
+import { DREAM_LAND_STAGE_ID, stageBlastZone } from "../stageGeometry.js";
 import { t, getLanguage } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
 import {
@@ -2206,7 +2206,11 @@ export class MatchViewController {
 
   private renderPositionHeatmapPanel(replay: Replay): void {
     const seated = getSeatedPorts(replay);
-    if (seated.length !== 2 || this.perspectivePort === null) {
+    if (
+      seated.length !== 2 ||
+      this.perspectivePort === null ||
+      !stageBlastZone(replay.matchSettings?.stageId)
+    ) {
       this.positionHeatmapSection.hidden = true;
       return;
     }
