@@ -24,9 +24,11 @@
 ### Task 1: i18n strings for the new panel
 
 **Files:**
+
 - Modify: `src/i18n.ts:5-31` (interface), `src/i18n.ts:462-467` (en table), `src/i18n.ts:909-913` (ja table)
 
 **Interfaces:**
+
 - Produces: `Translations.positionHeatmapTitle: string`, `Translations.positionHeatmapCollapseTitle: string`, `Translations.positionHeatmapAngelToggleLabel: string` — consumed by Task 5 via `t()`.
 
 - [ ] **Step 1: Add the three new fields to the `Translations` interface**
@@ -34,9 +36,9 @@
 In `src/i18n.ts`, immediately after line 30 (`statsCollapseTitle: string;`), insert:
 
 ```ts
-  positionHeatmapTitle: string;
-  positionHeatmapCollapseTitle: string;
-  positionHeatmapAngelToggleLabel: string;
+positionHeatmapTitle: string;
+positionHeatmapCollapseTitle: string;
+positionHeatmapAngelToggleLabel: string;
 ```
 
 - [ ] **Step 2: Add the English strings**
@@ -78,10 +80,12 @@ git commit -m "Add i18n strings for the Position Heatmap panel"
 ### Task 2: `collectHeatmapPoints` data module (TDD)
 
 **Files:**
+
 - Create: `src/positionHeatmap.ts`
 - Test: `src/positionHeatmap.test.ts`
 
 **Interfaces:**
+
 - Consumes: `computeAngelInvincibilityEvents(replay: Replay): AngelInvincibilityEvent[]` from `src/angelInvincibility.ts` (existing; `AngelInvincibilityEvent` has `.kind: "angel-entered" | "angel-avoid-success" | "angel-avoid-failure"`, `.respawnPort: PortIndex`, `.frameIndex: number`). `getSeatedPorts(replay): readonly PortIndex[]` from `@rmg-k/rmgr`.
 - Produces: `export interface HeatmapPoint { readonly x: number; readonly y: number; }`, `export interface HeatmapPoints { readonly perspective: readonly HeatmapPoint[]; readonly opponent: readonly HeatmapPoint[]; }`, `export function collectHeatmapPoints(replay: Replay, perspectivePort: PortIndex, opponentPort: PortIndex, onlyDuringAngelInvincibility: boolean): HeatmapPoints` — consumed by Task 5 (`matchView.ts`) and tested here.
 
@@ -205,7 +209,12 @@ describe("collectHeatmapPoints", () => {
     ];
     const replay = makeMockReplay(frames);
 
-    const result = collectHeatmapPoints(replay, 0 as PortIndex, 1 as PortIndex, false);
+    const result = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      false,
+    );
 
     expect(result.perspective).toEqual([
       { x: 0, y: 0 },
@@ -224,7 +233,12 @@ describe("collectHeatmapPoints", () => {
     ];
     const replay = makeMockReplay(frames);
 
-    const result = collectHeatmapPoints(replay, 0 as PortIndex, 1 as PortIndex, false);
+    const result = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      false,
+    );
 
     expect(result.perspective).toEqual([
       { x: 0, y: 0 },
@@ -238,7 +252,11 @@ describe("collectHeatmapPoints", () => {
     // Frames 0-4: opponent (port 1) not respawning - outside any window.
     for (let f = 0; f < 5; f++) {
       frames.push(
-        makeFrame(f, { state: IDLE, x: 0, y: 0 }, { state: IDLE, x: 999, y: 999 }),
+        makeFrame(
+          f,
+          { state: IDLE, x: 0, y: 0 },
+          { state: IDLE, x: 999, y: 999 },
+        ),
       );
     }
     // Frame 5: opponent enters respawn platform - "angel-entered" fires here.
@@ -251,11 +269,20 @@ describe("collectHeatmapPoints", () => {
     );
     // Frame 305: outside the window (5 + 300 = 305).
     frames.push(
-      makeFrame(305, { state: IDLE, x: 3, y: 0 }, { state: IDLE, x: 999, y: 999 }),
+      makeFrame(
+        305,
+        { state: IDLE, x: 3, y: 0 },
+        { state: IDLE, x: 999, y: 999 },
+      ),
     );
     const replay = makeMockReplay(frames);
 
-    const result = collectHeatmapPoints(replay, 0 as PortIndex, 1 as PortIndex, true);
+    const result = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      true,
+    );
 
     // Frame indices 5 and 6 are within the window (frames array index ==
     // frame number here since every frame number 0..6 is present in order,
@@ -286,7 +313,12 @@ describe("collectHeatmapPoints", () => {
     );
 
     const replay = makeMockReplay(frames);
-    const result = collectHeatmapPoints(replay, 0 as PortIndex, 1 as PortIndex, true);
+    const result = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      true,
+    );
 
     // Frame index 2 must appear exactly once, not twice.
     expect(result.perspective).toEqual([
@@ -329,8 +361,18 @@ describe("collectHeatmapPoints", () => {
     ];
     const replay = makeMockReplay(frames, [0, 1, 2] as PortIndex[]);
 
-    const resultOff = collectHeatmapPoints(replay, 0 as PortIndex, 1 as PortIndex, false);
-    const resultOn = collectHeatmapPoints(replay, 0 as PortIndex, 1 as PortIndex, true);
+    const resultOff = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      false,
+    );
+    const resultOn = collectHeatmapPoints(
+      replay,
+      0 as PortIndex,
+      1 as PortIndex,
+      true,
+    );
 
     expect(resultOff).toEqual({ perspective: [], opponent: [] });
     expect(resultOn).toEqual({ perspective: [], opponent: [] });
@@ -385,7 +427,8 @@ export function collectHeatmapPoints(
   if (onlyDuringAngelInvincibility) {
     allowedFrameIndices = new Set<number>();
     for (const ev of computeAngelInvincibilityEvents(replay)) {
-      if (ev.kind !== "angel-entered" || ev.respawnPort !== opponentPort) continue;
+      if (ev.kind !== "angel-entered" || ev.respawnPort !== opponentPort)
+        continue;
       const end = Math.min(
         replay.frames.length,
         ev.frameIndex + ANGEL_WINDOW_FRAMES,
@@ -437,9 +480,11 @@ git commit -m "Add collectHeatmapPoints: per-port position collection with angel
 ### Task 3: `renderPositionHeatmap` canvas renderer
 
 **Files:**
+
 - Create: `src/positionHeatmapRenderer.ts`
 
 **Interfaces:**
+
 - Consumes: `HeatmapPoints`, `HeatmapPoint` from `./positionHeatmap.js` (Task 2). `stageGeometry(stageId: number | undefined): PlatformSpec[] | undefined` and `stageBlastZone(stageId: number | undefined): BlastZoneSpec | undefined` from `./stageGeometry.js` (existing — `PlatformSpec` has `leftX/rightX/y/kind`, `BlastZoneSpec` has `leftX/rightX/bottomY/topY`). `MAIN_PLAYER_COLOR`, `OPPONENT_COLOR` from `./players.js` (existing).
 - Produces: `export function renderPositionHeatmap(canvas: HTMLCanvasElement, stageId: number | undefined, points: HeatmapPoints): void` — consumed by Task 5 (`matchView.ts`).
 
@@ -603,9 +648,11 @@ git commit -m "Add renderPositionHeatmap: grid-density canvas renderer for stage
 ### Task 4: HTML markup and CSS for the new panel
 
 **Files:**
+
 - Modify: `index.html:4917` (insert new section after `</section>` closing `#matchStats`), `index.html` `<style>` block (add new rules near the existing `#matchStats`/`#statsPanel` rules at lines 2753-2806 and 3973-3982)
 
 **Interfaces:**
+
 - Produces: DOM elements `#positionHeatmapSection` (the `<section>`, `hidden` by default), `#positionHeatmapCollapseBtn`, `#positionHeatmapPanelBody`, `#positionHeatmapAngelToggle` (checkbox `<input>`), `#positionHeatmapCanvas` — all consumed by Task 5 (`matchView.ts`).
 
 - [ ] **Step 1: Insert the new section markup**
@@ -613,24 +660,24 @@ git commit -m "Add renderPositionHeatmap: grid-density canvas renderer for stage
 In `index.html`, immediately after line 4917 (`</section>` closing `#matchStats`, right before `<section id="characterMetaWidget" hidden>`), insert:
 
 ```html
-          <section id="positionHeatmapSection" hidden>
-            <div id="positionHeatmapHeader">
-              <button
-                id="positionHeatmapCollapseBtn"
-                title="Collapse / expand Position Heatmap"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2>Position Heatmap</h2>
-              </button>
-            </div>
-            <div id="positionHeatmapPanelBody">
-              <label id="positionHeatmapAngelToggleLabel">
-                <input type="checkbox" id="positionHeatmapAngelToggle" />
-                <span>Only first 5s after opponent respawns (angel invincibility)</span>
-              </label>
-              <canvas id="positionHeatmapCanvas" width="600" height="360"></canvas>
-            </div>
-          </section>
+<section id="positionHeatmapSection" hidden>
+  <div id="positionHeatmapHeader">
+    <button
+      id="positionHeatmapCollapseBtn"
+      title="Collapse / expand Position Heatmap"
+    >
+      <span class="collapse-icon">▼</span>
+      <h2>Position Heatmap</h2>
+    </button>
+  </div>
+  <div id="positionHeatmapPanelBody">
+    <label id="positionHeatmapAngelToggleLabel">
+      <input type="checkbox" id="positionHeatmapAngelToggle" />
+      <span>Only first 5s after opponent respawns (angel invincibility)</span>
+    </label>
+    <canvas id="positionHeatmapCanvas" width="600" height="360"></canvas>
+  </div>
+</section>
 ```
 
 (The hardcoded English text here — button title, `<h2>`, checkbox label — is a placeholder DOM structure only; Task 5 overwrites all three via `t()` on every render, same as how `#matchStatsHeader h2` is populated dynamically in `matchView.ts`'s existing code. This matches the existing convention: `index.html`'s static text is never actually shown because the constructor/`updateLanguage` path always sets `.textContent`/`.title` from the current language table before first paint.)
@@ -640,85 +687,85 @@ In `index.html`, immediately after line 4917 (`</section>` closing `#matchStats`
 In `index.html`'s `<style>` block, immediately after line 2806 (the closing brace of the `#statsCollapseBtn:hover h2, #characterMetaCollapseBtn:hover h2` rule), insert:
 
 ```css
-      #positionHeatmapSection {
-        flex-shrink: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-        background: var(--panel);
-        border: 1px solid var(--panel-border);
-        border-radius: 8px;
-        overflow: hidden;
-      }
-      #positionHeatmapSection[hidden] {
-        display: none !important;
-      }
-      #positionHeatmapHeader {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        border-bottom: 1px solid var(--panel-border);
-        flex-shrink: 0;
-        flex-wrap: wrap;
-      }
-      #positionHeatmapCollapseBtn {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        background: transparent;
-        border: none;
-        padding: 0;
-        cursor: pointer;
-        color: var(--text-dim);
-      }
-      #positionHeatmapCollapseBtn:hover {
-        color: var(--text);
-      }
-      #positionHeatmapCollapseBtn:hover h2 {
-        color: var(--text);
-      }
-      #positionHeatmapCollapseBtn.collapsed .collapse-icon {
-        transform: rotate(-90deg);
-      }
-      #positionHeatmapHeader h2 {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin: 0;
-        flex-shrink: 0;
-      }
+#positionHeatmapSection {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+#positionHeatmapSection[hidden] {
+  display: none !important;
+}
+#positionHeatmapHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+#positionHeatmapCollapseBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+#positionHeatmapCollapseBtn:hover {
+  color: var(--text);
+}
+#positionHeatmapCollapseBtn:hover h2 {
+  color: var(--text);
+}
+#positionHeatmapCollapseBtn.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+#positionHeatmapHeader h2 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+  flex-shrink: 0;
+}
 ```
 
 And immediately after line 3982 (the closing brace of the `#statsPanel[hidden]` rule), insert:
 
 ```css
-      #positionHeatmapPanelBody {
-        padding: 10px 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        font-size: 12px;
-      }
-      #positionHeatmapPanelBody[hidden] {
-        display: none !important;
-      }
-      #positionHeatmapAngelToggleLabel {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        cursor: pointer;
-        color: var(--text-dim);
-      }
-      #positionHeatmapCanvas {
-        width: 100%;
-        height: auto;
-        aspect-ratio: 600 / 360;
-        border-radius: 6px;
-        background: rgba(0, 0, 0, 0.15);
-      }
+#positionHeatmapPanelBody {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+#positionHeatmapPanelBody[hidden] {
+  display: none !important;
+}
+#positionHeatmapAngelToggleLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+#positionHeatmapCanvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 600 / 360;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+}
 ```
 
 - [ ] **Step 3: Verify the page still loads with no console errors**
@@ -737,9 +784,11 @@ git commit -m "Add Position Heatmap panel markup and styles beneath Match Stats"
 ### Task 5: Wire the panel into `matchView.ts`
 
 **Files:**
+
 - Modify: `src/match/matchView.ts` (imports; field declarations near line 154-159; constructor `getElementById` wiring near line 371-385; event listener setup near line 778-781; a new `renderPositionHeatmapPanel` method; call sites at `loadMatch` ~line 3907, `buildPerspectiveToggle`'s click handler ~line 1981, and the language-refresh block ~line 1453)
 
 **Interfaces:**
+
 - Consumes: `collectHeatmapPoints` (Task 2), `renderPositionHeatmap` (Task 3), `getSeatedPorts` (already imported from `@rmg-k/rmgr`), `t()` (already imported from `./i18n.js`), `this.perspectivePort: PortIndex | null` (existing field), `this.currentReplay: Replay | null` (existing field).
 - Produces: `private renderPositionHeatmapPanel(replay: Replay): void` — no other file calls this (kept private, only used within `matchView.ts`'s own render call sites).
 
@@ -772,27 +821,27 @@ Immediately after line 157 (`private statsPanel: HTMLDivElement;`), insert:
 Immediately after line 380 (`this.statsPanel = document.getElementById("statsPanel") as HTMLDivElement;`), insert:
 
 ```ts
-    this.positionHeatmapSection = document.getElementById(
-      "positionHeatmapSection",
-    ) as HTMLElement;
-    this.positionHeatmapCollapseBtn = document.getElementById(
-      "positionHeatmapCollapseBtn",
-    ) as HTMLButtonElement;
-    this.positionHeatmapHeaderTitle = document.querySelector(
-      "#positionHeatmapHeader h2",
-    ) as HTMLHeadingElement;
-    this.positionHeatmapPanelBody = document.getElementById(
-      "positionHeatmapPanelBody",
-    ) as HTMLDivElement;
-    this.positionHeatmapAngelToggleLabelText = document.querySelector(
-      "#positionHeatmapAngelToggleLabel span",
-    ) as HTMLSpanElement;
-    this.positionHeatmapAngelToggle = document.getElementById(
-      "positionHeatmapAngelToggle",
-    ) as HTMLInputElement;
-    this.positionHeatmapCanvas = document.getElementById(
-      "positionHeatmapCanvas",
-    ) as HTMLCanvasElement;
+this.positionHeatmapSection = document.getElementById(
+  "positionHeatmapSection",
+) as HTMLElement;
+this.positionHeatmapCollapseBtn = document.getElementById(
+  "positionHeatmapCollapseBtn",
+) as HTMLButtonElement;
+this.positionHeatmapHeaderTitle = document.querySelector(
+  "#positionHeatmapHeader h2",
+) as HTMLHeadingElement;
+this.positionHeatmapPanelBody = document.getElementById(
+  "positionHeatmapPanelBody",
+) as HTMLDivElement;
+this.positionHeatmapAngelToggleLabelText = document.querySelector(
+  "#positionHeatmapAngelToggleLabel span",
+) as HTMLSpanElement;
+this.positionHeatmapAngelToggle = document.getElementById(
+  "positionHeatmapAngelToggle",
+) as HTMLInputElement;
+this.positionHeatmapCanvas = document.getElementById(
+  "positionHeatmapCanvas",
+) as HTMLCanvasElement;
 ```
 
 - [ ] **Step 4: Add event listeners**
@@ -800,20 +849,20 @@ Immediately after line 380 (`this.statsPanel = document.getElementById("statsPan
 Immediately after line 781 (`this.statsCollapseBtn.classList.toggle("collapsed", this.statsCollapsed);` and its closing `});`), insert:
 
 ```ts
-    this.positionHeatmapCollapseBtn.addEventListener("click", () => {
-      this.positionHeatmapCollapsed = !this.positionHeatmapCollapsed;
-      this.positionHeatmapPanelBody.hidden = this.positionHeatmapCollapsed;
-      this.positionHeatmapCollapseBtn.classList.toggle(
-        "collapsed",
-        this.positionHeatmapCollapsed,
-      );
-    });
+this.positionHeatmapCollapseBtn.addEventListener("click", () => {
+  this.positionHeatmapCollapsed = !this.positionHeatmapCollapsed;
+  this.positionHeatmapPanelBody.hidden = this.positionHeatmapCollapsed;
+  this.positionHeatmapCollapseBtn.classList.toggle(
+    "collapsed",
+    this.positionHeatmapCollapsed,
+  );
+});
 
-    this.positionHeatmapAngelToggle.addEventListener("change", () => {
-      if (this.currentReplay) {
-        this.renderPositionHeatmapPanel(this.currentReplay);
-      }
-    });
+this.positionHeatmapAngelToggle.addEventListener("change", () => {
+  if (this.currentReplay) {
+    this.renderPositionHeatmapPanel(this.currentReplay);
+  }
+});
 ```
 
 - [ ] **Step 5: Add the `renderPositionHeatmapPanel` method**
@@ -850,7 +899,7 @@ Immediately before the existing `private renderStatsPanel(replay: Replay): void 
 Immediately after line 3907 (`this.renderStatsPanel(replay);` inside `loadMatch`), insert:
 
 ```ts
-    this.renderPositionHeatmapPanel(replay);
+this.renderPositionHeatmapPanel(replay);
 ```
 
 - [ ] **Step 7: Call it from the perspective-toggle click handler**
@@ -858,7 +907,7 @@ Immediately after line 3907 (`this.renderStatsPanel(replay);` inside `loadMatch`
 Immediately after line 1981 (`this.renderStatsPanel(replay);` inside `buildPerspectiveToggle`'s button click handler), insert:
 
 ```ts
-        this.renderPositionHeatmapPanel(replay);
+this.renderPositionHeatmapPanel(replay);
 ```
 
 (Note the extra indentation — this call site is nested inside the `btn.addEventListener("click", () => { ... })` callback, one level deeper than Step 6's call site.)
@@ -868,7 +917,7 @@ Immediately after line 1981 (`this.renderStatsPanel(replay);` inside `buildPersp
 Immediately after line 1453 (`this.renderStatsPanel(this.currentReplay);` inside the `if (this.currentReplay && this.currentLoaded) { ... }` block), insert:
 
 ```ts
-      this.renderPositionHeatmapPanel(this.currentReplay);
+this.renderPositionHeatmapPanel(this.currentReplay);
 ```
 
 - [ ] **Step 9: Wire the i18n text refresh**
@@ -876,13 +925,13 @@ Immediately after line 1453 (`this.renderStatsPanel(this.currentReplay);` inside
 Immediately after line 1321 (`this.statsCollapseBtn.title = tr.statsCollapseTitle;`), insert:
 
 ```ts
-    if (this.positionHeatmapCollapseBtn)
-      this.positionHeatmapCollapseBtn.title = tr.positionHeatmapCollapseTitle;
-    if (this.positionHeatmapHeaderTitle)
-      this.positionHeatmapHeaderTitle.textContent = tr.positionHeatmapTitle;
-    if (this.positionHeatmapAngelToggleLabelText)
-      this.positionHeatmapAngelToggleLabelText.textContent =
-        tr.positionHeatmapAngelToggleLabel;
+if (this.positionHeatmapCollapseBtn)
+  this.positionHeatmapCollapseBtn.title = tr.positionHeatmapCollapseTitle;
+if (this.positionHeatmapHeaderTitle)
+  this.positionHeatmapHeaderTitle.textContent = tr.positionHeatmapTitle;
+if (this.positionHeatmapAngelToggleLabelText)
+  this.positionHeatmapAngelToggleLabelText.textContent =
+    tr.positionHeatmapAngelToggleLabel;
 ```
 
 - [ ] **Step 10: Verify it compiles and lints**

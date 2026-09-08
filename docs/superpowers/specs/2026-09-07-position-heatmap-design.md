@@ -130,6 +130,7 @@ is 1v1 (mirrors how other conditionally-relevant panels are shown/hidden
 elsewhere in that file).
 
 `src/match/matchView.ts`:
+
 - Field/getElementById wiring for the new elements, following the same
   pattern as `statsCollapseBtn`/`statsPanel` (collapse) and the Quick
   Attack overlay button (checkbox-driven re-render).
