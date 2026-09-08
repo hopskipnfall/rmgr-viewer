@@ -71,12 +71,16 @@ class LegacyBinaryReader {
   readFixedString(width: number): string {
     const raw = this.readBytes(width);
     const nul = raw.indexOf(0);
-    return new TextDecoder("ascii").decode(nul === -1 ? raw : raw.subarray(0, nul));
+    return new TextDecoder("ascii").decode(
+      nul === -1 ? raw : raw.subarray(0, nul),
+    );
   }
   readFixedUtf8String(width: number): string {
     const raw = this.readBytes(width);
     const nul = raw.indexOf(0);
-    return new TextDecoder("utf-8").decode(nul === -1 ? raw : raw.subarray(0, nul));
+    return new TextDecoder("utf-8").decode(
+      nul === -1 ? raw : raw.subarray(0, nul),
+    );
   }
   skip(count: number): void {
     this.offset += count;
@@ -117,7 +121,12 @@ export interface LegacyGameStart {
   itemFrequency: number;
   teamsEnabled: boolean;
   handicapMode: (typeof HANDICAP_MODE_BY_WIRE)[number];
-  ports: readonly [LegacyPortSettings, LegacyPortSettings, LegacyPortSettings, LegacyPortSettings];
+  ports: readonly [
+    LegacyPortSettings,
+    LegacyPortSettings,
+    LegacyPortSettings,
+    LegacyPortSettings,
+  ];
   playerNames: readonly [string, string, string, string];
 }
 
@@ -162,7 +171,9 @@ export interface LegacyItemUpdate {
 
 export interface LegacyFrame {
   frame: number;
-  ports: Partial<Record<number, { pre: LegacyPreFrame; post: LegacyPostFrame }>>;
+  ports: Partial<
+    Record<number, { pre: LegacyPreFrame; post: LegacyPostFrame }>
+  >;
   items: LegacyItemUpdate[];
   hazardFlags: number;
 }
@@ -196,7 +207,9 @@ export function parseLegacyReplay(data: Uint8Array): LegacyReplay {
   }
   const version = r.readU8();
   if (version < 3 || version > 4) {
-    throw new Error(`unsupported legacy version ${version} - only 3/4 are handled`);
+    throw new Error(
+      `unsupported legacy version ${version} - only 3/4 are handled`,
+    );
   }
   r.skip(3); // reserved
   const streamLength = r.readU32();
@@ -212,11 +225,14 @@ export function parseLegacyReplay(data: Uint8Array): LegacyReplay {
   }
 
   const headerSize = r.position;
-  const streamEnd = streamLength > 0 ? headerSize + streamLength : data.byteLength;
+  const streamEnd =
+    streamLength > 0 ? headerSize + streamLength : data.byteLength;
 
   const firstCode = r.readU8();
   if (firstCode !== EventCode.EventPayloads) {
-    throw new Error(`expected EventPayloads first, got 0x${firstCode.toString(16)}`);
+    throw new Error(
+      `expected EventPayloads first, got 0x${firstCode.toString(16)}`,
+    );
   }
   const count = r.readU8();
   const declaredSizes = new Map<number, number>();
@@ -272,8 +288,12 @@ export function parseLegacyReplay(data: Uint8Array): LegacyReplay {
         let teamsEnabled = false;
         let handicapMode: LegacyGameStart["handicapMode"] = "off";
         let portTeam: readonly [number, number, number, number] = [0, 0, 0, 0];
-        let portHandicap: readonly [number, number, number, number] = [0, 0, 0, 0];
-        let portCpuLevel: readonly [number, number, number, number] = [0, 0, 0, 0];
+        let portHandicap: readonly [number, number, number, number] = [
+          0, 0, 0, 0,
+        ];
+        let portCpuLevel: readonly [number, number, number, number] = [
+          0, 0, 0, 0,
+        ];
         if (declared - (r.position - start) >= 14) {
           teamsEnabled = r.readU8() !== 0;
           handicapMode = HANDICAP_MODE_BY_WIRE[r.readU8()] ?? "off";
@@ -386,7 +406,15 @@ export function parseLegacyReplay(data: Uint8Array): LegacyReplay {
           items = [];
           itemsByFrame.set(frame, items);
         }
-        items.push({ frame, objectAddress, linkId, kind, positionX, positionY, positionZ });
+        items.push({
+          frame,
+          objectAddress,
+          linkId,
+          kind,
+          positionX,
+          positionY,
+          positionZ,
+        });
         break;
       }
       case EventCode.StageHazardUpdate: {
@@ -402,7 +430,9 @@ export function parseLegacyReplay(data: Uint8Array): LegacyReplay {
       default: {
         const size = declaredSizes.get(code);
         if (size === undefined) {
-          throw new Error(`unrecognized event code 0x${code.toString(16)} with no declared size`);
+          throw new Error(
+            `unrecognized event code 0x${code.toString(16)} with no declared size`,
+          );
         }
         r.skip(size);
         break;
@@ -415,7 +445,11 @@ export function parseLegacyReplay(data: Uint8Array): LegacyReplay {
   }
 
   const frameNumbers = [
-    ...new Set([...frameEntries.keys(), ...itemsByFrame.keys(), ...hazardFlagsByFrame.keys()]),
+    ...new Set([
+      ...frameEntries.keys(),
+      ...itemsByFrame.keys(),
+      ...hazardFlagsByFrame.keys(),
+    ]),
   ].sort((a, b) => a - b);
 
   const frames: LegacyFrame[] = frameNumbers.map((frameNumber) => {
