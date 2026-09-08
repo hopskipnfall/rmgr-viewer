@@ -47,7 +47,6 @@ import {
 import {
   computeEdgeGuardEvents,
   computeEdgeGuardStats,
-  isHitstunState,
   type EdgeGuardEvent,
 } from "../edgeGuard.js";
 import {
@@ -109,10 +108,7 @@ export type MatchEvent =
 interface PlayerPanel {
   port: PortIndex;
   pad: ControllerPad;
-  damageEl: HTMLElement;
-  stocksEl: HTMLElement;
-  jumpsEl: HTMLElement;
-  comboHitsEl: HTMLElement;
+  panelEl: HTMLElement;
 }
 
 function formatElapsed(frameIndex: number): string {
@@ -1569,21 +1565,15 @@ export class MatchViewController {
 
   private updatePlayerPanelColors(): void {
     for (const panel of this.panels) {
-      const panelEl = panel.damageEl.closest(
-        ".player-panel",
-      ) as HTMLElement | null;
-      if (panelEl) {
-        panelEl.style.setProperty(
-          "--player-color",
-          getPlayerColor(panel.port, this.perspectivePort),
-        );
-      }
+      panel.panelEl.style.setProperty(
+        "--player-color",
+        getPlayerColor(panel.port, this.perspectivePort),
+      );
     }
   }
 
   private buildPlayerPanels(replay: Replay): void {
     this.playersEl.innerHTML = "";
-    const tr = t();
 
     this.panels = getSeatedPorts(replay).map((port) => {
       const characterId = replay.matchSettings?.characterId[port] ?? 0;
@@ -1596,12 +1586,6 @@ export class MatchViewController {
       const name = replay.matchStart.playerNames[port] || PORT_LABELS[port];
       panel.innerHTML = `
         <div class="player-name">${escapeHtml(name)} <span class="character">— ${escapeHtml(characterName(characterId))} (${escapeHtml(PORT_LABELS[port])})</span></div>
-        <div class="player-stats">
-          <div>${escapeHtml(tr.damage)} <strong class="stat-damage">—</strong></div>
-          <div>${escapeHtml(tr.stocks)} <strong class="stat-stocks">—</strong></div>
-          <div>${escapeHtml(tr.jumps)} <strong class="stat-jumps">—</strong></div>
-          <div class="full-row">${escapeHtml(tr.comboHits)} <strong class="stat-combo-hits">0</strong></div>
-        </div>
         <canvas class="controller-pad" width="140" height="84"></canvas>
       `;
       this.playersEl.appendChild(panel);
@@ -1612,10 +1596,7 @@ export class MatchViewController {
       return {
         port,
         pad: new ControllerPad(padCanvas),
-        damageEl: panel.querySelector(".stat-damage") as HTMLElement,
-        stocksEl: panel.querySelector(".stat-stocks") as HTMLElement,
-        jumpsEl: panel.querySelector(".stat-jumps") as HTMLElement,
-        comboHitsEl: panel.querySelector(".stat-combo-hits") as HTMLElement,
+        panelEl: panel,
       };
     });
   }
@@ -1690,37 +1671,9 @@ export class MatchViewController {
         !this.stageRenderer.isQuickAttackOverlayActive();
     }
 
-    const tr = t();
     for (const panel of this.panels) {
       const portData = frame?.ports[panel.port];
-      if (!portData || !portData.state) {
-        panel.damageEl.textContent = "—";
-        panel.stocksEl.textContent = "—";
-        panel.jumpsEl.textContent = "—";
-        panel.comboHitsEl.textContent = "—";
-        panel.comboHitsEl.className = "stat-combo-hits";
-        panel.pad.render(portData?.input);
-        continue;
-      }
-      const { state: post, input: pre } = portData;
-      panel.damageEl.textContent = `${post.damagePercent}%`;
-      panel.stocksEl.textContent = String(post.stocksRemaining + 1);
-      panel.jumpsEl.textContent = String(post.jumpsRemaining);
-
-      const inHitstun = isHitstunState(post.actionStateId, post.hitstunCounter);
-      const comboCount = post.comboHitCount;
-      if (comboCount > 0) {
-        const hitstunSuffix = inHitstun
-          ? tr.hitstunUnit(post.hitstunCounter)
-          : "";
-        panel.comboHitsEl.textContent = `${tr.hitUnit(comboCount)}${hitstunSuffix}`;
-        panel.comboHitsEl.className = "stat-combo-hits in-combo";
-      } else {
-        panel.comboHitsEl.textContent = "0";
-        panel.comboHitsEl.className = "stat-combo-hits";
-      }
-
-      panel.pad.render(pre);
+      panel.pad.render(portData?.input);
     }
   }
 
