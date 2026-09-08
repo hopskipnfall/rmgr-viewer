@@ -32,14 +32,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const replaysDir = resolve(__dirname, "../public/replays");
 const outPath = resolve(replaysDir, "demo-summaries.json");
 
-function loadReplayFromDisk(filename: string): LoadedReplay {
+async function loadReplayFromDisk(filename: string): Promise<LoadedReplay> {
   const buffer = readFileSync(resolve(replaysDir, filename));
   const bytes = new Uint8Array(
     buffer.buffer,
     buffer.byteOffset,
     buffer.byteLength,
   );
-  const replay = parseReplay(bytes);
+  const replay = await parseReplay(bytes);
   return {
     replay,
     sourceName: filename,
@@ -47,11 +47,11 @@ function loadReplayFromDisk(filename: string): LoadedReplay {
   };
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const results: SerializedGameSummary[] = [];
 
   for (const filename of DEMO_REPLAY_FILENAMES) {
-    const loaded = loadReplayFromDisk(filename);
+    const loaded = await loadReplayFromDisk(filename);
     const summary = summarizeReplay(loaded, null);
     results.push(serializeGameSummary(summary));
     console.log(`Summarized ${filename}`);

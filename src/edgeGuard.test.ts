@@ -6,14 +6,19 @@ import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 function makeMockReplay(frames: Frame[]): Replay {
   return {
     header: {
-      version: 4,
-      streamLength: 1000,
+      version: 5,
+      gameFamily: "smash64",
       goodName: "Super Smash Bros. (U) (V1.0) [!]",
-      recorderSchemaVersion: 8,
+      recorderSchemaVersion: 1,
       recordedAtEpochMillis: 1724300000000,
-      recordedAtNanosOffset: 0,
+      uncompressedLength: 0,
+      compressedLength: 0,
     },
-    gameStart: {
+    matchStart: {
+      playerNames: ["nue", "Kurabba", "", ""],
+      slotType: ["human", "human", "empty", "empty"],
+    },
+    matchSettings: {
       stageId: DREAM_LAND_STAGE_ID,
       gameType: 2,
       stockCountSetting: 4,
@@ -22,52 +27,21 @@ function makeMockReplay(frames: Frame[]): Replay {
       itemFrequency: 0,
       teamsEnabled: false,
       handicapMode: "off",
-      ports: [
-        {
-          slotType: "human",
-          characterId: 9, // Pikachu
-          costumeId: 0,
-          teamColor: 0,
-          team: 0,
-          handicap: 0,
-          cpuLevel: 0,
-        },
-        {
-          slotType: "human",
-          characterId: 8, // Kirby
-          costumeId: 0,
-          teamColor: 0,
-          team: 1,
-          handicap: 0,
-          cpuLevel: 0,
-        },
-        {
-          slotType: "empty",
-          characterId: 0,
-          costumeId: 0,
-          teamColor: 0,
-          team: 0,
-          handicap: 0,
-          cpuLevel: 0,
-        },
-        {
-          slotType: "empty",
-          characterId: 0,
-          costumeId: 0,
-          teamColor: 0,
-          team: 0,
-          handicap: 0,
-          cpuLevel: 0,
-        },
-      ],
-      playerNames: ["nue", "Kurabba", "", ""],
+      characterId: [9, 8, 0, 0], // Pikachu, Kirby
+      costumeId: [0, 0, 0, 0],
+      teamColor: [0, 0, 0, 0],
+      portTeam: [0, 1, 0, 0],
+      portHandicap: [0, 0, 0, 0],
+      portCpuLevel: [0, 0, 0, 0],
     },
     frames,
-    gameEnd: {
+    matchEnd: {
+      finalFrame: frames.at(-1)?.frame ?? 0,
       endReason: "normal",
+    },
+    matchResult: {
       placements: [1, 2, -1, -1],
     },
-    isComplete: true,
   };
 }
 
@@ -83,14 +57,14 @@ interface PortState {
 
 function makeFrame(frameNumber: number, p0: PortState, p1: PortState): Frame {
   const post = (port: PortIndex, characterId: number, p: PortState) => ({
-    pre: {
+    input: {
       frame: frameNumber,
       port,
       buttons: 0,
       stickX: 0,
       stickY: 0,
     },
-    post: {
+    state: {
       frame: frameNumber,
       port,
       characterId,

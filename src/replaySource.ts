@@ -20,7 +20,7 @@ export async function loadReplayFromUrl(url: string): Promise<LoadedReplay> {
     );
   }
   const buffer = await response.arrayBuffer();
-  const replay = parseReplay(new Uint8Array(buffer));
+  const replay = await parseReplay(new Uint8Array(buffer));
   return {
     replay,
     sourceName: url.split("/").pop() ?? url,
@@ -30,7 +30,7 @@ export async function loadReplayFromUrl(url: string): Promise<LoadedReplay> {
 
 export async function loadReplayFromFile(file: File): Promise<LoadedReplay> {
   const buffer = await file.arrayBuffer();
-  const replay = parseReplay(new Uint8Array(buffer));
+  const replay = await parseReplay(new Uint8Array(buffer));
   return {
     replay,
     sourceName: file.name,

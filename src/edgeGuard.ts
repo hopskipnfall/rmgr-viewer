@@ -143,7 +143,7 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
   const events: EdgeGuardEvent[] = [];
 
   // Only meaningful on Dream Land, 2-player matches.
-  if (replay.gameStart.stageId !== DREAM_LAND_STAGE_ID) return events;
+  if (replay.matchSettings?.stageId !== DREAM_LAND_STAGE_ID) return events;
   const seated = getSeatedPorts(replay);
   if (seated.length !== 2) return events;
 
@@ -159,8 +159,8 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
     const frame = replay.frames[i];
     if (!frame) continue;
 
-    const postA = frame.ports[portA]?.post;
-    const postB = frame.ports[portB]?.post;
+    const postA = frame.ports[portA]?.state;
+    const postB = frame.ports[portB]?.state;
     if (!postA || !postB) continue;
 
     const frameNumber = frame.frame;
@@ -337,10 +337,11 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
     });
   }
 
-  // If a situation is still open when the replay ends and the recording
-  // finished cleanly (GameEnd present), the recovering player never came back
-  // — resolve it as a failure on the last frame.
-  if (situation !== null && replay.isComplete) {
+  // If a situation is still open when the replay ends, the recovering
+  // player never came back — resolve it as a failure on the last frame.
+  // (format v5 always parses a complete match - see docs/RMGR_SPEC.md §2 -
+  // so there's no "truncated recording" case to exclude here anymore.)
+  if (situation !== null) {
     const lastFrame = replay.frames[replay.frames.length - 1];
     if (lastFrame !== undefined) {
       events.push({

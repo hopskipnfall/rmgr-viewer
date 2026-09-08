@@ -68,7 +68,7 @@ export function computeAngelInvincibilityEvents(
     for (let i = 0; i < replay.frames.length; i++) {
       const f = replay.frames[i];
       if (!f) continue;
-      const pPost = f.ports[respawnPort]?.post;
+      const pPost = f.ports[respawnPort]?.state;
       if (!pPost) continue;
 
       const isPlat = RESPAWN_STATES.has(pPost.actionStateId);
@@ -94,15 +94,15 @@ export function computeAngelInvincibilityEvents(
         const endFrame = replay.frames[endIdx]?.frame ?? f.frame;
 
         const oppDamageAtStart =
-          replay.frames[startIdx]?.ports[oppPort]?.post?.damagePercent ?? 0;
+          replay.frames[startIdx]?.ports[oppPort]?.state?.damagePercent ?? 0;
         const oppDamageAtEnd =
-          replay.frames[endIdx]?.ports[oppPort]?.post?.damagePercent ?? 0;
+          replay.frames[endIdx]?.ports[oppPort]?.state?.damagePercent ?? 0;
         const damageTaken = Math.max(0, oppDamageAtEnd - oppDamageAtStart);
 
         let hitsTaken = 0;
         let lastCombo: number | undefined;
         for (let j = startIdx; j <= endIdx; j++) {
-          const oPost = replay.frames[j]?.ports[oppPort]?.post;
+          const oPost = replay.frames[j]?.ports[oppPort]?.state;
           if (!oPost) continue;
           if (
             (lastCombo === 0 || lastCombo === undefined) &&

@@ -318,8 +318,8 @@ export function calculateHitDI(
   if (!startFrame) return null;
 
   const prevFrame = replay.frames[hitFrameIndex - 1];
-  const startPost = startFrame.ports[victimPort]?.post;
-  const prevPost = prevFrame?.ports[victimPort]?.post;
+  const startPost = startFrame.ports[victimPort]?.state;
+  const prevPost = prevFrame?.ports[victimPort]?.state;
   if (!startPost || !prevPost) return null;
 
   const damageDealt = Math.max(
@@ -330,7 +330,7 @@ export function calculateHitDI(
 
   const attackerPost =
     attackerPort !== null
-      ? (startFrame.ports[attackerPort]?.post ?? null)
+      ? (startFrame.ports[attackerPort]?.state ?? null)
       : null;
 
   // In Smash 64, throws and grab captures cannot be DI'd
@@ -365,7 +365,7 @@ export function calculateHitDI(
     const fIdx = hitFrameIndex + k;
     const f = replay.frames[fIdx];
     if (!f) break;
-    const post = f.ports[victimPort]?.post;
+    const post = f.ports[victimPort]?.state;
     if (!post) break;
     if (post.velocityX !== 0 || post.velocityY !== 0) {
       endHitlagFrameIndex = hitFrameIndex + k - 1;
@@ -380,8 +380,8 @@ export function calculateHitDI(
   let inputCount = 0;
   const inputs: DISingleStickInput[] = [];
 
-  let lastX = prevFrame.ports[victimPort]?.pre?.stickX ?? 0;
-  let lastY = prevFrame.ports[victimPort]?.pre?.stickY ?? 0;
+  let lastX = prevFrame.ports[victimPort]?.input?.stickX ?? 0;
+  let lastY = prevFrame.ports[victimPort]?.input?.stickY ?? 0;
   let lastRecordedPos = { x: startPost.positionX, y: startPost.positionY };
 
   let theoreticalDx = 0;
@@ -392,8 +392,8 @@ export function calculateHitDI(
     const f = replay.frames[fIdx];
     if (!f) break;
 
-    const pre = f.ports[victimPort]?.pre;
-    const post = f.ports[victimPort]?.post;
+    const pre = f.ports[victimPort]?.input;
+    const post = f.ports[victimPort]?.state;
     const currX = pre?.stickX ?? 0;
     const currY = pre?.stickY ?? 0;
     const mag = Math.hypot(currX, currY);
@@ -433,7 +433,8 @@ export function calculateHitDI(
   let dy = 0;
 
   if (inputCount > 0) {
-    const endPost = replay.frames[endHitlagFrameIndex]?.ports[victimPort]?.post;
+    const endPost =
+      replay.frames[endHitlagFrameIndex]?.ports[victimPort]?.state;
     if (endPost) {
       dx = endPost.positionX - startPos.x;
       dy = endPost.positionY - startPos.y;
@@ -522,8 +523,8 @@ export function extractAllHitsWithDI(replay: Replay): HitDIResult[] {
     if (!prev || !curr) continue;
 
     for (const victimPort of seated) {
-      const pPrev = prev.ports[victimPort]?.post;
-      const pCurr = curr.ports[victimPort]?.post;
+      const pPrev = prev.ports[victimPort]?.state;
+      const pCurr = curr.ports[victimPort]?.state;
       if (pPrev && pCurr && pCurr.damagePercent > pPrev.damagePercent) {
         // Find other seated port as attacker
         const attackerPort =

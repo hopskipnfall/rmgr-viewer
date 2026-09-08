@@ -260,7 +260,7 @@ export function computeLedgeGrabCandidates(
 
   for (const key of Object.keys(frame.ports)) {
     const port = Number(key) as PortIndex;
-    const currentPost = frame.ports[port]?.post;
+    const currentPost = frame.ports[port]?.state;
     if (!currentPost) continue;
 
     const currentRaw = rawLedgeGrabState(currentPost, leftLedge, rightLedge);
@@ -268,7 +268,7 @@ export function computeLedgeGrabCandidates(
       let consecutiveFrames = 0;
       let idx = frameIndex;
       while (consecutiveFrames < LEDGE_GRAB_FADE_FRAMES && idx >= 0) {
-        const post = replay.frames[idx]?.ports[port]?.post;
+        const post = replay.frames[idx]?.ports[port]?.state;
         if (!post || !rawLedgeGrabState(post, leftLedge, rightLedge)) break;
         consecutiveFrames++;
         idx--;
@@ -290,7 +290,7 @@ export function computeLedgeGrabCandidates(
     let lastActive: RawLedgeGrabState | null = null;
     while (framesSinceActive < LEDGE_GRAB_FADE_FRAMES && idx >= 0) {
       framesSinceActive++;
-      const post = replay.frames[idx]?.ports[port]?.post;
+      const post = replay.frames[idx]?.ports[port]?.state;
       const raw = post ? rawLedgeGrabState(post, leftLedge, rightLedge) : null;
       if (raw) {
         lastActive = raw;
@@ -1115,7 +1115,7 @@ export function extractAllQuickAttackPaths(
   recoveryOnly = true,
 ): QuickAttackPath[] {
   const paths: QuickAttackPath[] = [];
-  const charId = replay.gameStart.ports[port]?.characterId ?? 0x09;
+  const charId = replay.matchSettings?.characterId[port] ?? 0x09;
   if (!isPikachuCharacter(charId)) return paths;
 
   const recoveryWindows = getRecoveryWindowsForPort(replay, port);
@@ -1152,7 +1152,7 @@ export function extractAllQuickAttackPaths(
       // Find first jump frame during the recovery approach
       let firstJumpIdx = -1;
       for (let k = matchingWindow.start; k <= startFrameIndex; k++) {
-        const pData = replay.frames[k]?.ports[port]?.post;
+        const pData = replay.frames[k]?.ports[port]?.state;
         if (pData && isJumpActionState(pData.actionStateId)) {
           firstJumpIdx = k;
           break;
@@ -1165,7 +1165,7 @@ export function extractAllQuickAttackPaths(
 
         const preJumpPts: Array<{ x: number; y: number }> = [];
         for (let k = matchingWindow.start; k <= firstJumpIdx; k++) {
-          const pData = replay.frames[k]?.ports[port]?.post;
+          const pData = replay.frames[k]?.ports[port]?.state;
           if (pData) {
             preJumpPts.push({
               x: pData.positionX,
@@ -1179,7 +1179,7 @@ export function extractAllQuickAttackPaths(
 
         const jmpPts: Array<{ x: number; y: number }> = [];
         for (let k = firstJumpIdx; k <= startFrameIndex; k++) {
-          const pData = replay.frames[k]?.ports[port]?.post;
+          const pData = replay.frames[k]?.ports[port]?.state;
           if (pData) {
             jmpPts.push({
               x: pData.positionX,
@@ -1193,7 +1193,7 @@ export function extractAllQuickAttackPaths(
       } else {
         const prePts: Array<{ x: number; y: number }> = [];
         for (let k = matchingWindow.start; k <= startFrameIndex; k++) {
-          const pData = replay.frames[k]?.ports[port]?.post;
+          const pData = replay.frames[k]?.ports[port]?.state;
           if (pData) {
             prePts.push({
               x: pData.positionX,
@@ -1209,7 +1209,7 @@ export function extractAllQuickAttackPaths(
       // Populate preUpBPoints for compatibility
       const allPrePts: Array<{ x: number; y: number }> = [];
       for (let k = matchingWindow.start; k <= startFrameIndex; k++) {
-        const pData = replay.frames[k]?.ports[port]?.post;
+        const pData = replay.frames[k]?.ports[port]?.state;
         if (pData) {
           allPrePts.push({
             x: pData.positionX,
@@ -1244,7 +1244,7 @@ export function extractAllQuickAttackPaths(
   for (let i = 0; i < replay.frames.length; i++) {
     const f = replay.frames[i];
     if (!f) continue;
-    const pData = f.ports[port]?.post;
+    const pData = f.ports[port]?.state;
     if (!pData) continue;
 
     const isQA = isQuickAttackState(pData.actionStateId);
@@ -1263,7 +1263,9 @@ export function extractAllQuickAttackPaths(
       });
       if (pData.actionStateId === 0x0ec || pData.actionStateId === 0x0ed) {
         const prevAction =
-          i > 0 ? replay.frames[i - 1]?.ports[port]?.post?.actionStateId : null;
+          i > 0
+            ? replay.frames[i - 1]?.ports[port]?.state?.actionStateId
+            : null;
         if (prevAction !== pData.actionStateId) {
           zipCount++;
         }
@@ -1376,7 +1378,7 @@ export function getFoxFlightAngle(
   let prevX: number | null = null;
   let prevY: number | null = null;
   for (let back = 1; back <= 4; back++) {
-    const prevPost = replay.frames[frameIndex - back]?.ports[port]?.post;
+    const prevPost = replay.frames[frameIndex - back]?.ports[port]?.state;
     if (
       prevPost &&
       (Math.abs(prevPost.positionX - post.positionX) > 0.001 ||
@@ -1391,7 +1393,7 @@ export function getFoxFlightAngle(
   // If at start of flight (frame 0), look forward up to 4 frames
   if (prevX === null && frameIndex + 1 < replay.frames.length) {
     for (let fwd = 1; fwd <= 4; fwd++) {
-      const fwdPost = replay.frames[frameIndex + fwd]?.ports[port]?.post;
+      const fwdPost = replay.frames[frameIndex + fwd]?.ports[port]?.state;
       if (
         fwdPost &&
         (Math.abs(fwdPost.positionX - post.positionX) > 0.001 ||
@@ -1805,8 +1807,8 @@ export class StageRenderer {
       const spawnFrameSet = new Set<number>([0]);
       for (const port of getSeatedPorts(replay)) {
         for (let i = 1; i < replay.frames.length; i++) {
-          const cur = replay.frames[i]?.ports[port]?.post.actionStateId;
-          const prev = replay.frames[i - 1]?.ports[port]?.post.actionStateId;
+          const cur = replay.frames[i]?.ports[port]?.state?.actionStateId;
+          const prev = replay.frames[i - 1]?.ports[port]?.state?.actionStateId;
           if (
             prev === REVIVE2_ACTION_STATE_ID &&
             cur !== REVIVE2_ACTION_STATE_ID
@@ -1867,12 +1869,12 @@ export class StageRenderer {
       marks = [];
       const hasReliableJumpsRemaining =
         replay.header.recorderSchemaVersion >= 7;
-      const ledges = stageLedges(replay.gameStart.stageId);
+      const ledges = stageLedges(replay.matchSettings?.stageId);
       if (hasReliableJumpsRemaining && ledges) {
         const [leftLedge, rightLedge] = ledges;
         for (let i = 1; i < replay.frames.length; i++) {
-          const post = replay.frames[i]?.ports[port]?.post;
-          const prevPost = replay.frames[i - 1]?.ports[port]?.post;
+          const post = replay.frames[i]?.ports[port]?.state;
+          const prevPost = replay.frames[i - 1]?.ports[port]?.state;
           if (!post || !prevPost) continue;
           if (
             (isKirbyCharacter(post.characterId) ||
@@ -2008,14 +2010,14 @@ export class StageRenderer {
         for (const key of Object.keys(frame.ports)) {
           const port = Number(key) as PortIndex;
           const portData = frame.ports[port];
-          if (!portData) continue;
+          if (!portData || !portData.state) continue;
           if (
-            isPikachuCharacter(portData.post.characterId) &&
-            isQuickAttackState(portData.post.actionStateId)
+            isPikachuCharacter(portData.state.characterId) &&
+            isQuickAttackState(portData.state.actionStateId)
           ) {
             this.drawPikachuQuickAttackStreak(camera, port, replay, frameIndex);
           }
-          if (isRollState(portData.post.actionStateId)) {
+          if (isRollState(portData.state.actionStateId)) {
             this.drawRollTrail(camera, port, replay, frameIndex);
           }
         }
@@ -2024,17 +2026,17 @@ export class StageRenderer {
       for (const key of Object.keys(frame.ports)) {
         const port = Number(key) as PortIndex;
         const portData = frame.ports[port];
-        if (!portData) continue;
+        if (!portData || !portData.state) continue;
         if (
-          isDeadState(portData.post.actionStateId) ||
-          portData.post.stocksRemaining < 0
+          isDeadState(portData.state.actionStateId) ||
+          portData.state.stocksRemaining < 0
         ) {
           continue;
         }
         this.drawPlayer(
           camera,
           port,
-          portData.post,
+          portData.state,
           perspectivePort,
           replay,
           frameIndex,
@@ -2275,10 +2277,10 @@ export class StageRenderer {
 
     const seated = getSeatedPorts(replay);
     const luigiPorts = seated.filter((p) =>
-      isLuigiCharacter(replay.gameStart.ports[p]?.characterId ?? -1),
+      isLuigiCharacter(replay.matchSettings?.characterId[p] ?? -1),
     );
     const marioPorts = seated.filter((p) =>
-      isMarioCharacter(replay.gameStart.ports[p]?.characterId ?? -1),
+      isMarioCharacter(replay.matchSettings?.characterId[p] ?? -1),
     );
 
     if (luigiPorts.length > 0 && marioPorts.length === 0) {
@@ -2287,9 +2289,9 @@ export class StageRenderer {
       let closestLuigiDist = Infinity;
       for (const p of luigiPorts) {
         const pd = frame.ports[p];
-        if (!pd) continue;
-        const dx = pd.post.positionX - item.positionX;
-        const dy = pd.post.positionY - item.positionY;
+        if (!pd || !pd.state) continue;
+        const dx = pd.state.positionX - item.positionX;
+        const dy = pd.state.positionY - item.positionY;
         const dist = dx * dx + dy * dy;
         if (dist < closestLuigiDist) closestLuigiDist = dist;
       }
@@ -2297,9 +2299,9 @@ export class StageRenderer {
       let closestMarioDist = Infinity;
       for (const p of marioPorts) {
         const pd = frame.ports[p];
-        if (!pd) continue;
-        const dx = pd.post.positionX - item.positionX;
-        const dy = pd.post.positionY - item.positionY;
+        if (!pd || !pd.state) continue;
+        const dx = pd.state.positionX - item.positionX;
+        const dy = pd.state.positionY - item.positionY;
         const dist = dx * dx + dy * dy;
         if (dist < closestMarioDist) closestMarioDist = dist;
       }
@@ -2312,9 +2314,9 @@ export class StageRenderer {
       let closestPort: PortIndex | null = null;
       for (const p of seated) {
         const pd = frame.ports[p];
-        if (!pd) continue;
-        const dx = pd.post.positionX - item.positionX;
-        const dy = pd.post.positionY - item.positionY;
+        if (!pd || !pd.state) continue;
+        const dx = pd.state.positionX - item.positionX;
+        const dy = pd.state.positionY - item.positionY;
         const dist = dx * dx + dy * dy;
         if (dist < closestDist) {
           closestDist = dist;
@@ -2323,8 +2325,8 @@ export class StageRenderer {
       }
       if (closestPort !== null) {
         const pd = frame.ports[closestPort];
-        if (pd) {
-          dir = pd.post.facingDirection >= 0 ? 1 : -1;
+        if (pd?.state) {
+          dir = pd.state.facingDirection >= 0 ? 1 : -1;
         }
       }
     }
@@ -3034,9 +3036,9 @@ export class StageRenderer {
     for (const key of Object.keys(frame.ports)) {
       const port = Number(key) as PortIndex;
       const portData = frame.ports[port];
-      if (!portData) continue;
+      if (!portData || !portData.state) continue;
 
-      const { actionStateId, positionX, actionFrameCounter } = portData.post;
+      const { actionStateId, positionX, actionFrameCounter } = portData.state;
       const direction = getDeathDirection(actionStateId, positionX);
       if (!direction) continue;
 
@@ -7582,7 +7584,7 @@ export class StageRenderer {
     if (attack) {
       const joystick =
         replay && frameIndex !== undefined
-          ? replay.frames[frameIndex]?.ports[port]?.pre
+          ? replay.frames[frameIndex]?.ports[port]?.input
           : null;
       const angleable = canAngleAttack(post.characterId, attack);
 
@@ -7853,7 +7855,7 @@ export class StageRenderer {
         : frameIndex;
     const nameAlpha = getStartNameAlpha(framesSinceSpawn);
     if (nameAlpha > 0) {
-      const rawName = replay?.gameStart?.playerNames?.[port]?.trim();
+      const rawName = replay?.matchStart.playerNames[port]?.trim();
       const playerName =
         rawName && rawName.length > 0 ? rawName : PORT_LABELS[port];
       const hasPerspective =
@@ -15109,7 +15111,7 @@ export class StageRenderer {
 
     let currIdx = frameIndex;
     while (currIdx >= 0) {
-      const pData = replay.frames[currIdx]?.ports[port]?.post;
+      const pData = replay.frames[currIdx]?.ports[port]?.state;
       if (!pData || !isQuickAttackState(pData.actionStateId)) {
         break;
       }
@@ -15124,7 +15126,7 @@ export class StageRenderer {
     if (pathPoints.length < 2) return;
     pathPoints.reverse(); // Chronological order: [startPoint, ..., currentPoint]
 
-    const charId = replay.gameStart.ports[port]?.characterId ?? 0x09;
+    const charId = replay.matchSettings?.characterId[port] ?? 0x09;
     const size = characterSize(charId);
     const halfHeightWorld = size.height * 0.5;
     const screenPts = pathPoints.map((pt) =>
@@ -15699,7 +15701,7 @@ export class StageRenderer {
 
     let currIdx = frameIndex;
     while (currIdx >= 0) {
-      const pData = replay.frames[currIdx]?.ports[port]?.post;
+      const pData = replay.frames[currIdx]?.ports[port]?.state;
       if (!pData || !isRollState(pData.actionStateId)) {
         break;
       }

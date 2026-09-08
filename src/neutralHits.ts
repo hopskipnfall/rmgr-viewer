@@ -200,7 +200,7 @@ export function buildAngelMap(
     for (let i = 0; i < replay.frames.length; i++) {
       const f = replay.frames[i];
       if (!f) continue;
-      const post = f.ports[p]?.post;
+      const post = f.ports[p]?.state;
       if (!post) continue;
 
       const isPlat = RESPAWN_STATES.has(post.actionStateId);
@@ -239,7 +239,7 @@ export function classifyNeutralOpening(
   attackerPort: PortIndex,
 ): { reason: NeutralOpeningReason; reasonDetail?: string } {
   const victimPrevPost =
-    replay.frames[hitFrameIndex - 1]?.ports[victimPort]?.post;
+    replay.frames[hitFrameIndex - 1]?.ports[victimPort]?.state;
   if (!victimPrevPost) return { reason: "unknown" };
   const isVictimAirborneAtHit =
     isAirborneActionState(victimPrevPost.actionStateId) ||
@@ -251,8 +251,8 @@ export function classifyNeutralOpening(
   for (let k = 1; k <= 45; k++) {
     const f = hitFrameIndex - k;
     if (f < 0) break;
-    const vPost = replay.frames[f]?.ports[victimPort]?.post;
-    const aPost = replay.frames[f]?.ports[attackerPort]?.post;
+    const vPost = replay.frames[f]?.ports[victimPort]?.state;
+    const aPost = replay.frames[f]?.ports[attackerPort]?.state;
     if (!vPost || !aPost) continue;
 
     if (isAttackActionState(vPost.actionStateId)) {
@@ -280,7 +280,7 @@ export function classifyNeutralOpening(
     for (let k = 1; k <= 30; k++) {
       const f = hitFrameIndex - k;
       if (f < 0) break;
-      const post = replay.frames[f]?.ports[victimPort]?.post;
+      const post = replay.frames[f]?.ports[victimPort]?.state;
       if (!post) continue;
 
       if (
@@ -308,7 +308,7 @@ export function classifyNeutralOpening(
   for (let k = 1; k <= 45; k++) {
     const f = hitFrameIndex - k;
     if (f < 0) break;
-    const post = replay.frames[f]?.ports[victimPort]?.post;
+    const post = replay.frames[f]?.ports[victimPort]?.state;
     if (!post) continue;
 
     if (isAttackActionState(post.actionStateId)) {
@@ -340,7 +340,7 @@ export function classifyNeutralOpening(
   for (let k = 1; k <= 45; k++) {
     const f = hitFrameIndex - k;
     if (f < 0) break;
-    const post = replay.frames[f]?.ports[victimPort]?.post;
+    const post = replay.frames[f]?.ports[victimPort]?.state;
     if (!post) continue;
 
     if (isAttackActionState(post.actionStateId)) {
@@ -430,8 +430,8 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
   for (let i = 0; i < replay.frames.length; i++) {
     const frame = replay.frames[i];
     if (!frame) continue;
-    const postA = frame.ports[portA]?.post;
-    const postB = frame.ports[portB]?.post;
+    const postA = frame.ports[portA]?.state;
+    const postB = frame.ports[portB]?.state;
     if (!postA || !postB) continue;
 
     const frameNumber = frame.frame;
@@ -454,8 +454,8 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
     if (active === null) {
       // We are in True Neutral — check for fresh opening hit/grab
       if (!inDisadvantage) {
-        const prevPostA = replay.frames[i - 1]?.ports[portA]?.post;
-        const prevPostB = replay.frames[i - 1]?.ports[portB]?.post;
+        const prevPostA = replay.frames[i - 1]?.ports[portA]?.state;
+        const prevPostB = replay.frames[i - 1]?.ports[portB]?.state;
         const damageBeforeHitA = prevPostA
           ? prevPostA.damagePercent
           : postA.damagePercent;
@@ -707,8 +707,8 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
 
           // 2. Open a new interaction starting from this reversal
           const isGrab: boolean = vic === portA ? aGrabbedB : bGrabbedA;
-          const prevPostA = replay.frames[i - 1]?.ports[portA]?.post;
-          const prevPostB = replay.frames[i - 1]?.ports[portB]?.post;
+          const prevPostA = replay.frames[i - 1]?.ports[portA]?.state;
+          const prevPostB = replay.frames[i - 1]?.ports[portB]?.state;
           const damageBeforeHitA = prevPostA
             ? prevPostA.damagePercent
             : postA.damagePercent;
@@ -834,20 +834,18 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
     const lastFrame = replay.frames[endFrameIndex];
     const totalDamageA = Math.max(
       0,
-      (lastFrame?.ports[portB]?.post?.damagePercent ?? 0) -
+      (lastFrame?.ports[portB]?.state?.damagePercent ?? 0) -
         active.damageAtEntryB,
     );
     const totalDamageB = Math.max(
       0,
-      (lastFrame?.ports[portA]?.post?.damagePercent ?? 0) -
+      (lastFrame?.ports[portA]?.state?.damagePercent ?? 0) -
         active.damageAtEntryA,
     );
     const damageAttDealt = att === portA ? totalDamageA : totalDamageB;
     const damageVicDealt = att === portA ? totalDamageB : totalDamageA;
     const isKO: boolean = Boolean(
-      replay.isComplete &&
-      replay.gameEnd &&
-      replay.gameEnd.placements?.[vic] === -1,
+      replay.matchResult && replay.matchResult.placements[vic] === -1,
     );
 
     if (active.winnerPort === null) {
@@ -927,7 +925,7 @@ export function computeNeutralHitsPerStock(
     const victimEvents = events.filter((e) => e.victimPort === port);
 
     for (let i = 0; i < replay.frames.length; i++) {
-      const post = replay.frames[i]?.ports[port]?.post;
+      const post = replay.frames[i]?.ports[port]?.state;
       if (!post) {
         values[i] = openingsTaken;
         continue;
@@ -991,7 +989,7 @@ export function computeNeutralHitsStats(
   for (const opp of opponents) {
     let lastStocks: number | undefined;
     for (let i = 0; i < replay.frames.length; i++) {
-      const post = replay.frames[i]?.ports[opp]?.post;
+      const post = replay.frames[i]?.ports[opp]?.state;
       if (!post) continue;
       if (lastStocks !== undefined && post.stocksRemaining < lastStocks) {
         stocksTaken++;

@@ -49,7 +49,7 @@ export async function importReplayFiles(
 
     try {
       const buffer = await file.arrayBuffer();
-      const replay = parseReplay(new Uint8Array(buffer));
+      const replay = await parseReplay(new Uint8Array(buffer));
       const loaded: LoadedReplay = {
         replay,
         sourceName: file.name,

@@ -53,8 +53,8 @@ function matchesEntryCriteria(
   }
 
   const frame = replay.frames[event.frameIndex];
-  const guarderPost = frame?.ports[event.edgeGuardingPort]?.post;
-  const recovererPost = frame?.ports[event.recoveringPort]?.post;
+  const guarderPost = frame?.ports[event.edgeGuardingPort]?.state;
+  const recovererPost = frame?.ports[event.recoveringPort]?.state;
   if (!guarderPost || !recovererPost) return false;
 
   if (

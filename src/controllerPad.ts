@@ -1,4 +1,4 @@
-import { ButtonBit, hasButton, type PreFrameUpdate } from "@rmg-k/rmgr";
+import { ButtonBit, hasButton, type InputFrame } from "@rmg-k/rmgr";
 
 /** Layout of button glyphs on the pad, in drawing order. */
 const BUTTON_LAYOUT: ReadonlyArray<{
@@ -43,7 +43,7 @@ export class ControllerPad {
     this.ctx = ctx;
   }
 
-  render(pre: PreFrameUpdate | undefined): void {
+  render(pre: InputFrame | undefined): void {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#1c1f2a";

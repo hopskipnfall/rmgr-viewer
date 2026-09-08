@@ -39,7 +39,7 @@ function makeMockReplayWithAction(options: {
       frame: f,
       ports: {
         [port0]: {
-          pre: {
+          input: {
             stickX: 0,
             stickY: 0,
             buttonA: false,
@@ -53,7 +53,7 @@ function makeMockReplayWithAction(options: {
             buttonCRight: false,
             buttonStart: false,
           },
-          post: {
+          state: {
             characterId: 0,
             actionStateId: isHit ? (hitType === "grab" ? 0x0a6 : 0x0c0) : 0x00a,
             actionFrameCounter: f,
@@ -72,7 +72,7 @@ function makeMockReplayWithAction(options: {
           },
         },
         [port1]: {
-          pre: {
+          input: {
             stickX: 0,
             stickY: 0,
             buttonA: false,
@@ -86,7 +86,7 @@ function makeMockReplayWithAction(options: {
             buttonCRight: false,
             buttonStart: false,
           },
-          post: {
+          state: {
             characterId: 1,
             actionStateId: actionState,
             actionFrameCounter: f,
@@ -250,7 +250,7 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: {
           [port0]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -264,7 +264,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 0,
               actionStateId: isHit
                 ? 0x0c0
@@ -287,7 +287,7 @@ describe("classifyNeutralOpening", () => {
             },
           },
           [port1]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -301,7 +301,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 1,
               actionStateId: isHit ? 0x028 : isVictimAttacking ? 0x0d1 : 0x00a, // 0x0d1 = Nair
               actionFrameCounter: f,
@@ -368,7 +368,7 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: {
           [port0]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -382,7 +382,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 0,
               actionStateId: isHit
                 ? 0x0c0
@@ -405,7 +405,7 @@ describe("classifyNeutralOpening", () => {
             },
           },
           [port1]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -419,7 +419,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 1,
               actionStateId: isHit ? 0x028 : isVictimAttacking ? 0x0d1 : 0x00a, // 0x0d1 = Nair
               actionFrameCounter: f,
@@ -519,7 +519,7 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: {
           [p0]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -533,7 +533,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 0,
               actionStateId: 0x00a,
               actionFrameCounter: f,
@@ -552,7 +552,7 @@ describe("classifyNeutralOpening", () => {
             },
           },
           [p1]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -566,7 +566,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 1,
               actionStateId: inHit ? 0x028 : 0x00a,
               actionFrameCounter: f,
@@ -645,7 +645,7 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: {
           [p0]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -659,7 +659,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 0,
               actionStateId: 0x00a,
               actionFrameCounter: f,
@@ -678,7 +678,7 @@ describe("classifyNeutralOpening", () => {
             },
           },
           [p1]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -692,7 +692,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 1,
               actionStateId: inHit ? 0x028 : 0x00a,
               actionFrameCounter: f,
@@ -765,7 +765,7 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: {
           [p0]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -779,7 +779,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 0,
               actionStateId: 0x00a,
               actionFrameCounter: f,
@@ -798,7 +798,7 @@ describe("classifyNeutralOpening", () => {
             },
           },
           [p1]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -812,7 +812,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 1,
               actionStateId: isDead ? 0x000 : isHit ? 0x028 : 0x00a,
               actionFrameCounter: f,
@@ -898,68 +898,60 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: {
           [p0]: {
-            pre: {
+            input: {
+              frame: f,
+              port: p0,
+              buttons: 0,
               stickX: 0,
               stickY: 0,
-              buttonA: false,
-              buttonB: false,
-              buttonZ: false,
-              buttonL: false,
-              buttonR: false,
-              buttonCUp: false,
-              buttonCDown: false,
-              buttonCLeft: false,
-              buttonCRight: false,
-              buttonStart: false,
             },
-            post: {
+            state: {
+              frame: f,
+              port: p0,
               characterId: 0,
               actionStateId: 0x00a,
               actionFrameCounter: f,
               positionX: 1000,
               positionY: 0,
-              positionZ: 0,
               velocityX: 0,
               velocityY: 0,
-              velocityZ: 0,
               damagePercent: 0,
               stocksRemaining: 4,
-              shieldSize: 50,
+              jumpsRemaining: 0,
+              grounded: true,
+              hurtboxState: 0,
               hitstunCounter: 0,
               comboHitCount: 0,
+              comboDamage: 0,
               facingDirection: 1,
             },
           },
           [p1]: {
-            pre: {
+            input: {
+              frame: f,
+              port: p1,
+              buttons: 0,
               stickX: 0,
               stickY: 0,
-              buttonA: false,
-              buttonB: false,
-              buttonZ: false,
-              buttonL: false,
-              buttonR: false,
-              buttonCUp: false,
-              buttonCDown: false,
-              buttonCLeft: false,
-              buttonCRight: false,
-              buttonStart: false,
             },
-            post: {
+            state: {
+              frame: f,
+              port: p1,
               characterId: 1,
               actionStateId: p1State,
               actionFrameCounter: f,
               positionX: isOffstage ? 3600 : 1200,
               positionY: isOffstage ? 500 : 0,
-              positionZ: 0,
               velocityX: 0,
               velocityY: 0,
-              velocityZ: 0,
               damagePercent: f >= 275 ? 34 : f >= 233 ? 18 : 0,
               stocksRemaining: 4,
-              shieldSize: 50,
+              jumpsRemaining: 0,
+              grounded: !isOffstage,
+              hurtboxState: 0,
               hitstunCounter: inHit ? 15 : 0,
               comboHitCount: inHit ? 1 : 0,
+              comboDamage: 0,
               facingDirection: -1,
             },
           },
@@ -969,30 +961,37 @@ describe("classifyNeutralOpening", () => {
 
     const replay = {
       header: {
-        gameMode: 0,
-        stageId: DREAM_LAND_STAGE_ID,
-        isTeams: false,
-        itemSpawnRate: 0,
-        randomSeed: 0,
+        version: 5,
+        gameFamily: "smash64",
+        goodName: "Super Smash Bros. (U) (V1.0) [!]",
+        recorderSchemaVersion: 1,
+        recordedAtEpochMillis: 1724300000000,
+        uncompressedLength: 0,
+        compressedLength: 0,
       },
-      gameStart: {
-        stageId: DREAM_LAND_STAGE_ID,
-        isTeams: false,
-        itemSpawnRate: 0,
-        randomSeed: 0,
-        ports: [{ characterId: 0 }, { characterId: 1 }],
+      matchStart: {
+        playerNames: ["Harold", "George", "", ""],
+        slotType: ["human", "human", "empty", "empty"],
       },
-      metadata: {
-        date: "2026-08-26",
-        stage: "Dream Land",
-        durationFrames: frames.length,
-        durationSeconds: frames.length / 60,
-        players: [
-          { port: p0, character: "Pikachu" },
-          { port: p1, character: "Kirby" },
-        ],
+      matchSettings: {
+        stageId: DREAM_LAND_STAGE_ID,
+        gameType: 2,
+        stockCountSetting: 3,
+        timeLimitMinutes: 100,
+        damageRatio: 100,
+        itemFrequency: 0,
+        teamsEnabled: false,
+        handicapMode: "off",
+        characterId: [0, 1, 0, 0],
+        costumeId: [0, 0, 0, 0],
+        teamColor: [0, 0, 0, 0],
+        portTeam: [0, 1, 0, 0],
+        portHandicap: [0, 0, 0, 0],
+        portCpuLevel: [0, 0, 0, 0],
       },
       frames,
+      matchEnd: { finalFrame: frames.length - 1, endReason: "normal" },
+      matchResult: { placements: [0, -1, -1, -1] },
     } as unknown as Replay;
 
     const events = computeNeutralHitEvents(replay);
@@ -1030,7 +1029,7 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: {
           [p0]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -1044,7 +1043,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 0,
               actionStateId: isP0ReversedOffstage ? 0x01a : 0x00a,
               actionFrameCounter: f,
@@ -1063,7 +1062,7 @@ describe("classifyNeutralOpening", () => {
             },
           },
           [p1]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -1077,7 +1076,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 1,
               actionStateId: isHit1
                 ? 0x028
@@ -1199,7 +1198,7 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: {
           [p0]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -1213,7 +1212,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 0,
               actionStateId: 0x00a,
               actionFrameCounter: f,
@@ -1232,7 +1231,7 @@ describe("classifyNeutralOpening", () => {
             },
           },
           [p1]: {
-            pre: {
+            input: {
               stickX: 0,
               stickY: 0,
               buttonA: false,
@@ -1246,7 +1245,7 @@ describe("classifyNeutralOpening", () => {
               buttonCRight: false,
               buttonStart: false,
             },
-            post: {
+            state: {
               characterId: 1,
               actionStateId: state,
               actionFrameCounter: f,
@@ -1316,8 +1315,8 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: [
           {
-            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p0,
               characterId: 0,
@@ -1339,8 +1338,8 @@ describe("classifyNeutralOpening", () => {
             },
           },
           {
-            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p1,
               characterId: 1,
@@ -1370,8 +1369,8 @@ describe("classifyNeutralOpening", () => {
       frame: 5,
       ports: [
         {
-          pre: { frame: 5, port: p0, buttons: 0, stickX: 0, stickY: 0 },
-          post: {
+          input: { frame: 5, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+          state: {
             frame: 5,
             port: p0,
             characterId: 0,
@@ -1393,8 +1392,8 @@ describe("classifyNeutralOpening", () => {
           },
         },
         {
-          pre: { frame: 5, port: p1, buttons: 0, stickX: 0, stickY: 0 },
-          post: {
+          input: { frame: 5, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+          state: {
             frame: 5,
             port: p1,
             characterId: 1,
@@ -1426,8 +1425,8 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: [
           {
-            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p0,
               characterId: 0,
@@ -1449,8 +1448,8 @@ describe("classifyNeutralOpening", () => {
             },
           },
           {
-            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p1,
               characterId: 1,
@@ -1481,8 +1480,8 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: [
           {
-            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p0,
               characterId: 0,
@@ -1504,8 +1503,8 @@ describe("classifyNeutralOpening", () => {
             },
           },
           {
-            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p1,
               characterId: 1,
@@ -1536,8 +1535,8 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: [
           {
-            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p0,
               characterId: 0,
@@ -1559,8 +1558,8 @@ describe("classifyNeutralOpening", () => {
             },
           },
           {
-            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p1,
               characterId: 1,
@@ -1633,8 +1632,8 @@ describe("classifyNeutralOpening", () => {
         frame: f,
         ports: [
           {
-            pre: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p0,
               characterId: 0,
@@ -1656,8 +1655,8 @@ describe("classifyNeutralOpening", () => {
             },
           },
           {
-            pre: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
-            post: {
+            input: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
               frame: f,
               port: p1,
               characterId: 1,
