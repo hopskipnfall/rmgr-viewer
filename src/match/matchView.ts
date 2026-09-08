@@ -8,6 +8,8 @@ import { Camera } from "../camera.js";
 import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_LABELS, getPlayerColor } from "../players.js";
+import { collectHeatmapPoints } from "../positionHeatmap.js";
+import { renderPositionHeatmap } from "../positionHeatmapRenderer.js";
 import {
   playAttackSfx,
   playGrabSfx,
@@ -155,6 +157,14 @@ export class MatchViewController {
   private perspectiveToggleEl: HTMLDivElement;
   private statsCollapseBtn: HTMLButtonElement;
   private statsPanel: HTMLDivElement;
+  private positionHeatmapSection: HTMLElement;
+  private positionHeatmapCollapseBtn: HTMLButtonElement;
+  private positionHeatmapHeaderTitle: HTMLHeadingElement;
+  private positionHeatmapPanelBody: HTMLDivElement;
+  private positionHeatmapAngelToggleLabelText: HTMLSpanElement;
+  private positionHeatmapAngelToggle: HTMLInputElement;
+  private positionHeatmapCanvas: HTMLCanvasElement;
+  private positionHeatmapCollapsed = false;
   private statsEmpty: HTMLParagraphElement;
   private characterMetaWidget: HTMLElement;
   private characterMetaHeaderTitle: HTMLHeadingElement;
@@ -378,6 +388,27 @@ export class MatchViewController {
       "statsCollapseBtn",
     ) as HTMLButtonElement;
     this.statsPanel = document.getElementById("statsPanel") as HTMLDivElement;
+    this.positionHeatmapSection = document.getElementById(
+      "positionHeatmapSection",
+    ) as HTMLElement;
+    this.positionHeatmapCollapseBtn = document.getElementById(
+      "positionHeatmapCollapseBtn",
+    ) as HTMLButtonElement;
+    this.positionHeatmapHeaderTitle = document.querySelector(
+      "#positionHeatmapHeader h2",
+    ) as HTMLHeadingElement;
+    this.positionHeatmapPanelBody = document.getElementById(
+      "positionHeatmapPanelBody",
+    ) as HTMLDivElement;
+    this.positionHeatmapAngelToggleLabelText = document.querySelector(
+      "#positionHeatmapAngelToggleLabel span",
+    ) as HTMLSpanElement;
+    this.positionHeatmapAngelToggle = document.getElementById(
+      "positionHeatmapAngelToggle",
+    ) as HTMLInputElement;
+    this.positionHeatmapCanvas = document.getElementById(
+      "positionHeatmapCanvas",
+    ) as HTMLCanvasElement;
     this.statsEmpty = document.getElementById(
       "statsEmpty",
     ) as HTMLParagraphElement;
@@ -779,6 +810,21 @@ export class MatchViewController {
       this.statsCollapsed = !this.statsCollapsed;
       this.statsPanel.hidden = this.statsCollapsed;
       this.statsCollapseBtn.classList.toggle("collapsed", this.statsCollapsed);
+    });
+
+    this.positionHeatmapCollapseBtn.addEventListener("click", () => {
+      this.positionHeatmapCollapsed = !this.positionHeatmapCollapsed;
+      this.positionHeatmapPanelBody.hidden = this.positionHeatmapCollapsed;
+      this.positionHeatmapCollapseBtn.classList.toggle(
+        "collapsed",
+        this.positionHeatmapCollapsed,
+      );
+    });
+
+    this.positionHeatmapAngelToggle.addEventListener("change", () => {
+      if (this.currentReplay) {
+        this.renderPositionHeatmapPanel(this.currentReplay);
+      }
     });
 
     this.recoveryCollapseBtn.addEventListener("click", () => {
@@ -1319,6 +1365,13 @@ export class MatchViewController {
     if (this.statsEmpty) this.statsEmpty.textContent = tr.statsEmpty;
     if (this.statsCollapseBtn)
       this.statsCollapseBtn.title = tr.statsCollapseTitle;
+    if (this.positionHeatmapCollapseBtn)
+      this.positionHeatmapCollapseBtn.title = tr.positionHeatmapCollapseTitle;
+    if (this.positionHeatmapHeaderTitle)
+      this.positionHeatmapHeaderTitle.textContent = tr.positionHeatmapTitle;
+    if (this.positionHeatmapAngelToggleLabelText)
+      this.positionHeatmapAngelToggleLabelText.textContent =
+        tr.positionHeatmapAngelToggleLabel;
     if (this.recoveryWidgetTitleEl)
       this.recoveryWidgetTitleEl.textContent = tr.recoveryWidgetTitle;
     if (this.recoveryCollapseBtn)
@@ -1451,6 +1504,7 @@ export class MatchViewController {
       this.buildPlayerPanels(this.currentReplay);
       this.buildPerspectiveToggle(this.currentReplay);
       this.renderStatsPanel(this.currentReplay);
+      this.renderPositionHeatmapPanel(this.currentReplay);
       this.buildEventLog();
       this.onFrameChange(
         this.playback?.currentIndex ?? 0,
@@ -1979,6 +2033,7 @@ export class MatchViewController {
         this.onPerspectiveChangedCb?.(port);
         this.updatePlayerPanelColors();
         this.renderStatsPanel(replay);
+        this.renderPositionHeatmapPanel(replay);
         this.renderCharacterMetaPanel(replay);
         this.render12CbMatchWidget();
         this.buildEventLog();
@@ -2147,6 +2202,29 @@ export class MatchViewController {
         this.stageOverlayList.appendChild(entry);
       }
     }
+  }
+
+  private renderPositionHeatmapPanel(replay: Replay): void {
+    const seated = getSeatedPorts(replay);
+    if (seated.length !== 2 || this.perspectivePort === null) {
+      this.positionHeatmapSection.hidden = true;
+      return;
+    }
+
+    this.positionHeatmapSection.hidden = false;
+    const opponentPort = seated.find((p) => p !== this.perspectivePort)!;
+
+    const points = collectHeatmapPoints(
+      replay,
+      this.perspectivePort,
+      opponentPort,
+      this.positionHeatmapAngelToggle.checked,
+    );
+    renderPositionHeatmap(
+      this.positionHeatmapCanvas,
+      replay.matchSettings?.stageId,
+      points,
+    );
   }
 
   private renderStatsPanel(replay: Replay): void {
@@ -3905,6 +3983,7 @@ export class MatchViewController {
     this.buildPlayerPanels(replay);
     this.buildPerspectiveToggle(replay);
     this.renderStatsPanel(replay);
+    this.renderPositionHeatmapPanel(replay);
     this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
     this.render12CbMatchWidget();
