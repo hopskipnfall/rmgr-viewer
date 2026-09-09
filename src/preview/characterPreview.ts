@@ -1110,7 +1110,6 @@ export class CharacterPreviewController {
       this.camera,
       synthFrame,
       undefined,
-      undefined,
       synthReplay,
       1,
       perspectivePort,

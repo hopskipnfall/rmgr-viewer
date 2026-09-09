@@ -302,7 +302,6 @@ export class MatchViewController {
   private panels: PlayerPanel[] = [];
   private playback: PlaybackController | null = null;
   private lastFrame: Frame | undefined;
-  private hoverScreen: { x: number; y: number } | undefined;
   private matchEvents: MatchEvent[] = [];
   private currentLogEvents: MatchEvent[] = [];
   private perspectivePort: PortIndex | null = null;
@@ -1048,36 +1047,6 @@ export class MatchViewController {
       this.exitPlaylist();
     });
 
-    this.stageCanvas.addEventListener("mousemove", (e) => {
-      if (!this.currentReplay) return;
-      this.hoverScreen = { x: e.offsetX, y: e.offsetY };
-      this.stageRenderer.render(
-        this.camera,
-        this.lastFrame,
-        this.currentReplay.matchSettings?.stageId,
-        this.hoverScreen,
-        this.currentReplay,
-        this.playback?.currentIndex ?? 0,
-        this.perspectivePort,
-        this.isPausedMidMatch(this.playback?.currentIndex ?? 0),
-      );
-    });
-
-    this.stageCanvas.addEventListener("mouseleave", () => {
-      if (!this.currentReplay) return;
-      this.hoverScreen = undefined;
-      this.stageRenderer.render(
-        this.camera,
-        this.lastFrame,
-        this.currentReplay.matchSettings?.stageId,
-        this.hoverScreen,
-        this.currentReplay,
-        this.playback?.currentIndex ?? 0,
-        this.perspectivePort,
-        this.isPausedMidMatch(this.playback?.currentIndex ?? 0),
-      );
-    });
-
     this.viewModePipBtn.addEventListener("click", () => {
       this.youtubeSync.setViewMode("video-pip");
     });
@@ -1659,7 +1628,6 @@ export class MatchViewController {
       this.camera,
       frame,
       this.currentReplay?.matchSettings?.stageId,
-      this.hoverScreen,
       this.currentReplay,
       _frameIndex,
       this.perspectivePort,
@@ -2287,7 +2255,6 @@ export class MatchViewController {
       this.scrubberPreviewCamera!,
       frame,
       replay.matchSettings?.stageId,
-      undefined,
       replay,
       frameIndex,
       this.perspectivePort,
@@ -2295,15 +2262,29 @@ export class MatchViewController {
 
     this.scrubberPreviewFrameLabel.textContent = `${formatElapsed(frameIndex)} (Frame ${frameIndex})`;
 
-    const barRect = this.scrubberBarEl.getBoundingClientRect();
-    const tooltipHalfWidth = this.scrubberPreviewCanvas.width / 2 + 6;
-    const clampedX = Math.max(
-      barRect.left + tooltipHalfWidth,
-      Math.min(clientX, barRect.right - tooltipHalfWidth),
-    );
-    this.scrubberPreviewTooltip.style.left = `${clampedX}px`;
-    this.scrubberPreviewTooltip.style.top = `${barRect.top - 8}px`;
     this.scrubberPreviewTooltip.hidden = false;
+    const barRect = this.scrubberBarEl.getBoundingClientRect();
+    const tooltipWidth =
+      this.scrubberPreviewTooltip.offsetWidth ||
+      this.scrubberPreviewCanvas.width + 14;
+    const tooltipHeight = this.scrubberPreviewTooltip.offsetHeight || 180;
+    const margin = 8;
+    const maxLeft = Math.max(margin, window.innerWidth - margin - tooltipWidth);
+    const targetLeft = Math.min(
+      Math.max(clientX - tooltipWidth / 2, margin),
+      maxLeft,
+    );
+    this.scrubberPreviewTooltip.style.left = `${targetLeft}px`;
+
+    let targetTop = barRect.top - tooltipHeight - 12;
+    if (targetTop < margin) {
+      if (barRect.bottom + 12 + tooltipHeight <= window.innerHeight - margin) {
+        targetTop = barRect.bottom + 12;
+      } else {
+        targetTop = margin;
+      }
+    }
+    this.scrubberPreviewTooltip.style.top = `${targetTop}px`;
   }
 
   private hideScrubberPreview(): void {

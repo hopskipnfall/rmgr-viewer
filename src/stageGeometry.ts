@@ -135,3 +135,66 @@ export function stageBlastZone(
 ): BlastZoneSpec | undefined {
   return stageId !== undefined ? STAGE_BLAST_ZONES[stageId] : undefined;
 }
+
+export interface StageVertex {
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface StageSlopes {
+  readonly leftSlope: readonly StageVertex[];
+  readonly rightSlope: readonly StageVertex[];
+  /**
+   * Complete closed silhouette polygon of the stage landmass (main floor,
+   * descending left/right slopes, and bottom boundary).
+   */
+  readonly bodyPolygon: readonly StageVertex[];
+}
+
+/**
+ * Dream Land descending cliff slope vertices:
+ * Left slope: (-2318, 0) -> (-2307, -124) -> (-2290, -331) -> (-2075, -834) -> (-1972, -1072)
+ * Right slope: exact mirror across x=0
+ */
+export const DREAM_LAND_LEFT_SLOPE: readonly StageVertex[] = [
+  { x: -2318, y: 0 },
+  { x: -2307, y: -124 },
+  { x: -2290, y: -331 },
+  { x: -2075, y: -834 },
+  { x: -1972, y: -1072 },
+];
+
+export const DREAM_LAND_RIGHT_SLOPE: readonly StageVertex[] = [
+  { x: 2318, y: 0 },
+  { x: 2307, y: -124 },
+  { x: 2290, y: -331 },
+  { x: 2075, y: -834 },
+  { x: 1972, y: -1072 },
+];
+
+export const DREAM_LAND_BODY_POLYGON: readonly StageVertex[] = [
+  { x: -2318, y: 0 },
+  { x: 2318, y: 0 },
+  { x: 2307, y: -124 },
+  { x: 2290, y: -331 },
+  { x: 2075, y: -834 },
+  { x: 1972, y: -1072 },
+  { x: -1972, y: -1072 },
+  { x: -2075, y: -834 },
+  { x: -2290, y: -331 },
+  { x: -2307, y: -124 },
+];
+
+const STAGE_SLOPES: Partial<Record<number, StageSlopes>> = {
+  [DREAM_LAND_STAGE_ID]: {
+    leftSlope: DREAM_LAND_LEFT_SLOPE,
+    rightSlope: DREAM_LAND_RIGHT_SLOPE,
+    bodyPolygon: DREAM_LAND_BODY_POLYGON,
+  },
+};
+
+export function stageSlopes(
+  stageId: number | undefined,
+): StageSlopes | undefined {
+  return stageId !== undefined ? STAGE_SLOPES[stageId] : undefined;
+}
