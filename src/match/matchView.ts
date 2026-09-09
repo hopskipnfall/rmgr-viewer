@@ -128,6 +128,13 @@ function escapeHtml(s: string): string {
   return div.innerHTML;
 }
 
+export function formatBytes(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export class MatchViewController {
   private stageCanvas: HTMLCanvasElement;
   private stageWrap: HTMLDivElement;
@@ -231,6 +238,7 @@ export class MatchViewController {
   private neutralHitsList: HTMLDivElement;
   private neutralHitEvents: NeutralHitEvent[] = [];
   private neutralHitFilter: "all" | "openings" | "punishes" = "all";
+  private wasPlayingBeforeScrub = false;
   private leftSidebarCollapsed = false;
   private rightSidebarCollapsed = false;
   private lastScrolledNeutralRow: HTMLElement | null = null;
@@ -258,6 +266,20 @@ export class MatchViewController {
   private replayInfoFileName: HTMLSpanElement;
   private replayInfoDateLabel: HTMLSpanElement;
   private replayInfoDateLocal: HTMLSpanElement;
+  private replayInfoGoodNameLabel: HTMLSpanElement;
+  private replayInfoGoodName: HTMLSpanElement;
+  private replayInfoSpecVersionLabel: HTMLSpanElement;
+  private replayInfoSpecVersion: HTMLSpanElement;
+  private replayInfoSchemaVersionLabel: HTMLSpanElement;
+  private replayInfoSchemaVersion: HTMLSpanElement;
+  private replayInfoGameFamilyLabel: HTMLSpanElement;
+  private replayInfoGameFamily: HTMLSpanElement;
+  private replayInfoDurationLabel: HTMLSpanElement;
+  private replayInfoDuration: HTMLSpanElement;
+  private replayInfoEndReasonLabel: HTMLSpanElement;
+  private replayInfoEndReason: HTMLSpanElement;
+  private replayInfoSizeLabel: HTMLSpanElement;
+  private replayInfoSize: HTMLSpanElement;
   private replayInfoVideoLabel: HTMLSpanElement;
   private replayInfoVideoValue: HTMLSpanElement;
   private replayInfoCollapsed = false;
@@ -358,10 +380,28 @@ export class MatchViewController {
       scrubberTimelineCanvas,
       scrubberThumb,
       {
+        onScrubStart: () => {
+          this.wasPlayingBeforeScrub = this.playback?.isPlaying ?? false;
+          if (this.wasPlayingBeforeScrub) {
+            this.playback?.pause();
+          }
+        },
+        onScrubCancel: () => {
+          if (this.wasPlayingBeforeScrub) {
+            this.playback?.play();
+          }
+          this.wasPlayingBeforeScrub = false;
+        },
         onSeek: (index) => {
           this.dismissQuickAttackOverlay();
-          this.playback?.pause();
-          this.playback?.seek(index);
+          const shouldResume =
+            this.wasPlayingBeforeScrub || (this.playback?.isPlaying ?? false);
+          this.wasPlayingBeforeScrub = false;
+          if (shouldResume) {
+            this.playback?.seekAndPlay(index);
+          } else {
+            this.playback?.seek(index);
+          }
         },
         onPreview: (index, clientX) => {
           if (index === null) {
@@ -653,6 +693,48 @@ export class MatchViewController {
     ) as HTMLSpanElement;
     this.replayInfoDateLocal = document.getElementById(
       "replayInfoDateLocal",
+    ) as HTMLSpanElement;
+    this.replayInfoGoodNameLabel = document.getElementById(
+      "replayInfoGoodNameLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoGoodName = document.getElementById(
+      "replayInfoGoodName",
+    ) as HTMLSpanElement;
+    this.replayInfoSpecVersionLabel = document.getElementById(
+      "replayInfoSpecVersionLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoSpecVersion = document.getElementById(
+      "replayInfoSpecVersion",
+    ) as HTMLSpanElement;
+    this.replayInfoSchemaVersionLabel = document.getElementById(
+      "replayInfoSchemaVersionLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoSchemaVersion = document.getElementById(
+      "replayInfoSchemaVersion",
+    ) as HTMLSpanElement;
+    this.replayInfoGameFamilyLabel = document.getElementById(
+      "replayInfoGameFamilyLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoGameFamily = document.getElementById(
+      "replayInfoGameFamily",
+    ) as HTMLSpanElement;
+    this.replayInfoDurationLabel = document.getElementById(
+      "replayInfoDurationLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoDuration = document.getElementById(
+      "replayInfoDuration",
+    ) as HTMLSpanElement;
+    this.replayInfoEndReasonLabel = document.getElementById(
+      "replayInfoEndReasonLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoEndReason = document.getElementById(
+      "replayInfoEndReason",
+    ) as HTMLSpanElement;
+    this.replayInfoSizeLabel = document.getElementById(
+      "replayInfoSizeLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoSize = document.getElementById(
+      "replayInfoSize",
     ) as HTMLSpanElement;
     this.replayInfoVideoLabel = document.getElementById(
       "replayInfoVideoLabel",
@@ -1479,6 +1561,22 @@ export class MatchViewController {
       this.replayInfoFileLabel.textContent = tr.replayInfoFileLabel;
     if (this.replayInfoDateLabel)
       this.replayInfoDateLabel.textContent = tr.replayInfoRecordedLabel;
+    if (this.replayInfoGoodNameLabel)
+      this.replayInfoGoodNameLabel.textContent = tr.replayInfoGoodNameLabel;
+    if (this.replayInfoSpecVersionLabel)
+      this.replayInfoSpecVersionLabel.textContent =
+        tr.replayInfoSpecVersionLabel;
+    if (this.replayInfoSchemaVersionLabel)
+      this.replayInfoSchemaVersionLabel.textContent =
+        tr.replayInfoSchemaVersionLabel;
+    if (this.replayInfoGameFamilyLabel)
+      this.replayInfoGameFamilyLabel.textContent = tr.replayInfoGameFamilyLabel;
+    if (this.replayInfoDurationLabel)
+      this.replayInfoDurationLabel.textContent = tr.replayInfoDurationLabel;
+    if (this.replayInfoEndReasonLabel)
+      this.replayInfoEndReasonLabel.textContent = tr.replayInfoEndReasonLabel;
+    if (this.replayInfoSizeLabel)
+      this.replayInfoSizeLabel.textContent = tr.replayInfoSizeLabel;
     if (this.replayInfoVideoLabel)
       this.replayInfoVideoLabel.textContent = tr.youtubeVideoTitle;
     if (this.videoUrlInput)
@@ -1540,6 +1638,7 @@ export class MatchViewController {
     }
 
     if (this.currentReplay && this.currentLoaded) {
+      this.renderReplayInfo(this.currentLoaded);
       this.buildPlayerPanels(this.currentReplay);
       this.buildPerspectiveToggle(this.currentReplay);
       this.renderStatsPanel(this.currentReplay);
@@ -4171,6 +4270,56 @@ export class MatchViewController {
     const localStr = `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
     this.replayInfoDateLocal.textContent = localStr;
     this.replayInfoDateLocal.title = `UTC: ${d.toISOString().replace(".000Z", "Z").replace("T", " ")}`;
+
+    const { header, frames, matchEnd } = loaded.replay;
+    const tr = t();
+
+    if (this.replayInfoGoodName) {
+      this.replayInfoGoodName.textContent = header?.goodName || "—";
+      this.replayInfoGoodName.title = header?.goodName || "";
+    }
+    if (this.replayInfoSpecVersion) {
+      this.replayInfoSpecVersion.textContent =
+        header?.version !== undefined ? `v${header.version}` : "—";
+    }
+    if (this.replayInfoSchemaVersion) {
+      this.replayInfoSchemaVersion.textContent =
+        header?.recorderSchemaVersion !== undefined
+          ? `v${header.recorderSchemaVersion}`
+          : "—";
+    }
+    if (this.replayInfoGameFamily) {
+      this.replayInfoGameFamily.textContent = header?.gameFamily || "—";
+    }
+
+    if (this.replayInfoDuration) {
+      const frameCount = frames?.length ?? 0;
+      const totalSecs = Math.floor(frameCount / 60);
+      const mins = Math.floor(totalSecs / 60);
+      const secs = totalSecs % 60;
+      const timeStr = `${mins}:${secs.toString().padStart(2, "0")}`;
+      this.replayInfoDuration.textContent = `${timeStr} (${tr.framesLabel(frameCount)})`;
+    }
+
+    if (this.replayInfoEndReason) {
+      let endReasonText = matchEnd?.endReason
+        ? (matchEnd.endReason as string)
+        : "—";
+      if (matchEnd?.endReason === "normal") {
+        endReasonText = tr.replayInfoEndReasonNormal;
+      } else if (matchEnd?.endReason === "aborted") {
+        endReasonText = tr.replayInfoEndReasonAborted;
+      }
+      this.replayInfoEndReason.textContent = endReasonText;
+    }
+
+    if (this.replayInfoSize) {
+      const comp = header?.compressedLength ?? 0;
+      const uncomp = header?.uncompressedLength ?? 0;
+      const compStr = formatBytes(comp);
+      const uncompStr = formatBytes(uncomp);
+      this.replayInfoSize.textContent = `${compStr} (${tr.replayInfoUncompressedSize(uncompStr)})`;
+    }
 
     this.updateVideoSyncUI(this.youtubeSync.getLinkData());
   }
