@@ -56,6 +56,24 @@ export class PlaybackController {
 
   seek(index: number): void {
     this.index = Math.max(0, Math.min(this.frameCount - 1, index));
+    if (this.playing) {
+      this.lastTimestampMs = performance.now();
+      this.accumulatedMs = 0;
+    }
+    this.onChange(this.index, this.playing, "jump");
+  }
+
+  seekAndPlay(index: number): void {
+    if (this.frameCount === 0) return;
+    this.index = Math.max(0, Math.min(this.frameCount - 1, index));
+    if (this.index >= this.frameCount - 1) {
+      this.index = 0;
+    }
+    this.playing = true;
+    this.lastTimestampMs = performance.now();
+    this.accumulatedMs = 0;
+    cancelAnimationFrame(this.rafHandle);
+    this.rafHandle = requestAnimationFrame(this.tick);
     this.onChange(this.index, this.playing, "jump");
   }
 

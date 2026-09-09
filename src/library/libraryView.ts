@@ -1,5 +1,7 @@
 import { t } from "../i18n.js";
-import { characterName } from "../lookups.js";
+import { characterName, CHARACTER_NAMES_JA } from "../lookups.js";
+import { CustomDropdown } from "../ui/customDropdown.js";
+import { characterIconUrl } from "../characterIcons.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import {
   type Identity,
@@ -502,6 +504,25 @@ export class LibraryViewController {
           this.render();
         });
 
+        if (
+          myCharSelect &&
+          typeof document !== "undefined" &&
+          typeof myCharSelect.querySelectorAll === "function"
+        ) {
+          CustomDropdown.fromSelect(myCharSelect, {
+            getIconUrl: (val) =>
+              val === "all" ? undefined : characterIconUrl(Number(val)),
+            getSublabel: (val) =>
+              val === "all" ? undefined : CHARACTER_NAMES_JA[Number(val)],
+            searchable: myChars.length > 5,
+            onChange: (val) => {
+              this.filters.yourCharacterId =
+                val === "all" ? "all" : Number(val);
+              this.render();
+            },
+          });
+        }
+
         const oppCharSelect = filterBarEl.querySelector(
           "#filterOppCharSelect",
         ) as HTMLSelectElement;
@@ -510,6 +531,24 @@ export class LibraryViewController {
             oppCharSelect.value === "all" ? "all" : Number(oppCharSelect.value);
           this.render();
         });
+
+        if (
+          oppCharSelect &&
+          typeof document !== "undefined" &&
+          typeof oppCharSelect.querySelectorAll === "function"
+        ) {
+          CustomDropdown.fromSelect(oppCharSelect, {
+            getIconUrl: (val) =>
+              val === "all" ? undefined : characterIconUrl(Number(val)),
+            getSublabel: (val) =>
+              val === "all" ? undefined : CHARACTER_NAMES_JA[Number(val)],
+            searchable: oppChars.length > 5,
+            onChange: (val) => {
+              this.filters.oppCharacterId = val === "all" ? "all" : Number(val);
+              this.render();
+            },
+          });
+        }
 
         const resetBtn = filterBarEl.querySelector(
           "#filterResetBtn",

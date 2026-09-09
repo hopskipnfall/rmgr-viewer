@@ -24,6 +24,7 @@ import {
   stageBlastZone,
   stageLedges,
   DREAM_LAND_STAGE_ID,
+  DREAM_LAND_BLAST_ZONE,
   type PlatformSpec,
   type LedgePoint,
 } from "./stageGeometry.js";
@@ -97,6 +98,109 @@ const HIDDEN_WEAPON_KINDS = new Set<number>([WPKind.SpinAttack]);
  * it's applied.
  */
 const MARKER_TUNING_PX_PER_WORLD_UNIT = 0.38;
+
+export interface BombExplosionEvent {
+  startFrame: number;
+  x: number;
+  y: number;
+  kind: number;
+  radius: number;
+  isBobOmb?: boolean;
+  objectAddress?: number;
+}
+
+export const EXPLOSION_DURATION = 24;
+
+export function isBombObject(linkId: number, kind: number): boolean {
+  if (linkId === ItemLinkId.Item) {
+    return (
+      kind === ITKind.Bomb ||
+      kind === ITKind.BobOmb ||
+      kind === ITKind.RTTFBomb ||
+      kind === ITKind.MotionSensorBomb ||
+      kind === 0x2d // BowserCastleBomb
+    );
+  }
+  if (linkId === ItemLinkId.Weapon) {
+    return kind === WPKind.SamusBomb;
+  }
+  return false;
+}
+
+/**
+ * Extracts bomb explosion events across all frames of a replay.
+ * When an active bomb object (identified by its runtime RDRAM objectAddress)
+ * disappears between consecutive frames within stage bounds, an explosion event
+ * is recorded at its last known coordinates.
+ */
+export function extractBombExplosions(replay: Replay): BombExplosionEvent[] {
+  const explosions: BombExplosionEvent[] = [];
+  const activeBombs = new Map<
+    number,
+    {
+      lastFrame: number;
+      x: number;
+      y: number;
+      kind: number;
+      linkId: number;
+      isBobOmb: boolean;
+    }
+  >();
+
+  const blastZone =
+    stageBlastZone(replay.matchSettings?.stageId) ?? DREAM_LAND_BLAST_ZONE;
+
+  for (let f = 0; f < replay.frames.length; f++) {
+    const frame = replay.frames[f];
+    const currentItems = frame?.items ?? [];
+    const currentAddresses = new Set<number>();
+
+    for (const item of currentItems) {
+      if (isBombObject(item.linkId, item.kind)) {
+        currentAddresses.add(item.objectAddress);
+        activeBombs.set(item.objectAddress, {
+          lastFrame: f,
+          x: item.positionX,
+          y: item.positionY,
+          kind: item.kind,
+          linkId: item.linkId,
+          isBobOmb: item.kind === ITKind.BobOmb,
+        });
+      }
+    }
+
+    // Check which bombs disappeared on frame f
+    for (const [addr, bomb] of Array.from(activeBombs.entries())) {
+      if (!currentAddresses.has(addr)) {
+        let inBounds = true;
+        if (blastZone) {
+          if (
+            bomb.y < blastZone.bottomY - 150 ||
+            bomb.x < blastZone.leftX - 150 ||
+            bomb.x > blastZone.rightX + 150 ||
+            bomb.y > blastZone.topY + 150
+          ) {
+            inBounds = false;
+          }
+        }
+        if (inBounds) {
+          explosions.push({
+            startFrame: f,
+            x: bomb.x,
+            y: bomb.y,
+            kind: bomb.kind,
+            radius: bomb.isBobOmb ? 44 : 36,
+            isBobOmb: bomb.isBobOmb,
+            objectAddress: addr,
+          });
+        }
+        activeBombs.delete(addr);
+      }
+    }
+  }
+
+  return explosions;
+}
 
 const SHIELD_ACTION_STATES = new Set([
   0x098, // ShieldOn
@@ -1928,7 +2032,7 @@ export class StageRenderer {
 
   private getCharacterIconImage(characterId: number): HTMLImageElement | null {
     const url = characterIconUrl(characterId);
-    if (!url) return null;
+    if (!url || typeof Image === "undefined") return null;
     let img = this.iconImageCache.get(url);
     if (!img) {
       img = new Image();
@@ -2045,7 +2149,10 @@ export class StageRenderer {
           isPaused,
         );
       }
-      this.drawItemObjects(camera, frame.items ?? [], replay, frame);
+      this.drawItemObjects(camera, frame.items ?? [], replay, frame, isPaused);
+      if (replay && frameIndex !== undefined) {
+        this.drawBombExplosions(camera, frameIndex, replay);
+      }
       this.drawDeathDirectionFlashes(frame);
       this.drawLedgeGrabDots(camera, ledgeGrabCandidates);
 
@@ -2189,6 +2296,7 @@ export class StageRenderer {
     items: readonly ItemUpdate[],
     replay?: Replay | null,
     frame?: Frame,
+    isPaused?: boolean,
   ): void {
     if (items.length === 0) return;
     const { ctx } = this;
@@ -2236,33 +2344,332 @@ export class StageRenderer {
       }
       ctx.restore();
 
-      // The generic diamond and most custom shapes are small enough for a
-      // fixed label offset, but bigger shapes like boomerang, fireball, pk fire, bomb, and thunder jolt need more
-      // clearance so the label doesn't sit on top of their aura/arc.
-      const isBomb =
-        !isWeapon &&
-        (item.kind === ITKind.Bomb ||
-          item.kind === ITKind.BobOmb ||
-          item.kind === ITKind.RTTFBomb);
-      const isLargeWeapon =
-        isWeapon &&
-        (item.kind === WPKind.Boomerang ||
-          item.kind === WPKind.Fireball ||
-          item.kind === WPKind.PKFire ||
-          item.kind === WPKind.ThunderJoltAir ||
-          item.kind === WPKind.ThunderJoltGround ||
-          item.kind === WPKind.Blaster ||
-          item.kind === WPKind.Cutter);
+      // Only show projectile/weapon names and IDs above the projectile when paused (similar to character position/state)
+      if (isPaused) {
+        // The generic diamond and most custom shapes are small enough for a
+        // fixed label offset, but bigger shapes like boomerang, fireball, pk fire, bomb, and thunder jolt need more
+        // clearance so the label doesn't sit on top of their aura/arc.
+        const isVeryTall = !isWeapon && item.kind === ITKind.PKFirePillar;
+        const isBomb =
+          (!isWeapon &&
+            (item.kind === ITKind.Bomb ||
+              item.kind === ITKind.BobOmb ||
+              item.kind === ITKind.RTTFBomb)) ||
+          (isWeapon && item.kind === WPKind.SamusBomb);
+        const isLargeObject = isWeapon
+          ? item.kind === WPKind.Boomerang ||
+            item.kind === WPKind.ChargeShot ||
+            item.kind === WPKind.Fireball ||
+            item.kind === WPKind.PKFire ||
+            item.kind === WPKind.ThunderJoltAir ||
+            item.kind === WPKind.ThunderJoltGround ||
+            item.kind === WPKind.Blaster ||
+            item.kind === WPKind.Cutter ||
+            item.kind === WPKind.EggThrow ||
+            item.kind === WPKind.PKThunderHead
+          : item.kind === ITKind.Hammer ||
+            item.kind === ITKind.HomeRunBat ||
+            item.kind === ITKind.BeamSword ||
+            item.kind === ITKind.Crate ||
+            item.kind === ITKind.Barrel ||
+            item.kind === ITKind.Bumper ||
+            item.kind === ITKind.StageBumper;
 
-      const labelOffset = (isBomb ? 46 : isLargeWeapon ? 22 : 14) * markerScale;
+        const baseOffset = isVeryTall
+          ? 76
+          : isBomb
+            ? 48
+            : isLargeObject
+              ? 34
+              : 24;
+        const labelOffset = Math.max(
+          baseOffset,
+          (baseOffset - 2) * markerScale,
+        );
 
-      ctx.save();
-      ctx.font = `${10 * markerScale}px monospace`;
-      ctx.textAlign = "center";
-      ctx.fillStyle = isWeapon ? "#f5d0fe" : "#bfdbfe";
-      ctx.fillText(getItemKindName(item.linkId, item.kind), x, y - labelOffset);
-      ctx.restore();
+        const baseName = getItemKindName(item.linkId, item.kind);
+        const hexId = `0x${item.kind.toString(16)}`;
+        const labelText = baseName.includes(hexId)
+          ? baseName
+          : `${baseName} (${hexId})`;
+
+        ctx.save();
+        const font = "bold 12px system-ui, -apple-system, sans-serif";
+        ctx.font = font;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        const textMetrics = ctx.measureText(labelText);
+        const paddingX = 6;
+        const pillWidth = Math.max(textMetrics.width + paddingX * 2, 28);
+        const pillHeight = 18;
+        const pillX = x - pillWidth / 2;
+        const pillY = y - labelOffset - pillHeight / 2;
+        const borderRadius = 4;
+
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(pillX, pillY, pillWidth, pillHeight, borderRadius);
+        } else {
+          ctx.rect(pillX, pillY, pillWidth, pillHeight);
+        }
+        ctx.fillStyle = "rgba(15, 17, 23, 0.85)";
+        ctx.fill();
+        ctx.strokeStyle = isWeapon
+          ? "rgba(245, 208, 254, 0.6)"
+          : "rgba(191, 219, 254, 0.6)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = isWeapon ? "#f5d0fe" : "#bfdbfe";
+        ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+        ctx.shadowBlur = 2;
+        ctx.fillText(labelText, x, pillY + pillHeight / 2);
+        ctx.restore();
+      }
     }
+  }
+
+  private bombExplosionsCache = new WeakMap<Replay, BombExplosionEvent[]>();
+
+  public getBombExplosions(replay: Replay): BombExplosionEvent[] {
+    let explosions = this.bombExplosionsCache.get(replay);
+    if (!explosions) {
+      explosions = extractBombExplosions(replay);
+      this.bombExplosionsCache.set(replay, explosions);
+    }
+    return explosions;
+  }
+
+  /**
+   * Renders all active bomb explosions at the current frameIndex.
+   * Multiple simultaneous bombs are rendered independently with their own progress.
+   */
+  private drawBombExplosions(
+    camera: Camera,
+    frameIndex: number,
+    replay: Replay,
+  ): void {
+    const explosions = this.getBombExplosions(replay);
+    if (explosions.length === 0) return;
+
+    for (const exp of explosions) {
+      if (
+        frameIndex >= exp.startFrame &&
+        frameIndex < exp.startFrame + EXPLOSION_DURATION
+      ) {
+        const progress = (frameIndex - exp.startFrame) / EXPLOSION_DURATION;
+        const { x, y } = camera.worldToScreen(exp.x, exp.y);
+        const markerScale =
+          camera.worldLengthToScreen(1) / MARKER_TUNING_PX_PER_WORLD_UNIT;
+
+        this.ctx.save();
+        this.ctx.translate(x, y);
+        this.ctx.scale(markerScale, markerScale);
+        this.ctx.translate(-x, -y);
+
+        this.drawBombExplosionAt(
+          this.ctx,
+          x,
+          y,
+          progress,
+          exp.isBobOmb ?? false,
+          exp.radius,
+        );
+
+        this.ctx.restore();
+      }
+    }
+  }
+
+  /**
+   * 3-Phase Bomb Explosion Visual:
+   * Phase 1 (p: 0.0 - 0.25): Initial supersonic flash, shockwave ring, radial blast spokes.
+   * Phase 2 (p: 0.15 - 0.70): Multi-lobed boiling fireball clouds, fiery shrapnel & spark trails.
+   * Phase 3 (p: 0.50 - 1.00): Billowing dark charcoal/slate smoke puffs drifting upward and fading.
+   */
+  public drawBombExplosionAt(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    progress: number, // 0.0 to 1.0
+    isBobOmb = false,
+    baseRadius = 36,
+  ): void {
+    if (progress < 0 || progress > 1) return;
+    ctx.save();
+
+    const scale = (baseRadius / 36) * (isBobOmb ? 1.25 : 1.0);
+
+    // 1. Supersonic Shockwave Ring (expands rapidly outward and fades)
+    if (progress < 0.75) {
+      const shockProgress = progress / 0.75;
+      const shockRadius = (16 + shockProgress * 85) * scale;
+      const shockAlpha = Math.max(0, (1 - shockProgress) * 0.85);
+
+      ctx.beginPath();
+      ctx.arc(x, y, shockRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(251, 191, 36, ${shockAlpha})`;
+      ctx.lineWidth = Math.max(1, (5 - shockProgress * 3.5) * scale);
+      ctx.stroke();
+
+      // Outer faint secondary compression ring
+      ctx.beginPath();
+      ctx.arc(x, y, shockRadius * 1.15, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(254, 240, 138, ${shockAlpha * 0.45})`;
+      ctx.lineWidth = Math.max(0.75, 1.8 * scale);
+      ctx.stroke();
+    }
+
+    // 2. Flying Shrapnel & Fire Sparks (shoot outward radially with speed trails)
+    if (progress < 0.85) {
+      const sparkCount = 12;
+      const sparkProgress = progress / 0.85;
+      const sparkAlpha = Math.max(0, 1 - sparkProgress);
+
+      for (let i = 0; i < sparkCount; i++) {
+        const angle = (i * Math.PI * 2) / sparkCount + i * 1.37;
+        const speed = 0.8 + ((i * 7) % 5) * 0.18;
+        const dist = (12 + sparkProgress * speed * 95) * scale;
+        const trailLen = 14 * (1 - sparkProgress * 0.5) * scale;
+
+        const sx = x + Math.cos(angle) * dist;
+        const sy = y + Math.sin(angle) * dist;
+        const tx = x + Math.cos(angle) * Math.max(0, dist - trailLen);
+        const ty = y + Math.sin(angle) * Math.max(0, dist - trailLen);
+
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(sx, sy);
+        ctx.strokeStyle =
+          i % 2 === 0
+            ? `rgba(254, 240, 138, ${sparkAlpha})`
+            : `rgba(249, 115, 22, ${sparkAlpha})`;
+        ctx.lineWidth = Math.max(1, (2.6 - sparkProgress * 1.5) * scale);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(
+          sx,
+          sy,
+          Math.max(0.8, 2.5 * scale * (1 - sparkProgress * 0.6)),
+          0,
+          Math.PI * 2,
+        );
+        ctx.fillStyle = `rgba(255, 255, 255, ${sparkAlpha})`;
+        ctx.fill();
+      }
+    }
+
+    // 3. Multi-Lobed Boiling Fireball Puffs & Rising Smoke Puffs
+    const puffCount = 8;
+    const upwardDrift = Math.max(0, progress - 0.35) * 35 * scale;
+
+    for (let i = 0; i < puffCount; i++) {
+      const angle = (i * Math.PI * 2) / puffCount + 0.35;
+      const puffDist = (10 + Math.min(progress, 0.7) * 46) * scale;
+      const puffX = x + Math.cos(angle) * puffDist;
+      const puffY = y + Math.sin(angle) * puffDist - upwardDrift * 0.5;
+      const puffRadius = (16 + progress * 24) * scale;
+
+      const puffGrad = ctx.createRadialGradient(
+        puffX - 4 * scale,
+        puffY - 4 * scale,
+        2 * scale,
+        puffX,
+        puffY,
+        puffRadius,
+      );
+
+      if (progress < 0.45) {
+        // Fireball stage
+        const pFire = progress / 0.45;
+        puffGrad.addColorStop(0.0, "#ffffff");
+        puffGrad.addColorStop(0.25, "#fde047");
+        puffGrad.addColorStop(0.65, "#f97316");
+        puffGrad.addColorStop(1.0, `rgba(220, 38, 38, ${1 - pFire * 0.3})`);
+      } else {
+        // Cooling smoke stage
+        const pSmoke = (progress - 0.45) / 0.55;
+        const smokeAlpha = Math.max(0, (1 - pSmoke) * 0.9);
+        puffGrad.addColorStop(0.0, `rgba(249, 115, 22, ${smokeAlpha * 0.6})`);
+        puffGrad.addColorStop(0.3, `rgba(71, 85, 105, ${smokeAlpha})`);
+        puffGrad.addColorStop(0.75, `rgba(30, 41, 59, ${smokeAlpha})`);
+        puffGrad.addColorStop(1.0, "rgba(15, 23, 42, 0)");
+      }
+
+      ctx.beginPath();
+      ctx.arc(puffX, puffY, puffRadius, 0, Math.PI * 2);
+      ctx.fillStyle = puffGrad;
+      ctx.fill();
+    }
+
+    // 4. Central Dominant Fireball / Smoke Core
+    const coreRadius = (22 + progress * 28) * scale;
+    const coreY = y - upwardDrift;
+    const coreGrad = ctx.createRadialGradient(
+      x - 4 * scale,
+      coreY - 4 * scale,
+      3 * scale,
+      x,
+      coreY,
+      coreRadius,
+    );
+
+    if (progress < 0.4) {
+      const pCore = progress / 0.4;
+      coreGrad.addColorStop(0.0, "#ffffff");
+      coreGrad.addColorStop(0.3, "#fef08a");
+      coreGrad.addColorStop(0.7, "#f97316");
+      coreGrad.addColorStop(1.0, `rgba(185, 28, 28, ${1 - pCore * 0.25})`);
+    } else {
+      const pSmoke = (progress - 0.4) / 0.6;
+      const alpha = Math.max(0, (1 - pSmoke) * 0.95);
+      coreGrad.addColorStop(0.0, `rgba(253, 224, 71, ${alpha * 0.5})`);
+      coreGrad.addColorStop(0.35, `rgba(71, 85, 105, ${alpha})`);
+      coreGrad.addColorStop(0.8, `rgba(15, 23, 42, ${alpha})`);
+      coreGrad.addColorStop(1.0, "rgba(15, 23, 42, 0)");
+    }
+
+    ctx.beginPath();
+    ctx.arc(x, coreY, coreRadius, 0, Math.PI * 2);
+    ctx.fillStyle = coreGrad;
+    ctx.fill();
+
+    // 5. Initial Detonation Flash & Sharp Blast Rays (First 6 frames / progress < 0.25)
+    if (progress < 0.25) {
+      const flashProgress = progress / 0.25;
+      const flashAlpha = (1 - flashProgress) * 0.95;
+      const flashRadius = (28 + flashProgress * 42) * scale;
+
+      const flashGrad = ctx.createRadialGradient(x, y, 0, x, y, flashRadius);
+      flashGrad.addColorStop(0.0, `rgba(255, 255, 255, ${flashAlpha})`);
+      flashGrad.addColorStop(0.4, `rgba(254, 240, 138, ${flashAlpha * 0.8})`);
+      flashGrad.addColorStop(1.0, "rgba(249, 115, 22, 0)");
+
+      ctx.beginPath();
+      ctx.arc(x, y, flashRadius, 0, Math.PI * 2);
+      ctx.fillStyle = flashGrad;
+      ctx.fill();
+
+      // Sharp blast spokes
+      const spokeCount = 8;
+      ctx.lineWidth = Math.max(1.2, 3.5 * scale * (1 - flashProgress));
+      ctx.strokeStyle = `rgba(255, 255, 255, ${flashAlpha * 0.85})`;
+      for (let s = 0; s < spokeCount; s++) {
+        const sAngle = (s * Math.PI * 2) / spokeCount;
+        const spokeLen = flashRadius * (1.1 + (s % 2) * 0.4) * scale;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(
+          x + Math.cos(sAngle) * spokeLen,
+          y + Math.sin(sAngle) * spokeLen,
+        );
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
   }
 
   private getWeaponInfo(
@@ -2340,7 +2747,7 @@ export class StageRenderer {
     y: number,
     isWeapon: boolean,
   ): void {
-    const r = 6;
+    const r = 9;
     const color = isWeapon
       ? "rgba(232, 121, 249, 0.85)" // magenta - Weapon (free-flying projectile)
       : "rgba(96, 165, 250, 0.85)"; // blue - Item (thrown/spawned/held)
@@ -2388,11 +2795,18 @@ export class StageRenderer {
         this.drawThunderJoltMarker(ctx, x, y, true, dir, spinAngle);
         return true;
       case WPKind.PKThunderHead:
-      case WPKind.PKThunderTrail:
-        this.drawLightningMarker(ctx, x, y, "#60a5fa");
+        this.drawPKThunderHeadMarker(ctx, x, y, spinAngle);
         return true;
-      case WPKind.ChargeShot: // Samus - pink/purple energy orb
-        this.drawOrbMarker(ctx, x, y, "#f472b6", "#fbcfe8");
+      case WPKind.PKThunderTrail:
+      case WPKind.ThunderHead:
+      case WPKind.ThunderTrail:
+        this.drawPKThunderTrailMarker(ctx, x, y, spinAngle);
+        return true;
+      case WPKind.ChargeShot: // Samus - pulsing electric plasma orb
+        this.drawChargeShotMarker(ctx, x, y, spinAngle);
+        return true;
+      case WPKind.SamusBomb:
+        this.drawSamusBombMarker(ctx, x, y, spinAngle);
         return true;
       case WPKind.Boomerang:
         this.drawBoomerangMarker(ctx, x, y, "#eab308", spinAngle);
@@ -2403,8 +2817,24 @@ export class StageRenderer {
       case WPKind.Cutter: // Kirby Up-B Final Cutter wave
         this.drawCutterWaveMarker(ctx, x, y, dir);
         return true;
-      case WPKind.EggThrow: // same shell art as a character encased in an egg (drawYoshiEggShell)
-        this.drawYoshiEgg(x, y, 8, 6);
+      case WPKind.EggThrow:
+        this.drawEggThrowMarker(ctx, x, y, spinAngle, dir);
+        return true;
+      case WPKind.YoshiStar:
+      case WPKind.StarRodStar:
+        this.drawStarProjectileMarker(ctx, x, y, spinAngle);
+        return true;
+      case WPKind.BulletNormal:
+      case WPKind.BulletHard:
+      case WPKind.LGunAmmo:
+        this.drawRayGunBulletMarker(ctx, x, y, dir);
+        return true;
+      case WPKind.ArwingLaser2D:
+      case WPKind.ArwingLaser3D:
+        this.drawArwingLaserMarker(ctx, x, y, dir);
+        return true;
+      case WPKind.FFlowerFlame:
+        this.drawFireFlowerFlameMarker(ctx, x, y, dir, spinAngle);
         return true;
       default:
         return false;
@@ -2427,6 +2857,80 @@ export class StageRenderer {
       case ITKind.RTTFBomb:
         this.drawRoundBombItem(ctx, x, y, frameCounter, kind === ITKind.BobOmb);
         return true;
+      case ITKind.MotionSensorBomb:
+        this.drawMotionSensorBombItem(ctx, x, y, frameCounter);
+        return true;
+      case ITKind.Pokeball:
+        this.drawPokeballItem(ctx, x, y);
+        return true;
+      case ITKind.Star:
+        this.drawSuperStarItem(ctx, x, y, frameCounter);
+        return true;
+      case ITKind.MaximTomato:
+        this.drawMaximTomatoItem(ctx, x, y);
+        return true;
+      case ITKind.Heart:
+        this.drawHeartContainerItem(ctx, x, y, frameCounter);
+        return true;
+      case ITKind.BeamSword:
+        this.drawBeamSwordItem(ctx, x, y, frameCounter);
+        return true;
+      case ITKind.HomeRunBat:
+        this.drawHomeRunBatItem(ctx, x, y);
+        return true;
+      case ITKind.Fan:
+        this.drawFanItem(ctx, x, y);
+        return true;
+      case ITKind.StarRod:
+        this.drawStarRodItem(ctx, x, y, frameCounter);
+        return true;
+      case ITKind.RayGun:
+        this.drawRayGunItem(ctx, x, y);
+        return true;
+      case ITKind.FireFlower:
+        this.drawFireFlowerItem(ctx, x, y);
+        return true;
+      case ITKind.Hammer:
+        this.drawHammerItem(ctx, x, y);
+        return true;
+      case ITKind.GreenShell:
+      case ITKind.RedShell:
+        this.drawKoopaShellItem(
+          ctx,
+          x,
+          y,
+          kind === ITKind.RedShell,
+          frameCounter,
+        );
+        return true;
+      case ITKind.Bumper:
+      case ITKind.StageBumper:
+        this.drawBumperItem(ctx, x, y, frameCounter);
+        return true;
+      case ITKind.PKFirePillar:
+        this.drawPKFirePillarItem(ctx, x, y, frameCounter);
+        return true;
+      case ITKind.Capsule:
+        this.drawCapsuleItem(ctx, x, y);
+        return true;
+      case ITKind.Crate:
+        this.drawCrateItem(ctx, x, y);
+        return true;
+      case ITKind.Barrel:
+        this.drawBarrelItem(ctx, x, y);
+        return true;
+      case ITKind.PowBlock:
+        this.drawPowBlockItem(ctx, x, y);
+        return true;
+      case ITKind.Egg:
+        this.drawEggItem(ctx, x, y);
+        return true;
+      case 0xfe: {
+        const cycle = 24;
+        const progress = (Math.abs(frameCounter) % cycle) / cycle;
+        this.drawBombExplosionAt(ctx, x, y, progress, false, 28);
+        return true;
+      }
       default:
         return false;
     }
@@ -2639,7 +3143,7 @@ export class StageRenderer {
    * - Outer flame aura with glow (Red for Mario, Emerald for Luigi)
    * - Bright core (Yellow for Mario, Mint for Luigi)
    * - White-hot center
-   * - Trailing sparks behind the fireball
+   * - Trailing sparks and rolling flame licks behind the fireball
    */
   private drawFireballMarker(
     ctx: CanvasRenderingContext2D,
@@ -2648,18 +3152,18 @@ export class StageRenderer {
     isLuigi: boolean,
     dir = 1,
   ): void {
-    const fbRadius = 13;
+    const fbRadius = 17;
 
     ctx.save();
 
     // 1. Fireball outer flame aura
     ctx.beginPath();
-    ctx.arc(x, y, fbRadius * 1.35, 0, Math.PI * 2);
+    ctx.arc(x, y, fbRadius * 1.4, 0, Math.PI * 2);
     ctx.fillStyle = isLuigi
       ? "rgba(34, 197, 94, 0.45)"
       : "rgba(239, 68, 68, 0.45)";
     ctx.shadowColor = isLuigi ? "#22c55e" : "#ef4444";
-    ctx.shadowBlur = 16;
+    ctx.shadowBlur = 18;
     ctx.fill();
 
     // 2. Fireball bright core
@@ -2670,15 +3174,15 @@ export class StageRenderer {
 
     // 3. White-hot center
     ctx.beginPath();
-    ctx.arc(x - dir * 2, y - 1.5, fbRadius * 0.4, 0, Math.PI * 2);
+    ctx.arc(x - dir * 2.5, y - 2, fbRadius * 0.45, 0, Math.PI * 2);
     ctx.fillStyle = "#ffffff";
     ctx.fill();
 
-    // 4. Trailing sparks
+    // 4. Trailing sparks & flame licks
     ctx.beginPath();
-    ctx.arc(x - dir * (fbRadius * 1.5), y + 3, 3.2, 0, Math.PI * 2);
-    ctx.arc(x - dir * (fbRadius * 2.2), y - 3, 2.4, 0, Math.PI * 2);
-    ctx.arc(x - dir * (fbRadius * 2.8), y + 1, 1.8, 0, Math.PI * 2);
+    ctx.arc(x - dir * (fbRadius * 1.5), y + 4, 3.8, 0, Math.PI * 2);
+    ctx.arc(x - dir * (fbRadius * 2.2), y - 4, 2.8, 0, Math.PI * 2);
+    ctx.arc(x - dir * (fbRadius * 2.9), y + 1.5, 2.0, 0, Math.PI * 2);
     ctx.fillStyle = isLuigi ? "#4ade80" : "#f97316";
     ctx.fill();
 
@@ -2698,16 +3202,16 @@ export class StageRenderer {
     y: number,
     dir = 1,
   ): void {
-    const pkRadius = 11;
+    const pkRadius = 15;
 
     ctx.save();
 
     // 1. Fiery outer flame aura
     ctx.beginPath();
-    ctx.arc(x, y, pkRadius * 1.35, 0, Math.PI * 2);
+    ctx.arc(x, y, pkRadius * 1.4, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(249, 115, 22, 0.45)"; // Vibrant PK Fire orange
     ctx.shadowColor = "#ef4444";
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = 16;
     ctx.fill();
 
     // 2. Bright yellow flame core
@@ -2719,15 +3223,15 @@ export class StageRenderer {
     // 3. White-hot center
     ctx.shadowBlur = 0;
     ctx.beginPath();
-    ctx.arc(x - dir * 2, y - 1, pkRadius * 0.4, 0, Math.PI * 2);
+    ctx.arc(x - dir * 2.5, y - 1.5, pkRadius * 0.45, 0, Math.PI * 2);
     ctx.fillStyle = "#ffffff";
     ctx.fill();
 
     // 4. Trailing sparks
     ctx.beginPath();
-    ctx.arc(x - dir * (pkRadius * 1.5), y + 2.5, 2.8, 0, Math.PI * 2);
-    ctx.arc(x - dir * (pkRadius * 2.2), y - 2.5, 2.0, 0, Math.PI * 2);
-    ctx.arc(x - dir * (pkRadius * 2.8), y + 1, 1.5, 0, Math.PI * 2);
+    ctx.arc(x - dir * (pkRadius * 1.5), y + 3, 3.4, 0, Math.PI * 2);
+    ctx.arc(x - dir * (pkRadius * 2.2), y - 3, 2.4, 0, Math.PI * 2);
+    ctx.arc(x - dir * (pkRadius * 2.8), y + 1.5, 1.8, 0, Math.PI * 2);
     ctx.fillStyle = "#fbbf24";
     ctx.fill();
 
@@ -2749,7 +3253,7 @@ export class StageRenderer {
     dir = 1,
     spinAngle = 0,
   ): void {
-    const tjRadius = 12;
+    const tjRadius = 16;
 
     ctx.save();
 
@@ -2759,9 +3263,9 @@ export class StageRenderer {
     ctx.beginPath();
     ctx.arc(x, y, tjRadius * 1.5 * ringScale, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(56, 189, 248, 0.65)"; // Electric cyan
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.2;
     ctx.shadowColor = "#38bdf8";
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 12;
     ctx.stroke();
 
     // 2. Electric spark aura & glow
@@ -2769,7 +3273,7 @@ export class StageRenderer {
     ctx.arc(x, y, tjRadius * 1.25, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(250, 204, 21, 0.45)"; // Bright electric yellow
     ctx.shadowColor = "#facc15";
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = 16;
     ctx.fill();
 
     // 3. Electric core
@@ -2786,7 +3290,7 @@ export class StageRenderer {
     ctx.fill();
 
     // 5. 4 Branching zig-zag electric sparks radiating outward
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.2;
     ctx.strokeStyle = "#fef08a";
     ctx.lineCap = "round";
     for (let i = 0; i < 4; i++) {
@@ -2805,15 +3309,21 @@ export class StageRenderer {
 
     // 6. Trailing spark dots behind travel direction
     ctx.beginPath();
-    ctx.arc(x - dir * (tjRadius * 1.5), y + 2, 2.5, 0, Math.PI * 2);
-    ctx.arc(x - dir * (tjRadius * 2.2), y - 2, 1.8, 0, Math.PI * 2);
+    ctx.arc(x - dir * (tjRadius * 1.5), y + 2.5, 3.0, 0, Math.PI * 2);
+    ctx.arc(x - dir * (tjRadius * 2.2), y - 2.5, 2.2, 0, Math.PI * 2);
     ctx.fillStyle = "#38bdf8";
     ctx.fill();
 
     ctx.restore();
   }
 
-  /** A spinning hooked chevron curve, for Boomerang. */
+  /**
+   * Link's Boomerang projectile visual (WPKind.Boomerang):
+   * - Spinning aerodynamic curved chevron / returning boomerang silhouette
+   * - Proportional scale with distinct curved wings and rounded elbow
+   * - Dynamic spinning speed / wind trail arcs
+   * - Warm golden/amber glowing outer body, vibrant light-gold core, and crisp spine highlight
+   */
   private drawBoomerangMarker(
     ctx: CanvasRenderingContext2D,
     x: number,
@@ -2825,19 +3335,40 @@ export class StageRenderer {
     ctx.translate(x, y);
     ctx.rotate(spinAngle);
 
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 8;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3.5;
-    ctx.lineCap = "round";
+    // 1. Spinning circular wind / speed trail arcs
     ctx.beginPath();
-    ctx.moveTo(-10.5, -9);
-    ctx.quadraticCurveTo(0, 10.5, 10.5, -9);
+    ctx.arc(0, 0, 22, 0, Math.PI * 0.7);
+    ctx.strokeStyle = "rgba(253, 224, 71, 0.35)";
+    ctx.lineWidth = 1.75;
+    ctx.lineCap = "round";
     ctx.stroke();
 
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, Math.PI, Math.PI * 1.7);
+    ctx.stroke();
+
+    // 2. Outer glowing boomerang body with aerodynamic wing curvature
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 7;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(-21, -12);
+    ctx.quadraticCurveTo(-11, 2, 0, 9);
+    ctx.quadraticCurveTo(11, 2, 21, -12);
+    ctx.stroke();
+
+    // 3. Bright vibrant golden core
     ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#fef08a";
+    ctx.lineWidth = 3.8;
+    ctx.stroke();
+
+    // 4. Crisp spine highlight
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1.25;
+    ctx.lineWidth = 1.4;
     ctx.stroke();
 
     ctx.restore();
@@ -2847,7 +3378,7 @@ export class StageRenderer {
    * Fox's Blaster Laser Bolt visual (WPKind.Blaster):
    * - Red/crimson glowing laser beam capsule with energetic aura
    * - White-hot core beam
-   * - Front laser flare spark
+   * - Front laser flare star
    * - Trailing energy sparks behind the bolt
    */
   private drawLaserMarker(
@@ -2857,8 +3388,8 @@ export class StageRenderer {
     dir = 1,
   ): void {
     ctx.save();
-    const beamLen = 26;
-    const beamHalfH = 3;
+    const beamLen = 36;
+    const beamHalfH = 4.2;
 
     // 1. Glowing red outer laser bolt
     ctx.beginPath();
@@ -2871,17 +3402,17 @@ export class StageRenderer {
     );
     ctx.fillStyle = "rgba(239, 68, 68, 0.95)";
     ctx.shadowColor = "#ff0033";
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 14;
     ctx.fill();
 
     // 2. White-hot inner core
     ctx.beginPath();
     ctx.roundRect(
-      x - (dir > 0 ? (beamLen - 4) * 0.75 : (beamLen - 4) * 0.25),
-      y - 1.2,
-      beamLen - 4,
-      2.4,
-      1.2,
+      x - (dir > 0 ? (beamLen - 5) * 0.75 : (beamLen - 5) * 0.25),
+      y - 1.6,
+      beamLen - 5,
+      3.2,
+      1.6,
     );
     ctx.fillStyle = "#ffffff";
     ctx.fill();
@@ -2889,18 +3420,18 @@ export class StageRenderer {
     // 3. Leading tip star / energy flare
     const tipX = x + dir * (beamLen * 0.55);
     ctx.beginPath();
-    ctx.arc(tipX, y, 3, 0, Math.PI * 2);
+    ctx.arc(tipX, y, 3.8, 0, Math.PI * 2);
     ctx.fillStyle = "#ffffff";
     ctx.shadowColor = "#ff6688";
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 10;
     ctx.fill();
 
     // 4. Trailing energy wake sparks
     const tailX = x - dir * (beamLen * 0.6);
     ctx.beginPath();
-    ctx.arc(tailX - dir * 4, y, 1.5, 0, Math.PI * 2);
-    ctx.arc(tailX - dir * 9, y - 1, 1.0, 0, Math.PI * 2);
-    ctx.arc(tailX - dir * 14, y + 1, 0.8, 0, Math.PI * 2);
+    ctx.arc(tailX - dir * 5, y, 2.0, 0, Math.PI * 2);
+    ctx.arc(tailX - dir * 11, y - 1.5, 1.4, 0, Math.PI * 2);
+    ctx.arc(tailX - dir * 17, y + 1.5, 1.0, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255, 120, 120, 0.85)";
     ctx.fill();
 
@@ -2922,8 +3453,8 @@ export class StageRenderer {
     dir = 1,
   ): void {
     ctx.save();
-    const waveH = 22;
-    const waveW = 14;
+    const waveH = 32;
+    const waveW = 18;
 
     // 1. Glowing cyan aura
     ctx.beginPath();
@@ -2934,9 +3465,9 @@ export class StageRenderer {
     ctx.lineTo(x - dir * (waveW * 0.6), y - waveH * 0.5);
     ctx.lineTo(x - dir * (waveW * 0.8), y);
     ctx.closePath();
-    ctx.fillStyle = "rgba(56, 189, 248, 0.4)";
+    ctx.fillStyle = "rgba(56, 189, 248, 0.45)";
     ctx.shadowColor = "#0284c7";
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = 16;
     ctx.fill();
 
     // 2. Solid cyan/blue energy blade core
@@ -2958,70 +3489,1649 @@ export class StageRenderer {
     ctx.lineTo(x + dir * (waveW * 0.7), y - waveH * 0.75);
     ctx.lineTo(x + dir * (waveW * 0.1), y - waveH * 0.95);
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 2.2;
     ctx.lineCap = "round";
     ctx.stroke();
 
     // 4. Trailing velocity streaks
     ctx.shadowBlur = 0;
-    ctx.lineWidth = 1.2;
-    ctx.strokeStyle = "rgba(186, 230, 253, 0.8)";
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = "rgba(186, 230, 253, 0.85)";
     ctx.beginPath();
     ctx.moveTo(x - dir * (waveW * 0.5), y - waveH * 0.25);
-    ctx.lineTo(x - dir * (waveW * 1.3), y - waveH * 0.25);
+    ctx.lineTo(x - dir * (waveW * 1.4), y - waveH * 0.25);
     ctx.moveTo(x - dir * (waveW * 0.3), y - waveH * 0.65);
-    ctx.lineTo(x - dir * (waveW * 1.0), y - waveH * 0.65);
+    ctx.lineTo(x - dir * (waveW * 1.1), y - waveH * 0.65);
     ctx.stroke();
 
     ctx.restore();
   }
 
-  /** Classic zigzag bolt silhouette, for PK Thunder. */
-  private drawLightningMarker(
+  /**
+   * Crackling plasma orb for Ness's PK Thunder Head.
+   */
+  private drawPKThunderHeadMarker(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
-    color: string,
+    spinAngle = 0,
   ): void {
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 8;
+    ctx.save();
+    const thRadius = 15;
+
+    // Glowing cyan electrical corona
     ctx.beginPath();
-    ctx.moveTo(x + 2, y - 9);
-    ctx.lineTo(x - 4, y);
-    ctx.lineTo(x, y);
-    ctx.lineTo(x - 2, y + 9);
-    ctx.lineTo(x + 4, y - 1);
-    ctx.lineTo(x, y - 1);
-    ctx.closePath();
-    ctx.fillStyle = color;
+    ctx.arc(x, y, thRadius * 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(56, 189, 248, 0.4)";
+    ctx.shadowColor = "#38bdf8";
+    ctx.shadowBlur = 18;
     ctx.fill();
 
+    // Electric plasma ball core
+    const grad = ctx.createRadialGradient(x - 3, y - 3, 2, x, y, thRadius);
+    grad.addColorStop(0.0, "#ffffff");
+    grad.addColorStop(0.3, "#7dd3fc");
+    grad.addColorStop(0.7, "#0284c7");
+    grad.addColorStop(1.0, "#075985");
+
+    ctx.beginPath();
+    ctx.arc(x, y, thRadius, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 6 crackling zig-zag lightning sparks
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    ctx.strokeStyle = "#fef08a";
+    ctx.lineWidth = 1.8;
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3 + spinAngle * 2.5;
+      const midR = thRadius * 0.9;
+      const endR = thRadius * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(a + 0.15) * midR, y + Math.sin(a + 0.15) * midR);
+      ctx.lineTo(x + Math.cos(a) * endR, y + Math.sin(a) * endR);
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.arc(x, y, thRadius * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    ctx.restore();
   }
 
-  /** Glowing orb with a brighter core, for Charge Shot. */
-  private drawOrbMarker(
+  /**
+   * Trailing electric plasma mote for PK Thunder Trail and Pikachu Thunder Trail.
+   */
+  private drawPKThunderTrailMarker(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
-    color: string,
-    coreColor: string,
+    spinAngle = 0,
   ): void {
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
+    ctx.save();
+    const trRadius = 10;
+
     ctx.beginPath();
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.fillStyle = color;
+    ctx.arc(x, y, trRadius * 1.35, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
+    ctx.shadowColor = "#0ea5e9";
+    ctx.shadowBlur = 12;
     ctx.fill();
 
+    ctx.beginPath();
+    ctx.arc(x, y, trRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "#38bdf8";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, y, trRadius * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // Small sparks
+    ctx.strokeStyle = "#fef08a";
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 3; i++) {
+      const a = (i * Math.PI * 2) / 3 + spinAngle;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(
+        x + Math.cos(a) * trRadius * 1.4,
+        y + Math.sin(a) * trRadius * 1.4,
+      );
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Samus's Charge Shot visual (WPKind.ChargeShot):
+   * - Proportional ~24px electric plasma sphere with rotating energy arcs
+   * - Deep magenta/violet 3D sphere gradient core
+   * - White-hot pulsating nucleus
+   * - Electric discharge spikes radiating outward
+   */
+  private drawChargeShotMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    spinAngle = 0,
+  ): void {
+    ctx.save();
+    const csRadius = 24;
+
+    // 1. Outer pulsating electric magenta/violet corona
+    const pulse = 1 + 0.12 * Math.sin(spinAngle * 3);
+    ctx.beginPath();
+    ctx.arc(x, y, csRadius * 1.45 * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(192, 38, 211, 0.35)";
+    ctx.shadowColor = "#d946ef";
+    ctx.shadowBlur = 22;
+    ctx.fill();
+
+    // 2. Swirling energetic orbital arcs
+    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = "rgba(250, 204, 21, 0.75)";
+    ctx.beginPath();
+    ctx.ellipse(
+      x,
+      y,
+      csRadius * 1.3,
+      csRadius * 0.65,
+      spinAngle,
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.75)";
+    ctx.beginPath();
+    ctx.ellipse(
+      x,
+      y,
+      csRadius * 1.3,
+      csRadius * 0.65,
+      spinAngle + Math.PI / 2,
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+
+    // 3. Spherical 3D plasma body
+    const grad = ctx.createRadialGradient(x - 6, y - 6, 3, x, y, csRadius);
+    grad.addColorStop(0.0, "#ffffff");
+    grad.addColorStop(0.2, "#f472b6");
+    grad.addColorStop(0.55, "#c026d3");
+    grad.addColorStop(0.85, "#6b21a8");
+    grad.addColorStop(1.0, "#3b0764");
+
+    ctx.beginPath();
+    ctx.arc(x, y, csRadius, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.shadowColor = "#c026d3";
+    ctx.shadowBlur = 16;
+    ctx.fill();
+
+    // 4. White-hot crackling center
     ctx.shadowBlur = 0;
     ctx.beginPath();
-    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = coreColor;
+    ctx.arc(x, y, csRadius * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
     ctx.fill();
+
+    // 5. Electric discharge spikes radiating outward
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 5; i++) {
+      const a = (i * Math.PI * 2) / 5 + spinAngle * 2;
+      const r1 = csRadius * 0.7;
+      const r2 = csRadius * (1.1 + ((i * 3) % 4) * 0.1);
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
+      ctx.lineTo(
+        x + Math.cos(a + 0.1) * ((r1 + r2) / 2),
+        y + Math.sin(a + 0.1) * ((r1 + r2) / 2),
+      );
+      ctx.lineTo(x + Math.cos(a) * r2, y + Math.sin(a) * r2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Yoshi's Egg Throw projectile (WPKind.EggThrow):
+   * - Proportional ~18x13 tilted egg shell
+   * - Clean white/cream shell with 3D gradient
+   * - Emerald green spots
+   * - Aerodynamic velocity wind arcs
+   */
+  private drawEggThrowMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    spinAngle = 0,
+    dir = 1,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(spinAngle * dir);
+
+    const rx = 26;
+    const ry = 19;
+
+    // Aerodynamic wind trail arcs
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx * 1.35, ry * 1.35, 0, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.strokeStyle = "rgba(187, 247, 208, 0.55)";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Egg body 3D radial gradient
+    const eggGrad = ctx.createRadialGradient(-6, -6, 4, 0, 0, rx);
+    eggGrad.addColorStop(0.0, "#ffffff");
+    eggGrad.addColorStop(0.65, "#f1f5f9");
+    eggGrad.addColorStop(1.0, "#cbd5e1");
+
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fillStyle = eggGrad;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+    ctx.shadowBlur = 10;
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(71, 85, 105, 0.75)";
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Green spotted pattern on egg shell
+    ctx.fillStyle = "#22c55e";
+    const spots = [
+      { x: -7, y: -6, r: 6 },
+      { x: 9, y: 5, r: 5.5 },
+      { x: 4, y: -7, r: 4.2 },
+      { x: -10, y: 6, r: 4.5 },
+      { x: 13, y: -2, r: 3.8 },
+    ];
+    for (const spot of spots) {
+      ctx.beginPath();
+      ctx.arc(spot.x, spot.y, spot.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Samus's Morph Ball Bomb (WPKind.SamusBomb):
+   * - Glowing cybernetic energy sphere
+   * - Rotating neon reticle rings
+   * - Blinking red detonator lens
+   */
+  private drawSamusBombMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    spinAngle = 0,
+  ): void {
+    ctx.save();
+    const sbRadius = 15;
+
+    // Glowing cyan/blue aura
+    ctx.beginPath();
+    ctx.arc(x, y, sbRadius * 1.35, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(6, 182, 212, 0.35)";
+    ctx.shadowColor = "#06b6d4";
+    ctx.shadowBlur = 14;
+    ctx.fill();
+
+    // Dark cyber-metallic chassis
+    const bodyGrad = ctx.createRadialGradient(x - 3, y - 3, 2, x, y, sbRadius);
+    bodyGrad.addColorStop(0.0, "#475569");
+    bodyGrad.addColorStop(0.7, "#1e293b");
+    bodyGrad.addColorStop(1.0, "#090d16");
+
+    ctx.beginPath();
+    ctx.arc(x, y, sbRadius, 0, Math.PI * 2);
+    ctx.fillStyle = bodyGrad;
+    ctx.fill();
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Rotating neon crosshair / reticle
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = "#22d3ee";
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2 + spinAngle;
+      ctx.beginPath();
+      ctx.moveTo(
+        x + Math.cos(a) * (sbRadius * 0.4),
+        y + Math.sin(a) * (sbRadius * 0.4),
+      );
+      ctx.lineTo(
+        x + Math.cos(a) * (sbRadius * 0.9),
+        y + Math.sin(a) * (sbRadius * 0.9),
+      );
+      ctx.stroke();
+    }
+
+    // Blinking red detonator core
+    const blink = (Math.sin(spinAngle * 4) + 1) * 0.5;
+    ctx.beginPath();
+    ctx.arc(x, y, sbRadius * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = blink > 0.4 ? "#ef4444" : "#991b1b";
+    ctx.shadowColor = "#ef4444";
+    ctx.shadowBlur = blink > 0.4 ? 10 : 0;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * 5-point golden/sparkling star for Yoshi Star (WPKind.YoshiStar) and Star Rod Star (WPKind.StarRodStar).
+   */
+  private drawStarProjectileMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    spinAngle = 0,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(spinAngle);
+
+    const rOuter = 18;
+    const rInner = 8;
+    const points = 5;
+
+    ctx.shadowColor = "#facc15";
+    ctx.shadowBlur = 14;
+
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 === 0 ? rOuter : rInner;
+      const a = (i * Math.PI) / points - Math.PI / 2;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+
+    const starGrad = ctx.createRadialGradient(-3, -3, 2, 0, 0, rOuter);
+    starGrad.addColorStop(0.0, "#ffffff");
+    starGrad.addColorStop(0.35, "#fef08a");
+    starGrad.addColorStop(0.8, "#facc15");
+    starGrad.addColorStop(1.0, "#eab308");
+
+    ctx.fillStyle = starGrad;
+    ctx.fill();
+    ctx.strokeStyle = "#ca8a04";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    // Glitter sparks around star
+    ctx.shadowBlur = 0;
+    for (let s = 0; s < 3; s++) {
+      const sa = (s * Math.PI * 2) / 3 + spinAngle * 1.5;
+      const dist = rOuter * (1.25 + ((s * 3) % 2) * 0.2);
+      ctx.beginPath();
+      ctx.arc(Math.cos(sa) * dist, Math.sin(sa) * dist, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Searing green blaster energy bolt for Ray Gun bullet (WPKind.BulletNormal, BulletHard, LGunAmmo).
+   */
+  private drawRayGunBulletMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    dir = 1,
+  ): void {
+    ctx.save();
+    const len = 28;
+    const halfH = 3.5;
+
+    // Glowing green aura
+    ctx.beginPath();
+    ctx.roundRect(
+      x - (dir > 0 ? len * 0.75 : len * 0.25),
+      y - halfH * 1.4,
+      len,
+      halfH * 2.8,
+      halfH * 1.4,
+    );
+    ctx.fillStyle = "rgba(34, 197, 94, 0.4)";
+    ctx.shadowColor = "#22c55e";
+    ctx.shadowBlur = 12;
+    ctx.fill();
+
+    // Solid emerald body
+    ctx.beginPath();
+    ctx.roundRect(
+      x - (dir > 0 ? len * 0.75 : len * 0.25),
+      y - halfH,
+      len,
+      halfH * 2,
+      halfH,
+    );
+    ctx.fillStyle = "#4ade80";
+    ctx.fill();
+
+    // White-hot core
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.roundRect(
+      x - (dir > 0 ? (len - 6) * 0.75 : (len - 6) * 0.25),
+      y - 1.2,
+      len - 6,
+      2.4,
+      1.2,
+    );
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // Trailing sparks
+    const tailX = x - dir * (len * 0.6);
+    ctx.fillStyle = "#86efac";
+    ctx.beginPath();
+    ctx.arc(tailX - dir * 4, y, 1.5, 0, Math.PI * 2);
+    ctx.arc(tailX - dir * 9, y - 1, 1.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Sector Z twin green laser cannons for ArwingLaser (WPKind.ArwingLaser2D, ArwingLaser3D).
+   */
+  private drawArwingLaserMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    dir = 1,
+  ): void {
+    ctx.save();
+    const len = 38;
+    const beamH = 4;
+    const gap = 10;
+
+    for (const offset of [-gap / 2, gap / 2]) {
+      const by = y + offset;
+      ctx.beginPath();
+      ctx.roundRect(
+        x - (dir > 0 ? len * 0.75 : len * 0.25),
+        by - beamH / 2,
+        len,
+        beamH,
+        beamH / 2,
+      );
+      ctx.fillStyle = "#22c55e";
+      ctx.shadowColor = "#4ade80";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.roundRect(
+        x - (dir > 0 ? (len - 8) * 0.75 : (len - 8) * 0.25),
+        by - 1,
+        len - 8,
+        2,
+        1,
+      );
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Fire Flower continuous flame blast stream (WPKind.FFlowerFlame).
+   */
+  private drawFireFlowerFlameMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    dir = 1,
+    spinAngle = 0,
+  ): void {
+    ctx.save();
+    const puffs = [
+      { dx: 0, r: 8 },
+      { dx: 12, r: 13 },
+      { dx: 26, r: 18 },
+    ];
+    for (let i = 0; i < puffs.length; i++) {
+      const p = puffs[i]!;
+      const px = x + dir * p.dx;
+      const py = y + Math.sin(spinAngle * 2 + i) * 3;
+
+      ctx.beginPath();
+      ctx.arc(px, py, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? "#fde047" : i === 1 ? "#f97316" : "#ef4444";
+      ctx.shadowColor = "#f97316";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // Item Custom Shapes (thrown, held, ground pickups, and containers)
+  // =========================================================================
+
+  /**
+   * Poké Ball item visual (ITKind.Pokeball):
+   * - Red upper dome, white lower dome, black belt divider, center release button
+   */
+  private drawPokeballItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    const pbRadius = 20;
+
+    // Shadow & outer rim
+    ctx.beginPath();
+    ctx.arc(x, y, pbRadius, 0, Math.PI * 2);
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = "#0f172a";
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Top hemisphere (Red)
+    const topGrad = ctx.createRadialGradient(
+      x - 5,
+      y - 6,
+      2,
+      x,
+      y - 5,
+      pbRadius,
+    );
+    topGrad.addColorStop(0.0, "#f87171");
+    topGrad.addColorStop(0.4, "#ef4444");
+    topGrad.addColorStop(1.0, "#991b1b");
+    ctx.beginPath();
+    ctx.arc(x, y, pbRadius, Math.PI, 0);
+    ctx.fillStyle = topGrad;
+    ctx.fill();
+
+    // Bottom hemisphere (White)
+    const botGrad = ctx.createRadialGradient(
+      x - 5,
+      y + 4,
+      2,
+      x,
+      y + 5,
+      pbRadius,
+    );
+    botGrad.addColorStop(0.0, "#ffffff");
+    botGrad.addColorStop(0.6, "#e2e8f0");
+    botGrad.addColorStop(1.0, "#94a3b8");
+    ctx.beginPath();
+    ctx.arc(x, y, pbRadius, 0, Math.PI);
+    ctx.fillStyle = botGrad;
+    ctx.fill();
+
+    // Black equator belt line
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = "#0f172a";
+    ctx.beginPath();
+    ctx.moveTo(x - pbRadius, y);
+    ctx.lineTo(x + pbRadius, y);
+    ctx.stroke();
+
+    // Outer circle border
+    ctx.beginPath();
+    ctx.arc(x, y, pbRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Center release button (black outer ring, white inner button)
+    ctx.beginPath();
+    ctx.arc(x, y, 6.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#0f172a";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, y, 4.2, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#64748b";
+    ctx.lineWidth = 1;
+    ctx.fill();
+    ctx.stroke();
+
+    // Specular highlight on top dome
+    ctx.beginPath();
+    ctx.ellipse(x - 7, y - 8, 4.5, 2.5, -Math.PI / 4, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Super Star item visual (ITKind.Star):
+   * - 5-pointed Mario star with vertical black oval eyes and golden glow
+   */
+  private drawSuperStarItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    frameCounter = 0,
+  ): void {
+    ctx.save();
+    const rOuter = 22;
+    const rInner = 9.5;
+    const points = 5;
+
+    // Golden glow aura
+    ctx.shadowColor = "#facc15";
+    ctx.shadowBlur = 14;
+
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 === 0 ? rOuter : rInner;
+      const a = (i * Math.PI) / points - Math.PI / 2;
+      const px = x + Math.cos(a) * r;
+      const py = y + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+
+    const starGrad = ctx.createRadialGradient(x - 4, y - 4, 2, x, y, rOuter);
+    starGrad.addColorStop(0.0, "#ffffff");
+    starGrad.addColorStop(0.3, "#fef08a");
+    starGrad.addColorStop(0.75, "#facc15");
+    starGrad.addColorStop(1.0, "#ca8a04");
+
+    ctx.fillStyle = starGrad;
+    ctx.fill();
+    ctx.strokeStyle = "#854d0e";
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Two vertical black oval eyes
+    const eyeSpacing = 4.2;
+    const eyeY = y + 0.5;
+    ctx.fillStyle = "#0f172a";
+    for (const ex of [x - eyeSpacing, x + eyeSpacing]) {
+      ctx.beginPath();
+      ctx.ellipse(ex, eyeY, 1.8, 4.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Eye specular dot
+      ctx.beginPath();
+      ctx.arc(ex - 0.4, eyeY - 1.8, 0.8, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.fillStyle = "#0f172a";
+    }
+
+    // Sparkles
+    for (let s = 0; s < 3; s++) {
+      const sa = (s * Math.PI * 2) / 3 + frameCounter * 0.08;
+      const dist = rOuter * 1.35;
+      ctx.beginPath();
+      ctx.arc(
+        x + Math.cos(sa) * dist,
+        y + Math.sin(sa) * dist,
+        1.6,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#fef08a";
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Maxim Tomato item visual (ITKind.MaximTomato):
+   * - Red plump tomato with green calyx stem and bold black "M"
+   */
+  private drawMaximTomatoItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    const tomRadius = 20;
+
+    // Tomato plump body
+    const tomGrad = ctx.createRadialGradient(x - 5, y - 5, 2, x, y, tomRadius);
+    tomGrad.addColorStop(0.0, "#f87171");
+    tomGrad.addColorStop(0.35, "#ef4444");
+    tomGrad.addColorStop(0.8, "#dc2626");
+    tomGrad.addColorStop(1.0, "#991b1b");
+
+    ctx.beginPath();
+    ctx.arc(x, y + 2, tomRadius, 0, Math.PI * 2);
+    ctx.fillStyle = tomGrad;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#7f1d1d";
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // Specular shine
+    ctx.beginPath();
+    ctx.ellipse(x - 7, y - 5, 4.5, 2.5, -Math.PI / 4, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.fill();
+
+    // Green leafy stem on top
+    const stemY = y - tomRadius + 2;
+    ctx.fillStyle = "#16a34a";
+    ctx.beginPath();
+    ctx.moveTo(x, stemY);
+    ctx.lineTo(x - 8, stemY - 5);
+    ctx.lineTo(x - 3, stemY + 1);
+    ctx.lineTo(x + 8, stemY - 5);
+    ctx.lineTo(x + 3, stemY + 1);
+    ctx.closePath();
+    ctx.fill();
+
+    // Black letter "M" insignia on front
+    ctx.font = "900 17px system-ui, -apple-system, sans-serif";
+    ctx.fillStyle = "#0f172a";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("M", x, y + 4);
+
+    ctx.restore();
+  }
+
+  /**
+   * Heart Container item visual (ITKind.Heart):
+   * - Crystalline heart container with glowing ruby inner heart
+   */
+  private drawHeartContainerItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    frameCounter = 0,
+  ): void {
+    ctx.save();
+    const pulse = Math.sin((frameCounter * Math.PI) / 16) * 1.2;
+    const hW = 26 + pulse;
+    const hH = 26 + pulse;
+
+    const drawHeartPath = (ox: number, oy: number, w: number, h: number) => {
+      ctx.beginPath();
+      ctx.moveTo(ox, oy + h * 0.35);
+      ctx.bezierCurveTo(
+        ox,
+        oy - h * 0.15,
+        ox - w * 0.6,
+        oy - h * 0.15,
+        ox - w * 0.6,
+        oy + h * 0.35,
+      );
+      ctx.bezierCurveTo(
+        ox - w * 0.6,
+        oy + h * 0.7,
+        ox,
+        oy + h * 0.95,
+        ox,
+        oy + h,
+      );
+      ctx.bezierCurveTo(
+        ox,
+        oy + h * 0.95,
+        ox + w * 0.6,
+        oy + h * 0.7,
+        ox + w * 0.6,
+        oy + h * 0.35,
+      );
+      ctx.bezierCurveTo(
+        ox + w * 0.6,
+        oy - h * 0.15,
+        ox,
+        oy - h * 0.15,
+        ox,
+        oy + h * 0.35,
+      );
+      ctx.closePath();
+    };
+
+    // Gold outer frame
+    ctx.shadowColor = "#f43f5e";
+    ctx.shadowBlur = 12;
+    drawHeartPath(x, y - hH * 0.5, hW * 1.15, hH * 1.15);
+    ctx.fillStyle = "#eab308";
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Glowing ruby-red gem heart inside
+    const rubyGrad = ctx.createRadialGradient(x - 3, y - 2, 2, x, y, hW * 0.6);
+    rubyGrad.addColorStop(0.0, "#fda4af");
+    rubyGrad.addColorStop(0.4, "#f43f5e");
+    rubyGrad.addColorStop(0.85, "#be123c");
+    rubyGrad.addColorStop(1.0, "#881337");
+
+    drawHeartPath(x, y - hH * 0.5 + 2, hW * 0.9, hH * 0.9);
+    ctx.fillStyle = rubyGrad;
+    ctx.fill();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Specular crystal glint
+    ctx.beginPath();
+    ctx.ellipse(x - 5, y - 5, 3.5, 1.8, -Math.PI / 4, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Beam Sword item visual (ITKind.BeamSword):
+   * - Sleek hilt projecting a vibrant glowing laser blade
+   */
+  private drawBeamSwordItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    frameCounter = 0,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 4);
+
+    // Hilt (dark metallic cylinder with silver emitter guard)
+    ctx.fillStyle = "#1e293b";
+    ctx.fillRect(-18, -3, 14, 6);
+    ctx.strokeStyle = "#64748b";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-18, -3, 14, 6);
+
+    // Emitter collar
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillRect(-4, -4.5, 4, 9);
+
+    // Laser blade
+    const shimmer = Math.sin((frameCounter * Math.PI) / 8) * 1.5;
+    const bladeLen = 36 + shimmer;
+    ctx.shadowColor = "#ec4899";
+    ctx.shadowBlur = 14 + shimmer;
+
+    // Outer energy glow
+    ctx.fillStyle = "rgba(236, 72, 153, 0.45)";
+    ctx.beginPath();
+    ctx.roundRect(0, -5, bladeLen, 10, 4);
+    ctx.fill();
+
+    // Solid magenta/pink laser
+    ctx.fillStyle = "#f472b6";
+    ctx.beginPath();
+    ctx.roundRect(0, -3.2, bladeLen, 6.4, 2.8);
+    ctx.fill();
+
+    // White-hot inner plasma core
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.roundRect(0, -1.2, bladeLen - 2, 2.4, 1.2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Home Run Bat item visual (ITKind.HomeRunBat):
+   * - Wooden baseball bat with grip wrap and polished woodgrain
+   */
+  private drawHomeRunBatItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 4);
+
+    const batGrad = ctx.createLinearGradient(0, -6, 0, 6);
+    batGrad.addColorStop(0.0, "#fef3c7");
+    batGrad.addColorStop(0.35, "#d97706");
+    batGrad.addColorStop(0.85, "#b45309");
+    batGrad.addColorStop(1.0, "#78350f");
+
+    // Bat barrel and taper
+    ctx.beginPath();
+    ctx.moveTo(-18, -2);
+    ctx.lineTo(-4, -2.5);
+    ctx.lineTo(20, -5.5);
+    ctx.quadraticCurveTo(24, 0, 20, 5.5);
+    ctx.lineTo(-4, 2.5);
+    ctx.lineTo(-18, 2);
+    ctx.closePath();
+    ctx.fillStyle = batGrad;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 6;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#451a03";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // White grip tape on handle
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillRect(-17, -2.2, 10, 4.4);
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(-17, -2.2, 10, 4.4);
+
+    // Knob at base
+    ctx.fillStyle = "#92400e";
+    ctx.beginPath();
+    ctx.ellipse(-19, 0, 2, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Paper pleated Harisen Fan item visual (ITKind.Fan).
+   */
+  private drawFanItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+
+    const fanRadius = 24;
+    const startAngle = -Math.PI * 0.85;
+    const endAngle = -Math.PI * 0.15;
+
+    ctx.beginPath();
+    ctx.moveTo(0, 8);
+    ctx.arc(0, 8, fanRadius, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fillStyle = "#fef2f2";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+    ctx.shadowBlur = 6;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#dc2626";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Red decorative ribs
+    const pleats = 6;
+    for (let i = 0; i <= pleats; i++) {
+      const a = startAngle + (i * (endAngle - startAngle)) / pleats;
+      ctx.beginPath();
+      ctx.moveTo(0, 8);
+      ctx.lineTo(Math.cos(a) * fanRadius, 8 + Math.sin(a) * fanRadius);
+      ctx.strokeStyle = i % 2 === 0 ? "#ef4444" : "#fca5a5";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    // Bamboo pivot handle
+    ctx.fillStyle = "#b45309";
+    ctx.fillRect(-2.5, 6, 5, 9);
+    ctx.beginPath();
+    ctx.arc(0, 8, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "#facc15";
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Star Rod item visual (ITKind.StarRod):
+   * - Red/white wand with golden collar and sparkling star tip
+   */
+  private drawStarRodItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    frameCounter = 0,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 4);
+
+    ctx.fillStyle = "#dc2626";
+    ctx.fillRect(-18, -2.5, 20, 5);
+    ctx.strokeStyle = "#991b1b";
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(-18, -2.5, 20, 5);
+
+    // White diagonal stripes
+    ctx.fillStyle = "#ffffff";
+    for (let s = -16; s < 0; s += 6) {
+      ctx.fillRect(s, -2.5, 2.5, 5);
+    }
+
+    // Golden neck collar
+    ctx.fillStyle = "#facc15";
+    ctx.fillRect(1, -4, 4, 8);
+
+    // Golden 4-point star on tip
+    const starR = 12;
+    ctx.translate(12, 0);
+    ctx.rotate((frameCounter * Math.PI) / 30);
+    ctx.shadowColor = "#facc15";
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = "#fde047";
+    ctx.beginPath();
+    ctx.moveTo(0, -starR);
+    ctx.quadraticCurveTo(2, -2, starR, 0);
+    ctx.quadraticCurveTo(2, 2, 0, starR);
+    ctx.quadraticCurveTo(-2, 2, -starR, 0);
+    ctx.quadraticCurveTo(-2, -2, 0, -starR);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#ca8a04";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Ray Gun weapon item visual (ITKind.RayGun).
+   */
+  private drawRayGunItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Finned handle
+    ctx.fillStyle = "#475569";
+    ctx.beginPath();
+    ctx.moveTo(-10, 0);
+    ctx.lineTo(-14, 14);
+    ctx.lineTo(-8, 14);
+    ctx.lineTo(-4, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Main barrel housing
+    ctx.fillStyle = "#94a3b8";
+    ctx.beginPath();
+    ctx.roundRect(-12, -7, 24, 11, 3);
+    ctx.fill();
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Glowing green liquid energy chamber
+    ctx.fillStyle = "#22c55e";
+    ctx.shadowColor = "#4ade80";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.roundRect(-6, -4, 12, 5, 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Concentric emitter rings on nozzle
+    ctx.fillStyle = "#cbd5e1";
+    ctx.fillRect(12, -5, 4, 7);
+    ctx.fillRect(17, -3.5, 3, 4);
+
+    // Glowing green nozzle tip
+    ctx.beginPath();
+    ctx.arc(20, -1.5, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#4ade80";
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Fire Flower item visual (ITKind.FireFlower).
+   */
+  private drawFireFlowerItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Slender green stem
+    ctx.strokeStyle = "#16a34a";
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, 14);
+    ctx.stroke();
+
+    // Two curved green leaves at base
+    ctx.fillStyle = "#22c55e";
+    ctx.beginPath();
+    ctx.ellipse(-7, 12, 6, 3, -Math.PI / 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(7, 12, 6, 3, Math.PI / 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Concentric flower bloom: Red outer oval
+    ctx.beginPath();
+    ctx.ellipse(0, -6, 15, 12, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#ef4444";
+    ctx.shadowColor = "rgba(239, 68, 68, 0.4)";
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Orange middle ring
+    ctx.beginPath();
+    ctx.ellipse(0, -6, 11, 8.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#f97316";
+    ctx.fill();
+
+    // White/Yellow inner face
+    ctx.beginPath();
+    ctx.ellipse(0, -6, 7.5, 5.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#fef08a";
+    ctx.fill();
+
+    // Two black oval smiling eyes
+    ctx.fillStyle = "#0f172a";
+    ctx.beginPath();
+    ctx.ellipse(-2.8, -6, 1.2, 2.4, 0, 0, Math.PI * 2);
+    ctx.ellipse(2.8, -6, 1.2, 2.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Hammer weapon item visual (ITKind.Hammer).
+   */
+  private drawHammerItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 6);
+
+    // Sturdy wooden shaft
+    ctx.fillStyle = "#b45309";
+    ctx.fillRect(-3, -12, 6, 32);
+    ctx.strokeStyle = "#78350f";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-3, -12, 6, 32);
+
+    // Dark oak barrel mallet head
+    const headW = 32;
+    const headH = 20;
+    const hx = -headW / 2;
+    const hy = -16 - headH / 2;
+
+    const headGrad = ctx.createLinearGradient(hx, 0, hx + headW, 0);
+    headGrad.addColorStop(0.0, "#78350f");
+    headGrad.addColorStop(0.3, "#92400e");
+    headGrad.addColorStop(0.7, "#78350f");
+    headGrad.addColorStop(1.0, "#451a03");
+
+    ctx.beginPath();
+    ctx.roundRect(hx, hy, headW, headH, 4);
+    ctx.fillStyle = headGrad;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#292524";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    // Two steel reinforcement bands
+    ctx.fillStyle = "#64748b";
+    ctx.fillRect(hx + 6, hy, 4, headH);
+    ctx.fillRect(hx + headW - 10, hy, 4, headH);
+
+    ctx.restore();
+  }
+
+  /**
+   * Motion Sensor Bomb proximity landmine (ITKind.MotionSensorBomb).
+   */
+  private drawMotionSensorBombItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    frameCounter = 0,
+  ): void {
+    ctx.save();
+    const size = 26;
+    const hs = size / 2;
+
+    ctx.fillStyle = "#1e293b";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.roundRect(x - hs, y - hs, size, size, 5);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#475569";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Yellow hazard warning stripes
+    ctx.fillStyle = "#eab308";
+    ctx.fillRect(x - hs + 3, y - hs + 3, size - 6, 3);
+    ctx.fillRect(x - hs + 3, y + hs - 6, size - 6, 3);
+
+    // Central optical sensor eye with blinking red lens
+    const blink = (Math.sin(frameCounter * 0.25) + 1) * 0.5;
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = "#0f172a";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = blink > 0.35 ? "#ef4444" : "#7f1d1d";
+    ctx.shadowColor = "#ef4444";
+    ctx.shadowBlur = blink > 0.35 ? 8 : 0;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Koopa Shell item visual (ITKind.GreenShell, ITKind.RedShell).
+   */
+  private drawKoopaShellItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    isRed = false,
+    frameCounter = 0,
+  ): void {
+    ctx.save();
+    const wobble = Math.sin((frameCounter * Math.PI) / 15) * 0.8;
+    ctx.translate(0, wobble);
+    const sW = 32;
+    const sH = 22;
+
+    const domeGrad = ctx.createRadialGradient(x - 5, y - 5, 2, x, y, sW / 2);
+    if (isRed) {
+      domeGrad.addColorStop(0.0, "#f87171");
+      domeGrad.addColorStop(0.5, "#dc2626");
+      domeGrad.addColorStop(1.0, "#991b1b");
+    } else {
+      domeGrad.addColorStop(0.0, "#4ade80");
+      domeGrad.addColorStop(0.5, "#16a34a");
+      domeGrad.addColorStop(1.0, "#14532d");
+    }
+
+    ctx.beginPath();
+    ctx.ellipse(x, y - 2, sW / 2, sH / 2, 0, Math.PI, 0);
+    ctx.closePath();
+    ctx.fillStyle = domeGrad;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = isRed ? "#7f1d1d" : "#052e16";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Hexagonal scute pattern on dome
+    ctx.strokeStyle = isRed ? "#fca5a5" : "#86efac";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x - 6, y - 8);
+    ctx.lineTo(x + 6, y - 8);
+    ctx.lineTo(x + 9, y - 3);
+    ctx.lineTo(x - 9, y - 3);
+    ctx.closePath();
+    ctx.stroke();
+
+    // White underbelly rim
+    ctx.beginPath();
+    ctx.ellipse(x, y + 2, sW / 2 + 2, 5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#f8fafc";
+    ctx.fill();
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Bumper item visual (ITKind.Bumper, ITKind.StageBumper).
+   */
+  private drawBumperItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    frameCounter = 0,
+  ): void {
+    ctx.save();
+    const bRadius = 18;
+
+    // Metallic weighted disc base
+    ctx.beginPath();
+    ctx.ellipse(x, y + 8, bRadius * 0.95, 6, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#64748b";
+    ctx.fill();
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Chrome domed cap with red rim
+    const pulse = 1 + 0.05 * Math.sin(frameCounter * 0.3);
+    ctx.beginPath();
+    ctx.arc(x, y - 2, bRadius * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = "#dc2626";
+    ctx.shadowColor = "rgba(220, 38, 38, 0.45)";
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#991b1b";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Blue inner dome
+    ctx.beginPath();
+    ctx.arc(x, y - 2, bRadius * 0.72 * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = "#2563eb";
+    ctx.fill();
+
+    // White 5-pointed star in center
+    const starR = 7 * pulse;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? starR : starR * 0.45;
+      const a = (i * Math.PI) / 5 - Math.PI / 2;
+      const px = x + Math.cos(a) * r;
+      const py = y - 2 + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Towering roaring column of psychic flame for PK Fire Pillar (ITKind.PKFirePillar).
+   */
+  private drawPKFirePillarItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    frameCounter = 0,
+  ): void {
+    ctx.save();
+    const pW = 28;
+    const pH = 66;
+
+    // Ground impact ring
+    ctx.beginPath();
+    ctx.ellipse(x, y, pW * 0.7, 6, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(249, 115, 22, 0.45)";
+    ctx.shadowColor = "#f97316";
+    ctx.shadowBlur = 14;
+    ctx.fill();
+
+    // Surging psychic flame pillar
+    const topY = y - pH;
+    const wave = Math.sin(frameCounter * 0.4) * 4;
+
+    const fireGrad = ctx.createLinearGradient(x, y, x, topY);
+    fireGrad.addColorStop(0.0, "#ef4444");
+    fireGrad.addColorStop(0.4, "#f97316");
+    fireGrad.addColorStop(0.85, "#fde047");
+    fireGrad.addColorStop(1.0, "#ffffff");
+
+    ctx.beginPath();
+    ctx.moveTo(x - pW * 0.5, y);
+    ctx.quadraticCurveTo(
+      x - pW * 0.7 + wave,
+      y - pH * 0.35,
+      x - pW * 0.3,
+      y - pH * 0.7,
+    );
+    ctx.lineTo(x + wave * 0.5, topY);
+    ctx.lineTo(x + pW * 0.3, y - pH * 0.7);
+    ctx.quadraticCurveTo(x + pW * 0.7 + wave, y - pH * 0.35, x + pW * 0.5, y);
+    ctx.closePath();
+
+    ctx.fillStyle = fireGrad;
+    ctx.shadowColor = "#ea580c";
+    ctx.shadowBlur = 18;
+    ctx.fill();
+
+    // Bright white-hot core column
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(x - pW * 0.2, y);
+    ctx.lineTo(x - pW * 0.1 + wave * 0.5, y - pH * 0.8);
+    ctx.lineTo(x + wave * 0.5, topY + 6);
+    ctx.lineTo(x + pW * 0.1 + wave * 0.5, y - pH * 0.8);
+    ctx.lineTo(x + pW * 0.2, y);
+    ctx.closePath();
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // Discharging electric sparks
+    ctx.strokeStyle = "#fef08a";
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 4; i++) {
+      const sy = y - ((frameCounter * 3 + i * 16) % pH);
+      const sx = x + (i % 2 === 0 ? 1 : -1) * (pW * 0.6 + i * 3);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = "#fde047";
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Two-tone medical Capsule item visual (ITKind.Capsule).
+   */
+  private drawCapsuleItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.PI / 4);
+    const w = 26;
+    const h = 13;
+
+    // Left red half
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w / 2, h, [h / 2, 0, 0, h / 2]);
+    ctx.fill();
+
+    // Right white half
+    ctx.fillStyle = "#f8fafc";
+    ctx.beginPath();
+    ctx.roundRect(0, -h / 2, w / 2, h, [0, h / 2, h / 2, 0]);
+    ctx.fill();
+
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, h / 2);
+    ctx.stroke();
+
+    // Highlight
+    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.fillRect(-w / 2 + 3, -h / 2 + 2, w - 6, 2.5);
+
+    ctx.restore();
+  }
+
+  /**
+   * Wooden Crate item visual (ITKind.Crate).
+   */
+  private drawCrateItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    const size = 30;
+    const hs = size / 2;
+
+    ctx.fillStyle = "#d97706";
+    ctx.fillRect(x - hs, y - hs, size, size);
+    ctx.strokeStyle = "#78350f";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - hs, y - hs, size, size);
+
+    // Diagonal "X" cross-bracing
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "#92400e";
+    ctx.beginPath();
+    ctx.moveTo(x - hs, y - hs);
+    ctx.lineTo(x + hs, y + hs);
+    ctx.moveTo(x + hs, y - hs);
+    ctx.lineTo(x - hs, y + hs);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Wooden Barrel item visual (ITKind.Barrel).
+   */
+  private drawBarrelItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    const bw = 26;
+    const bh = 32;
+
+    ctx.beginPath();
+    ctx.moveTo(x - bw * 0.4, y - bh * 0.5);
+    ctx.quadraticCurveTo(x - bw * 0.6, y, x - bw * 0.4, y + bh * 0.5);
+    ctx.lineTo(x + bw * 0.4, y + bh * 0.5);
+    ctx.quadraticCurveTo(x + bw * 0.6, y, x + bw * 0.4, y - bh * 0.5);
+    ctx.closePath();
+
+    const woodGrad = ctx.createLinearGradient(x - bw / 2, 0, x + bw / 2, 0);
+    woodGrad.addColorStop(0.0, "#78350f");
+    woodGrad.addColorStop(0.4, "#b45309");
+    woodGrad.addColorStop(1.0, "#451a03");
+    ctx.fillStyle = woodGrad;
+    ctx.fill();
+    ctx.strokeStyle = "#292524";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    // Dark iron bands
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(x - bw * 0.45, y - bh * 0.35, bw * 0.9, 3);
+    ctx.fillRect(x - bw * 0.52, y - 1.5, bw * 1.04, 3);
+    ctx.fillRect(x - bw * 0.45, y + bh * 0.35 - 3, bw * 0.9, 3);
+
+    ctx.restore();
+  }
+
+  /**
+   * POW Block item visual (ITKind.PowBlock).
+   */
+  private drawPowBlockItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    const size = 28;
+    const hs = size / 2;
+
+    ctx.fillStyle = "#2563eb";
+    ctx.fillRect(x - hs, y - hs, size, size);
+    ctx.strokeStyle = "#1d4ed8";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - hs, y - hs, size, size);
+
+    // Bevel edges
+    ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.fillRect(x - hs, y - hs, size, 3);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillRect(x - hs, y + hs - 3, size, 3);
+
+    // "POW" text
+    ctx.font = "900 13px system-ui, -apple-system, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("POW", x, y + 0.5);
+
+    ctx.restore();
+  }
+
+  /**
+   * Yoshi Egg item container visual (ITKind.Egg).
+   */
+  private drawEggItem(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ): void {
+    ctx.save();
+    const rx = 18;
+    const ry = 25;
+
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#f8fafc";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // Green spots
+    ctx.fillStyle = "#22c55e";
+    ctx.beginPath();
+    ctx.arc(x - 5, y - 8, 4.5, 0, Math.PI * 2);
+    ctx.arc(x + 6, y + 5, 4.2, 0, Math.PI * 2);
+    ctx.arc(x - 4, y + 10, 3.2, 0, Math.PI * 2);
+    ctx.arc(x + 7, y - 7, 3.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
   }
 
   /**
@@ -9091,7 +11201,7 @@ export class StageRenderer {
         : frameIndex;
     const nameAlpha = isPaused ? 1 : getStartNameAlpha(framesSinceSpawn);
     if (nameAlpha > 0) {
-      const rawName = replay?.matchStart.playerNames[port]?.trim();
+      const rawName = replay?.matchStart?.playerNames?.[port]?.trim();
       const playerName =
         rawName && rawName.length > 0 ? rawName : PORT_LABELS[port];
       const hasPerspective =
@@ -15124,50 +17234,8 @@ export class StageRenderer {
     }
 
     if (specialType === "egg_throw") {
-      ctx.save();
-      // Egg Throw: Yoshi tossing a green-spotted egg upward in flight
-      const throwProgress = Math.min(frameCounter / 18, 1);
-      const arcX = noseX + dir * (throwProgress * halfWidth * 2.2);
-      const arcY =
-        centerY -
-        heightPx * 0.4 -
-        Math.sin(throwProgress * Math.PI) * (heightPx * 0.85);
-
-      // Trajectory dashed arc
-      ctx.beginPath();
-      ctx.moveTo(noseX, centerY);
-      ctx.quadraticCurveTo(
-        noseX + dir * halfWidth,
-        centerY - heightPx * 1.1,
-        noseX + dir * (halfWidth * 2.2),
-        centerY - heightPx * 0.4,
-      );
-      ctx.strokeStyle = "rgba(74, 222, 128, 0.5)";
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([3, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Egg body (white oval)
-      ctx.beginPath();
-      ctx.ellipse(arcX, arcY, 6, 8, dir * 0.35, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff";
-      ctx.shadowColor = "#4ade80";
-      ctx.shadowBlur = 8;
-      ctx.fill();
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      // Green spots on egg
-      ctx.fillStyle = "#22c55e";
-      ctx.beginPath();
-      ctx.arc(arcX, arcY - 2, 2.2, 0, Math.PI * 2);
-      ctx.arc(arcX - 2, arcY + 2, 1.8, 0, Math.PI * 2);
-      ctx.arc(arcX + 2, arcY + 3, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
+      // Dotted trajectory line and duplicate egg removed per user feedback.
+      // The thrown egg is an active in-game weapon entity (WPKind.EggThrow) rendered by drawCustomWeaponShape.
       return;
     }
   }

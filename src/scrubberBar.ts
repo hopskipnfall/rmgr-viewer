@@ -2,6 +2,10 @@ import type { FrameClassification, StockLossMarker } from "./matchTimeline.js";
 import { renderMatchTimeline } from "./matchTimelineRenderer.js";
 
 export interface ScrubberBarCallbacks {
+  /** Fires when scrubbing/dragging starts on the bar (pointerdown). */
+  onScrubStart?: () => void;
+  /** Fires when scrubbing is cancelled (pointercancel). */
+  onScrubCancel?: () => void;
   /** Fires when the user commits to a new position: click, drag release, or a keyboard step. */
   onSeek: (index: number) => void;
   /**
@@ -93,6 +97,7 @@ export class ScrubberBar {
     this.bar.addEventListener("pointerdown", (e) => {
       this.dragging = true;
       this.bar.setPointerCapture(e.pointerId);
+      this.callbacks.onScrubStart?.();
       const index = this.indexFromClientX(e.clientX);
       this.setValue(index);
       this.callbacks.onPreview(index, e.clientX);
@@ -121,7 +126,10 @@ export class ScrubberBar {
     });
 
     this.bar.addEventListener("pointercancel", (e) => {
-      this.dragging = false;
+      if (this.dragging) {
+        this.dragging = false;
+        this.callbacks.onScrubCancel?.();
+      }
       this.callbacks.onPreview(null, e.clientX);
     });
 

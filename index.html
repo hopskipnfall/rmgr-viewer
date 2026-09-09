@@ -715,6 +715,21 @@
       .library-filter-item select:focus {
         border-color: var(--accent);
       }
+      .library-filter-item .custom-dropdown-container {
+        width: auto;
+        min-width: 140px;
+        max-width: 200px;
+      }
+      .library-filter-item .custom-dropdown-trigger {
+        min-height: 28px;
+        padding: 3px 8px;
+        font-size: 12px;
+        background: #10121a;
+      }
+      .library-filter-item .custom-dropdown-menu {
+        min-width: 220px;
+        right: auto;
+      }
       .library-filter-reset-btn {
         background: rgba(239, 68, 68, 0.12);
         border: 1px solid rgba(239, 68, 68, 0.35);
@@ -1850,6 +1865,311 @@
         color: var(--text-dim);
         min-width: 32px;
         text-align: right;
+      }
+      .preview-mode-switch {
+        display: flex;
+        background: #14161f;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 3px;
+        gap: 4px;
+      }
+      .preview-mode-btn {
+        flex: 1;
+        padding: 7px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        color: var(--text-dim);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .preview-mode-btn:hover {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .preview-mode-btn.active {
+        background: var(--accent);
+        color: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .preview-info-card {
+        background: #141722;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 12px;
+      }
+      .preview-info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .preview-info-label {
+        color: var(--text-dim);
+      }
+      .preview-info-value {
+        font-family: monospace;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .preview-badge-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        background: rgba(245, 158, 11, 0.18);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.35);
+      }
+      .preview-chip-btn.has-star {
+        border-color: rgba(245, 158, 11, 0.45);
+      }
+
+      /* =========================================================================
+         Custom Dropdown Component Styles
+         ========================================================================= */
+      .custom-dropdown-container {
+        position: relative;
+        width: 100%;
+      }
+      .custom-dropdown-native-hidden {
+        display: none !important;
+      }
+      .custom-dropdown {
+        position: relative;
+        width: 100%;
+        user-select: none;
+      }
+      .custom-dropdown-trigger {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        min-height: 38px;
+        padding: 6px 12px;
+        background: #0f1015;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 13px;
+        cursor: pointer;
+        outline: none;
+        transition:
+          border-color 0.15s ease,
+          box-shadow 0.15s ease,
+          background 0.15s ease;
+      }
+      .custom-dropdown-trigger:hover {
+        background: #14161f;
+        border-color: #3b4255;
+      }
+      .custom-dropdown-trigger:focus-visible,
+      .custom-dropdown.open .custom-dropdown-trigger {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(79, 127, 219, 0.25);
+      }
+      .custom-dropdown-trigger-content {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
+        text-align: left;
+      }
+      .custom-dropdown-icon {
+        width: 22px;
+        height: 22px;
+        object-fit: contain;
+        flex-shrink: 0;
+        border-radius: 3px;
+      }
+      .custom-dropdown-icon-placeholder {
+        width: 22px;
+        height: 22px;
+        flex-shrink: 0;
+      }
+      .custom-dropdown-label {
+        font-weight: 500;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .custom-dropdown-sublabel {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-left: 4px;
+        white-space: nowrap;
+      }
+      .custom-dropdown-badge {
+        font-family: monospace;
+        font-size: 10px;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text-dim);
+        margin-left: auto;
+        flex-shrink: 0;
+      }
+      .custom-dropdown-chevron {
+        display: flex;
+        align-items: center;
+        color: var(--text-dim);
+        margin-left: 8px;
+        flex-shrink: 0;
+        transition:
+          transform 0.2s ease,
+          color 0.15s ease;
+      }
+      .custom-dropdown.open .custom-dropdown-chevron {
+        transform: rotate(180deg);
+        color: var(--accent);
+      }
+      .custom-dropdown-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: #11131b;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        box-shadow:
+          0 12px 28px rgba(0, 0, 0, 0.65),
+          0 2px 6px rgba(0, 0, 0, 0.35);
+        z-index: 1000;
+        max-height: 320px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        backdrop-filter: blur(12px);
+        animation: customDropdownFadeIn 0.12s ease-out;
+      }
+      @keyframes customDropdownFadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .custom-dropdown-search-wrap {
+        padding: 8px;
+        border-bottom: 1px solid var(--panel-border);
+        background: rgba(0, 0, 0, 0.2);
+      }
+      .custom-dropdown-search {
+        width: 100%;
+        padding: 6px 10px;
+        background: #181b26;
+        border: 1px solid var(--panel-border);
+        border-radius: 5px;
+        color: var(--text);
+        font-size: 12px;
+        outline: none;
+      }
+      .custom-dropdown-search:focus {
+        border-color: var(--accent);
+      }
+      .custom-dropdown-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 4px;
+        max-height: 260px;
+      }
+      .custom-dropdown-list::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-dropdown-list::-webkit-scrollbar-thumb {
+        background: #2a2e3d;
+        border-radius: 3px;
+      }
+      .custom-dropdown-group {
+        margin-bottom: 4px;
+      }
+      .custom-dropdown-group:last-child {
+        margin-bottom: 0;
+      }
+      .custom-dropdown-group-header {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #64748b;
+        padding: 6px 8px 3px;
+        position: sticky;
+        top: -4px;
+        background: #11131b;
+        z-index: 1;
+      }
+      .custom-dropdown-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 12px;
+        color: var(--text);
+        transition:
+          background 0.1s ease,
+          color 0.1s ease;
+      }
+      .custom-dropdown-option:hover,
+      .custom-dropdown-option.focused {
+        background: rgba(79, 127, 219, 0.15);
+        color: #fff;
+      }
+      .custom-dropdown-option.selected {
+        background: rgba(79, 127, 219, 0.25);
+        font-weight: 600;
+        color: #fff;
+      }
+      .custom-dropdown-option.disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .custom-dropdown-option-text {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 0;
+      }
+      .custom-dropdown-option-label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .custom-dropdown-option-sublabel {
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      .custom-dropdown-check {
+        margin-left: 6px;
+        color: var(--accent);
+        opacity: 0;
+        flex-shrink: 0;
+      }
+      .custom-dropdown-option.selected .custom-dropdown-check {
+        opacity: 1;
+      }
+      .custom-dropdown-empty {
+        padding: 16px;
+        text-align: center;
+        color: var(--text-dim);
+        font-size: 12px;
       }
 
       /* =========================================================================
@@ -5306,6 +5626,64 @@
                   <span id="replayInfoDateLocal" class="replay-info-value"
                     >—</span
                   >
+                </div>
+                <div class="replay-info-row">
+                  <span class="replay-info-label" id="replayInfoGoodNameLabel"
+                    >Good Name</span
+                  >
+                  <span id="replayInfoGoodName" class="replay-info-value"
+                    >—</span
+                  >
+                </div>
+                <div class="replay-info-row">
+                  <span
+                    class="replay-info-label"
+                    id="replayInfoSpecVersionLabel"
+                    >Spec Version</span
+                  >
+                  <span id="replayInfoSpecVersion" class="replay-info-value"
+                    >—</span
+                  >
+                </div>
+                <div class="replay-info-row">
+                  <span
+                    class="replay-info-label"
+                    id="replayInfoSchemaVersionLabel"
+                    >Schema Version</span
+                  >
+                  <span id="replayInfoSchemaVersion" class="replay-info-value"
+                    >—</span
+                  >
+                </div>
+                <div class="replay-info-row">
+                  <span class="replay-info-label" id="replayInfoGameFamilyLabel"
+                    >Game Family</span
+                  >
+                  <span id="replayInfoGameFamily" class="replay-info-value"
+                    >—</span
+                  >
+                </div>
+                <div class="replay-info-row">
+                  <span class="replay-info-label" id="replayInfoDurationLabel"
+                    >Duration</span
+                  >
+                  <span id="replayInfoDuration" class="replay-info-value"
+                    >—</span
+                  >
+                </div>
+                <div class="replay-info-row">
+                  <span class="replay-info-label" id="replayInfoEndReasonLabel"
+                    >End Reason</span
+                  >
+                  <span id="replayInfoEndReason" class="replay-info-value"
+                    >—</span
+                  >
+                </div>
+                <div class="replay-info-row">
+                  <span class="replay-info-label" id="replayInfoSizeLabel"
+                    >Size</span
+                  >
+                  <span id="replayInfoSize" class="replay-info-value">—</span>
                 </div>
                 <div class="replay-info-row" id="replayInfoVideoRow">
                   <span class="replay-info-label" id="replayInfoVideoLabel"

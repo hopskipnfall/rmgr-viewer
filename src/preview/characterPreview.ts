@@ -1,5 +1,6 @@
-import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
-import { StageRenderer } from "../renderer.js";
+import type { Frame, ItemUpdate, PortIndex, Replay } from "@rmg-k/rmgr";
+import { ItemLinkId, WPKind, ITKind } from "@rmg-k/rmgr";
+import { StageRenderer, type BackgroundTheme } from "../renderer.js";
 import { Camera } from "../camera.js";
 import {
   CHARACTER_NAMES,
@@ -7,6 +8,8 @@ import {
   getGameDefinitions,
 } from "../lookups.js";
 import { characterSize } from "../characterSizes.js";
+import { CustomDropdown } from "../ui/customDropdown.js";
+import { characterIconUrl } from "../characterIcons.js";
 
 export interface CharacterOption {
   id: number;
@@ -19,11 +22,25 @@ export interface CharacterGroupOption {
   characters: CharacterOption[];
 }
 
-interface StateOption {
+export interface StateOption {
   id: number;
   name: string;
   category: "special" | "movement" | "crouch" | "defense" | "damage" | "attack";
+  visualized?: boolean;
+  visualizedDesc?: string;
 }
+
+export interface ItemCatalogEntry {
+  kind: number;
+  linkId: number;
+  name: string;
+  category: "weapon" | "item";
+  customShape: boolean;
+  description: string;
+}
+
+export type PreviewTheme =
+  "grid" | "mountain" | "autumn" | "beach" | "opponent";
 
 function makeCharacterOption(id: number): CharacterOption {
   const name =
@@ -101,15 +118,27 @@ export const ORIGINAL_CHARACTERS: CharacterOption[] = CHARACTER_GROUPS.flatMap(
   (g) => g.characters,
 );
 
-const COMMON_STATES: StateOption[] = [
+export const COMMON_STATES: StateOption[] = [
   // Movement
   { id: 0x00a, name: "Idle", category: "movement" },
   { id: 0x00b, name: "Walk1", category: "movement" },
   { id: 0x00f, name: "Dash", category: "movement" },
   { id: 0x010, name: "Run", category: "movement" },
   { id: 0x011, name: "RunBrake", category: "movement" },
-  { id: 0x012, name: "Turn (Turnaround Yaw)", category: "movement" },
-  { id: 0x013, name: "TurnRun", category: "movement" },
+  {
+    id: 0x012,
+    name: "Turn (Turnaround Yaw)",
+    category: "movement",
+    visualized: true,
+    visualizedDesc: "3D Yaw & Inverted Body Geometry",
+  },
+  {
+    id: 0x013,
+    name: "TurnRun",
+    category: "movement",
+    visualized: true,
+    visualizedDesc: "Turnrun 3D Yaw Direction Flip",
+  },
   { id: 0x014, name: "JumpSquat", category: "movement" },
   { id: 0x016, name: "JumpF", category: "movement" },
   { id: 0x01a, name: "Fall", category: "movement" },
@@ -119,25 +148,114 @@ const COMMON_STATES: StateOption[] = [
   { id: 0x01d, name: "CrouchIdle", category: "crouch" },
   { id: 0x01e, name: "CrouchEnd", category: "crouch" },
   { id: 0x01f, name: "LandingLight", category: "crouch" },
-  { id: 0x020, name: "LandingHeavy", category: "crouch" },
+  {
+    id: 0x020,
+    name: "LandingHeavy",
+    category: "crouch",
+    visualized: true,
+    visualizedDesc: "Ground Impact Shockwave Dust Puff",
+  },
   { id: 0x023, name: "Teeter (Ledge Balance)", category: "crouch" },
 
-  // Defense & Rolls
-  { id: 0x098, name: "ShieldOn", category: "defense" },
-  { id: 0x099, name: "Shield (Hold)", category: "defense" },
-  { id: 0x09a, name: "ShieldOff", category: "defense" },
-  { id: 0x09b, name: "ShieldStun (Vibrating)", category: "defense" },
-  { id: 0x09c, name: "RollF (Ghost Translucent)", category: "defense" },
-  { id: 0x09d, name: "RollB", category: "defense" },
-  { id: 0x09e, name: "ShieldBreakFly", category: "defense" },
+  // Defense & Shields
+  {
+    id: 0x098,
+    name: "ShieldOn",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Forcefield Energy Sphere Activation",
+  },
+  {
+    id: 0x099,
+    name: "Shield (Hold)",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Dynamic Forcefield Bubble Energy Shield",
+  },
+  {
+    id: 0x09a,
+    name: "ShieldOff",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Shield Depletion Collapse",
+  },
+  {
+    id: 0x09b,
+    name: "ShieldStun (Vibrating)",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Shield Stun Vibration & Impact Ripple",
+  },
+  {
+    id: 0x09c,
+    name: "RollF (Ghost Translucent)",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Translucent Motion Blur Trail",
+  },
+  {
+    id: 0x09d,
+    name: "RollB",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Translucent Motion Blur Trail",
+  },
+  {
+    id: 0x09e,
+    name: "ShieldBreakFly",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Shield Break Launch & Orbiting Dizzy Stars",
+  },
+  {
+    id: 0x0a0,
+    name: "Tech In Place",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Breakfall Ground Flash & Upward Burst",
+  },
+  {
+    id: 0x0a1,
+    name: "Tech Forward",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Tech Roll Speed Lines & Breakfall Flash",
+  },
+  {
+    id: 0x0a2,
+    name: "Tech Backward",
+    category: "defense",
+    visualized: true,
+    visualizedDesc: "Tech Roll Speed Lines & Breakfall Flash",
+  },
 
-  // Damage & Hitstun
+  // Damage & Status Effects
   { id: 0x025, name: "DamageHigh", category: "damage" },
   { id: 0x028, name: "DamageMid", category: "damage" },
   { id: 0x02b, name: "DamageLow", category: "damage" },
   { id: 0x031, name: "DamageElec (Electric)", category: "damage" },
   { id: 0x033, name: "DamageFly (Hitstun Outline)", category: "damage" },
-  { id: 0x039, name: "Tumble", category: "damage" },
+  {
+    id: 0x039,
+    name: "Tumble",
+    category: "damage",
+    visualized: true,
+    visualizedDesc: "Swirling Reeling Wind Motion Streaks",
+  },
+  {
+    id: 0x044,
+    name: "Sleep",
+    category: "damage",
+    visualized: true,
+    visualizedDesc: "Floating Animated Zzz Sleep Bubbles",
+  },
+  {
+    id: 0x0a3,
+    name: "Dizzy",
+    category: "damage",
+    visualized: true,
+    visualizedDesc: "3 Orbiting Golden Dizzy Stars",
+  },
 
   // Attacks
   { id: 0x0be, name: "Jab1", category: "attack" },
@@ -150,25 +268,158 @@ const COMMON_STATES: StateOption[] = [
   { id: 0x0d0, name: "DSmash", category: "attack" },
   { id: 0x0d1, name: "Nair", category: "attack" },
   { id: 0x0a6, name: "Grab", category: "attack" },
-  { id: 0x0a9, name: "Grabbed", category: "attack" },
-  { id: 0x0bd, name: "Taunt (Rainbow Spin)", category: "attack" },
+  {
+    id: 0x0a9,
+    name: "Grabbed",
+    category: "attack",
+    visualized: true,
+    visualizedDesc: "Capture Hold Lock Brackets [ ]",
+  },
+  {
+    id: 0x0ab,
+    name: "Capture Wait",
+    category: "attack",
+    visualized: true,
+    visualizedDesc: "Capture Lock Brackets [ ]",
+  },
+  {
+    id: 0x0aa,
+    name: "Taunt",
+    category: "attack",
+    visualized: true,
+    visualizedDesc: "Rainbow Color Cycling Taunt Animation",
+  },
+  {
+    id: 0x0bd,
+    name: "Egg Encased (Yoshi Trap)",
+    category: "damage",
+    visualized: true,
+    visualizedDesc: "Enclosing Yoshi Egg Shell Trap",
+  },
 ];
 
-function getCharacterSpecialStates(characterId: number): StateOption[] {
+export function getCharacterSpecialStates(characterId: number): StateOption[] {
   // Captain Falcon
   if (characterId === 0x07 || characterId === 0x15 || characterId === 0x28) {
     return [
-      { id: 0x0e6, name: "Falcon Punch (Ground)", category: "special" },
-      { id: 0x0e7, name: "Falcon Punch (Air)", category: "special" },
-      { id: 0x0e8, name: "Falcon Dive Reach (Up-B)", category: "special" },
-      { id: 0x0ea, name: "Falcon Dive Catch (Lock)", category: "special" },
+      {
+        id: 0x0e6,
+        name: "Falcon Punch (Ground)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Flame Punch & Raptor Fire Aura",
+      },
+      {
+        id: 0x0e7,
+        name: "Falcon Punch (Air)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Aerial Falcon Punch Fire Aura",
+      },
+      {
+        id: 0x0e8,
+        name: "Falcon Dive Reach (Up-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Falcon Dive Upward Reach Flare",
+      },
+      {
+        id: 0x0ea,
+        name: "Falcon Dive Catch (Lock)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Falcon Dive Catch Lock",
+      },
       {
         id: 0x0ee,
-        name: "Falcon Dive Explosion (Detonation)",
+        name: "Falcon Dive Explosion",
         category: "special",
+        visualized: true,
+        visualizedDesc: "Fiery Detonation Explosion",
       },
-      { id: 0x0eb, name: "Falcon Kick (Down-B Flame)", category: "special" },
-      { id: 0x0ed, name: "Falcon Kick End", category: "special" },
+      {
+        id: 0x0eb,
+        name: "Falcon Kick (Down-B Flame)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Flame Kick Forward Streak",
+      },
+      {
+        id: 0x0ed,
+        name: "Falcon Kick End",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Falcon Kick Deceleration",
+      },
+    ];
+  }
+
+  // Fox / Falco / Wolf
+  if (
+    characterId === 0x01 ||
+    characterId === 0x0f ||
+    characterId === 0x1d ||
+    characterId === 0x29 ||
+    characterId === 0x37 ||
+    characterId === 0x55
+  ) {
+    return [
+      {
+        id: 0x0e4,
+        name: "Fire Fox Charge (Sparks)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Charging Fire Spark Aura",
+      },
+      {
+        id: 0x0e8,
+        name: "Fire Fox Flight (Directional Flame)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Directional Flame Jet & Streak Trail",
+      },
+      {
+        id: 0x0ea,
+        name: "Fire Fox End",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Flight Deceleration Flare",
+      },
+      {
+        id: 0x0ed,
+        name: "Reflector / Shine Start",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Hexagonal Reflector Burst",
+      },
+      {
+        id: 0x0ee,
+        name: "Reflector / Shine Loop",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Hexagonal Energy Forcefield",
+      },
+      {
+        id: 0x0ef,
+        name: "Reflector / Shine Hit",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Reflector Reflect Impact Flash",
+      },
+      {
+        id: 0x0f0,
+        name: "Reflector / Shine End",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Reflector Collapse",
+      },
+      {
+        id: 0x0e1,
+        name: "Blaster (Laser Shot)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Blaster Muzzle Flash & Laser",
+      },
     ];
   }
 
@@ -184,323 +435,829 @@ function getCharacterSpecialStates(characterId: number): StateOption[] {
         id: 0x0e6,
         name: "Thunder Jolt Ground (Neutral-B)",
         category: "special",
+        visualized: true,
+        visualizedDesc: "Rolling Electric Ground Wave",
       },
-      { id: 0x0e7, name: "Thunder Jolt Air (Neutral-B)", category: "special" },
-      { id: 0x0df, name: "Thunder Jolt Startup", category: "special" },
-      { id: 0x0e3, name: "Thunder (Down-B Cloud/Bolt)", category: "special" },
-      { id: 0x0e8, name: "Quick Attack (Up-B Startup)", category: "special" },
-      { id: 0x0ec, name: "Quick Attack Zip (Electric)", category: "special" },
-      { id: 0x0ea, name: "Quick Attack Landing", category: "special" },
-    ];
-  }
-
-  // Fox
-  if (characterId === 0x01 || characterId === 0x0f || characterId === 0x29) {
-    return [
-      { id: 0x0e4, name: "Fire Fox Charge (Sparks)", category: "special" },
+      {
+        id: 0x0e7,
+        name: "Thunder Jolt Air (Neutral-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Bouncing Electric Spark Orb",
+      },
+      {
+        id: 0x0e3,
+        name: "Thunder (Down-B Cloud/Bolt)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Thunder Cloud & Electric Strike",
+      },
       {
         id: 0x0e8,
-        name: "Fire Fox Flight (Directional Flame)",
+        name: "Quick Attack (Up-B Startup)",
         category: "special",
+        visualized: true,
+        visualizedDesc: "Quick Attack Charging Sparks",
       },
-      { id: 0x0ea, name: "Fire Fox End", category: "special" },
-      { id: 0x0ed, name: "Reflector / Shine Start", category: "special" },
-      { id: 0x0ee, name: "Reflector / Shine Loop", category: "special" },
-      { id: 0x0ef, name: "Reflector / Shine Hit", category: "special" },
-      { id: 0x0f0, name: "Reflector / Shine End", category: "special" },
-      { id: 0x0e1, name: "Blaster (Laser Shot)", category: "special" },
+      {
+        id: 0x0ec,
+        name: "Quick Attack Zip (Electric)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Electric Streak Motion Trail",
+      },
+      {
+        id: 0x0ea,
+        name: "Quick Attack Landing",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Electric Deceleration Flash",
+      },
     ];
   }
 
-  // Mario / Luigi
+  // Mario / Luigi / Dr. Mario
   if (
     characterId === 0x00 ||
     characterId === 0x04 ||
     characterId === 0x0d ||
     characterId === 0x0e ||
-    characterId === 0x12
+    characterId === 0x12 ||
+    characterId === 0x20 ||
+    characterId === 0x45 ||
+    characterId === 0x4b
   ) {
     return [
-      { id: 0x0dc, name: "Fireball (Neutral-B)", category: "special" },
-      { id: 0x0e0, name: "Super Jump Punch (Up-B)", category: "special" },
-      { id: 0x0e4, name: "Tornado / Cyclone (Down-B)", category: "special" },
+      {
+        id: 0x0dc,
+        name: "Fireball (Neutral-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Fiery Muzzle Launch Effect",
+      },
+      {
+        id: 0x0e0,
+        name: "Super Jump Punch (Up-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Coin Sparks & Upward Leap",
+      },
+      {
+        id: 0x0e4,
+        name: "Tornado / Cyclone (Down-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Spinning Cyclone Wind Vortex",
+      },
     ];
   }
 
   // Kirby
   if (characterId === 0x08 || characterId === 0x16) {
     return [
-      { id: 0x0dc, name: "Inhale (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Final Cutter (Up-B)", category: "special" },
-      { id: 0x0eb, name: "Stone (Down-B)", category: "special" },
+      {
+        id: 0x0dc,
+        name: "Inhale (Neutral-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Vacuum Inhale Wind Funnel",
+      },
+      {
+        id: 0x0e5,
+        name: "Final Cutter (Up-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Rising Blade & Downward Wave",
+      },
+      {
+        id: 0x0eb,
+        name: "Stone (Down-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Solid Stone Form Transmutation",
+      },
     ];
   }
 
   // Jigglypuff
   if (characterId === 0x0a || characterId === 0x18) {
     return [
-      { id: 0x0dc, name: "Pound Ground (Neutral-B)", category: "special" },
-      { id: 0x0df, name: "Pound Air Straight", category: "special" },
-      { id: 0x0e1, name: "Pound Air Angled Up", category: "special" },
-      { id: 0x0e7, name: "Pound Air Angled Punch", category: "special" },
-      { id: 0x0e2, name: "Sing Ground (Up-B)", category: "special" },
-      { id: 0x0e3, name: "Sing Air (Up-B)", category: "special" },
-      { id: 0x0ea, name: "Rest Ground (Down-B)", category: "special" },
-      { id: 0x0eb, name: "Rest Air (Down-B)", category: "special" },
+      {
+        id: 0x0dc,
+        name: "Pound (Neutral-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Forward Pound Wind Gust",
+      },
+      {
+        id: 0x0e2,
+        name: "Sing (Up-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Hypnotic Sing Musical Notes",
+      },
+      {
+        id: 0x0ea,
+        name: "Rest (Down-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Critical Detonation & Sleep Flare",
+      },
+    ];
+  }
+
+  // Ness / Lucas
+  if (characterId === 0x0b || characterId === 0x19 || characterId === 0x26) {
+    return [
+      {
+        id: 0x0dc,
+        name: "PK Fire (Neutral-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "PK Fire Energy Spark Release",
+      },
+      {
+        id: 0x0e0,
+        name: "PK Thunder (Up-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "PK Thunder Guiding Lightning Ball",
+      },
+      {
+        id: 0x0e3,
+        name: "PSI Magnet (Down-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Spherical Absorption Barrier",
+      },
+    ];
+  }
+
+  // Link / Young Link
+  if (characterId === 0x06 || characterId === 0x14 || characterId === 0x1f) {
+    return [
+      {
+        id: 0x0dc,
+        name: "Boomerang (Neutral-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Boomerang Toss Wind Stream",
+      },
+      {
+        id: 0x0e3,
+        name: "Spin Attack (Up-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Whirlwind Sword Spin Aura",
+      },
+      {
+        id: 0x0e6,
+        name: "Bomb Pull (Down-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Link Bomb Extraction",
+      },
+    ];
+  }
+
+  // Samus / Dark Samus
+  if (characterId === 0x03 || characterId === 0x11 || characterId === 0x22) {
+    return [
+      {
+        id: 0x0dc,
+        name: "Charge Shot Charging",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Pulsing Energy Cannon Glow",
+      },
+      {
+        id: 0x0df,
+        name: "Charge Shot Release",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Energy Blast Muzzle Flare",
+      },
+      {
+        id: 0x0e4,
+        name: "Screw Attack (Up-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Spinning Electric Somersault Field",
+      },
+      {
+        id: 0x0e6,
+        name: "Morph Ball / Bomb (Down-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Spherical Morph Transmutation",
+      },
     ];
   }
 
   // Yoshi
-  if (characterId === 0x06 || characterId === 0x14 || characterId === 0x31) {
+  if (characterId === 0x05 || characterId === 0x13) {
     return [
-      { id: 0x0df, name: "Egg Lay Start (Tongue)", category: "special" },
-      { id: 0x0e0, name: "Egg Lay Tongue Reach", category: "special" },
-      { id: 0x0e1, name: "Egg Lay Swallow", category: "special" },
-      { id: 0x0e2, name: "Egg Throw (Ground)", category: "special" },
-      { id: 0x0e3, name: "Egg Throw (Air)", category: "special" },
-      { id: 0x0e4, name: "Yoshi Bomb Start (Flip)", category: "special" },
-      { id: 0x0e5, name: "Yoshi Bomb Ground (Hip Drop)", category: "special" },
-      { id: 0x0e6, name: "Yoshi Bomb Air (Hip Drop)", category: "special" },
-      { id: 0x0e7, name: "Yoshi Bomb Landing Shockwave", category: "special" },
+      {
+        id: 0x0df,
+        name: "Egg Lay Tongue (Neutral-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Lashing Tongue Catch",
+      },
+      {
+        id: 0x0de,
+        name: "Egg Throw (Up-B)",
+        category: "special",
+        visualized: false,
+      },
+      {
+        id: 0x0e4,
+        name: "Yoshi Bomb (Down-B Start)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Somersault Bomb Flip",
+      },
+      {
+        id: 0x0e2,
+        name: "Yoshi Bomb (Plummet)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Downward Hip Drop Plummet",
+      },
+      {
+        id: 0x0e1,
+        name: "Yoshi Bomb (Landing)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Ground Slam Stars & Shockwave",
+      },
     ];
   }
 
   // Donkey Kong
-  if (
-    characterId === 0x02 ||
-    characterId === 0x10 ||
-    characterId === 0x1a ||
-    characterId === 0x2c
-  ) {
+  if (characterId === 0x02 || characterId === 0x10) {
     return [
-      { id: 0x0e6, name: "Spinning Kong Ground (Up-B)", category: "special" },
-      { id: 0x0e7, name: "Spinning Kong Air (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Hand Slap Start (Down-B)", category: "special" },
-      { id: 0x0e9, name: "Hand Slap Quake Slam", category: "special" },
-      { id: 0x0ea, name: "Hand Slap End", category: "special" },
-      { id: 0x0eb, name: "Giant Punch Windup", category: "special" },
-      { id: 0x0ec, name: "Giant Punch Strike", category: "special" },
-    ];
-  }
-
-  // Link
-  if (characterId === 0x05 || characterId === 0x13) {
-    return [
-      { id: 0x0dc, name: "Boomerang (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Spin Attack (Up-B)", category: "special" },
-      { id: 0x0e9, name: "Bomb (Down-B)", category: "special" },
-    ];
-  }
-
-  // Ness
-  if (
-    characterId === 0x0b ||
-    characterId === 0x19 ||
-    characterId === 0x25 ||
-    characterId === 0x26
-  ) {
-    return [
-      { id: 0x0e6, name: "PK Fire Ground (Neutral-B)", category: "special" },
-      { id: 0x0e7, name: "PK Fire Air (Neutral-B)", category: "special" },
-      { id: 0x0e8, name: "PK Thunder Start (Up-B)", category: "special" },
-      { id: 0x0e9, name: "PK Thunder Guiding Spark", category: "special" },
       {
-        id: 0x0ea,
-        name: "PK Thunder Blast Rocket Launch",
+        id: 0x0dc,
+        name: "Giant Punch Windup (Neutral-B)",
         category: "special",
+        visualized: true,
+        visualizedDesc: "Arm Windup Rotation",
       },
-      { id: 0x0eb, name: "PSI Magnet Start (Down-B)", category: "special" },
       {
-        id: 0x0ec,
-        name: "PSI Magnet Absorption Barrier",
+        id: 0x0dd,
+        name: "Giant Punch Release",
         category: "special",
+        visualized: true,
+        visualizedDesc: "Heavy Impact Punch Blast",
       },
-      { id: 0x0ed, name: "PSI Magnet End", category: "special" },
-    ];
-  }
-
-  // Samus
-  if (characterId === 0x03 || characterId === 0x11) {
-    return [
-      { id: 0x0dc, name: "Charge Shot (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Screw Attack (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Bomb (Down-B)", category: "special" },
-    ];
-  }
-
-  // Bowser / Giga Bowser / Polygon Bowser
-  if (characterId === 0x34 || characterId === 0x35 || characterId === 0x4f) {
-    return [
-      { id: 0x0dc, name: "Flame Breath (Neutral-B)", category: "special" },
       {
-        id: 0x0e5,
-        name: "Whirling Fortress Ground (Up-B)",
+        id: 0x0e4,
+        name: "Spinning Kong (Up-B)",
         category: "special",
+        visualized: true,
+        visualizedDesc: "Whirling Dual Fist Spin",
       },
       {
         id: 0x0e6,
-        name: "Whirling Fortress Air (Up-B)",
+        name: "Hand Slap (Down-B)",
         category: "special",
+        visualized: true,
+        visualizedDesc: "Ground Quake Slap Shockwave",
       },
-      { id: 0x0e9, name: "Bowser Bomb Start (Down-B)", category: "special" },
-      { id: 0x0ea, name: "Bowser Bomb Drop (Down-B)", category: "special" },
-      { id: 0x0eb, name: "Bowser Bomb Landing", category: "special" },
     ];
   }
 
-  // Falco
-  if (characterId === 0x1d || characterId === 0x55) {
+  // Bowser / Giga Bowser
+  if (characterId === 0x34 || characterId === 0x35) {
     return [
-      { id: 0x0e4, name: "Fire Bird Charge (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Fire Bird Flight (Up-B)", category: "special" },
-      { id: 0x0ed, name: "Reflector / Shine", category: "special" },
-      { id: 0x0e1, name: "Blaster (Laser Shot)", category: "special" },
-    ];
-  }
-
-  // Ganondorf
-  if (characterId === 0x1e || characterId === 0x56) {
-    return [
-      { id: 0x0e6, name: "Warlock Punch (Neutral-B)", category: "special" },
-      { id: 0x0e8, name: "Dark Dive (Up-B)", category: "special" },
-      { id: 0x0eb, name: "Wizard's Foot (Down-B)", category: "special" },
-    ];
-  }
-
-  // Young Link
-  if (characterId === 0x1f || characterId === 0x5b) {
-    return [
-      { id: 0x0dc, name: "Fire Bow (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Spin Attack (Up-B)", category: "special" },
-      { id: 0x0e9, name: "Bomb (Down-B)", category: "special" },
-    ];
-  }
-
-  // Dr. Mario
-  if (characterId === 0x20 || characterId === 0x51) {
-    return [
-      { id: 0x0dc, name: "Megavitamin (Neutral-B)", category: "special" },
-      { id: 0x0e0, name: "Super Jump Punch (Up-B)", category: "special" },
-      { id: 0x0e4, name: "Dr. Tornado (Down-B)", category: "special" },
-    ];
-  }
-
-  // Wario
-  if (characterId === 0x21 || characterId === 0x4d) {
-    return [
-      { id: 0x0dc, name: "Chomp / Bite (Neutral-B)", category: "special" },
-      { id: 0x0e0, name: "Corkscrew (Up-B)", category: "special" },
-      { id: 0x0e4, name: "Ground Pound (Down-B)", category: "special" },
-    ];
-  }
-
-  // Dark Samus
-  if (characterId === 0x22 || characterId === 0x57) {
-    return [
-      { id: 0x0dc, name: "Charge Shot (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Screw Attack (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Bomb (Down-B)", category: "special" },
-    ];
-  }
-
-  // Lucas
-  if (characterId === 0x26 || characterId === 0x4e) {
-    return [
-      { id: 0x0e6, name: "PK Freeze (Neutral-B)", category: "special" },
-      { id: 0x0e8, name: "PK Thunder (Up-B)", category: "special" },
-      { id: 0x0eb, name: "PSI Magnet (Down-B)", category: "special" },
-    ];
-  }
-
-  // Marth / Roy
-  if (characterId === 0x3a || characterId === 0x4a || characterId === 0x58) {
-    return [
-      { id: 0x0dc, name: "Shield Breaker (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Dolphin Slash (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Counter (Down-B)", category: "special" },
-    ];
-  }
-
-  // Mewtwo
-  if (characterId === 0x39 || characterId === 0x59) {
-    return [
-      { id: 0x0dc, name: "Shadow Ball (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Teleport (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Disable (Down-B)", category: "special" },
-    ];
-  }
-
-  // Sonic
-  if (characterId === 0x3b || characterId === 0x3d || characterId === 0x52) {
-    return [
-      { id: 0x0dc, name: "Homing Attack (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Spring Jump (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Spin Dash (Down-B)", category: "special" },
-    ];
-  }
-
-  // King Dedede
-  if (characterId === 0x40 || characterId === 0x5a) {
-    return [
-      { id: 0x0dc, name: "Inhale (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Super Dedede Jump (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Jet Hammer (Down-B)", category: "special" },
-    ];
-  }
-
-  // Peach
-  if (characterId === 0x49 || characterId === 0x5f) {
-    return [
-      { id: 0x0dc, name: "Toad (Neutral-B)", category: "special" },
-      { id: 0x0e5, name: "Peach Parasol (Up-B)", category: "special" },
-      { id: 0x0e8, name: "Vegetable Pluck (Down-B)", category: "special" },
+      {
+        id: 0x0dc,
+        name: "Fire Breath (Neutral-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Continuous Flame Blast Stream",
+      },
+      {
+        id: 0x0e0,
+        name: "Whirling Fortress (Up-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Spinning Spiked Shell Fortress",
+      },
+      {
+        id: 0x0e4,
+        name: "Bowser Bomb (Down-B)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Crushing Shell Ground Pound",
+      },
     ];
   }
 
   return [];
 }
 
+export const ITEM_CATALOG: ItemCatalogEntry[] = [
+  // Weapons / Projectiles (ItemLinkId.Weapon = 5)
+  {
+    kind: WPKind.Fireball,
+    linkId: ItemLinkId.Weapon,
+    name: "Fireball",
+    category: "weapon",
+    customShape: true,
+    description: "Mario / Luigi Neutral-B bouncing fireball with flame aura",
+  },
+  {
+    kind: WPKind.Blaster,
+    linkId: ItemLinkId.Weapon,
+    name: "Blaster Laser",
+    category: "weapon",
+    customShape: true,
+    description: "Fox Neutral-B high-velocity blaster laser bolt",
+  },
+  {
+    kind: WPKind.ChargeShot,
+    linkId: ItemLinkId.Weapon,
+    name: "Charge Shot",
+    category: "weapon",
+    customShape: true,
+    description: "Samus Neutral-B pulsing energy orb projectile",
+  },
+  {
+    kind: WPKind.SamusBomb,
+    linkId: ItemLinkId.Weapon,
+    name: "Samus Bomb",
+    category: "weapon",
+    customShape: true,
+    description: "Samus Down-B morph ball bomb trap",
+  },
+  {
+    kind: WPKind.Cutter,
+    linkId: ItemLinkId.Weapon,
+    name: "Final Cutter Wave",
+    category: "weapon",
+    customShape: true,
+    description: "Kirby Up-B razor wind blade projectile",
+  },
+  {
+    kind: WPKind.EggThrow,
+    linkId: ItemLinkId.Weapon,
+    name: "Egg Throw",
+    category: "weapon",
+    customShape: true,
+    description: "Yoshi Up-B thrown spotted egg with shell geometry",
+  },
+  {
+    kind: WPKind.YoshiStar,
+    linkId: ItemLinkId.Weapon,
+    name: "Yoshi Star",
+    category: "weapon",
+    customShape: true,
+    description: "Yoshi Down-B ground impact spark star",
+  },
+  {
+    kind: WPKind.Boomerang,
+    linkId: ItemLinkId.Weapon,
+    name: "Boomerang",
+    category: "weapon",
+    customShape: true,
+    description: "Link Neutral-B rotating wooden boomerang with curved wings",
+  },
+  {
+    kind: WPKind.SpinAttack,
+    linkId: ItemLinkId.Weapon,
+    name: "Spin Attack Aura",
+    category: "weapon",
+    customShape: false,
+    description: "Link Up-B whirlwind sword hitbox",
+  },
+  {
+    kind: WPKind.ThunderJoltAir,
+    linkId: ItemLinkId.Weapon,
+    name: "Thunder Jolt (Air)",
+    category: "weapon",
+    customShape: true,
+    description: "Pikachu Neutral-B bouncing aerial spark projectile",
+  },
+  {
+    kind: WPKind.ThunderJoltGround,
+    linkId: ItemLinkId.Weapon,
+    name: "Thunder Jolt (Ground)",
+    category: "weapon",
+    customShape: true,
+    description: "Pikachu Neutral-B ground-crawling electric wave",
+  },
+  {
+    kind: WPKind.ThunderHead,
+    linkId: ItemLinkId.Weapon,
+    name: "Thunder Head",
+    category: "weapon",
+    customShape: true,
+    description: "Pikachu Down-B descending lightning bolt leader",
+  },
+  {
+    kind: WPKind.ThunderTrail,
+    linkId: ItemLinkId.Weapon,
+    name: "Thunder Trail",
+    category: "weapon",
+    customShape: true,
+    description: "Pikachu Down-B electric trail segment",
+  },
+  {
+    kind: WPKind.PKFire,
+    linkId: ItemLinkId.Weapon,
+    name: "PK Fire",
+    category: "weapon",
+    customShape: true,
+    description: "Ness Neutral-B horizontal spark burst",
+  },
+  {
+    kind: WPKind.PKThunderHead,
+    linkId: ItemLinkId.Weapon,
+    name: "PK Thunder Head",
+    category: "weapon",
+    customShape: true,
+    description: "Ness Up-B controllable lightning orb",
+  },
+  {
+    kind: WPKind.PKThunderTrail,
+    linkId: ItemLinkId.Weapon,
+    name: "PK Thunder Trail",
+    category: "weapon",
+    customShape: true,
+    description: "Ness Up-B electric tail segment",
+  },
+  {
+    kind: WPKind.BulletNormal,
+    linkId: ItemLinkId.Weapon,
+    name: "Ray Gun Bullet",
+    category: "weapon",
+    customShape: true,
+    description: "Standard high-speed energy pellet",
+  },
+  {
+    kind: WPKind.BulletHard,
+    linkId: ItemLinkId.Weapon,
+    name: "Hard Bullet",
+    category: "weapon",
+    customShape: true,
+    description: "Heavy piercing projectile",
+  },
+  {
+    kind: WPKind.ArwingLaser2D,
+    linkId: ItemLinkId.Weapon,
+    name: "Arwing Laser 2D",
+    category: "weapon",
+    customShape: true,
+    description: "Sector Z stage Arwing laser fire",
+  },
+  {
+    kind: WPKind.ArwingLaser3D,
+    linkId: ItemLinkId.Weapon,
+    name: "Arwing Laser 3D",
+    category: "weapon",
+    customShape: true,
+    description: "Sector Z background Arwing laser fire",
+  },
+  {
+    kind: WPKind.LGunAmmo,
+    linkId: ItemLinkId.Weapon,
+    name: "Light Gun Ammo",
+    category: "weapon",
+    customShape: true,
+    description: "Ray Gun ammo energy projectile",
+  },
+  {
+    kind: WPKind.FFlowerFlame,
+    linkId: ItemLinkId.Weapon,
+    name: "Fire Flower Flame",
+    category: "weapon",
+    customShape: true,
+    description: "Continuous stream of fire particles",
+  },
+  {
+    kind: WPKind.StarRodStar,
+    linkId: ItemLinkId.Weapon,
+    name: "Star Rod Star",
+    category: "weapon",
+    customShape: true,
+    description: "Star projectile swung from Star Rod",
+  },
+
+  // Standard Items & Hazards (ItemLinkId.Item = 4)
+  {
+    kind: ITKind.Bomb,
+    linkId: ItemLinkId.Item,
+    name: "Bomb",
+    category: "item",
+    customShape: true,
+    description:
+      "Link's pulled bomb: spherical body, brass collar, burning fuse & sparks",
+  },
+  {
+    kind: ITKind.BobOmb,
+    linkId: ItemLinkId.Item,
+    name: "Bob-omb",
+    category: "item",
+    customShape: true,
+    description:
+      "Walking mechanical explosive bomb with wind-up key and burning fuse",
+  },
+  {
+    kind: ITKind.RTTFBomb,
+    linkId: ItemLinkId.Item,
+    name: "RTTF Bomb",
+    category: "item",
+    customShape: true,
+    description: "Race to the Finish stadium explosive bomb obstacle",
+  },
+  {
+    kind: 0xfe,
+    linkId: ItemLinkId.Item,
+    name: "Bomb Explosion",
+    category: "item",
+    customShape: true,
+    description:
+      "Detonation blast: shockwave, fireballs, flying sparks, and rising smoke",
+  },
+  {
+    kind: ITKind.MaximTomato,
+    linkId: ItemLinkId.Item,
+    name: "Maxim Tomato",
+    category: "item",
+    customShape: true,
+    description: "Kirby series tomato healing +100% damage",
+  },
+  {
+    kind: ITKind.Heart,
+    linkId: ItemLinkId.Item,
+    name: "Heart Container",
+    category: "item",
+    customShape: true,
+    description: "Zelda heart container fully healing 0% damage",
+  },
+  {
+    kind: ITKind.Star,
+    linkId: ItemLinkId.Item,
+    name: "Super Star",
+    category: "item",
+    customShape: true,
+    description: "Mario super star granting temporary invincibility",
+  },
+  {
+    kind: ITKind.BeamSword,
+    linkId: ItemLinkId.Item,
+    name: "Beam Sword",
+    category: "item",
+    customShape: true,
+    description: "Glowing energy melee sword weapon",
+  },
+  {
+    kind: ITKind.HomeRunBat,
+    linkId: ItemLinkId.Item,
+    name: "Home Run Bat",
+    category: "item",
+    customShape: true,
+    description: "Smash bat capable of instant knockout forward smashes",
+  },
+  {
+    kind: ITKind.Fan,
+    linkId: ItemLinkId.Item,
+    name: "Fan",
+    category: "item",
+    customShape: true,
+    description: "Paper fan with ultra-fast attack speed",
+  },
+  {
+    kind: ITKind.StarRod,
+    linkId: ItemLinkId.Item,
+    name: "Star Rod",
+    category: "item",
+    customShape: true,
+    description: "Wand that fires stars on smash attacks",
+  },
+  {
+    kind: ITKind.RayGun,
+    linkId: ItemLinkId.Item,
+    name: "Ray Gun",
+    category: "item",
+    customShape: true,
+    description: "Blaster weapon with 16 rapid-fire energy shots",
+  },
+  {
+    kind: ITKind.FireFlower,
+    linkId: ItemLinkId.Item,
+    name: "Fire Flower",
+    category: "item",
+    customShape: true,
+    description: "Flamethrower weapon burning opponents",
+  },
+  {
+    kind: ITKind.Hammer,
+    linkId: ItemLinkId.Item,
+    name: "Hammer",
+    category: "item",
+    customShape: true,
+    description: "Heavy swinging mallet with invincible walking music",
+  },
+  {
+    kind: ITKind.MotionSensorBomb,
+    linkId: ItemLinkId.Item,
+    name: "Motion Sensor Bomb",
+    category: "item",
+    customShape: true,
+    description: "Proximity mine sticking to stage ground or walls",
+  },
+  {
+    kind: ITKind.Bumper,
+    linkId: ItemLinkId.Item,
+    name: "Bumper",
+    category: "item",
+    customShape: true,
+    description: "Stationary pinball bumper launching fighters on contact",
+  },
+  {
+    kind: ITKind.GreenShell,
+    linkId: ItemLinkId.Item,
+    name: "Green Shell",
+    category: "item",
+    customShape: true,
+    description: "Sliding koopa shell ricocheting across stage",
+  },
+  {
+    kind: ITKind.RedShell,
+    linkId: ItemLinkId.Item,
+    name: "Red Shell",
+    category: "item",
+    customShape: true,
+    description: "Patrolling shell seeking out opponents",
+  },
+  {
+    kind: ITKind.Pokeball,
+    linkId: ItemLinkId.Item,
+    name: "Poké Ball",
+    category: "item",
+    customShape: true,
+    description: "Summons random Pokémon companions with various effects",
+  },
+  {
+    kind: ITKind.PKFirePillar,
+    linkId: ItemLinkId.Item,
+    name: "PK Fire Pillar",
+    category: "item",
+    customShape: true,
+    description: "Stationary column of fire upon PK Fire impact",
+  },
+  {
+    kind: ITKind.Crate,
+    linkId: ItemLinkId.Item,
+    name: "Crate",
+    category: "item",
+    customShape: true,
+    description: "Large container holding multiple items",
+  },
+  {
+    kind: ITKind.Barrel,
+    linkId: ItemLinkId.Item,
+    name: "Barrel",
+    category: "item",
+    customShape: true,
+    description: "Rolling container holding items",
+  },
+  {
+    kind: ITKind.Capsule,
+    linkId: ItemLinkId.Item,
+    name: "Capsule",
+    category: "item",
+    customShape: true,
+    description: "Small thrown capsule holding a single item",
+  },
+  {
+    kind: ITKind.Egg,
+    linkId: ItemLinkId.Item,
+    name: "Egg (Item)",
+    category: "item",
+    customShape: true,
+    description: "Breakable egg container holding items or recovery",
+  },
+  {
+    kind: ITKind.PowBlock,
+    linkId: ItemLinkId.Item,
+    name: "POW Block",
+    category: "item",
+    customShape: true,
+    description: "Hits ground causing earthquake damage to grounded fighters",
+  },
+  {
+    kind: ITKind.StageBumper,
+    linkId: ItemLinkId.Item,
+    name: "Stage Bumper",
+    category: "item",
+    customShape: true,
+    description: "Peach's Castle stage floating bumper obstacle",
+  },
+  {
+    kind: ITKind.PiranhaPlant,
+    linkId: ItemLinkId.Item,
+    name: "Piranha Plant",
+    category: "item",
+    customShape: false,
+    description: "Mushroom Kingdom pipe hazard",
+  },
+  {
+    kind: ITKind.Target,
+    linkId: ItemLinkId.Item,
+    name: "Break the Targets Target",
+    category: "item",
+    customShape: false,
+    description: "Target smash target obstacle",
+  },
+  {
+    kind: ITKind.Chansey,
+    linkId: ItemLinkId.Item,
+    name: "Chansey",
+    category: "item",
+    customShape: false,
+    description: "Chansey tossing lucky eggs",
+  },
+  {
+    kind: ITKind.BowserBomb,
+    linkId: ItemLinkId.Item,
+    name: "Bowser Castle Stadium Bomb",
+    category: "item",
+    customShape: false,
+    description: "Custom stadium bomb obstacle in Bowser's Castle",
+  },
+];
+
 export class CharacterPreviewController {
   private container: HTMLDivElement;
   private canvas: HTMLCanvasElement;
   private renderer: StageRenderer;
   private camera: Camera;
+
+  // Active Main Mode
+  public activeMode: "characters" | "items" = "characters";
+
+  // Character Mode State
+  public characterId = 0x07; // Captain Falcon
+  public actionStateId = 0x00a; // Idle
+  public selectedCategory: string = "visualized";
+  public currentTheme: PreviewTheme = "grid";
+  public compareAllThemes = false;
+  public actionFrameCounter = 0;
+  public isPlaying = false;
+  public flightAngleDeg = 45;
+
+  // Items Mode State
+  public selectedItemIndex = 0;
+  public itemViewMode: "single" | "grid" = "single";
+  public itemCategoryFilter: "all" | "weapon" | "item" = "all";
+  public isLuigiFireball = false;
+  public isBombDetonating = false;
+
   private animFrameId: number | null = null;
 
-  // State
-  private characterId = 0x07; // Captain Falcon default
-  private actionStateId = 0x00a; // Idle default
-  private isOpponent = false; // Perspective full color default
-  private facingDirection: 1 | -1 = 1;
-  private actionFrameCounter = 0;
-  private isPlaying = true;
-  private damagePercent = 0;
-  private comboHitCount = 0;
-  private isInvulnerable = false;
-  private flightAngleDeg = 45; // For Fox Fire Fox flight
-  private stickY = 0; // For angled attack joystick Y
-  private zoomLevel = 2.0;
-  private selectedCategory = "all";
+  // DOM Elements
+  private modeCharsBtn!: HTMLButtonElement;
+  private modeItemsBtn!: HTMLButtonElement;
+  private charControlsWrap!: HTMLDivElement;
+  private itemControlsWrap!: HTMLDivElement;
 
-  // Elements
+  // Character Controls
   private charSelectEl!: HTMLSelectElement;
+  private customCharDropdown?: CustomDropdown<string>;
   private stateSelectEl!: HTMLSelectElement;
   private hexInputEl!: HTMLInputElement;
+  private stateChipsContainer!: HTMLDivElement;
+  private angleControlWrap!: HTMLDivElement;
+  private angleSliderEl!: HTMLInputElement;
+  private angleValEl!: HTMLSpanElement;
+  private themeChipsContainer!: HTMLDivElement;
+  private compareThemesBtn!: HTMLButtonElement;
+  private categoryBtnsContainer!: HTMLDivElement;
+  private charInfoCardEl!: HTMLDivElement;
+
+  // Items Controls
+  private itemSelectEl!: HTMLSelectElement;
+  private itemCategoryBtnsContainer!: HTMLDivElement;
+  private itemViewSingleBtn!: HTMLButtonElement;
+  private itemViewGridBtn!: HTMLButtonElement;
+  private itemLuigiToggleWrap!: HTMLDivElement;
+  private itemLuigiCheckbox!: HTMLInputElement;
+  private itemDetonateWrap!: HTMLDivElement;
+  private itemDetonateCheckbox!: HTMLInputElement;
+  private itemInfoCardEl!: HTMLDivElement;
+
+  // Scrubber Elements (shared across both modes)
   private badgeTitleEl!: HTMLDivElement;
   private badgeSubtitleEl!: HTMLDivElement;
   private frameSliderEl!: HTMLInputElement;
   private frameValEl!: HTMLSpanElement;
   private playPauseBtn!: HTMLButtonElement;
-  private opponentToggleBtn!: HTMLButtonElement;
-  private perspectiveToggleBtn!: HTMLButtonElement;
-  private dirRightBtn!: HTMLButtonElement;
-  private dirLeftBtn!: HTMLButtonElement;
-  private angleControlWrap!: HTMLDivElement;
-  private angleSliderEl!: HTMLInputElement;
-  private angleValEl!: HTMLSpanElement;
-  private stickSliderEl!: HTMLInputElement;
-  private stickValEl!: HTMLSpanElement;
-  private stateChipsContainer!: HTMLDivElement;
+  private stepBackBtn!: HTMLButtonElement;
+  private stepFwdBtn!: HTMLButtonElement;
 
   constructor(container: HTMLDivElement) {
     this.container = container;
@@ -524,74 +1281,142 @@ export class CharacterPreviewController {
       </div>
 
       <aside class="preview-sidebar">
-        <!-- Character Selector -->
+        <!-- Top-level Mode Switch -->
         <div class="preview-control-group">
-          <label class="preview-control-label">Character</label>
-          <select id="previewCharSelect" class="preview-select">
-            ${CHARACTER_GROUPS.map(
-              (group) => `
-              <optgroup label="${group.groupName}">
-                ${group.characters
-                  .map(
-                    (c) =>
-                      `<option value="${c.id}" ${c.id === this.characterId ? "selected" : ""}>0x${c.id.toString(16).padStart(2, "0")} - ${c.name} (${c.nameJa})</option>`,
-                  )
-                  .join("")}
-              </optgroup>`,
-            ).join("")}
-          </select>
-        </div>
-
-        <!-- Color Mode -->
-        <div class="preview-control-group">
-          <label class="preview-control-label">Rendering Palette</label>
-          <div class="preview-btn-row">
-            <button id="previewPerspectiveBtn" class="preview-chip-btn active">Perspective (Color)</button>
-            <button id="previewOpponentBtn" class="preview-chip-btn">Opponent (Grayscale)</button>
+          <label class="preview-control-label">Debug Preview Mode</label>
+          <div class="preview-mode-switch">
+            <button class="preview-mode-btn active" id="previewModeCharsBtn">👤 Characters</button>
+            <button class="preview-mode-btn" id="previewModeItemsBtn">🗡️ Items & Weapons</button>
           </div>
         </div>
 
-        <!-- Facing Direction -->
-        <div class="preview-control-group">
-          <label class="preview-control-label">Facing Direction</label>
-          <div class="preview-btn-row">
-            <button id="previewDirRightBtn" class="preview-chip-btn active">Facing Right (+1)</button>
-            <button id="previewDirLeftBtn" class="preview-chip-btn">Facing Left (-1)</button>
+        <!-- ================= CHARACTERS CONTROLS ================= -->
+        <div id="previewCharControls" style="display:flex;flex-direction:column;gap:12px;">
+          <!-- Character Selector -->
+          <div class="preview-control-group">
+            <label class="preview-control-label">Character</label>
+            <select id="previewCharSelect" class="preview-select">
+              ${CHARACTER_GROUPS.map(
+                (group) => `
+                <optgroup label="${group.groupName}">
+                  ${group.characters
+                    .map(
+                      (c) =>
+                        `<option value="${c.id}" ${c.id === this.characterId ? "selected" : ""}>0x${c.id.toString(16).padStart(2, "0")} - ${c.name} (${c.nameJa})</option>`,
+                    )
+                    .join("")}
+                </optgroup>`,
+              ).join("")}
+            </select>
+          </div>
+
+          <!-- Theme Palette Selection & Comparison -->
+          <div class="preview-control-group">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <label class="preview-control-label">Theme Palette</label>
+              <button id="previewCompareThemesBtn" class="preview-chip-btn" style="font-size:11px;padding:3px 7px;">🗂️ Compare All 5 Themes</button>
+            </div>
+            <div class="preview-btn-row" id="previewThemeBtns">
+              <button class="preview-chip-btn active" data-theme="grid">Grid</button>
+              <button class="preview-chip-btn" data-theme="mountain">Mountain</button>
+              <button class="preview-chip-btn" data-theme="autumn">Autumn</button>
+              <button class="preview-chip-btn" data-theme="beach">Beach</button>
+              <button class="preview-chip-btn" data-theme="opponent">Opponent</button>
+            </div>
+          </div>
+
+          <!-- State Category Filter -->
+          <div class="preview-control-group">
+            <label class="preview-control-label">State Filter</label>
+            <div class="preview-btn-row" id="previewCategoryBtns">
+              <button class="preview-chip-btn has-star active" data-cat="visualized">★ Custom Visualized</button>
+              <button class="preview-chip-btn" data-cat="all">All</button>
+              <button class="preview-chip-btn" data-cat="special">Specials</button>
+              <button class="preview-chip-btn" data-cat="defense">Defense & Shields</button>
+              <button class="preview-chip-btn" data-cat="status">Status & CC</button>
+              <button class="preview-chip-btn" data-cat="movement">Movement</button>
+              <button class="preview-chip-btn" data-cat="attack">Attacks</button>
+            </div>
+          </div>
+
+          <!-- Action State Selector & Hex Input -->
+          <div class="preview-control-group">
+            <label class="preview-control-label">Action State</label>
+            <select id="previewStateSelect" class="preview-select"></select>
+            <div style="display:flex;gap:6px;margin-top:4px;">
+              <input type="text" id="previewHexInput" class="preview-select" placeholder="Hex ID e.g. 0x0ee or dec" style="font-family:monospace;" />
+              <button id="previewApplyHexBtn" class="preview-chip-btn">Apply</button>
+            </div>
+          </div>
+
+          <!-- State Quick Chips -->
+          <div class="preview-control-group">
+            <label class="preview-control-label">Quick Select States</label>
+            <div id="previewStateChips" class="preview-btn-row" style="max-height:150px;overflow-y:auto;"></div>
+          </div>
+
+          <!-- State Detail Card -->
+          <div id="previewCharInfoCard" class="preview-info-card"></div>
+
+          <!-- Flight Angle Control (For Fox Fire Fox) -->
+          <div class="preview-control-group" id="previewAngleWrap" hidden>
+            <label class="preview-control-label">Flight Angle (Degrees)</label>
+            <div class="preview-slider-row">
+              <input type="range" id="previewAngleSlider" min="0" max="360" value="45" />
+              <span id="previewAngleVal" class="preview-slider-val">45°</span>
+            </div>
           </div>
         </div>
 
-        <!-- State Category Filter -->
-        <div class="preview-control-group">
-          <label class="preview-control-label">State Category</label>
-          <div class="preview-btn-row" id="previewCategoryBtns">
-            <button class="preview-chip-btn active" data-cat="all">All</button>
-            <button class="preview-chip-btn" data-cat="special">Specials</button>
-            <button class="preview-chip-btn" data-cat="movement">Movement</button>
-            <button class="preview-chip-btn" data-cat="crouch">Crouch / Land</button>
-            <button class="preview-chip-btn" data-cat="defense">Defense / Roll</button>
-            <button class="preview-chip-btn" data-cat="damage">Damage / Hitstun</button>
-            <button class="preview-chip-btn" data-cat="attack">Attacks</button>
+        <!-- ================= ITEMS & WEAPONS CONTROLS ================= -->
+        <div id="previewItemControls" style="display:none;flex-direction:column;gap:12px;">
+          <!-- View Mode: Single vs Grid -->
+          <div class="preview-control-group">
+            <label class="preview-control-label">Showcase View</label>
+            <div class="preview-btn-row">
+              <button class="preview-chip-btn active" id="previewItemViewSingle">🎯 Single Item Focus</button>
+              <button class="preview-chip-btn" id="previewItemViewGrid">🍱 Show All Grid (30+)</button>
+            </div>
           </div>
-        </div>
 
-        <!-- State Selector Dropdown & Hex Input -->
-        <div class="preview-control-group">
-          <label class="preview-control-label">Action State</label>
-          <select id="previewStateSelect" class="preview-select"></select>
-          <div style="display:flex;gap:6px;margin-top:4px;">
-            <input type="text" id="previewHexInput" class="preview-select" placeholder="Hex ID e.g. 0x0ee or dec" style="font-family:monospace;" />
-            <button id="previewApplyHexBtn" class="preview-chip-btn">Apply</button>
+          <!-- Category Filter -->
+          <div class="preview-control-group">
+            <label class="preview-control-label">Catalog Category</label>
+            <div class="preview-btn-row" id="previewItemCatBtns">
+              <button class="preview-chip-btn active" data-icat="all">All (${ITEM_CATALOG.length})</button>
+              <button class="preview-chip-btn" data-icat="weapon">Weapons / Projectiles</button>
+              <button class="preview-chip-btn" data-icat="item">Items & Hazards</button>
+            </div>
           </div>
+
+          <!-- Item Selector -->
+          <div class="preview-control-group" id="previewItemSelectGroup">
+            <label class="preview-control-label">Select Item / Weapon</label>
+            <select id="previewItemSelect" class="preview-select"></select>
+          </div>
+
+          <!-- Luigi Fireball Variant Toggle -->
+          <div class="preview-control-group" id="previewItemLuigiWrap" style="display:none;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+              <input type="checkbox" id="previewItemLuigiCheck" />
+              <span>Luigi Fireball Variant (Green / Cyan Core)</span>
+            </label>
+          </div>
+
+          <!-- Detonate Bomb on Loop Toggle -->
+          <div class="preview-control-group" id="previewItemDetonateWrap" style="display:none;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+              <input type="checkbox" id="previewItemDetonateCheck" />
+              <span>Detonate Bomb on Loop (Fuse ➔ Blast)</span>
+            </label>
+          </div>
+
+          <!-- Item Detail Card -->
+          <div id="previewItemInfoCard" class="preview-info-card"></div>
         </div>
 
-        <!-- State Quick Chips -->
-        <div class="preview-control-group">
-          <label class="preview-control-label">Quick Select States</label>
-          <div id="previewStateChips" class="preview-btn-row" style="max-height:160px;overflow-y:auto;"></div>
-        </div>
-
-        <!-- Animation / Frame Counter -->
-        <div class="preview-control-group">
+        <!-- Animation / Frame Counter (Shared Scrubber) -->
+        <div class="preview-control-group" style="margin-top:auto;padding-top:8px;border-top:1px solid var(--panel-border);">
           <label class="preview-control-label">Frame Animation (0-60)</label>
           <div class="preview-slider-row">
             <button id="previewPlayPauseBtn" class="preview-chip-btn">⏸ Pause</button>
@@ -601,61 +1426,26 @@ export class CharacterPreviewController {
             <span id="previewFrameVal" class="preview-slider-val">#0</span>
           </div>
         </div>
-
-        <!-- Flight Angle Control (For Fox Fire Fox) -->
-        <div class="preview-control-group" id="previewAngleWrap" hidden>
-          <label class="preview-control-label">Flight Angle (Degrees)</label>
-          <div class="preview-slider-row">
-            <input type="range" id="previewAngleSlider" min="0" max="360" value="45" />
-            <span id="previewAngleVal" class="preview-slider-val">45°</span>
-          </div>
-        </div>
-
-        <!-- Joystick Y / Angled Attack Control -->
-        <div class="preview-control-group" id="previewStickYWrap">
-          <label class="preview-control-label">Joystick Y (Angled Attack: Up/Down)</label>
-          <div class="preview-slider-row">
-            <input type="range" id="previewStickYSlider" min="-80" max="80" value="0" />
-            <span id="previewStickYVal" class="preview-slider-val">0</span>
-          </div>
-        </div>
-
-        <!-- Zoom Control -->
-        <div class="preview-control-group">
-          <label class="preview-control-label">Camera Zoom</label>
-          <div class="preview-btn-row" id="previewZoomBtns">
-            <button class="preview-chip-btn" data-zoom="1.0">1x</button>
-            <button class="preview-chip-btn active" data-zoom="2.0">2x</button>
-            <button class="preview-chip-btn" data-zoom="3.0">3x</button>
-            <button class="preview-chip-btn" data-zoom="4.5">4.5x</button>
-          </div>
-        </div>
-
-        <!-- Hitstun / Damage & Invulnerability -->
-        <div class="preview-control-group">
-          <label class="preview-control-label">Status Overlays</label>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <div class="preview-slider-row">
-              <span style="font-size:12px;color:var(--text-dim);width:70px;">Damage %:</span>
-              <input type="range" id="previewDamageSlider" min="0" max="300" value="0" />
-              <span id="previewDamageVal" class="preview-slider-val">0%</span>
-            </div>
-            <div class="preview-slider-row">
-              <span style="font-size:12px;color:var(--text-dim);width:70px;">Combo Hits:</span>
-              <input type="range" id="previewComboSlider" min="0" max="10" value="0" />
-              <span id="previewComboVal" class="preview-slider-val">0</span>
-            </div>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
-              <input type="checkbox" id="previewInvulnerableCheck" />
-              <span>Intangible / Invulnerable (Hurtbox 0x03)</span>
-            </label>
-          </div>
-        </div>
       </aside>
     `;
   }
 
   private attachEvents(): void {
+    // Top-level Mode elements
+    this.modeCharsBtn = this.container.querySelector(
+      "#previewModeCharsBtn",
+    ) as HTMLButtonElement;
+    this.modeItemsBtn = this.container.querySelector(
+      "#previewModeItemsBtn",
+    ) as HTMLButtonElement;
+    this.charControlsWrap = this.container.querySelector(
+      "#previewCharControls",
+    ) as HTMLDivElement;
+    this.itemControlsWrap = this.container.querySelector(
+      "#previewItemControls",
+    ) as HTMLDivElement;
+
+    // Characters Controls
     this.charSelectEl = this.container.querySelector(
       "#previewCharSelect",
     ) as HTMLSelectElement;
@@ -665,6 +1455,61 @@ export class CharacterPreviewController {
     this.hexInputEl = this.container.querySelector(
       "#previewHexInput",
     ) as HTMLInputElement;
+    this.stateChipsContainer = this.container.querySelector(
+      "#previewStateChips",
+    ) as HTMLDivElement;
+    this.angleControlWrap = this.container.querySelector(
+      "#previewAngleWrap",
+    ) as HTMLDivElement;
+    this.angleSliderEl = this.container.querySelector(
+      "#previewAngleSlider",
+    ) as HTMLInputElement;
+    this.angleValEl = this.container.querySelector(
+      "#previewAngleVal",
+    ) as HTMLSpanElement;
+    this.themeChipsContainer = this.container.querySelector(
+      "#previewThemeBtns",
+    ) as HTMLDivElement;
+    this.compareThemesBtn = this.container.querySelector(
+      "#previewCompareThemesBtn",
+    ) as HTMLButtonElement;
+    this.categoryBtnsContainer = this.container.querySelector(
+      "#previewCategoryBtns",
+    ) as HTMLDivElement;
+    this.charInfoCardEl = this.container.querySelector(
+      "#previewCharInfoCard",
+    ) as HTMLDivElement;
+
+    // Items Controls
+    this.itemSelectEl = this.container.querySelector(
+      "#previewItemSelect",
+    ) as HTMLSelectElement;
+    this.itemCategoryBtnsContainer = this.container.querySelector(
+      "#previewItemCatBtns",
+    ) as HTMLDivElement;
+    this.itemViewSingleBtn = this.container.querySelector(
+      "#previewItemViewSingle",
+    ) as HTMLButtonElement;
+    this.itemViewGridBtn = this.container.querySelector(
+      "#previewItemViewGrid",
+    ) as HTMLButtonElement;
+    this.itemLuigiToggleWrap = this.container.querySelector(
+      "#previewItemLuigiWrap",
+    ) as HTMLDivElement;
+    this.itemLuigiCheckbox = this.container.querySelector(
+      "#previewItemLuigiCheck",
+    ) as HTMLInputElement;
+    this.itemDetonateWrap = this.container.querySelector(
+      "#previewItemDetonateWrap",
+    ) as HTMLDivElement;
+    this.itemDetonateCheckbox = this.container.querySelector(
+      "#previewItemDetonateCheck",
+    ) as HTMLInputElement;
+    this.itemInfoCardEl = this.container.querySelector(
+      "#previewItemInfoCard",
+    ) as HTMLDivElement;
+
+    // Shared Scrubber & Badge
     this.badgeTitleEl = this.container.querySelector(
       "#previewBadgeTitle",
     ) as HTMLDivElement;
@@ -680,36 +1525,40 @@ export class CharacterPreviewController {
     this.playPauseBtn = this.container.querySelector(
       "#previewPlayPauseBtn",
     ) as HTMLButtonElement;
-    this.perspectiveToggleBtn = this.container.querySelector(
-      "#previewPerspectiveBtn",
+    this.stepBackBtn = this.container.querySelector(
+      "#previewStepBackBtn",
     ) as HTMLButtonElement;
-    this.opponentToggleBtn = this.container.querySelector(
-      "#previewOpponentBtn",
+    this.stepFwdBtn = this.container.querySelector(
+      "#previewStepFwdBtn",
     ) as HTMLButtonElement;
-    this.dirRightBtn = this.container.querySelector(
-      "#previewDirRightBtn",
-    ) as HTMLButtonElement;
-    this.dirLeftBtn = this.container.querySelector(
-      "#previewDirLeftBtn",
-    ) as HTMLButtonElement;
-    this.angleControlWrap = this.container.querySelector(
-      "#previewAngleWrap",
-    ) as HTMLDivElement;
-    this.angleSliderEl = this.container.querySelector(
-      "#previewAngleSlider",
-    ) as HTMLInputElement;
-    this.angleValEl = this.container.querySelector(
-      "#previewAngleVal",
-    ) as HTMLSpanElement;
-    this.stickSliderEl = this.container.querySelector(
-      "#previewStickYSlider",
-    ) as HTMLInputElement;
-    this.stickValEl = this.container.querySelector(
-      "#previewStickYVal",
-    ) as HTMLSpanElement;
-    this.stateChipsContainer = this.container.querySelector(
-      "#previewStateChips",
-    ) as HTMLDivElement;
+
+    // Mode Switch events
+    this.modeCharsBtn.addEventListener("click", () => {
+      this.activeMode = "characters";
+      this.modeCharsBtn.classList.add("active");
+      this.modeItemsBtn.classList.remove("active");
+      if (this.charControlsWrap?.style) {
+        this.charControlsWrap.style.display = "flex";
+      }
+      if (this.itemControlsWrap?.style) {
+        this.itemControlsWrap.style.display = "none";
+      }
+      this.render();
+    });
+
+    this.modeItemsBtn.addEventListener("click", () => {
+      this.activeMode = "items";
+      this.modeItemsBtn.classList.add("active");
+      this.modeCharsBtn.classList.remove("active");
+      if (this.charControlsWrap?.style) {
+        this.charControlsWrap.style.display = "none";
+      }
+      if (this.itemControlsWrap?.style) {
+        this.itemControlsWrap.style.display = "flex";
+      }
+      this.populateItems();
+      this.render();
+    });
 
     // Character Change
     this.charSelectEl.addEventListener("change", () => {
@@ -718,42 +1567,66 @@ export class CharacterPreviewController {
       this.render();
     });
 
-    // Color Mode
-    this.perspectiveToggleBtn.addEventListener("click", () => {
-      this.isOpponent = false;
-      this.perspectiveToggleBtn.classList.add("active");
-      this.opponentToggleBtn.classList.remove("active");
-      this.render();
-    });
-    this.opponentToggleBtn.addEventListener("click", () => {
-      this.isOpponent = true;
-      this.opponentToggleBtn.classList.add("active");
-      this.perspectiveToggleBtn.classList.remove("active");
+    if (
+      this.charSelectEl &&
+      typeof document !== "undefined" &&
+      typeof this.charSelectEl.querySelectorAll === "function"
+    ) {
+      this.customCharDropdown =
+        CustomDropdown.fromSelect(this.charSelectEl, {
+          getIconUrl: (val) => characterIconUrl(parseInt(val, 10)),
+          getSublabel: (val) => CHARACTER_NAMES_JA[parseInt(val, 10)],
+          getBadge: (val) =>
+            `0x${parseInt(val, 10).toString(16).padStart(2, "0")}`,
+          searchable: true,
+          onChange: (val) => {
+            this.characterId = parseInt(val, 10);
+            this.populateStates();
+            this.render();
+          },
+        }) ?? undefined;
+    }
+
+    // Theme Chips
+    this.themeChipsContainer.addEventListener("click", (e) => {
+      const target = (e.target as HTMLElement).closest<HTMLButtonElement>(
+        "button",
+      );
+      if (!target || !target.dataset.theme) return;
+      this.currentTheme = target.dataset.theme as PreviewTheme;
+      this.compareAllThemes = false;
+      this.compareThemesBtn.classList.remove("active");
+      this.themeChipsContainer
+        .querySelectorAll("button")
+        .forEach((b) => b.classList.remove("active"));
+      target.classList.add("active");
       this.render();
     });
 
-    // Direction
-    this.dirRightBtn.addEventListener("click", () => {
-      this.facingDirection = 1;
-      this.dirRightBtn.classList.add("active");
-      this.dirLeftBtn.classList.remove("active");
-      this.render();
-    });
-    this.dirLeftBtn.addEventListener("click", () => {
-      this.facingDirection = -1;
-      this.dirLeftBtn.classList.add("active");
-      this.dirRightBtn.classList.remove("active");
+    // Compare All Themes Toggle
+    this.compareThemesBtn.addEventListener("click", () => {
+      this.compareAllThemes = !this.compareAllThemes;
+      this.compareThemesBtn.classList.toggle("active", this.compareAllThemes);
+      if (this.compareAllThemes) {
+        this.themeChipsContainer
+          .querySelectorAll("button")
+          .forEach((b) => b.classList.remove("active"));
+      } else {
+        const btn = this.themeChipsContainer.querySelector(
+          `[data-theme="${this.currentTheme}"]`,
+        );
+        btn?.classList.add("active");
+      }
       this.render();
     });
 
-    // Category Tabs
-    const catContainer = this.container.querySelector("#previewCategoryBtns");
-    catContainer?.addEventListener("click", (e) => {
+    // State Category Filter Chips
+    this.categoryBtnsContainer.addEventListener("click", (e) => {
       const target = (e.target as HTMLElement).closest<HTMLButtonElement>(
         "button",
       );
       if (!target || !target.dataset.cat) return;
-      catContainer
+      this.categoryBtnsContainer
         .querySelectorAll("button")
         .forEach((b) => b.classList.remove("active"));
       target.classList.add("active");
@@ -761,11 +1634,12 @@ export class CharacterPreviewController {
       this.populateStates();
     });
 
-    // State Select
+    // State Select Dropdown
     this.stateSelectEl.addEventListener("change", () => {
       this.actionStateId = parseInt(this.stateSelectEl.value, 10);
       this.hexInputEl.value = `0x${this.actionStateId.toString(16)}`;
       this.updateAngleControlVisibility();
+      this.updateCharInfoCard();
       this.render();
     });
 
@@ -784,6 +1658,7 @@ export class CharacterPreviewController {
         this.populateStates();
         this.stateSelectEl.value = String(this.actionStateId);
         this.updateAngleControlVisibility();
+        this.updateCharInfoCard();
         this.render();
       }
     };
@@ -792,7 +1667,76 @@ export class CharacterPreviewController {
       if (e.key === "Enter") applyHex();
     });
 
-    // Frame Slider & Controls
+    // Flight Angle Slider
+    this.angleSliderEl.addEventListener("input", () => {
+      this.flightAngleDeg = parseInt(this.angleSliderEl.value, 10);
+      this.angleValEl.textContent = `${this.flightAngleDeg}°`;
+      this.render();
+    });
+
+    // Items: View Mode (Single vs Grid)
+    this.itemViewSingleBtn.addEventListener("click", () => {
+      this.itemViewMode = "single";
+      this.itemViewSingleBtn.classList.add("active");
+      this.itemViewGridBtn.classList.remove("active");
+      const group = this.container.querySelector(
+        "#previewItemSelectGroup",
+      ) as HTMLDivElement;
+      if (group?.style) group.style.display = "flex";
+      if (this.itemInfoCardEl?.style)
+        this.itemInfoCardEl.style.display = "flex";
+      this.render();
+    });
+
+    this.itemViewGridBtn.addEventListener("click", () => {
+      this.itemViewMode = "grid";
+      this.itemViewGridBtn.classList.add("active");
+      this.itemViewSingleBtn.classList.remove("active");
+      const group = this.container.querySelector(
+        "#previewItemSelectGroup",
+      ) as HTMLDivElement;
+      if (group?.style) group.style.display = "none";
+      if (this.itemInfoCardEl?.style)
+        this.itemInfoCardEl.style.display = "none";
+      this.render();
+    });
+
+    // Items: Category Filter Chips
+    this.itemCategoryBtnsContainer.addEventListener("click", (e) => {
+      const target = (e.target as HTMLElement).closest<HTMLButtonElement>(
+        "button",
+      );
+      if (!target || !target.dataset.icat) return;
+      this.itemCategoryBtnsContainer
+        .querySelectorAll("button")
+        .forEach((b) => b.classList.remove("active"));
+      target.classList.add("active");
+      this.itemCategoryFilter = target.dataset.icat as
+        "all" | "weapon" | "item";
+      this.populateItems();
+      this.render();
+    });
+
+    // Items: Select Item
+    this.itemSelectEl.addEventListener("change", () => {
+      this.selectedItemIndex = parseInt(this.itemSelectEl.value, 10);
+      this.updateItemDetails();
+      this.render();
+    });
+
+    // Items: Luigi Fireball Checkbox
+    this.itemLuigiCheckbox.addEventListener("change", () => {
+      this.isLuigiFireball = this.itemLuigiCheckbox.checked;
+      this.render();
+    });
+
+    // Items: Detonate Bomb Checkbox
+    this.itemDetonateCheckbox.addEventListener("change", () => {
+      this.isBombDetonating = this.itemDetonateCheckbox.checked;
+      this.render();
+    });
+
+    // Shared Scrubber Controls
     this.frameSliderEl.addEventListener("input", () => {
       this.actionFrameCounter = parseInt(this.frameSliderEl.value, 10);
       this.frameValEl.textContent = `#${this.actionFrameCounter}`;
@@ -807,98 +1751,31 @@ export class CharacterPreviewController {
       }
     });
 
-    const stepBackBtn = this.container.querySelector(
-      "#previewStepBackBtn",
-    ) as HTMLButtonElement;
-    stepBackBtn.addEventListener("click", () => {
+    this.stepBackBtn.addEventListener("click", () => {
       this.actionFrameCounter = Math.max(0, this.actionFrameCounter - 1);
       this.frameSliderEl.value = String(this.actionFrameCounter);
       this.frameValEl.textContent = `#${this.actionFrameCounter}`;
       this.render();
     });
 
-    const stepFwdBtn = this.container.querySelector(
-      "#previewStepFwdBtn",
-    ) as HTMLButtonElement;
-    stepFwdBtn.addEventListener("click", () => {
+    this.stepFwdBtn.addEventListener("click", () => {
       this.actionFrameCounter = (this.actionFrameCounter + 1) % 61;
       this.frameSliderEl.value = String(this.actionFrameCounter);
       this.frameValEl.textContent = `#${this.actionFrameCounter}`;
       this.render();
     });
 
-    // Angle Slider
-    this.angleSliderEl.addEventListener("input", () => {
-      this.flightAngleDeg = parseInt(this.angleSliderEl.value, 10);
-      this.angleValEl.textContent = `${this.flightAngleDeg}°`;
-      this.render();
-    });
-
-    // Joystick Y (Angled Attack) Slider
-    this.stickSliderEl.addEventListener("input", () => {
-      this.stickY = parseInt(this.stickSliderEl.value, 10);
-      this.stickValEl.textContent = String(this.stickY);
-      this.render();
-    });
-
-    // Zoom Buttons
-    const zoomContainer = this.container.querySelector("#previewZoomBtns");
-    zoomContainer?.addEventListener("click", (e) => {
-      const target = (e.target as HTMLElement).closest<HTMLButtonElement>(
-        "button",
-      );
-      if (!target || !target.dataset.zoom) return;
-      zoomContainer
-        .querySelectorAll("button")
-        .forEach((b) => b.classList.remove("active"));
-      target.classList.add("active");
-      this.zoomLevel = parseFloat(target.dataset.zoom);
-      this.render();
-    });
-
-    // Damage & Combo
-    const dmgSlider = this.container.querySelector(
-      "#previewDamageSlider",
-    ) as HTMLInputElement;
-    const dmgVal = this.container.querySelector(
-      "#previewDamageVal",
-    ) as HTMLSpanElement;
-    dmgSlider.addEventListener("input", () => {
-      this.damagePercent = parseInt(dmgSlider.value, 10);
-      dmgVal.textContent = `${this.damagePercent}%`;
-      this.render();
-    });
-
-    const comboSlider = this.container.querySelector(
-      "#previewComboSlider",
-    ) as HTMLInputElement;
-    const comboVal = this.container.querySelector(
-      "#previewComboVal",
-    ) as HTMLSpanElement;
-    comboSlider.addEventListener("input", () => {
-      this.comboHitCount = parseInt(comboSlider.value, 10);
-      comboVal.textContent = String(this.comboHitCount);
-      this.render();
-    });
-
-    const invulCheck = this.container.querySelector(
-      "#previewInvulnerableCheck",
-    ) as HTMLInputElement;
-    invulCheck.addEventListener("change", () => {
-      this.isInvulnerable = invulCheck.checked;
-      this.render();
-    });
-
     this.populateStates();
+    this.populateItems();
   }
 
   private updateAngleControlVisibility(): void {
-    // Show angle slider for Fire Fox / Fire Bird flight (0x0e8 / 0x0ec on Fox/Falco)
     const isFoxOrFalco =
       this.characterId === 0x01 ||
       this.characterId === 0x0f ||
       this.characterId === 0x1d ||
       this.characterId === 0x29 ||
+      this.characterId === 0x37 ||
       this.characterId === 0x55;
     const isFireFox =
       this.actionStateId === 0x0e8 || this.actionStateId === 0x0ec;
@@ -912,10 +1789,22 @@ export class CharacterPreviewController {
 
   private populateStates(): void {
     const states = this.getAllStatesForCurrentChar();
-    const filtered =
-      this.selectedCategory === "all"
-        ? states
-        : states.filter((s) => s.category === this.selectedCategory);
+    let filtered = states;
+
+    if (this.selectedCategory === "visualized") {
+      filtered = states.filter((s) => s.visualized);
+    } else if (this.selectedCategory === "status") {
+      filtered = states.filter(
+        (s) =>
+          s.category === "damage" ||
+          s.id === 0x044 ||
+          s.id === 0x0a3 ||
+          s.id === 0x09e ||
+          s.id === 0x0bd,
+      );
+    } else if (this.selectedCategory !== "all") {
+      filtered = states.filter((s) => s.category === this.selectedCategory);
+    }
 
     // If current state not in list, add it dynamically
     if (!filtered.some((s) => s.id === this.actionStateId)) {
@@ -929,17 +1818,19 @@ export class CharacterPreviewController {
     }
 
     this.stateSelectEl.innerHTML = filtered
-      .map(
-        (s) =>
-          `<option value="${s.id}" ${s.id === this.actionStateId ? "selected" : ""}>0x${s.id.toString(16).padStart(3, "0")} - ${s.name}</option>`,
-      )
+      .map((s) => {
+        const star = s.visualized ? "★ " : "";
+        return `<option value="${s.id}" ${s.id === this.actionStateId ? "selected" : ""}>${star}0x${s.id.toString(16).padStart(3, "0")} - ${s.name}</option>`;
+      })
       .join("");
 
     this.stateChipsContainer.innerHTML = filtered
-      .map(
-        (s) =>
-          `<button class="preview-chip-btn ${s.id === this.actionStateId ? "active" : ""}" data-state="${s.id}">0x${s.id.toString(16)} ${s.name}</button>`,
-      )
+      .map((s) => {
+        const star = s.visualized ? "★ " : "";
+        const starClass = s.visualized ? "has-star" : "";
+        const activeClass = s.id === this.actionStateId ? "active" : "";
+        return `<button class="preview-chip-btn ${starClass} ${activeClass}" data-state="${s.id}">${star}0x${s.id.toString(16)} ${s.name}</button>`;
+      })
       .join("");
 
     this.stateChipsContainer.querySelectorAll("button").forEach((btn) => {
@@ -953,12 +1844,121 @@ export class CharacterPreviewController {
           .forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         this.updateAngleControlVisibility();
+        this.updateCharInfoCard();
         this.render();
       });
     });
 
     this.hexInputEl.value = `0x${this.actionStateId.toString(16)}`;
     this.updateAngleControlVisibility();
+    this.updateCharInfoCard();
+  }
+
+  private updateCharInfoCard(): void {
+    const states = this.getAllStatesForCurrentChar();
+    const cur = states.find((s) => s.id === this.actionStateId);
+    const defs = getGameDefinitions();
+    const name = cur ? cur.name : defs.getActionStateName(this.actionStateId);
+    const isVis = cur?.visualized ?? false;
+    const visDesc =
+      cur?.visualizedDesc ?? "Standard Skeleton Wireframe & Polygons";
+
+    this.charInfoCardEl.innerHTML = `
+      <div class="preview-info-row">
+        <span class="preview-info-label">Action State:</span>
+        <span class="preview-info-value">0x${this.actionStateId.toString(16).padStart(3, "0")} (${this.actionStateId})</span>
+      </div>
+      <div class="preview-info-row">
+        <span class="preview-info-label">State Name:</span>
+        <span class="preview-info-value">${name}</span>
+      </div>
+      <div class="preview-info-row">
+        <span class="preview-info-label">Visualization:</span>
+        <span class="${isVis ? "preview-badge-tag" : "preview-info-value"}">
+          ${isVis ? "★ Custom Visualized" : "Standard Geometry"}
+        </span>
+      </div>
+      <div class="preview-info-row" style="margin-top:2px;">
+        <span class="preview-info-label" style="font-size:11px;">Effect:</span>
+        <span style="font-size:11px;color:var(--text);text-align:right;">${visDesc}</span>
+      </div>
+    `;
+  }
+
+  private getFilteredItems(): ItemCatalogEntry[] {
+    if (this.itemCategoryFilter === "weapon") {
+      return ITEM_CATALOG.filter((i) => i.category === "weapon");
+    }
+    if (this.itemCategoryFilter === "item") {
+      return ITEM_CATALOG.filter((i) => i.category === "item");
+    }
+    return ITEM_CATALOG;
+  }
+
+  private populateItems(): void {
+    const items = this.getFilteredItems();
+    if (this.selectedItemIndex >= items.length) {
+      this.selectedItemIndex = 0;
+    }
+
+    this.itemSelectEl.innerHTML = items
+      .map(
+        (item, idx) =>
+          `<option value="${idx}" ${idx === this.selectedItemIndex ? "selected" : ""}>0x${item.kind.toString(16).padStart(2, "0")} - ${item.name} [${item.linkId === ItemLinkId.Weapon ? "Weapon" : "Item"}]</option>`,
+      )
+      .join("");
+
+    this.updateItemDetails();
+  }
+
+  private updateItemDetails(): void {
+    const items = this.getFilteredItems();
+    const item = items[this.selectedItemIndex] ?? items[0];
+    if (!item) return;
+
+    // Show Luigi Fireball toggle only when Fireball is selected
+    const isFireball =
+      item.linkId === ItemLinkId.Weapon && item.kind === WPKind.Fireball;
+    if (this.itemLuigiToggleWrap?.style) {
+      this.itemLuigiToggleWrap.style.display = isFireball ? "block" : "none";
+    }
+
+    // Show Detonate Bomb toggle when a bomb item/weapon is selected
+    const isBomb =
+      (item.linkId === ItemLinkId.Item &&
+        (item.kind === ITKind.Bomb ||
+          item.kind === ITKind.BobOmb ||
+          item.kind === ITKind.RTTFBomb ||
+          item.kind === ITKind.MotionSensorBomb)) ||
+      (item.linkId === ItemLinkId.Weapon && item.kind === WPKind.SamusBomb);
+    if (this.itemDetonateWrap?.style) {
+      this.itemDetonateWrap.style.display = isBomb ? "block" : "none";
+    }
+
+    this.itemInfoCardEl.innerHTML = `
+      <div class="preview-info-row">
+        <span class="preview-info-label">Item / Weapon:</span>
+        <span class="preview-info-value">${item.name}</span>
+      </div>
+      <div class="preview-info-row">
+        <span class="preview-info-label">Kind ID:</span>
+        <span class="preview-info-value">0x${item.kind.toString(16).padStart(2, "0")} (${item.kind})</span>
+      </div>
+      <div class="preview-info-row">
+        <span class="preview-info-label">Link ID:</span>
+        <span class="preview-info-value">${item.linkId === ItemLinkId.Weapon ? "Weapon (0x05)" : "Item (0x04)"}</span>
+      </div>
+      <div class="preview-info-row">
+        <span class="preview-info-label">Render Style:</span>
+        <span class="${item.customShape ? "preview-badge-tag" : "preview-info-value"}">
+          ${item.customShape ? "★ Custom Scaled Shape" : "Stylized Item Diamond"}
+        </span>
+      </div>
+      <div class="preview-info-row" style="margin-top:2px;">
+        <span class="preview-info-label" style="font-size:11px;">Details:</span>
+        <span style="font-size:11px;color:var(--text);text-align:right;">${item.description}</span>
+      </div>
+    `;
   }
 
   public activate(): void {
@@ -1020,70 +2020,107 @@ export class CharacterPreviewController {
     this.resize();
     const ctx = this.canvas.getContext("2d");
     if (!ctx) return;
-    const defs = getGameDefinitions();
 
+    if (this.activeMode === "characters") {
+      this.renderCharactersMode(ctx);
+    } else {
+      this.renderItemsMode(ctx);
+    }
+  }
+
+  private renderCharactersMode(ctx: CanvasRenderingContext2D): void {
+    const defs = getGameDefinitions();
     const charName = defs.getCharacterName(this.characterId, "en");
     const charNameJa = defs.getCharacterName(this.characterId, "ja");
     const stateName = defs.getActionStateName(this.actionStateId, "en");
     const stateNameJa = defs.getActionStateName(this.actionStateId, "ja");
 
-    // Update overlay badge
-    this.badgeTitleEl.innerHTML = `<span>0x${this.characterId.toString(16).padStart(2, "0")} ${charName} (${charNameJa})</span>`;
-    this.badgeSubtitleEl.textContent = `State 0x${this.actionStateId.toString(16).padStart(3, "0")}: ${stateName} (${stateNameJa}) | Frame #${this.actionFrameCounter} | ${this.isOpponent ? "Opponent (Grayscale)" : "Perspective (Color)"}`;
-
-    // Synthetic Frame setup
-    const synthFrame: Frame = {
-      frameIndex: 1,
-      ports: {
-        0: {
-          pre: {
-            stickX: this.facingDirection * 45,
-            stickY: this.stickY,
-            buttons: 0,
-          },
-          post: {
-            positionX: 0,
-            positionY: 0,
-            facingDirection: this.facingDirection,
-            damagePercent: this.damagePercent,
-            characterId: this.characterId,
-            actionStateId: this.actionStateId,
-            actionFrameCounter: this.actionFrameCounter,
-            hurtboxState: this.isInvulnerable ? 0x03 : 0x00,
-            comboHitCount: this.comboHitCount,
-            hitstunCounter: this.comboHitCount > 0 ? 10 : 0,
-            stocksRemaining: 4,
-          },
-        },
-      },
-    } as unknown as Frame;
-
-    // Calculate synthetic velocity vector for Fox flight angle testing
+    // Flight velocity vector for Fire Fox / Fire Bird flight
     const rad = (this.flightAngleDeg * Math.PI) / 180;
     const speed = 10;
     const dx = Math.cos(rad) * speed;
     const dy = Math.sin(rad) * speed;
 
+    const stateData = {
+      frame: 1,
+      port: 0 as PortIndex,
+      positionX: 0,
+      positionY: 0,
+      facingDirection: 1 as const,
+      velocityX: dx,
+      velocityY: dy,
+      damagePercent: 0,
+      characterId: this.characterId,
+      actionStateId: this.actionStateId,
+      actionFrameCounter: this.actionFrameCounter,
+      hurtboxState: 0x00,
+      comboHitCount: 0,
+      comboDamage: 0,
+      hitstunCounter: 0,
+      stocksRemaining: 4,
+      jumpsRemaining: 1,
+      grounded: true,
+    };
+
+    const synthFrame: Frame = {
+      frame: 1,
+      ports: {
+        0: {
+          input: {
+            frame: 1,
+            port: 0,
+            stickX: 45,
+            stickY: 0,
+            buttons: 0,
+          },
+          state: stateData,
+        },
+      },
+    };
+
     const synthReplay: Replay = {
-      gameStart: {
+      header: {
+        gameFamily: "smash64",
+        schemaVersion: 1,
+      },
+      matchStart: {
+        playerNames: [charName, "", "", ""],
+        slotType: ["human", "empty", "empty", "empty"],
+      },
+      matchSettings: {
         stageId: 0,
-        ports: { 0: { characterId: this.characterId } },
-        playerNames: { 0: charName },
+        gameType: 2,
+        stockCountSetting: 3,
+        timeLimitMinutes: 100,
+        damageRatio: 100,
+        itemFrequency: 0,
+        teamsEnabled: false,
+        handicapMode: "off",
+        characterId: [this.characterId, 0, 0, 0],
+        costumeId: [0, 0, 0, 0],
+        teamColor: [0, 0, 0, 0],
+        portTeam: [0, 0, 0, 0],
+        portHandicap: [0, 0, 0, 0],
+        portCpuLevel: [0, 0, 0, 0],
       },
       frames: [
         {
-          frameIndex: 0,
+          frame: 0,
           ports: {
             0: {
-              post: {
+              input: {
+                frame: 0,
+                port: 0,
+                stickX: 0,
+                stickY: 0,
+                buttons: 0,
+              },
+              state: {
+                ...stateData,
+                frame: 0,
                 positionX: -dx,
                 positionY: -dy,
-                facingDirection: this.facingDirection,
-                damagePercent: this.damagePercent,
-                characterId: this.characterId,
-                actionStateId: this.actionStateId,
                 actionFrameCounter: Math.max(0, this.actionFrameCounter - 1),
-                stocksRemaining: 4,
               },
             },
           },
@@ -1092,33 +2129,262 @@ export class CharacterPreviewController {
       ],
     } as unknown as Replay;
 
-    // Center camera on character with custom zoom
-    const size = characterSize(this.characterId);
-    const span = Math.max(800 / this.zoomLevel, 150);
-    this.camera.update(
-      [
-        { x: -span * 0.5, y: -span * 0.2 },
-        { x: span * 0.5, y: size.height + span * 0.6 },
-      ],
-      true,
-    );
+    if (!this.compareAllThemes) {
+      // Single Theme Render
+      const bgTheme: BackgroundTheme =
+        this.currentTheme === "opponent" ? "grid" : this.currentTheme;
+      this.renderer.setBackgroundTheme(bgTheme);
+      const perspectivePort: PortIndex | null =
+        this.currentTheme === "opponent" ? 1 : 0;
 
-    // Render through StageRenderer
-    // perspectivePort = 0 (Color) vs perspectivePort = 1 (Grayscale)
-    const perspectivePort: PortIndex | null = this.isOpponent ? 1 : 0;
-    this.renderer.render(
-      this.camera,
-      synthFrame,
-      undefined,
-      synthReplay,
-      1,
-      perspectivePort,
-    );
+      // Center camera on character
+      const size = characterSize(this.characterId);
+      const span = 400;
+      this.camera.update(
+        [
+          { x: -span * 0.5, y: -span * 0.2 },
+          { x: span * 0.5, y: size.height + span * 0.6 },
+        ],
+        true,
+      );
 
-    // Draw preview ground grid & origin axes in background/foreground
+      this.renderer.render(
+        this.camera,
+        synthFrame,
+        undefined,
+        synthReplay,
+        1,
+        perspectivePort,
+        true,
+      );
+
+      this.drawStageAxes(ctx);
+
+      // Update badge
+      this.badgeTitleEl.innerHTML = `<span>0x${this.characterId.toString(16).padStart(2, "0")} ${charName} (${charNameJa})</span>`;
+      this.badgeSubtitleEl.textContent = `State 0x${this.actionStateId.toString(16).padStart(3, "0")}: ${stateName} (${stateNameJa}) | Frame #${this.actionFrameCounter} | Theme: ${this.currentTheme.toUpperCase()}`;
+    } else {
+      // Compare All 5 Themes Side-by-Side
+      const themes: {
+        key: PreviewTheme;
+        label: string;
+        bg: BackgroundTheme;
+        isOpp: boolean;
+      }[] = [
+        { key: "grid", label: "GRID", bg: "grid", isOpp: false },
+        { key: "mountain", label: "MOUNTAIN", bg: "mountain", isOpp: false },
+        { key: "autumn", label: "AUTUMN", bg: "autumn", isOpp: false },
+        { key: "beach", label: "BEACH", bg: "beach", isOpp: false },
+        { key: "opponent", label: "OPPONENT", bg: "grid", isOpp: true },
+      ];
+
+      const colW = this.canvas.width / themes.length;
+      const size = characterSize(this.characterId);
+      const span = 420;
+
+      for (const [i, theme] of themes.entries()) {
+        const colX = i * colW;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(colX, 0, colW, this.canvas.height);
+        ctx.clip();
+
+        this.renderer.setBackgroundTheme(theme.bg);
+        const colCam = new Camera(colW, this.canvas.height);
+        colCam.update(
+          [
+            { x: -span * 0.5, y: -span * 0.2 },
+            { x: span * 0.5, y: size.height + span * 0.6 },
+          ],
+          true,
+        );
+
+        ctx.translate(colX, 0);
+        this.renderer.render(
+          colCam,
+          synthFrame,
+          undefined,
+          synthReplay,
+          1,
+          theme.isOpp ? 1 : 0,
+          true,
+        );
+
+        // Column divider line
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(colW, 0);
+        ctx.lineTo(colW, this.canvas.height);
+        ctx.stroke();
+
+        // Column Header Badge
+        ctx.fillStyle = "rgba(15, 17, 23, 0.85)";
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(10, 10, colW - 20, 24, 4);
+        } else {
+          ctx.rect(10, 10, colW - 20, 24);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 11px system-ui, -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(theme.label, colW / 2, 22);
+
+        ctx.restore();
+      }
+
+      this.badgeTitleEl.innerHTML = `<span>0x${this.characterId.toString(16).padStart(2, "0")} ${charName} (${charNameJa}) — Theme Palette Comparison</span>`;
+      this.badgeSubtitleEl.textContent = `State 0x${this.actionStateId.toString(16).padStart(3, "0")}: ${stateName} | All 5 Color Themes Side-by-Side`;
+    }
+  }
+
+  private renderItemsMode(ctx: CanvasRenderingContext2D): void {
+    const items = this.getFilteredItems();
+
+    // Replay setup (with Luigi if fireball luigi variant is checked)
+    const charId = this.isLuigiFireball ? 0x04 : 0x00; // Luigi vs Mario
+    const synthReplay: Replay = {
+      header: { gameFamily: "smash64", schemaVersion: 1 },
+      matchStart: {
+        playerNames: ["Player", "", "", ""],
+        slotType: ["human", "empty", "empty", "empty"],
+      },
+      matchSettings: {
+        stageId: 0,
+        gameType: 2,
+        characterId: [charId, 0, 0, 0],
+      },
+      frames: [],
+    } as unknown as Replay;
+
+    if (this.itemViewMode === "single") {
+      const selectedItem = items[this.selectedItemIndex] ?? items[0];
+      if (!selectedItem) return;
+
+      const isBomb =
+        (selectedItem.linkId === ItemLinkId.Item &&
+          (selectedItem.kind === ITKind.Bomb ||
+            selectedItem.kind === ITKind.BobOmb ||
+            selectedItem.kind === ITKind.RTTFBomb ||
+            selectedItem.kind === ITKind.MotionSensorBomb)) ||
+        (selectedItem.linkId === ItemLinkId.Weapon &&
+          selectedItem.kind === WPKind.SamusBomb);
+
+      const loopProgress = this.actionFrameCounter % 60;
+      const shouldDetonate =
+        isBomb && this.isBombDetonating && loopProgress >= 36;
+
+      const itemUpdate: ItemUpdate = {
+        kind: shouldDetonate ? 0xfe : selectedItem.kind,
+        linkId: shouldDetonate ? ItemLinkId.Item : selectedItem.linkId,
+        positionX: 0,
+        positionY: 0,
+        positionZ: 0,
+        objectAddress: 0x80200000,
+        frame: shouldDetonate ? loopProgress - 36 : this.actionFrameCounter,
+      };
+
+      const synthFrame: Frame = {
+        frame: 1,
+        ports: {},
+        items: [itemUpdate],
+      };
+
+      this.renderer.setBackgroundTheme("grid");
+      const span = 180;
+      this.camera.update(
+        [
+          { x: -span * 0.5, y: -span * 0.5 },
+          { x: span * 0.5, y: span * 0.5 },
+        ],
+        true,
+      );
+
+      this.renderer.render(
+        this.camera,
+        synthFrame,
+        undefined,
+        synthReplay,
+        1,
+        0,
+        true,
+      );
+
+      this.drawStageAxes(ctx);
+
+      const typeLabel =
+        selectedItem.linkId === ItemLinkId.Weapon ? "Weapon" : "Item";
+      this.badgeTitleEl.innerHTML = `<span>${selectedItem.name} (0x${selectedItem.kind.toString(16)}) [${typeLabel}]</span>`;
+      const stateSuffix = shouldDetonate
+        ? `💥 BLAST DETONATION (+${loopProgress - 36}f)`
+        : `Frame #${this.actionFrameCounter}`;
+      this.badgeSubtitleEl.textContent = `Kind: 0x${selectedItem.kind.toString(16)} (${selectedItem.kind}) | LinkId: ${selectedItem.linkId} | ${stateSuffix} | ${selectedItem.customShape ? "Custom Shape" : "Item Diamond"}`;
+    } else {
+      // Show All Items Grid
+      const cols = 6;
+      const spacingX = 85;
+      const spacingY = 70;
+      const startX = -((cols - 1) * spacingX) / 2;
+      const rows = Math.ceil(items.length / cols);
+      const startY = ((rows - 1) * spacingY) / 2;
+
+      const itemUpdates: ItemUpdate[] = items.map((item, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        return {
+          kind: item.kind,
+          linkId: item.linkId,
+          positionX: startX + col * spacingX,
+          positionY: startY - row * spacingY,
+          positionZ: 0,
+          objectAddress: 0x80200000 + idx * 0x100,
+          frame: this.actionFrameCounter,
+        };
+      });
+
+      const synthFrame: Frame = {
+        frame: 1,
+        ports: {},
+        items: itemUpdates,
+      };
+
+      this.renderer.setBackgroundTheme("grid");
+      const spanX = cols * spacingX + 80;
+      const spanY = rows * spacingY + 80;
+      this.camera.update(
+        [
+          { x: -spanX * 0.5, y: -spanY * 0.5 },
+          { x: spanX * 0.5, y: spanY * 0.5 },
+        ],
+        true,
+      );
+
+      this.renderer.render(
+        this.camera,
+        synthFrame,
+        undefined,
+        synthReplay,
+        1,
+        0,
+        true,
+      );
+
+      this.badgeTitleEl.innerHTML = `<span>All In-Game Items & Weapons Showcase (${items.length} Total)</span>`;
+      this.badgeSubtitleEl.textContent = `Live Projectile & Item Gallery | Rotating at Frame #${this.actionFrameCounter}`;
+    }
+  }
+
+  private drawStageAxes(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     const originScreen = this.camera.worldToScreen(0, 0);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
 
@@ -1138,7 +2404,7 @@ export class CharacterPreviewController {
     // Origin marker dot
     ctx.beginPath();
     ctx.arc(originScreen.x, originScreen.y, 4, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
     ctx.fill();
 
     ctx.restore();

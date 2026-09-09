@@ -62,9 +62,13 @@ import {
   computeLedgeGrabCandidates,
   LEDGE_GRAB_FADE_FRAMES,
   StageRenderer,
+  extractBombExplosions,
 } from "./renderer.js";
 import {
   HazardFlag,
+  ITKind,
+  ItemLinkId,
+  WPKind,
   type Frame,
   type PortIndex,
   type StateFrame,
@@ -3463,5 +3467,359 @@ describe("StageRenderer background themes", () => {
         }).not.toThrow();
       });
     }
+  });
+
+  describe("drawItemObjects projectile/weapon labels", () => {
+    const createMockCanvas = () => {
+      const textCalls: { text: string; x: number; y: number; font?: string }[] =
+        [];
+      let currentFont = "";
+      const fakeCanvas = {
+        getContext: () => ({
+          save: () => {},
+          restore: () => {},
+          beginPath: () => {},
+          closePath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          rect: () => {},
+          roundRect: () => {},
+          fillRect: () => {},
+          strokeRect: () => {},
+          clearRect: () => {},
+          bezierCurveTo: () => {},
+          clip: () => {},
+          setLineDash: () => {},
+          createRadialGradient: () => ({ addColorStop: () => {} }),
+          createLinearGradient: () => ({ addColorStop: () => {} }),
+          fill: () => {},
+          stroke: () => {},
+          measureText: (str: string) => ({ width: str.length * 7 }),
+          translate: () => {},
+          rotate: () => {},
+          scale: () => {},
+          arc: () => {},
+          ellipse: () => {},
+          quadraticCurveTo: () => {},
+          set font(val: string) {
+            currentFont = val;
+          },
+          get font() {
+            return currentFont;
+          },
+          textAlign: "left",
+          textBaseline: "top",
+          fillStyle: "",
+          strokeStyle: "",
+          lineWidth: 1,
+          shadowColor: "",
+          shadowBlur: 0,
+          fillText: (text: string, x: number, y: number) => {
+            textCalls.push({ text, x, y, font: currentFont });
+          },
+        }),
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+      };
+
+      return { fakeCanvas, fakeCamera, textCalls };
+    };
+
+    it("does not render item labels when playing (isPaused is false or undefined)", () => {
+      const { fakeCanvas, fakeCamera, textCalls } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const item = {
+        linkId: ItemLinkId.Weapon,
+        kind: WPKind.Blaster,
+        positionX: 100,
+        positionY: 200,
+        frame: 1,
+      };
+
+      renderer.drawItemObjects(fakeCamera, [item], null, undefined, false);
+      expect(textCalls).toHaveLength(0);
+
+      renderer.drawItemObjects(fakeCamera, [item], null, undefined, undefined);
+      expect(textCalls).toHaveLength(0);
+    });
+
+    it("renders weapon label with ID in parentheses and bold 12px font when isPaused is true", () => {
+      const { fakeCanvas, fakeCamera, textCalls } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const item = {
+        linkId: ItemLinkId.Weapon,
+        kind: WPKind.Blaster,
+        positionX: 100,
+        positionY: 200,
+        frame: 1,
+      };
+
+      renderer.drawItemObjects(fakeCamera, [item], null, undefined, true);
+      expect(textCalls.length).toBeGreaterThan(0);
+      const labelCall = textCalls[0]!;
+      expect(labelCall.text).toMatch(/Blaster/);
+      expect(labelCall.text).toMatch(/\(0x[0-9a-fA-F]+\)/);
+      expect(labelCall.font).toContain("bold 12px");
+    });
+
+    it("renders generic item label with ID in parentheses when isPaused is true", () => {
+      const { fakeCanvas, fakeCamera, textCalls } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const item = {
+        linkId: ItemLinkId.Item,
+        kind: ITKind.Bomb,
+        positionX: 50,
+        positionY: 80,
+        frame: 0,
+      };
+
+      renderer.drawItemObjects(fakeCamera, [item], null, undefined, true);
+      expect(textCalls.length).toBeGreaterThan(0);
+      const labelCall = textCalls[0]!;
+      expect(labelCall.text).toMatch(/\(0x[0-9a-fA-F]+\)/);
+      expect(labelCall.font).toContain("bold 12px");
+    });
+
+    it("renders enlarged boomerang weapon without throwing and displays its label when paused", () => {
+      const { fakeCanvas, fakeCamera, textCalls } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const item = {
+        linkId: ItemLinkId.Weapon,
+        kind: WPKind.Boomerang,
+        positionX: 120,
+        positionY: 150,
+        frame: 5,
+      };
+
+      expect(() => {
+        renderer.drawItemObjects(fakeCamera, [item], null, undefined, true);
+      }).not.toThrow();
+
+      expect(textCalls.length).toBeGreaterThan(0);
+      const labelCall = textCalls[0]!;
+      expect(labelCall.text).toMatch(/Boomerang/i);
+      expect(labelCall.text).toMatch(/\(0x[0-9a-fA-F]+\)/);
+    });
+
+    it("renders all implemented custom weapon shapes without falling back to generic diamond", () => {
+      const { fakeCanvas } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const ctx = fakeCanvas.getContext("2d");
+
+      const implementedWeaponKinds = [
+        WPKind.Fireball,
+        WPKind.Blaster,
+        WPKind.ChargeShot,
+        WPKind.SamusBomb,
+        WPKind.Cutter,
+        WPKind.EggThrow,
+        WPKind.YoshiStar,
+        WPKind.Boomerang,
+        WPKind.ThunderJoltAir,
+        WPKind.ThunderJoltGround,
+        WPKind.ThunderHead,
+        WPKind.ThunderTrail,
+        WPKind.PKFire,
+        WPKind.PKThunderHead,
+        WPKind.PKThunderTrail,
+        WPKind.BulletNormal,
+        WPKind.BulletHard,
+        WPKind.ArwingLaser2D,
+        WPKind.ArwingLaser3D,
+        WPKind.LGunAmmo,
+        WPKind.FFlowerFlame,
+        WPKind.StarRodStar,
+      ];
+
+      for (const kind of implementedWeaponKinds) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const handled = (renderer as any).drawCustomWeaponShape(
+          ctx,
+          kind,
+          100,
+          200,
+          false,
+          1,
+          0,
+        );
+        expect(
+          handled,
+          `Expected weapon kind 0x${kind.toString(16)} to have custom shape`,
+        ).toBe(true);
+      }
+    });
+
+    it("renders all implemented custom item shapes without falling back to generic diamond", () => {
+      const { fakeCanvas } = createMockCanvas();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const ctx = fakeCanvas.getContext("2d");
+
+      const implementedItemKinds = [
+        ITKind.Bomb,
+        ITKind.BobOmb,
+        ITKind.RTTFBomb,
+        ITKind.MotionSensorBomb,
+        ITKind.Pokeball,
+        ITKind.Star,
+        ITKind.MaximTomato,
+        ITKind.Heart,
+        ITKind.BeamSword,
+        ITKind.HomeRunBat,
+        ITKind.Fan,
+        ITKind.StarRod,
+        ITKind.RayGun,
+        ITKind.FireFlower,
+        ITKind.Hammer,
+        ITKind.GreenShell,
+        ITKind.RedShell,
+        ITKind.Bumper,
+        ITKind.StageBumper,
+        ITKind.PKFirePillar,
+        ITKind.Capsule,
+        ITKind.Crate,
+        ITKind.Barrel,
+        ITKind.PowBlock,
+        ITKind.Egg,
+        0xfe, // Bomb Explosion
+      ];
+
+      for (const kind of implementedItemKinds) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const handled = (renderer as any).drawCustomItemShape(
+          ctx,
+          kind,
+          100,
+          200,
+          12,
+        );
+        expect(
+          handled,
+          `Expected item kind 0x${kind.toString(16)} to have custom shape`,
+        ).toBe(true);
+      }
+    });
+
+    it("draws multi-phase bomb explosion at various progress levels without throwing", () => {
+      const { fakeCanvas } = createMockCanvas();
+      const renderer = new StageRenderer(fakeCanvas);
+      const ctx = fakeCanvas.getContext("2d")!;
+
+      // Phase 1 (supersonic flash & shockwave)
+      expect(() => {
+        renderer.drawBombExplosionAt(ctx, 150, 150, 0.1, false, 32);
+      }).not.toThrow();
+
+      // Phase 2 (expanding fireball puffs & flying shrapnel sparks)
+      expect(() => {
+        renderer.drawBombExplosionAt(ctx, 150, 150, 0.45, true, 36);
+      }).not.toThrow();
+
+      // Phase 3 (dark rising smoke puffs drifting upward and fading)
+      expect(() => {
+        renderer.drawBombExplosionAt(ctx, 150, 150, 0.85, false, 32);
+      }).not.toThrow();
+    });
+
+    it("extractBombExplosions detects single and multiple simultaneous bombs exploding", () => {
+      // Replay with multiple bombs
+      // Bomb A: objectAddress 0x80100000 at (50, 100), frames 0..9, missing on frame 10 (detonates at frame 10)
+      // Bomb B: objectAddress 0x80200000 at (-80, 200), frames 5..19, missing on frame 20 (detonates at frame 20)
+      // Bomb C: objectAddress 0x80300000 at (0, 0), frames 0..25, stays active (no explosion)
+      // Bomb D: objectAddress 0x80400000 falls below blast zone y = -4500, missing on frame 12 (no explosion event)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const frames: any[] = [];
+      for (let f = 0; f <= 25; f++) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const items: any[] = [];
+        if (f < 10) {
+          items.push({
+            kind: ITKind.Bomb,
+            linkId: ItemLinkId.Item,
+            positionX: 50,
+            positionY: 100,
+            objectAddress: 0x80100000,
+            frame: f,
+          });
+        }
+        if (f >= 5 && f < 20) {
+          items.push({
+            kind: ITKind.BobOmb,
+            linkId: ItemLinkId.Item,
+            positionX: -80,
+            positionY: 200,
+            objectAddress: 0x80200000,
+            frame: f,
+          });
+        }
+        if (f <= 25) {
+          items.push({
+            kind: ITKind.RTTFBomb,
+            linkId: ItemLinkId.Item,
+            positionX: 0,
+            positionY: 0,
+            objectAddress: 0x80300000,
+            frame: f,
+          });
+        }
+        if (f < 12) {
+          items.push({
+            kind: ITKind.Bomb,
+            linkId: ItemLinkId.Item,
+            positionX: 10,
+            positionY: -4500, // Deep below stage
+            objectAddress: 0x80400000,
+            frame: f,
+          });
+        }
+        frames.push({ frame: f, ports: {}, items });
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const replay: any = {
+        header: { gameFamily: "smash64", schemaVersion: 1 },
+        matchSettings: { stageId: 0 },
+        frames,
+      };
+
+      const explosions = extractBombExplosions(replay);
+      expect(explosions).toHaveLength(2);
+
+      // Bomb A explosion
+      const explosionA = explosions.find((e) => e.objectAddress === 0x80100000);
+      expect(explosionA).toBeDefined();
+      expect(explosionA!.startFrame).toBe(10);
+      expect(explosionA!.x).toBe(50);
+      expect(explosionA!.y).toBe(100);
+      expect(explosionA!.isBobOmb).toBe(false);
+
+      // Bomb B explosion (Bob-omb)
+      const explosionB = explosions.find((e) => e.objectAddress === 0x80200000);
+      expect(explosionB).toBeDefined();
+      expect(explosionB!.startFrame).toBe(20);
+      expect(explosionB!.x).toBe(-80);
+      expect(explosionB!.y).toBe(200);
+      expect(explosionB!.isBobOmb).toBe(true);
+
+      // Bomb C did not disappear -> no explosion
+      expect(
+        explosions.find((e) => e.objectAddress === 0x80300000),
+      ).toBeUndefined();
+
+      // Bomb D fell into void -> no explosion
+      expect(
+        explosions.find((e) => e.objectAddress === 0x80400000),
+      ).toBeUndefined();
+    });
   });
 });

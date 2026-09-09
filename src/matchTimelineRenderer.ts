@@ -11,7 +11,8 @@ const COLOR_BY_CLASSIFICATION: Record<FrameClassification, string> = {
   other: OTHER_COLOR,
 };
 
-const STOCK_LOSS_MARKER_WIDTH_PX = 2;
+export const OPPONENT_STOCK_LOSS_COLOR = "#ef4444";
+export const STOCK_LOSS_MARKER_WIDTH_PX = 4;
 /** The colored classification strip only fills the middle 40% of the bar's height - stock-loss markers span the full height (see below), so they visibly stick out above/below it rather than blending into a same-colored segment. */
 const COLOR_BAND_FRACTION = 0.4;
 
@@ -21,7 +22,7 @@ const COLOR_BAND_FRACTION = 0.4;
  * centered within `canvas` at COLOR_BAND_FRACTION of its height. Then draws
  * a vertical line spanning the canvas's FULL height at each of
  * `stockLossMarkers`' frame positions (blue for the perspective player,
- * grey for the opponent, with a dark outline for contrast against a
+ * red for the opponent, with a dark outline for contrast against a
  * same-colored segment), on top. Consecutive frames sharing a
  * classification are drawn as a single rect. Clears the canvas (no-op
  * draw) if `classifications` is empty.
@@ -61,12 +62,29 @@ export function renderMatchTimeline(
   }
   flushRun(classifications.length);
 
+  const dpr =
+    typeof window !== "undefined" && window.devicePixelRatio
+      ? window.devicePixelRatio
+      : 1;
+  const markerWidth = Math.max(
+    STOCK_LOSS_MARKER_WIDTH_PX,
+    Math.round(STOCK_LOSS_MARKER_WIDTH_PX * dpr),
+  );
+  const outlineWidth = Math.max(1, Math.round(dpr));
+
   for (const marker of stockLossMarkers) {
-    const x = marker.frameIndex * frameWidth - STOCK_LOSS_MARKER_WIDTH_PX / 2;
+    const x = marker.frameIndex * frameWidth - markerWidth / 2;
     ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
-    ctx.fillRect(x - 1, 0, STOCK_LOSS_MARKER_WIDTH_PX + 2, canvas.height);
+    ctx.fillRect(
+      x - outlineWidth,
+      0,
+      markerWidth + outlineWidth * 2,
+      canvas.height,
+    );
     ctx.fillStyle =
-      marker.side === "perspective" ? MAIN_PLAYER_COLOR : OPPONENT_COLOR;
-    ctx.fillRect(x, 0, STOCK_LOSS_MARKER_WIDTH_PX, canvas.height);
+      marker.side === "perspective"
+        ? MAIN_PLAYER_COLOR
+        : OPPONENT_STOCK_LOSS_COLOR;
+    ctx.fillRect(x, 0, markerWidth, canvas.height);
   }
 }

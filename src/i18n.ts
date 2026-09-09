@@ -334,6 +334,16 @@ export interface Translations {
   replayInfoWidgetTitle: string;
   replayInfoFileLabel: string;
   replayInfoRecordedLabel: string;
+  replayInfoGoodNameLabel: string;
+  replayInfoSpecVersionLabel: string;
+  replayInfoSchemaVersionLabel: string;
+  replayInfoGameFamilyLabel: string;
+  replayInfoDurationLabel: string;
+  replayInfoEndReasonLabel: string;
+  replayInfoEndReasonNormal: string;
+  replayInfoEndReasonAborted: string;
+  replayInfoSizeLabel: string;
+  replayInfoUncompressedSize: (uncompressed: string) => string;
   finalStocksDetail: (stocks: number) => string;
 
   // YouTube Video Sync
@@ -776,6 +786,16 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoWidgetTitle: "Replay Info",
     replayInfoFileLabel: "File",
     replayInfoRecordedLabel: "Recorded",
+    replayInfoGoodNameLabel: "Good Name",
+    replayInfoSpecVersionLabel: "Spec Version",
+    replayInfoSchemaVersionLabel: "Schema Version",
+    replayInfoGameFamilyLabel: "Game Family",
+    replayInfoDurationLabel: "Duration",
+    replayInfoEndReasonLabel: "End Reason",
+    replayInfoEndReasonNormal: "Normal",
+    replayInfoEndReasonAborted: "Aborted",
+    replayInfoSizeLabel: "Size",
+    replayInfoUncompressedSize: (u) => `${u} uncompressed`,
     finalStocksDetail: (stocks) => `Stocks Remaining: ${stocks}`,
 
     // YouTube Video Sync
@@ -1218,6 +1238,16 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoWidgetTitle: "リプレイ情報",
     replayInfoFileLabel: "ファイル",
     replayInfoRecordedLabel: "録画日時",
+    replayInfoGoodNameLabel: "Good Name",
+    replayInfoSpecVersionLabel: "仕様バージョン",
+    replayInfoSchemaVersionLabel: "スキーマバージョン",
+    replayInfoGameFamilyLabel: "ゲーム種別",
+    replayInfoDurationLabel: "試合時間",
+    replayInfoEndReasonLabel: "終了理由",
+    replayInfoEndReasonNormal: "通常終了",
+    replayInfoEndReasonAborted: "ノーコンテスト（中断）",
+    replayInfoSizeLabel: "サイズ",
+    replayInfoUncompressedSize: (u) => `解凍後: ${u}`,
     finalStocksDetail: (stocks) => `残ストック: ${stocks}`,
 
     // YouTube Video Sync
