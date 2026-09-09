@@ -2814,7 +2814,7 @@
       #characterMetaCollapseBtn:hover h2 {
         color: var(--text);
       }
-      #positionHeatmapSection {
+      #neutralHeatmapSection {
         flex-shrink: 0;
         display: flex;
         flex-direction: column;
@@ -2824,10 +2824,10 @@
         border-radius: 8px;
         overflow: hidden;
       }
-      #positionHeatmapSection[hidden] {
+      #neutralHeatmapSection[hidden] {
         display: none !important;
       }
-      #positionHeatmapHeader {
+      #neutralHeatmapHeader {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -2836,7 +2836,7 @@
         flex-shrink: 0;
         flex-wrap: wrap;
       }
-      #positionHeatmapCollapseBtn {
+      #neutralHeatmapCollapseBtn {
         display: flex;
         align-items: center;
         gap: 6px;
@@ -2846,16 +2846,16 @@
         cursor: pointer;
         color: var(--text-dim);
       }
-      #positionHeatmapCollapseBtn:hover {
+      #neutralHeatmapCollapseBtn:hover {
         color: var(--text);
       }
-      #positionHeatmapCollapseBtn:hover h2 {
+      #neutralHeatmapCollapseBtn:hover h2 {
         color: var(--text);
       }
-      #positionHeatmapCollapseBtn.collapsed .collapse-icon {
+      #neutralHeatmapCollapseBtn.collapsed .collapse-icon {
         transform: rotate(-90deg);
       }
-      #positionHeatmapHeader h2 {
+      #neutralHeatmapHeader h2 {
         font-size: 12px;
         font-weight: 600;
         color: var(--text-dim);
@@ -4040,24 +4040,76 @@
       #statsPanel[hidden] {
         display: none !important;
       }
-      #positionHeatmapPanelBody {
+      #neutralHeatmapPanelBody {
         padding: 10px 12px;
         display: flex;
         flex-direction: column;
         gap: 8px;
         font-size: 12px;
       }
-      #positionHeatmapPanelBody[hidden] {
+      #neutralHeatmapPanelBody[hidden] {
         display: none !important;
       }
-      #positionHeatmapAngelToggleLabel {
+      #neutralHeatmapTargetToggle {
+        display: flex;
+        gap: 6px;
+        width: 100%;
+      }
+      .heatmap-target-btn {
+        flex: 1;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--panel-border);
+        cursor: pointer;
+        background: #22252f;
+        color: var(--text-dim);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition:
+          background 0.12s,
+          border-color 0.12s,
+          color 0.12s,
+          box-shadow 0.12s;
+      }
+      .heatmap-target-btn:hover {
+        background: #2c3040;
+        color: var(--text);
+        border-color: #3b4050;
+      }
+      .heatmap-target-btn.active[data-target="me"] {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #ffffff;
+        font-weight: 700;
+        box-shadow: 0 2px 10px rgba(59, 130, 246, 0.45);
+      }
+      .heatmap-target-btn.active[data-target="me"]:hover {
+        background: #2563eb;
+        border-color: #2563eb;
+      }
+      .heatmap-target-btn.active[data-target="opponent"] {
+        background: #ef4444;
+        border-color: #ef4444;
+        color: #ffffff;
+        font-weight: 700;
+        box-shadow: 0 2px 10px rgba(239, 68, 68, 0.45);
+      }
+      .heatmap-target-btn.active[data-target="opponent"]:hover {
+        background: #dc2626;
+        border-color: #dc2626;
+      }
+      #neutralHeatmapAngelToggleLabel {
         display: flex;
         align-items: center;
         gap: 6px;
         cursor: pointer;
         color: var(--text-dim);
       }
-      #positionHeatmapCanvas {
+      #neutralHeatmapCanvas {
         width: 100%;
         height: auto;
         aspect-ratio: 600 / 360;
@@ -4454,7 +4506,7 @@
           flex: 0 0 auto;
           overflow: visible !important;
         }
-        #positionHeatmapSection {
+        #neutralHeatmapSection {
           order: 6;
           width: 100%;
           min-width: 0;
@@ -4559,7 +4611,7 @@
         #vodWidgetHeader,
         #perspectiveWidgetHeader,
         #matchStatsHeader,
-        #positionHeatmapHeader,
+        #neutralHeatmapHeader,
         #characterMetaHeader,
         #neutralHitsWidget .sidebar-header,
         .situation-widget-header,
@@ -4576,7 +4628,7 @@
         #vodWidgetHeader::after,
         #perspectiveWidgetHeader::after,
         #matchStatsHeader::after,
-        #positionHeatmapHeader::after,
+        #neutralHeatmapHeader::after,
         #characterMetaHeader::after,
         #neutralHitsWidget .sidebar-header::after,
         .situation-widget-header::after,
@@ -4609,7 +4661,7 @@
       @media (max-width: 480px) {
         #perspectiveWidget,
         #matchStats,
-        #positionHeatmapSection,
+        #neutralHeatmapSection,
         .situation-widget,
         #characterMetaWidget,
         #logFilterWidget,
@@ -5068,26 +5120,44 @@
                 </p>
               </div>
             </section>
-            <section id="positionHeatmapSection" hidden>
-              <div id="positionHeatmapHeader">
+            <section id="neutralHeatmapSection" hidden>
+              <div id="neutralHeatmapHeader">
                 <button
-                  id="positionHeatmapCollapseBtn"
-                  title="Collapse / expand Position Heatmap"
+                  id="neutralHeatmapCollapseBtn"
+                  title="Collapse / expand Neutral Heatmap"
                 >
                   <span class="collapse-icon">▼</span>
-                  <h2>Position Heatmap</h2>
+                  <h2>Neutral Heatmap</h2>
                 </button>
               </div>
-              <div id="positionHeatmapPanelBody">
-                <label id="positionHeatmapAngelToggleLabel">
-                  <input type="checkbox" id="positionHeatmapAngelToggle" />
+              <div id="neutralHeatmapPanelBody">
+                <div id="neutralHeatmapTargetToggle">
+                  <button
+                    type="button"
+                    id="neutralHeatmapTargetMeBtn"
+                    class="heatmap-target-btn active"
+                    data-target="me"
+                  >
+                    Me
+                  </button>
+                  <button
+                    type="button"
+                    id="neutralHeatmapTargetOpponentBtn"
+                    class="heatmap-target-btn"
+                    data-target="opponent"
+                  >
+                    Opponent
+                  </button>
+                </div>
+                <label id="neutralHeatmapAngelToggleLabel">
+                  <input type="checkbox" id="neutralHeatmapAngelToggle" />
                   <span
                     >Only first 5s after opponent respawns (angel
                     invincibility)</span
                   >
                 </label>
                 <canvas
-                  id="positionHeatmapCanvas"
+                  id="neutralHeatmapCanvas"
                   width="600"
                   height="360"
                 ></canvas>

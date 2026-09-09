@@ -1,11 +1,28 @@
-import { MAIN_PLAYER_COLOR, OPPONENT_COLOR } from "./players.js";
-import { stageBlastZone, stageGeometry, stageSlopes } from "./stageGeometry.js";
-import type { HeatmapPoint, HeatmapPoints } from "./positionHeatmap.js";
+import { MAIN_PLAYER_COLOR } from "./players.js";
+import {
+  stageBlastZone,
+  stageGeometry,
+  stageHeatmapBounds,
+  stageSlopes,
+} from "./stageGeometry.js";
+import type { HeatmapPoint, HeatmapPoints } from "./neutralHeatmap.js";
+
+export type HeatmapTarget = "me" | "opponent";
+
+export const HEATMAP_ME_COLOR = MAIN_PLAYER_COLOR; // Blue (#3b82f6)
+export const HEATMAP_OPPONENT_COLOR = "#ef4444"; // Red
 
 const GRID_COLS = 60;
 const GRID_ROWS = 36;
 /** Any visited cell is at least this visible, even if its count is tiny relative to the hottest cell. */
-const MIN_CELL_ALPHA = 0.08;
+const MIN_CELL_ALPHA = 0.05;
+
+/** Weight for the immediate square occupied in a frame. */
+const KERNEL_CENTER = 1.0;
+/** Weight for the 4 orthogonal squares immediately adjacent (up, down, left, right). */
+const KERNEL_ORTHOGONAL = 0.5;
+/** Weight for the 4 diagonal corner squares. */
+const KERNEL_DIAGONAL = 0.25;
 
 function buildGrid(
   points: readonly HeatmapPoint[],
@@ -13,8 +30,8 @@ function buildGrid(
   rightX: number,
   bottomY: number,
   topY: number,
-): { counts: Uint32Array; max: number } {
-  const counts = new Uint32Array(GRID_COLS * GRID_ROWS);
+): { counts: Float32Array; max: number } {
+  const counts = new Float32Array(GRID_COLS * GRID_ROWS);
   let max = 0;
   const width = rightX - leftX;
   const height = topY - bottomY;
@@ -25,15 +42,33 @@ function buildGrid(
     const ny = (p.y - bottomY) / height;
     if (nx < 0 || nx >= 1 || ny < 0 || ny >= 1) continue;
 
-    const col = Math.min(GRID_COLS - 1, Math.floor(nx * GRID_COLS));
+    const centerCol = Math.min(GRID_COLS - 1, Math.floor(nx * GRID_COLS));
     // Flip vertically: world Y grows up, grid row 0 is the top of the canvas.
-    const row = Math.min(
+    const centerRow = Math.min(
       GRID_ROWS - 1,
       GRID_ROWS - 1 - Math.floor(ny * GRID_ROWS),
     );
-    const idx = row * GRID_COLS + col;
-    counts[idx]!++;
-    if (counts[idx]! > max) max = counts[idx]!;
+
+    for (let dr = -1; dr <= 1; dr++) {
+      const r = centerRow + dr;
+      if (r < 0 || r >= GRID_ROWS) continue;
+      for (let dc = -1; dc <= 1; dc++) {
+        const c = centerCol + dc;
+        if (c < 0 || c >= GRID_COLS) continue;
+
+        const weight =
+          dr === 0 && dc === 0
+            ? KERNEL_CENTER
+            : dr === 0 || dc === 0
+              ? KERNEL_ORTHOGONAL
+              : KERNEL_DIAGONAL;
+
+        const idx = r * GRID_COLS + c;
+        const nextVal = counts[idx]! + weight;
+        counts[idx] = nextVal;
+        if (nextVal > max) max = nextVal;
+      }
+    }
   }
 
   return { counts, max };
@@ -41,7 +76,7 @@ function buildGrid(
 
 function drawLayer(
   ctx: CanvasRenderingContext2D,
-  counts: Uint32Array,
+  counts: Float32Array,
   max: number,
   color: string,
   cellWidth: number,
@@ -52,7 +87,7 @@ function drawLayer(
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
       const count = counts[row * GRID_COLS + col]!;
-      if (count === 0) continue;
+      if (count <= 0) continue;
       // Position data is heavily long-tailed (spawn points, ledges, center
       // stage dominate), so a linear count/max ratio clamps almost every
       // cell to MIN_CELL_ALPHA. Compress with sqrt so mid-frequency cells
@@ -68,25 +103,25 @@ function drawLayer(
 
 /**
  * Renders a static grid-density heatmap of `points` onto `canvas`, scaled
- * to `stageId`'s blast-zone extent. Draws a faint platform outline first
- * for spatial reference. Clears the canvas (no-op draw) if the stage's
- * geometry/blast-zone isn't in the lookup tables yet (see
- * src/stageGeometry.ts — only Dream Land is populated as of this writing).
+ * to `stageId`'s stage framing bounds. Draws a faint platform outline first
+ * for spatial reference. Renders only the selected target ("me" in blue or
+ * "opponent" in red) so characters do not overlap or clutter each other.
  */
-export function renderPositionHeatmap(
+export function renderNeutralHeatmap(
   canvas: HTMLCanvasElement,
   stageId: number | undefined,
   points: HeatmapPoints,
+  target: HeatmapTarget = "me",
 ): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const blastZone = stageBlastZone(stageId);
-  if (!blastZone) return;
+  const bounds = stageHeatmapBounds(stageId) ?? stageBlastZone(stageId);
+  if (!bounds) return;
 
-  const { leftX, rightX, bottomY, topY } = blastZone;
+  const { leftX, rightX, bottomY, topY } = bounds;
   const worldWidth = rightX - leftX;
   const worldHeight = topY - bottomY;
   if (worldWidth <= 0 || worldHeight <= 0) return;
@@ -131,29 +166,11 @@ export function renderPositionHeatmap(
   const cellWidth = canvas.width / GRID_COLS;
   const cellHeight = canvas.height / GRID_ROWS;
 
-  const perspectiveGrid = buildGrid(
-    points.perspective,
-    leftX,
-    rightX,
-    bottomY,
-    topY,
-  );
-  const opponentGrid = buildGrid(points.opponent, leftX, rightX, bottomY, topY);
+  const targetPoints =
+    target === "opponent" ? points.opponent : points.perspective;
+  const targetColor =
+    target === "opponent" ? HEATMAP_OPPONENT_COLOR : HEATMAP_ME_COLOR;
 
-  drawLayer(
-    ctx,
-    perspectiveGrid.counts,
-    perspectiveGrid.max,
-    MAIN_PLAYER_COLOR,
-    cellWidth,
-    cellHeight,
-  );
-  drawLayer(
-    ctx,
-    opponentGrid.counts,
-    opponentGrid.max,
-    OPPONENT_COLOR,
-    cellWidth,
-    cellHeight,
-  );
+  const grid = buildGrid(targetPoints, leftX, rightX, bottomY, topY);
+  drawLayer(ctx, grid.counts, grid.max, targetColor, cellWidth, cellHeight);
 }
