@@ -1,5 +1,5 @@
 import { MAIN_PLAYER_COLOR, OPPONENT_COLOR } from "./players.js";
-import { stageBlastZone, stageGeometry } from "./stageGeometry.js";
+import { stageBlastZone, stageGeometry, stageSlopes } from "./stageGeometry.js";
 import type { HeatmapPoint, HeatmapPoints } from "./positionHeatmap.js";
 
 const GRID_COLS = 60;
@@ -94,6 +94,26 @@ export function renderPositionHeatmap(
   const toCanvasX = (x: number) => ((x - leftX) / worldWidth) * canvas.width;
   const toCanvasY = (y: number) =>
     canvas.height - ((y - bottomY) / worldHeight) * canvas.height;
+
+  const slopes = stageSlopes(stageId);
+  if (slopes) {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.lineWidth = 2;
+    for (const slope of [slopes.leftSlope, slopes.rightSlope]) {
+      ctx.beginPath();
+      ctx.moveTo(toCanvasX(slope[0]!.x), toCanvasY(slope[0]!.y));
+      for (let i = 1; i < slope.length; i++) {
+        ctx.lineTo(toCanvasX(slope[i]!.x), toCanvasY(slope[i]!.y));
+      }
+      ctx.stroke();
+    }
+    const bottomL = slopes.leftSlope[slopes.leftSlope.length - 1]!;
+    const bottomR = slopes.rightSlope[slopes.rightSlope.length - 1]!;
+    ctx.beginPath();
+    ctx.moveTo(toCanvasX(bottomL.x), toCanvasY(bottomL.y));
+    ctx.lineTo(toCanvasX(bottomR.x), toCanvasY(bottomR.y));
+    ctx.stroke();
+  }
 
   const platforms = stageGeometry(stageId);
   if (platforms) {

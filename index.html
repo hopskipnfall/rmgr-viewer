@@ -1859,7 +1859,14 @@
         gap: 12px;
         padding: 12px;
       }
+      #matchScrollArea {
+        display: contents;
+      }
+      #neutralSidebar {
+        order: 1;
+      }
       #stageWrap {
+        order: 2;
         position: relative;
         flex: 1;
         min-width: 0;
@@ -1871,6 +1878,9 @@
         border: 1px solid var(--panel-border);
         border-radius: 8px;
         overflow: hidden;
+      }
+      #sidebar {
+        order: 3;
       }
       #youtubePlayerWrap {
         position: absolute;
@@ -4214,7 +4224,8 @@
         padding: 6px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
         pointer-events: none;
-        transform: translate(-50%, -100%);
+        width: max-content;
+        box-sizing: border-box;
       }
       #scrubberPreviewTooltip[hidden] {
         display: none !important;
@@ -4368,44 +4379,43 @@
         }
         #matchView {
           flex-direction: column;
-          overflow-y: auto;
-          overflow-x: hidden;
-          gap: 12px;
-          padding: 8px;
-        }
-        #neutralSidebar,
-        #sidebar {
-          display: contents !important;
+          overflow: hidden;
+          gap: 0;
+          padding: 0;
+          height: 100%;
         }
         #stageWrap {
           order: 1;
-          position: sticky;
-          top: -8px;
+          position: relative;
+          top: 0;
           z-index: 30;
           width: 100%;
           aspect-ratio: 16 / 9;
           flex: 0 0 auto;
           min-height: 200px;
           max-height: 42vh;
-          box-shadow:
-            0 -16px 0 var(--bg),
-            0 6px 24px rgba(0, 0, 0, 0.75);
+          border-radius: 0;
+          border-left: none;
+          border-right: none;
+          border-top: none;
+          border-bottom: 1px solid var(--panel-border);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
         }
-        #stageWrap::after {
-          content: "";
-          position: absolute;
-          left: 0;
-          right: 0;
-          top: 100%;
-          height: 16px;
-          background: linear-gradient(
-            to bottom,
-            rgba(11, 12, 16, 0.95) 0%,
-            rgba(11, 12, 16, 0.5) 45%,
-            transparent 100%
-          );
-          pointer-events: none;
-          z-index: 30;
+        #matchScrollArea {
+          order: 2;
+          display: flex;
+          flex-direction: column;
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow-y: auto;
+          overflow-x: hidden;
+          gap: 12px;
+          padding: 8px;
+          -webkit-overflow-scrolling: touch;
+        }
+        #neutralSidebar,
+        #sidebar {
+          display: contents !important;
         }
         .stage-sidebar-tab,
         .stage-expand-btn,
@@ -4444,15 +4454,22 @@
           flex: 0 0 auto;
           overflow: visible !important;
         }
-        #characterMetaWidget {
+        #positionHeatmapSection {
           order: 6;
           width: 100%;
           min-width: 0;
           flex: 0 0 auto;
           overflow: visible !important;
         }
-        #neutralHitsWidget {
+        #characterMetaWidget {
           order: 7;
+          width: 100%;
+          min-width: 0;
+          flex: 0 0 auto;
+          overflow: visible !important;
+        }
+        #neutralHitsWidget {
+          order: 8;
           width: 100%;
           min-width: 0;
           flex: 0 0 auto;
@@ -4468,49 +4485,49 @@
           padding: 8px;
         }
         #combosWidget {
-          order: 8;
-          width: 100%;
-          min-width: 0;
-          flex: 0 0 auto;
-          overflow: visible !important;
-        }
-        #diWidget {
           order: 9;
           width: 100%;
           min-width: 0;
           flex: 0 0 auto;
           overflow: visible !important;
         }
-        #recoveryWidget {
+        #diWidget {
           order: 10;
           width: 100%;
           min-width: 0;
           flex: 0 0 auto;
           overflow: visible !important;
         }
-        #edgeGuardWidget {
+        #recoveryWidget {
           order: 11;
           width: 100%;
           min-width: 0;
           flex: 0 0 auto;
           overflow: visible !important;
         }
-        #ledgeGetupWidget {
+        #edgeGuardWidget {
           order: 12;
           width: 100%;
           min-width: 0;
           flex: 0 0 auto;
           overflow: visible !important;
         }
-        #ledgeTrapWidget {
+        #ledgeGetupWidget {
           order: 13;
           width: 100%;
           min-width: 0;
           flex: 0 0 auto;
           overflow: visible !important;
         }
-        #players {
+        #ledgeTrapWidget {
           order: 14;
+          width: 100%;
+          min-width: 0;
+          flex: 0 0 auto;
+          overflow: visible !important;
+        }
+        #players {
+          order: 15;
           width: 100%;
           flex-direction: row;
           flex-wrap: wrap;
@@ -4523,14 +4540,14 @@
           min-width: 0;
         }
         #logFilterWidget {
-          order: 15;
+          order: 16;
           width: 100%;
           min-width: 0;
           flex: 0 0 auto;
           overflow: visible !important;
         }
         #replayInfoWidget {
-          order: 16;
+          order: 17;
           width: 100%;
           min-width: 0;
           flex: 0 0 auto;
@@ -4542,6 +4559,7 @@
         #vodWidgetHeader,
         #perspectiveWidgetHeader,
         #matchStatsHeader,
+        #positionHeatmapHeader,
         #characterMetaHeader,
         #neutralHitsWidget .sidebar-header,
         .situation-widget-header,
@@ -4558,6 +4576,7 @@
         #vodWidgetHeader::after,
         #perspectiveWidgetHeader::after,
         #matchStatsHeader::after,
+        #positionHeatmapHeader::after,
         #characterMetaHeader::after,
         #neutralHitsWidget .sidebar-header::after,
         .situation-widget-header::after,
@@ -4590,6 +4609,7 @@
       @media (max-width: 480px) {
         #perspectiveWidget,
         #matchStats,
+        #positionHeatmapSection,
         .situation-widget,
         #characterMetaWidget,
         #logFilterWidget,
@@ -4682,25 +4702,6 @@
 
       <!-- Match View -->
       <div id="matchView" class="view-container" hidden>
-        <!-- Left Sidebar: Neutral Analysis -->
-        <aside id="neutralSidebar" class="match-sidebar neutral-sidebar">
-          <section id="neutralHitsWidget" class="situation-widget">
-            <div class="sidebar-header situation-widget-header">
-              <h2 id="neutralHitsWidgetTitle" class="sidebar-header-title">
-                Neutral Analysis
-              </h2>
-              <button
-                id="collapseLeftSidebarBtn"
-                class="sidebar-collapse-toggle-btn"
-                title="Collapse Neutral Analysis sidebar"
-              >
-                ◀
-              </button>
-            </div>
-            <div id="neutralHitsList" class="situation-list"></div>
-          </section>
-        </aside>
-
         <!-- Center: Stage Canvas & Overlays -->
         <div id="stageWrap">
           <div id="youtubePlayerWrap">
@@ -4783,445 +4784,473 @@
           </button>
         </div>
 
-        <!-- Right Sidebar: Perspective, Stats, & Situations -->
-        <aside id="sidebar" class="match-sidebar right-sidebar">
-          <div class="sidebar-header right-sidebar-header">
-            <h2 id="statsSidebarHeaderTitle" class="sidebar-header-title">
-              Stats & Situations
-            </h2>
-            <button
-              id="collapseRightSidebarBtn"
-              class="sidebar-collapse-toggle-btn"
-              title="Collapse Stats sidebar"
-            >
-              ▶
-            </button>
-          </div>
-          <section id="twelveCbMatchWidget" hidden>
-            <div id="twelveCbWidgetHeader">
+        <!-- Scrollable content below playback on mobile; transparent flex wrapper on desktop -->
+        <div id="matchScrollArea">
+          <!-- Left Sidebar: Neutral Analysis -->
+          <aside id="neutralSidebar" class="match-sidebar neutral-sidebar">
+            <section id="neutralHitsWidget" class="situation-widget">
+              <div class="sidebar-header situation-widget-header">
+                <h2 id="neutralHitsWidgetTitle" class="sidebar-header-title">
+                  Neutral Analysis
+                </h2>
+                <button
+                  id="collapseLeftSidebarBtn"
+                  class="sidebar-collapse-toggle-btn"
+                  title="Collapse Neutral Analysis sidebar"
+                >
+                  ◀
+                </button>
+              </div>
+              <div id="neutralHitsList" class="situation-list"></div>
+            </section>
+          </aside>
+
+          <!-- Right Sidebar: Perspective, Stats, & Situations -->
+          <aside id="sidebar" class="match-sidebar right-sidebar">
+            <div class="sidebar-header right-sidebar-header">
+              <h2 id="statsSidebarHeaderTitle" class="sidebar-header-title">
+                Stats & Situations
+              </h2>
               <button
-                id="twelveCbCollapseBtn"
-                title="Collapse / expand 12 Character Battle"
+                id="collapseRightSidebarBtn"
+                class="sidebar-collapse-toggle-btn"
+                title="Collapse Stats sidebar"
               >
-                <span class="collapse-icon">▼</span>
-                <h2 id="twelveCbHeaderTitle">12 Character Battle</h2>
+                ▶
               </button>
             </div>
-            <div id="twelveCbWidgetBody">
-              <div class="twelve-cb-match-nav">
+            <section id="twelveCbMatchWidget" hidden>
+              <div id="twelveCbWidgetHeader">
                 <button
-                  id="twelveCbPrevMatchBtn"
-                  class="twelve-cb-nav-btn"
-                  type="button"
+                  id="twelveCbCollapseBtn"
+                  title="Collapse / expand 12 Character Battle"
                 >
-                  <span aria-hidden="true">←</span>
-                  <span id="twelveCbPrevMatchLabel">Prev</span>
-                </button>
-                <button
-                  id="twelveCbNextMatchBtn"
-                  class="twelve-cb-nav-btn"
-                  type="button"
-                >
-                  <span id="twelveCbNextMatchLabel">Next</span>
-                  <span aria-hidden="true">→</span>
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="twelveCbHeaderTitle">12 Character Battle</h2>
                 </button>
               </div>
-              <div
-                id="twelveCbPlayersContainer"
-                class="twelve-cb-sidebar-players"
-              ></div>
-            </div>
-          </section>
-          <section id="vodWidget" hidden>
-            <div id="vodWidgetHeader">
-              <h2 id="vodHeaderTitle">VOD</h2>
-            </div>
-            <div id="vodWidgetBody">
-              <div class="vod-row">
-                <span class="vod-row-label" id="vodModeLabel"
-                  >Playback mode:</span
-                >
-                <div class="vod-mode-row">
+              <div id="twelveCbWidgetBody">
+                <div class="twelve-cb-match-nav">
                   <button
-                    id="viewModeCanvasBtn"
-                    class="video-sync-btn"
-                    title="Replay Only (audio still plays)"
+                    id="twelveCbPrevMatchBtn"
+                    class="twelve-cb-nav-btn"
+                    type="button"
                   >
-                    🔊 Replay
+                    <span aria-hidden="true">←</span>
+                    <span id="twelveCbPrevMatchLabel">Prev</span>
                   </button>
                   <button
-                    id="viewModeCanvasMutedBtn"
-                    class="video-sync-btn muted"
-                    title="Replay Only (no video audio)"
+                    id="twelveCbNextMatchBtn"
+                    class="twelve-cb-nav-btn"
+                    type="button"
                   >
-                    🔇 Replay
-                  </button>
-                  <button
-                    id="viewModeVideoBtn"
-                    class="video-sync-btn"
-                    title="Video Only"
-                  >
-                    🎬 YouTube
-                  </button>
-                  <button
-                    id="viewModePipBtn"
-                    class="video-sync-btn active"
-                    title="Video + Mini 2D Overlay"
-                  >
-                    🖼 PiP
+                    <span id="twelveCbNextMatchLabel">Next</span>
+                    <span aria-hidden="true">→</span>
                   </button>
                 </div>
+                <div
+                  id="twelveCbPlayersContainer"
+                  class="twelve-cb-sidebar-players"
+                ></div>
               </div>
-              <div class="vod-row">
-                <span class="vod-row-label" id="vodSyncLabel">Fix sync:</span>
-                <div class="vod-sync-row">
-                  <span
-                    class="video-offset-badge"
-                    title="Replay Frame 0 Video Offset"
-                    >⏱
-                    <input
-                      type="text"
-                      id="videoOffsetInput"
-                      class="video-offset-input"
-                      value="0:00.00"
-                  /></span>
+            </section>
+            <section id="vodWidget" hidden>
+              <div id="vodWidgetHeader">
+                <h2 id="vodHeaderTitle">VOD</h2>
+              </div>
+              <div id="vodWidgetBody">
+                <div class="vod-row">
+                  <span class="vod-row-label" id="vodModeLabel"
+                    >Playback mode:</span
+                  >
+                  <div class="vod-mode-row">
+                    <button
+                      id="viewModeCanvasBtn"
+                      class="video-sync-btn"
+                      title="Replay Only (audio still plays)"
+                    >
+                      🔊 Replay
+                    </button>
+                    <button
+                      id="viewModeCanvasMutedBtn"
+                      class="video-sync-btn muted"
+                      title="Replay Only (no video audio)"
+                    >
+                      🔇 Replay
+                    </button>
+                    <button
+                      id="viewModeVideoBtn"
+                      class="video-sync-btn"
+                      title="Video Only"
+                    >
+                      🎬 YouTube
+                    </button>
+                    <button
+                      id="viewModePipBtn"
+                      class="video-sync-btn active"
+                      title="Video + Mini 2D Overlay"
+                    >
+                      🖼 PiP
+                    </button>
+                  </div>
+                </div>
+                <div class="vod-row">
+                  <span class="vod-row-label" id="vodSyncLabel">Fix sync:</span>
+                  <div class="vod-sync-row">
+                    <span
+                      class="video-offset-badge"
+                      title="Replay Frame 0 Video Offset"
+                      >⏱
+                      <input
+                        type="text"
+                        id="videoOffsetInput"
+                        class="video-offset-input"
+                        value="0:00.00"
+                    /></span>
+                    <button
+                      id="nudgeMinus1sBtn"
+                      class="video-sync-btn nudge-btn"
+                      title="-1.0s"
+                    >
+                      -1s
+                    </button>
+                    <button
+                      id="nudgeMinus1fBtn"
+                      class="video-sync-btn nudge-btn"
+                      title="-1 frame"
+                    >
+                      -1f
+                    </button>
+                    <button
+                      id="nudgePlus1fBtn"
+                      class="video-sync-btn nudge-btn"
+                      title="+1 frame"
+                    >
+                      +1f
+                    </button>
+                    <button
+                      id="nudgePlus1sBtn"
+                      class="video-sync-btn nudge-btn"
+                      title="+1.0s"
+                    >
+                      +1s
+                    </button>
+                    <span
+                      id="offsetManualBadge"
+                      class="offset-manual-badge"
+                      hidden
+                    >
+                      <span id="offsetManualBadgeLabel">Manual</span>
+                      <button
+                        type="button"
+                        id="clearOffsetOverrideBtn"
+                        class="clear-offset-btn"
+                        aria-label="Clear manual offset"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  </div>
+                </div>
+                <div class="vod-row vod-link-row" id="vodLinkDisplayRow">
+                  <a
+                    id="vodYoutubeLink"
+                    class="vod-youtube-link"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >▶ Watch on YouTube ↗</a
+                  >
                   <button
-                    id="nudgeMinus1sBtn"
-                    class="video-sync-btn nudge-btn"
-                    title="-1.0s"
+                    id="vodEditLinkBtn"
+                    class="video-sync-btn"
+                    type="button"
                   >
-                    -1s
+                    ✎ Edit
                   </button>
-                  <button
-                    id="nudgeMinus1fBtn"
-                    class="video-sync-btn nudge-btn"
-                    title="-1 frame"
-                  >
-                    -1f
-                  </button>
-                  <button
-                    id="nudgePlus1fBtn"
-                    class="video-sync-btn nudge-btn"
-                    title="+1 frame"
-                  >
-                    +1f
-                  </button>
-                  <button
-                    id="nudgePlus1sBtn"
-                    class="video-sync-btn nudge-btn"
-                    title="+1.0s"
-                  >
-                    +1s
-                  </button>
-                  <span
-                    id="offsetManualBadge"
-                    class="offset-manual-badge"
-                    hidden
-                  >
-                    <span id="offsetManualBadgeLabel">Manual</span>
+                </div>
+                <div
+                  class="vod-row vod-link-edit-row"
+                  id="vodLinkEditRow"
+                  hidden
+                >
+                  <input
+                    type="text"
+                    id="videoUrlInput"
+                    class="form-control vod-url-input"
+                    placeholder="https://www.youtube.com/watch?v=... or youtu.be/..."
+                  />
+                  <div id="videoLinkError" class="form-error" hidden></div>
+                  <div class="vod-edit-actions">
+                    <div class="vod-edit-actions-left">
+                      <button
+                        type="button"
+                        id="videoLinkSaveBtn"
+                        class="video-sync-btn active"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        id="videoLinkCancelBtn"
+                        class="video-sync-btn"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div class="vod-edit-actions-right">
+                      <button
+                        type="button"
+                        id="unlinkSessionBtn"
+                        class="vod-unlink-btn"
+                        hidden
+                      >
+                        Unlink from session
+                      </button>
+                      <button
+                        type="button"
+                        id="videoUnlinkBtn"
+                        class="vod-unlink-btn"
+                        hidden
+                      >
+                        Unlink video
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  id="vodSyncBanner"
+                  class="form-notice vod-sync-banner"
+                  hidden
+                >
+                  <span id="vodSyncBannerText"></span>
+                  <div class="vod-sync-banner-actions">
                     <button
                       type="button"
-                      id="clearOffsetOverrideBtn"
-                      class="clear-offset-btn"
-                      aria-label="Clear manual offset"
+                      id="syncSessionVideosBtn"
+                      class="video-sync-btn"
+                    >
+                      Sync now
+                    </button>
+                    <button
+                      type="button"
+                      id="vodSyncBannerDismissBtn"
+                      class="video-sync-btn"
+                      aria-label="Dismiss"
                     >
                       ✕
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section id="perspectiveWidget">
+              <div id="perspectiveWidgetHeader">
+                <h2 id="perspectiveHeaderTitle">Perspective</h2>
+              </div>
+              <div id="perspectiveWidgetBody">
+                <div id="perspectiveToggle"></div>
+              </div>
+            </section>
+            <section id="matchStats">
+              <div id="matchStatsHeader">
+                <button
+                  id="statsCollapseBtn"
+                  title="Collapse / expand Match Stats"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2>Match Stats</h2>
+                </button>
+              </div>
+              <div id="statsPanel">
+                <p id="statsEmpty">
+                  No stats — load a Dream Land 2-player replay.
+                </p>
+              </div>
+            </section>
+            <section id="positionHeatmapSection" hidden>
+              <div id="positionHeatmapHeader">
+                <button
+                  id="positionHeatmapCollapseBtn"
+                  title="Collapse / expand Position Heatmap"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2>Position Heatmap</h2>
+                </button>
+              </div>
+              <div id="positionHeatmapPanelBody">
+                <label id="positionHeatmapAngelToggleLabel">
+                  <input type="checkbox" id="positionHeatmapAngelToggle" />
+                  <span
+                    >Only first 5s after opponent respawns (angel
+                    invincibility)</span
+                  >
+                </label>
+                <canvas
+                  id="positionHeatmapCanvas"
+                  width="600"
+                  height="360"
+                ></canvas>
+              </div>
+            </section>
+            <section id="characterMetaWidget" hidden>
+              <div id="characterMetaHeader">
+                <button
+                  id="characterMetaCollapseBtn"
+                  title="Collapse / expand Character Stats"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="characterMetaHeaderTitle"></h2>
+                </button>
+              </div>
+              <div id="characterMetaPanel"></div>
+            </section>
+            <section id="combosWidget" class="situation-widget" hidden>
+              <div class="situation-widget-header">
+                <button
+                  id="combosCollapseBtn"
+                  class="situation-collapse-btn"
+                  title="Collapse / expand Kill Combos"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="combosWidgetTitle" class="situation-widget-title">
+                    Kill Combos
+                  </h2>
+                </button>
+              </div>
+              <div id="combosList" class="situation-list"></div>
+            </section>
+            <section id="recoveryWidget" class="situation-widget" hidden>
+              <div class="situation-widget-header">
+                <button
+                  id="recoveryCollapseBtn"
+                  class="situation-collapse-btn"
+                  title="Collapse / expand Recovery"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="recoveryWidgetTitle" class="situation-widget-title">
+                    Recovery
+                  </h2>
+                </button>
+              </div>
+              <div id="recoveryList" class="situation-list"></div>
+            </section>
+            <section id="edgeGuardWidget" class="situation-widget" hidden>
+              <div class="situation-widget-header">
+                <button
+                  id="edgeGuardCollapseBtn"
+                  class="situation-collapse-btn"
+                  title="Collapse / expand Edge Guard"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="edgeGuardWidgetTitle" class="situation-widget-title">
+                    Edge Guard
+                  </h2>
+                </button>
+              </div>
+              <div id="edgeGuardList" class="situation-list"></div>
+            </section>
+            <section id="ledgeGetupWidget" class="situation-widget" hidden>
+              <div class="situation-widget-header">
+                <button
+                  id="ledgeGetupCollapseBtn"
+                  class="situation-collapse-btn"
+                  title="Collapse / expand Ledge Getup"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="ledgeGetupWidgetTitle" class="situation-widget-title">
+                    Ledge Getup
+                  </h2>
+                </button>
+              </div>
+              <div id="ledgeGetupList" class="situation-list"></div>
+            </section>
+            <section id="ledgeTrapWidget" class="situation-widget" hidden>
+              <div class="situation-widget-header">
+                <button
+                  id="ledgeTrapCollapseBtn"
+                  class="situation-collapse-btn"
+                  title="Collapse / expand Ledge Trap"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="ledgeTrapWidgetTitle" class="situation-widget-title">
+                    Ledge Trap
+                  </h2>
+                </button>
+              </div>
+              <div id="ledgeTrapList" class="situation-list"></div>
+            </section>
+            <div id="players"></div>
+            <section id="diWidget" class="situation-widget" hidden>
+              <div class="situation-widget-header">
+                <button
+                  id="diCollapseBtn"
+                  class="situation-collapse-btn"
+                  title="Collapse / expand Directional Influence"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="diWidgetTitle" class="situation-widget-title">
+                    Directional Influence (DI)
+                  </h2>
+                </button>
+              </div>
+              <div id="diList" class="situation-list"></div>
+            </section>
+            <section id="logFilterWidget">
+              <div id="logFilterHeader">
+                <button
+                  id="logFilterCollapseBtn"
+                  title="Collapse / expand Log Filters"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="logFilterHeaderTitle">Log Filters</h2>
+                </button>
+              </div>
+              <div id="logFilterPanel">
+                <div id="logFilterChips" class="log-filter-chips"></div>
+              </div>
+            </section>
+            <section id="replayInfoWidget">
+              <div id="replayInfoHeader">
+                <button
+                  id="replayInfoCollapseBtn"
+                  title="Collapse / expand Replay Info"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="replayInfoHeaderTitle">Replay Info</h2>
+                </button>
+              </div>
+              <div id="replayInfoPanel">
+                <div class="replay-info-row">
+                  <span class="replay-info-label" id="replayInfoFileLabel"
+                    >File</span
+                  >
+                  <span id="replayInfoFileName" class="replay-info-value"
+                    >—</span
+                  >
+                </div>
+                <div class="replay-info-row">
+                  <span class="replay-info-label" id="replayInfoDateLabel"
+                    >Recorded</span
+                  >
+                  <span id="replayInfoDateLocal" class="replay-info-value"
+                    >—</span
+                  >
+                </div>
+                <div class="replay-info-row" id="replayInfoVideoRow">
+                  <span class="replay-info-label" id="replayInfoVideoLabel"
+                    >Video</span
+                  >
+                  <span id="replayInfoVideoValue" class="replay-info-value">
+                    <button id="replayInfoLinkVideoBtn" class="link-video-btn">
+                      + Link Video
                     </button>
                   </span>
                 </div>
               </div>
-              <div class="vod-row vod-link-row" id="vodLinkDisplayRow">
-                <a
-                  id="vodYoutubeLink"
-                  class="vod-youtube-link"
-                  href="#"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  >▶ Watch on YouTube ↗</a
-                >
-                <button
-                  id="vodEditLinkBtn"
-                  class="video-sync-btn"
-                  type="button"
-                >
-                  ✎ Edit
-                </button>
-              </div>
-              <div class="vod-row vod-link-edit-row" id="vodLinkEditRow" hidden>
-                <input
-                  type="text"
-                  id="videoUrlInput"
-                  class="form-control vod-url-input"
-                  placeholder="https://www.youtube.com/watch?v=... or youtu.be/..."
-                />
-                <div id="videoLinkError" class="form-error" hidden></div>
-                <div class="vod-edit-actions">
-                  <div class="vod-edit-actions-left">
-                    <button
-                      type="button"
-                      id="videoLinkSaveBtn"
-                      class="video-sync-btn active"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      id="videoLinkCancelBtn"
-                      class="video-sync-btn"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <div class="vod-edit-actions-right">
-                    <button
-                      type="button"
-                      id="unlinkSessionBtn"
-                      class="vod-unlink-btn"
-                      hidden
-                    >
-                      Unlink from session
-                    </button>
-                    <button
-                      type="button"
-                      id="videoUnlinkBtn"
-                      class="vod-unlink-btn"
-                      hidden
-                    >
-                      Unlink video
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div
-                id="vodSyncBanner"
-                class="form-notice vod-sync-banner"
-                hidden
-              >
-                <span id="vodSyncBannerText"></span>
-                <div class="vod-sync-banner-actions">
-                  <button
-                    type="button"
-                    id="syncSessionVideosBtn"
-                    class="video-sync-btn"
-                  >
-                    Sync now
-                  </button>
-                  <button
-                    type="button"
-                    id="vodSyncBannerDismissBtn"
-                    class="video-sync-btn"
-                    aria-label="Dismiss"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-          <section id="perspectiveWidget">
-            <div id="perspectiveWidgetHeader">
-              <h2 id="perspectiveHeaderTitle">Perspective</h2>
-            </div>
-            <div id="perspectiveWidgetBody">
-              <div id="perspectiveToggle"></div>
-            </div>
-          </section>
-          <section id="matchStats">
-            <div id="matchStatsHeader">
-              <button
-                id="statsCollapseBtn"
-                title="Collapse / expand Match Stats"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2>Match Stats</h2>
-              </button>
-            </div>
-            <div id="statsPanel">
-              <p id="statsEmpty">
-                No stats — load a Dream Land 2-player replay.
-              </p>
-            </div>
-          </section>
-          <section id="positionHeatmapSection" hidden>
-            <div id="positionHeatmapHeader">
-              <button
-                id="positionHeatmapCollapseBtn"
-                title="Collapse / expand Position Heatmap"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2>Position Heatmap</h2>
-              </button>
-            </div>
-            <div id="positionHeatmapPanelBody">
-              <label id="positionHeatmapAngelToggleLabel">
-                <input type="checkbox" id="positionHeatmapAngelToggle" />
-                <span
-                  >Only first 5s after opponent respawns (angel
-                  invincibility)</span
-                >
-              </label>
-              <canvas
-                id="positionHeatmapCanvas"
-                width="600"
-                height="360"
-              ></canvas>
-            </div>
-          </section>
-          <section id="characterMetaWidget" hidden>
-            <div id="characterMetaHeader">
-              <button
-                id="characterMetaCollapseBtn"
-                title="Collapse / expand Character Stats"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="characterMetaHeaderTitle"></h2>
-              </button>
-            </div>
-            <div id="characterMetaPanel"></div>
-          </section>
-          <section id="combosWidget" class="situation-widget" hidden>
-            <div class="situation-widget-header">
-              <button
-                id="combosCollapseBtn"
-                class="situation-collapse-btn"
-                title="Collapse / expand Kill Combos"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="combosWidgetTitle" class="situation-widget-title">
-                  Kill Combos
-                </h2>
-              </button>
-            </div>
-            <div id="combosList" class="situation-list"></div>
-          </section>
-          <section id="recoveryWidget" class="situation-widget" hidden>
-            <div class="situation-widget-header">
-              <button
-                id="recoveryCollapseBtn"
-                class="situation-collapse-btn"
-                title="Collapse / expand Recovery"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="recoveryWidgetTitle" class="situation-widget-title">
-                  Recovery
-                </h2>
-              </button>
-            </div>
-            <div id="recoveryList" class="situation-list"></div>
-          </section>
-          <section id="edgeGuardWidget" class="situation-widget" hidden>
-            <div class="situation-widget-header">
-              <button
-                id="edgeGuardCollapseBtn"
-                class="situation-collapse-btn"
-                title="Collapse / expand Edge Guard"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="edgeGuardWidgetTitle" class="situation-widget-title">
-                  Edge Guard
-                </h2>
-              </button>
-            </div>
-            <div id="edgeGuardList" class="situation-list"></div>
-          </section>
-          <section id="ledgeGetupWidget" class="situation-widget" hidden>
-            <div class="situation-widget-header">
-              <button
-                id="ledgeGetupCollapseBtn"
-                class="situation-collapse-btn"
-                title="Collapse / expand Ledge Getup"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="ledgeGetupWidgetTitle" class="situation-widget-title">
-                  Ledge Getup
-                </h2>
-              </button>
-            </div>
-            <div id="ledgeGetupList" class="situation-list"></div>
-          </section>
-          <section id="ledgeTrapWidget" class="situation-widget" hidden>
-            <div class="situation-widget-header">
-              <button
-                id="ledgeTrapCollapseBtn"
-                class="situation-collapse-btn"
-                title="Collapse / expand Ledge Trap"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="ledgeTrapWidgetTitle" class="situation-widget-title">
-                  Ledge Trap
-                </h2>
-              </button>
-            </div>
-            <div id="ledgeTrapList" class="situation-list"></div>
-          </section>
-          <div id="players"></div>
-          <section id="diWidget" class="situation-widget" hidden>
-            <div class="situation-widget-header">
-              <button
-                id="diCollapseBtn"
-                class="situation-collapse-btn"
-                title="Collapse / expand Directional Influence"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="diWidgetTitle" class="situation-widget-title">
-                  Directional Influence (DI)
-                </h2>
-              </button>
-            </div>
-            <div id="diList" class="situation-list"></div>
-          </section>
-          <section id="logFilterWidget">
-            <div id="logFilterHeader">
-              <button
-                id="logFilterCollapseBtn"
-                title="Collapse / expand Log Filters"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="logFilterHeaderTitle">Log Filters</h2>
-              </button>
-            </div>
-            <div id="logFilterPanel">
-              <div id="logFilterChips" class="log-filter-chips"></div>
-            </div>
-          </section>
-          <section id="replayInfoWidget">
-            <div id="replayInfoHeader">
-              <button
-                id="replayInfoCollapseBtn"
-                title="Collapse / expand Replay Info"
-              >
-                <span class="collapse-icon">▼</span>
-                <h2 id="replayInfoHeaderTitle">Replay Info</h2>
-              </button>
-            </div>
-            <div id="replayInfoPanel">
-              <div class="replay-info-row">
-                <span class="replay-info-label" id="replayInfoFileLabel"
-                  >File</span
-                >
-                <span id="replayInfoFileName" class="replay-info-value">—</span>
-              </div>
-              <div class="replay-info-row">
-                <span class="replay-info-label" id="replayInfoDateLabel"
-                  >Recorded</span
-                >
-                <span id="replayInfoDateLocal" class="replay-info-value"
-                  >—</span
-                >
-              </div>
-              <div class="replay-info-row" id="replayInfoVideoRow">
-                <span class="replay-info-label" id="replayInfoVideoLabel"
-                  >Video</span
-                >
-                <span id="replayInfoVideoValue" class="replay-info-value">
-                  <button id="replayInfoLinkVideoBtn" class="link-video-btn">
-                    + Link Video
-                  </button>
-                </span>
-              </div>
-            </div>
-          </section>
-        </aside>
+            </section>
+          </aside>
+        </div>
       </div>
     </main>
 

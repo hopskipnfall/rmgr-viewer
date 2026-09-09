@@ -20,6 +20,7 @@ import {
 } from "./players.js";
 import {
   stageGeometry,
+  stageSlopes,
   stageBlastZone,
   stageLedges,
   DREAM_LAND_STAGE_ID,
@@ -1966,7 +1967,6 @@ export class StageRenderer {
     camera: Camera,
     frame: Frame | undefined,
     stageId: number | undefined,
-    hoverScreen: { x: number; y: number } | undefined,
     replay?: Replay | null,
     frameIndex?: number,
     perspectivePort?: PortIndex | null,
@@ -2061,10 +2061,6 @@ export class StageRenderer {
           }
         }
       }
-    }
-
-    if (hoverScreen) {
-      this.drawHoverCoordinates(camera, hoverScreen);
     }
   }
 
@@ -4989,6 +4985,7 @@ export class StageRenderer {
       }
       return;
     }
+    this.drawStageSlopesAndSilhouette(camera, stageId);
     if (this.backgroundTheme === "beach") {
       this.drawStagePalmTrees(camera, stageId);
     } else if (this.backgroundTheme === "autumn") {
@@ -5962,25 +5959,69 @@ export class StageRenderer {
     for (let pi = 0; pi < petals.length; pi++) {
       const p = petals[pi];
       if (!p) continue;
-      const sway = Math.sin(anim * 0.035 + pi * 1.5) * 45;
-      const fall = ((anim * (1.2 + (pi % 3) * 0.4)) % 1400) - 200;
-      const petalPos = camera.worldToScreen(
-        rootWorldX + p.baseOffX + sway,
-        rootWorldY + p.baseOffY - fall,
-      );
+
+      const speed = 1.3 + (pi % 3) * 0.35;
+      const restDistance = 350;
+      const totalCycle = p.baseOffY + restDistance;
+      const progress = (anim * speed + pi * 211) % totalCycle;
+
+      const isGrounded = progress >= p.baseOffY;
+
+      let worldX: number;
+      let worldY: number;
+      let angle: number;
+      let radiusXMultiplier: number;
+      let radiusYMultiplier: number;
+      let alpha: number;
+
+      if (!isGrounded) {
+        // Falling through the air
+        const fallFraction = progress / p.baseOffY;
+        const sway =
+          Math.sin(anim * 0.035 + pi * 1.5) * 45 * (1 - fallFraction * 0.25);
+        worldX = rootWorldX + p.baseOffX + sway;
+        worldY = rootWorldY + (p.baseOffY - progress);
+        angle = 0.3 + Math.sin(anim * 0.05 + pi) * 0.4;
+        radiusXMultiplier = 1.0;
+        radiusYMultiplier = 0.45 + 0.2 * Math.abs(Math.sin(anim * 0.08 + pi));
+        // Fade in as it detaches from the canopy
+        alpha = Math.min(1, progress / 50);
+      } else {
+        // Stopped and resting peacefully on the stage surface
+        const landingAnim = anim - (progress - p.baseOffY) / speed;
+        const landingSway =
+          Math.sin(landingAnim * 0.035 + pi * 1.5) * 45 * 0.75;
+        worldX = rootWorldX + p.baseOffX + landingSway;
+        worldY = rootWorldY + 10;
+        // Flat resting orientation on the stage floor
+        angle = 0.05 * Math.sin(pi * 1.7);
+        radiusXMultiplier = 1.1;
+        radiusYMultiplier = 0.35;
+        // Fade out at the end of the rest duration
+        const remainingRest = totalCycle - progress;
+        alpha = Math.min(1, remainingRest / 70);
+      }
+
+      if (alpha <= 0.01) continue;
+
+      const petalPos = camera.worldToScreen(worldX, worldY);
       const s = Math.max(1.8, camera.worldLengthToScreen(p.size * 5));
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.ellipse(
         petalPos.x,
         petalPos.y,
-        s,
-        s * 0.55,
-        0.3 + Math.sin(anim * 0.05 + pi) * 0.4,
+        s * radiusXMultiplier,
+        s * radiusYMultiplier,
+        angle,
         0,
         Math.PI * 2,
       );
       ctx.fill();
+      ctx.restore();
     }
 
     ctx.restore();
@@ -6214,10 +6255,19 @@ export class StageRenderer {
     const groundRightX = ground ? ground.rightX : 2318;
     const groundY = ground ? ground.y : 0;
 
-    // Left palm tree rooted near stage left edge, curving outward
+    // 1. Left and right pineapple palm trees rooted near stage edges
     this.drawStagePalmTree(camera, groundLeftX + 280, groundY, -1);
-    // Right palm tree rooted near stage right edge, curving outward
     this.drawStagePalmTree(camera, groundRightX - 280, groundY, 1);
+
+    // 2. Stage floor pineapples and living pineapple plants
+    // Left side: flourishing pineapple plant and resting harvested pineapple
+    this.drawStagePineapplePlant(camera, groundLeftX + 460, groundY, 1.0);
+    this.drawPineapple(camera, groundLeftX + 600, groundY, 66, 102, 0.36);
+
+    // Right side: harvested pineapples and flourishing pineapple plant
+    this.drawPineapple(camera, groundRightX - 600, groundY, 64, 98, -0.34);
+    this.drawStagePineapplePlant(camera, groundRightX - 450, groundY, 0.95);
+    this.drawPineapple(camera, groundRightX - 350, groundY, 50, 76, 0.22);
   }
 
   private drawStagePalmTree(
@@ -6290,7 +6340,28 @@ export class StageRenderer {
     );
     ctx.stroke();
 
-    // 4. Coconut cluster under the crown
+    // 3b. Trunk pineapple-bark scale rings
+    ctx.strokeStyle = "#b45309";
+    ctx.lineWidth = Math.max(1, trunkWidthPx * 0.15);
+    const ringTValues = [0.15, 0.28, 0.42, 0.56, 0.7, 0.84];
+    for (const t of ringTValues) {
+      const invT = 1 - t;
+      const rx =
+        invT * invT * baseScreen.x +
+        2 * invT * t * ctrlScreen.x +
+        t * t * headScreen.x;
+      const ry =
+        invT * invT * baseScreen.y +
+        2 * invT * t * ctrlScreen.y +
+        t * t * headScreen.y;
+      const rWidth = trunkWidthPx * 0.45;
+      ctx.beginPath();
+      ctx.moveTo(rx - rWidth, ry);
+      ctx.lineTo(rx + rWidth, ry);
+      ctx.stroke();
+    }
+
+    // 4. Coconut & Pineapple cluster under the crown
     const coconutRadiusPx = Math.max(1.5, camera.worldLengthToScreen(24));
     ctx.fillStyle = "#78350f";
     ctx.beginPath();
@@ -6316,6 +6387,25 @@ export class StageRenderer {
       Math.PI * 2,
     );
     ctx.fill();
+
+    // Ripe pineapples nestled in the pineapple tree crown
+    this.drawPineapple(
+      camera,
+      headWorld.x - dir * 85,
+      headWorld.y - 70,
+      50,
+      76,
+      -dir * 0.28,
+    );
+    this.drawPineapple(
+      camera,
+      headWorld.x + dir * 75,
+      headWorld.y - 80,
+      46,
+      70,
+      dir * 0.32,
+    );
+    this.drawPineapple(camera, headWorld.x, headWorld.y - 30, 56, 86, 0);
 
     // 5. Crown Palm Fronds (in world offsets from headWorld)
     interface StageFrondSpec {
@@ -6433,6 +6523,1147 @@ export class StageRenderer {
       );
       ctx.stroke();
     }
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws a stylized pineapple fruit with golden amber diamond scales,
+   * brown bract eyes, and a spiky tropical crown of green leaves.
+   */
+  private drawPineapple(
+    camera: Camera,
+    worldX: number,
+    worldY: number,
+    widthWorld: number,
+    heightWorld: number,
+    tiltAngle: number = 0,
+  ): void {
+    const { ctx } = this;
+    const baseScreen = camera.worldToScreen(worldX, worldY);
+    const wPx = Math.max(3, camera.worldLengthToScreen(widthWorld));
+    const hPx = Math.max(4, camera.worldLengthToScreen(heightWorld));
+    const halfW = wPx / 2;
+    const halfH = hPx / 2;
+
+    const cos = Math.cos(tiltAngle);
+    const sin = Math.sin(tiltAngle);
+    const toScreen = (lx: number, ly: number) => ({
+      x: baseScreen.x + lx * cos - ly * sin,
+      y: baseScreen.y + lx * sin + ly * cos,
+    });
+
+    ctx.save();
+
+    // Small woody stem nub at the base
+    ctx.fillStyle = "#451a03";
+    ctx.beginPath();
+    const stemP0 = toScreen(-halfW * 0.2, 0);
+    const stemP1 = toScreen(halfW * 0.2, 0);
+    const stemP2 = toScreen(halfW * 0.15, halfH * 0.12);
+    const stemP3 = toScreen(-halfW * 0.15, halfH * 0.12);
+    ctx.moveTo(stemP0.x, stemP0.y);
+    ctx.lineTo(stemP1.x, stemP1.y);
+    ctx.lineTo(stemP2.x, stemP2.y);
+    ctx.lineTo(stemP3.x, stemP3.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 1. Spiky Tropical Crown Leaves (drawn at the top of the fruit body at ly = -hPx)
+    const crownBase = -hPx + halfH * 0.08;
+    const crownH = hPx * 0.75;
+    const crownW = wPx * 0.85;
+
+    // Outer / back dark fronds
+    ctx.fillStyle = "#14532d";
+    const outerLeafSpans = [
+      {
+        tipLx: -crownW * 0.55,
+        tipLy: crownBase - crownH * 0.65,
+        ctrlLx: -crownW * 0.35,
+        ctrlLy: crownBase - crownH * 0.2,
+      },
+      {
+        tipLx: crownW * 0.55,
+        tipLy: crownBase - crownH * 0.65,
+        ctrlLx: crownW * 0.35,
+        ctrlLy: crownBase - crownH * 0.2,
+      },
+      {
+        tipLx: -crownW * 0.75,
+        tipLy: crownBase - crownH * 0.4,
+        ctrlLx: -crownW * 0.5,
+        ctrlLy: crownBase - crownH * 0.1,
+      },
+      {
+        tipLx: crownW * 0.75,
+        tipLy: crownBase - crownH * 0.4,
+        ctrlLx: crownW * 0.5,
+        ctrlLy: crownBase - crownH * 0.1,
+      },
+    ];
+    for (const leaf of outerLeafSpans) {
+      const pBaseL = toScreen(-halfW * 0.18, crownBase);
+      const pBaseR = toScreen(halfW * 0.18, crownBase);
+      const pCtrlL = toScreen(leaf.ctrlLx - halfW * 0.08, leaf.ctrlLy);
+      const pCtrlR = toScreen(leaf.ctrlLx + halfW * 0.08, leaf.ctrlLy);
+      const pTip = toScreen(leaf.tipLx, leaf.tipLy);
+      ctx.beginPath();
+      ctx.moveTo(pBaseL.x, pBaseL.y);
+      ctx.quadraticCurveTo(pCtrlL.x, pCtrlL.y, pTip.x, pTip.y);
+      ctx.quadraticCurveTo(pCtrlR.x, pCtrlR.y, pBaseR.x, pBaseR.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Inner / front vibrant fronds
+    ctx.fillStyle = "#16a34a";
+    const innerLeafSpans = [
+      {
+        tipLx: 0,
+        tipLy: crownBase - crownH,
+        ctrlLx: 0,
+        ctrlLy: crownBase - crownH * 0.4,
+      },
+      {
+        tipLx: -crownW * 0.3,
+        tipLy: crownBase - crownH * 0.85,
+        ctrlLx: -crownW * 0.18,
+        ctrlLy: crownBase - crownH * 0.35,
+      },
+      {
+        tipLx: crownW * 0.3,
+        tipLy: crownBase - crownH * 0.85,
+        ctrlLx: crownW * 0.18,
+        ctrlLy: crownBase - crownH * 0.35,
+      },
+      {
+        tipLx: -crownW * 0.15,
+        tipLy: crownBase - crownH * 0.7,
+        ctrlLx: -crownW * 0.1,
+        ctrlLy: crownBase - crownH * 0.3,
+      },
+      {
+        tipLx: crownW * 0.15,
+        tipLy: crownBase - crownH * 0.7,
+        ctrlLx: crownW * 0.1,
+        ctrlLy: crownBase - crownH * 0.3,
+      },
+    ];
+    for (const leaf of innerLeafSpans) {
+      const pBaseL = toScreen(-halfW * 0.22, crownBase);
+      const pBaseR = toScreen(halfW * 0.22, crownBase);
+      const pCtrlL = toScreen(leaf.ctrlLx - halfW * 0.08, leaf.ctrlLy);
+      const pCtrlR = toScreen(leaf.ctrlLx + halfW * 0.08, leaf.ctrlLy);
+      const pTip = toScreen(leaf.tipLx, leaf.tipLy);
+      ctx.beginPath();
+      ctx.moveTo(pBaseL.x, pBaseL.y);
+      ctx.quadraticCurveTo(pCtrlL.x, pCtrlL.y, pTip.x, pTip.y);
+      ctx.quadraticCurveTo(pCtrlR.x, pCtrlR.y, pBaseR.x, pBaseR.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Crown leaf spine highlights
+    ctx.strokeStyle = "#86efac";
+    ctx.lineWidth = Math.max(1, wPx * 0.035);
+    ctx.beginPath();
+    const spineBase = toScreen(0, crownBase);
+    const spineTip = toScreen(0, crownBase - crownH * 0.92);
+    ctx.moveTo(spineBase.x, spineBase.y);
+    ctx.lineTo(spineTip.x, spineTip.y);
+    const spineTipL = toScreen(-crownW * 0.28, crownBase - crownH * 0.8);
+    ctx.moveTo(spineBase.x, spineBase.y);
+    ctx.lineTo(spineTipL.x, spineTipL.y);
+    const spineTipR = toScreen(crownW * 0.28, crownBase - crownH * 0.8);
+    ctx.moveTo(spineBase.x, spineBase.y);
+    ctx.lineTo(spineTipR.x, spineTipR.y);
+    ctx.stroke();
+
+    // 2. Main Pineapple Body
+    const bodySteps = 16;
+    ctx.beginPath();
+    for (let i = 0; i <= bodySteps; i++) {
+      const theta = (i / bodySteps) * Math.PI * 2;
+      const lx = halfW * Math.cos(theta);
+      const ly = -halfH + halfH * Math.sin(theta);
+      const pt = toScreen(lx, ly);
+      if (i === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.closePath();
+
+    const topPt = toScreen(0, -hPx);
+    const btmPt = toScreen(0, 0);
+    const grad = ctx.createLinearGradient(topPt.x, topPt.y, btmPt.x, btmPt.y);
+    grad.addColorStop(0.0, "#fbbf24"); // Sunlit golden yellow top
+    grad.addColorStop(0.35, "#f59e0b"); // Warm amber
+    grad.addColorStop(0.7, "#d97706"); // Ripe orange amber
+    grad.addColorStop(1.0, "#b45309"); // Deep golden brown base
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Clip texture inside the pineapple body
+    ctx.save();
+    ctx.clip?.();
+
+    // Diagonal lattice groove lines
+    ctx.strokeStyle = "rgba(69, 26, 3, 0.4)";
+    ctx.lineWidth = Math.max(1, wPx * 0.05);
+
+    const step = Math.max(3, wPx * 0.28);
+    const diagSpan = Math.max(wPx, hPx) * 1.5;
+
+    // +35 degree lines
+    for (let offset = -diagSpan; offset <= diagSpan; offset += step) {
+      const p1 = toScreen(-diagSpan + offset, -halfH - diagSpan);
+      const p2 = toScreen(diagSpan + offset, -halfH + diagSpan);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    }
+
+    // -35 degree lines
+    for (let offset = -diagSpan; offset <= diagSpan; offset += step) {
+      const p1 = toScreen(diagSpan + offset, -halfH - diagSpan);
+      const p2 = toScreen(-diagSpan + offset, -halfH + diagSpan);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    }
+
+    // Pineapple "Eyes" / Diamond scale center facets
+    const rows = 5;
+    const cols = 5;
+    for (let r = 0; r < rows; r++) {
+      const fy = (r + 0.5) / rows;
+      const ey = -hPx + fy * hPx;
+      const dy = (ey - -halfH) / halfH;
+      const rowWidth = 2 * halfW * Math.sqrt(Math.max(0, 1 - dy * dy));
+      const stagger = r % 2 === 1 ? 0.5 : 0;
+      for (let c = 0; c < cols; c++) {
+        const fx = (c + stagger) / (cols - 1);
+        const ex = (fx - 0.5) * rowWidth * 0.85;
+        if (Math.abs(ex) < rowWidth * 0.44) {
+          const dotCenter = toScreen(ex, ey);
+          const eyeW = Math.max(1, halfW * 0.14);
+          const eyeH = Math.max(1, halfH * 0.05);
+
+          // Sunlit scale top facet
+          ctx.fillStyle = "#fef08a";
+          ctx.beginPath();
+          ctx.ellipse(
+            dotCenter.x,
+            dotCenter.y - eyeH * 0.5,
+            eyeW,
+            eyeH,
+            tiltAngle,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+
+          // Dark brown center bract notch
+          ctx.fillStyle = "#451a03";
+          ctx.beginPath();
+          ctx.ellipse(
+            dotCenter.x,
+            dotCenter.y,
+            eyeW * 0.6,
+            eyeH * 0.6,
+            tiltAngle,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+        }
+      }
+    }
+
+    ctx.restore(); // end clip
+
+    // Body perimeter stroke
+    ctx.strokeStyle = "rgba(69, 26, 3, 0.6)";
+    ctx.lineWidth = Math.max(1, wPx * 0.05);
+    ctx.beginPath();
+    for (let i = 0; i <= bodySteps; i++) {
+      const theta = (i / bodySteps) * Math.PI * 2;
+      const lx = halfW * Math.cos(theta);
+      const ly = -halfH + halfH * Math.sin(theta);
+      const pt = toScreen(lx, ly);
+      if (i === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws a living pineapple plant (bromeliad) rooted in the stage sand:
+   * a circular rosette of sword-like spiky leaves, a sturdy fruiting stalk,
+   * and a majestic ripe golden pineapple perched proudly in the center.
+   */
+  private drawStagePineapplePlant(
+    camera: Camera,
+    rootWorldX: number,
+    rootWorldY: number,
+    scale: number = 1.0,
+  ): void {
+    const { ctx } = this;
+    const baseScreen = camera.worldToScreen(rootWorldX, rootWorldY);
+    const sandRadius = Math.max(3, camera.worldLengthToScreen(55 * scale));
+
+    ctx.save();
+
+    // 1. Tropical sand mound at plant base
+    ctx.beginPath();
+    ctx.ellipse(
+      baseScreen.x,
+      baseScreen.y,
+      sandRadius,
+      sandRadius * 0.35,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = "#f59e0b";
+    ctx.fill();
+
+    // 2. Rosette of sword-like bromeliad leaves spreading across the ground
+    interface LeafSpec {
+      tipXWorld: number;
+      tipYWorld: number;
+      ctrlXWorld: number;
+      ctrlYWorld: number;
+      color: string;
+      widthWorld: number;
+    }
+
+    const leaves: LeafSpec[] = [
+      // Outer low spreading leaves
+      {
+        tipXWorld: -170 * scale,
+        tipYWorld: 28 * scale,
+        ctrlXWorld: -90 * scale,
+        ctrlYWorld: 65 * scale,
+        color: "#14532d",
+        widthWorld: 22 * scale,
+      },
+      {
+        tipXWorld: 170 * scale,
+        tipYWorld: 28 * scale,
+        ctrlXWorld: 90 * scale,
+        ctrlYWorld: 65 * scale,
+        color: "#14532d",
+        widthWorld: 22 * scale,
+      },
+      {
+        tipXWorld: -220 * scale,
+        tipYWorld: 14 * scale,
+        ctrlXWorld: -120 * scale,
+        ctrlYWorld: 38 * scale,
+        color: "#166534",
+        widthWorld: 20 * scale,
+      },
+      {
+        tipXWorld: 220 * scale,
+        tipYWorld: 14 * scale,
+        ctrlXWorld: 120 * scale,
+        ctrlYWorld: 38 * scale,
+        color: "#166534",
+        widthWorld: 20 * scale,
+      },
+      // Mid arching leaves
+      {
+        tipXWorld: -120 * scale,
+        tipYWorld: 80 * scale,
+        ctrlXWorld: -60 * scale,
+        ctrlYWorld: 105 * scale,
+        color: "#15803d",
+        widthWorld: 24 * scale,
+      },
+      {
+        tipXWorld: 120 * scale,
+        tipYWorld: 80 * scale,
+        ctrlXWorld: 60 * scale,
+        ctrlYWorld: 105 * scale,
+        color: "#15803d",
+        widthWorld: 24 * scale,
+      },
+      // Upright leaves hugging stalk
+      {
+        tipXWorld: -55 * scale,
+        tipYWorld: 120 * scale,
+        ctrlXWorld: -30 * scale,
+        ctrlYWorld: 85 * scale,
+        color: "#16a34a",
+        widthWorld: 20 * scale,
+      },
+      {
+        tipXWorld: 55 * scale,
+        tipYWorld: 120 * scale,
+        ctrlXWorld: 30 * scale,
+        ctrlYWorld: 85 * scale,
+        color: "#16a34a",
+        widthWorld: 20 * scale,
+      },
+    ];
+
+    for (const lf of leaves) {
+      const tip = camera.worldToScreen(
+        rootWorldX + lf.tipXWorld,
+        rootWorldY + lf.tipYWorld,
+      );
+      const ctrl = camera.worldToScreen(
+        rootWorldX + lf.ctrlXWorld,
+        rootWorldY + lf.ctrlYWorld,
+      );
+      const leafW = Math.max(1, camera.worldLengthToScreen(lf.widthWorld));
+
+      ctx.strokeStyle = lf.color;
+      ctx.lineWidth = leafW;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(baseScreen.x, baseScreen.y);
+      ctx.quadraticCurveTo(ctrl.x, ctrl.y, tip.x, tip.y);
+      ctx.stroke();
+
+      // Sharp leaf spine highlight
+      ctx.strokeStyle = "#86efac";
+      ctx.lineWidth = Math.max(1, leafW * 0.18);
+      ctx.beginPath();
+      ctx.moveTo(baseScreen.x, baseScreen.y);
+      ctx.quadraticCurveTo(ctrl.x, ctrl.y, tip.x, tip.y);
+      ctx.stroke();
+    }
+
+    // 3. Stout central fruiting stalk
+    const stalkTopWorld = { x: rootWorldX, y: rootWorldY + 70 * scale };
+    const stalkTopScreen = camera.worldToScreen(
+      stalkTopWorld.x,
+      stalkTopWorld.y,
+    );
+    const stalkWidthPx = Math.max(2, camera.worldLengthToScreen(28 * scale));
+
+    ctx.strokeStyle = "#15803d";
+    ctx.lineWidth = stalkWidthPx;
+    ctx.lineCap = "butt";
+    ctx.beginPath();
+    ctx.moveTo(baseScreen.x, baseScreen.y);
+    ctx.lineTo(stalkTopScreen.x, stalkTopScreen.y);
+    ctx.stroke();
+
+    ctx.restore();
+
+    // 4. Perched Pineapple Fruit atop stalk
+    this.drawPineapple(
+      camera,
+      rootWorldX,
+      rootWorldY + 68 * scale,
+      68 * scale,
+      105 * scale,
+      0,
+    );
+  }
+
+  /**
+   * Draws the stage underbody hull silhouette and descending cliff slopes
+   * for stages with defined slope geometry (e.g. Dream Land).
+   */
+  private drawStageSlopesAndSilhouette(
+    camera: Camera,
+    stageId: number | undefined,
+  ): void {
+    const slopes = stageSlopes(stageId);
+    if (!slopes) return;
+
+    const { ctx } = this;
+    const bodyScreen = slopes.bodyPolygon.map((v) =>
+      camera.worldToScreen(v.x, v.y),
+    );
+    if (bodyScreen.length < 3) return;
+
+    ctx.save();
+
+    // 1. Solid opaque base fill to cleanly occlude background scenery
+    ctx.beginPath();
+    const firstBodyPt = bodyScreen[0]!;
+    ctx.moveTo(firstBodyPt.x, firstBodyPt.y);
+    for (let i = 1; i < bodyScreen.length; i++) {
+      const pt = bodyScreen[i]!;
+      ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.closePath();
+
+    if (this.backgroundTheme === "autumn") {
+      ctx.fillStyle = "#180b07";
+    } else if (this.backgroundTheme === "grid") {
+      ctx.fillStyle = "#020617";
+    } else if (this.backgroundTheme === "beach") {
+      ctx.fillStyle = "#78350f";
+    } else {
+      // Mountain: Deep midnight stone
+      ctx.fillStyle = "#0c0a1a";
+    }
+    ctx.fill();
+
+    // 2. Themed interior faceted structure
+    const drawWorldPoly = (
+      pts: readonly { x: number; y: number }[],
+      fill: string,
+    ) => {
+      if (pts.length < 3) return;
+      const first = camera.worldToScreen(pts[0]!.x, pts[0]!.y);
+      ctx.beginPath();
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < pts.length; i++) {
+        const p = camera.worldToScreen(pts[i]!.x, pts[i]!.y);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+
+    if (this.backgroundTheme === "autumn") {
+      // Autumn theme: Carved garden stone & dark lacquer foundation
+      drawWorldPoly(
+        [
+          { x: -2318, y: 0 },
+          { x: -2307, y: -124 },
+          { x: -2290, y: -331 },
+          { x: -1400, y: -420 },
+        ],
+        "#23100a",
+      );
+      drawWorldPoly(
+        [
+          { x: -2290, y: -331 },
+          { x: -2075, y: -834 },
+          { x: -1400, y: -420 },
+        ],
+        "#1a0c07",
+      );
+      drawWorldPoly(
+        [
+          { x: -2075, y: -834 },
+          { x: -1972, y: -1072 },
+          { x: -600, y: -750 },
+          { x: -1400, y: -420 },
+        ],
+        "#2b140c",
+      );
+      drawWorldPoly(
+        [
+          { x: -1972, y: -1072 },
+          { x: 0, y: -1072 },
+          { x: -600, y: -750 },
+        ],
+        "#150805",
+      );
+      drawWorldPoly(
+        [
+          { x: -2318, y: 0 },
+          { x: -1400, y: -420 },
+          { x: 0, y: -500 },
+          { x: 0, y: 0 },
+        ],
+        "#2f160e",
+      );
+      drawWorldPoly(
+        [
+          { x: -1400, y: -420 },
+          { x: -600, y: -750 },
+          { x: 0, y: -1072 },
+          { x: 0, y: -500 },
+        ],
+        "#200e08",
+      );
+
+      drawWorldPoly(
+        [
+          { x: 2318, y: 0 },
+          { x: 2307, y: -124 },
+          { x: 2290, y: -331 },
+          { x: 1400, y: -420 },
+        ],
+        "#3a1c11",
+      );
+      drawWorldPoly(
+        [
+          { x: 2290, y: -331 },
+          { x: 2075, y: -834 },
+          { x: 1400, y: -420 },
+        ],
+        "#32170e",
+      );
+      drawWorldPoly(
+        [
+          { x: 2075, y: -834 },
+          { x: 1972, y: -1072 },
+          { x: 600, y: -750 },
+          { x: 1400, y: -420 },
+        ],
+        "#442215",
+      );
+      drawWorldPoly(
+        [
+          { x: 1972, y: -1072 },
+          { x: 0, y: -1072 },
+          { x: 600, y: -750 },
+        ],
+        "#28120a",
+      );
+      drawWorldPoly(
+        [
+          { x: 2318, y: 0 },
+          { x: 1400, y: -420 },
+          { x: 0, y: -500 },
+          { x: 0, y: 0 },
+        ],
+        "#3e1e12",
+      );
+      drawWorldPoly(
+        [
+          { x: 1400, y: -420 },
+          { x: 600, y: -750 },
+          { x: 0, y: -1072 },
+          { x: 0, y: -500 },
+        ],
+        "#35190f",
+      );
+
+      // Autumn turf rim
+      drawWorldPoly(
+        [
+          { x: -2318, y: 0 },
+          { x: 2318, y: 0 },
+          { x: 2307, y: -30 },
+          { x: -2307, y: -30 },
+        ],
+        "#14532d",
+      );
+      drawWorldPoly(
+        [
+          { x: -1200, y: 0 },
+          { x: 1200, y: 0 },
+          { x: 1190, y: -20 },
+          { x: -1190, y: -20 },
+        ],
+        "#78350f",
+      );
+
+      ctx.strokeStyle = "rgba(245, 158, 11, 0.12)";
+      ctx.lineWidth = 1;
+      const seamPaths = [
+        [
+          { x: -1400, y: -420 },
+          { x: 0, y: -500 },
+          { x: 1400, y: -420 },
+        ],
+        [
+          { x: 0, y: 0 },
+          { x: 0, y: -500 },
+          { x: 0, y: -1072 },
+        ],
+        [
+          { x: -1400, y: -420 },
+          { x: -600, y: -750 },
+          { x: 0, y: -1072 },
+          { x: 600, y: -750 },
+          { x: 1400, y: -420 },
+        ],
+      ];
+      for (const sp of seamPaths) {
+        ctx.beginPath();
+        const p0 = camera.worldToScreen(sp[0]!.x, sp[0]!.y);
+        ctx.moveTo(p0.x, p0.y);
+        for (let i = 1; i < sp.length; i++) {
+          const pt = camera.worldToScreen(sp[i]!.x, sp[i]!.y);
+          ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+      }
+    } else if (this.backgroundTheme === "grid") {
+      // Grid theme: Cyber wireframe hull with structural ribs & glowing vector nodes
+      ctx.strokeStyle = "rgba(29, 78, 216, 0.35)";
+      ctx.lineWidth = 1.5;
+      const strataY = [-250, -500, -750];
+      for (const sy of strataY) {
+        const t = sy / -1072;
+        const leftHullX = -2318 + t * (2318 - 1972);
+        const rightHullX = 2318 - t * (2318 - 1972);
+        const pL = camera.worldToScreen(leftHullX, sy);
+        const pR = camera.worldToScreen(rightHullX, sy);
+        ctx.beginPath();
+        ctx.moveTo(pL.x, pL.y);
+        ctx.lineTo(pR.x, pR.y);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.22)";
+      ctx.lineWidth = 1.5;
+      const ribsX = [-1600, -1200, -800, -400, 0, 400, 800, 1200, 1600];
+      for (const rx of ribsX) {
+        const topP = camera.worldToScreen(rx, 0);
+        const botP = camera.worldToScreen(rx, -1072);
+        ctx.beginPath();
+        ctx.moveTo(topP.x, topP.y);
+        ctx.lineTo(botP.x, botP.y);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.lineWidth = 1.5;
+      const braces = [
+        [
+          { x: -2318, y: 0 },
+          { x: -1972, y: -1072 },
+        ],
+        [
+          { x: -2290, y: -331 },
+          { x: 0, y: -1072 },
+        ],
+        [
+          { x: 0, y: 0 },
+          { x: 0, y: -1072 },
+        ],
+        [
+          { x: 2290, y: -331 },
+          { x: 0, y: -1072 },
+        ],
+        [
+          { x: 2318, y: 0 },
+          { x: 1972, y: -1072 },
+        ],
+      ];
+      for (const b of braces) {
+        const p0 = camera.worldToScreen(b[0]!.x, b[0]!.y);
+        const p1 = camera.worldToScreen(b[1]!.x, b[1]!.y);
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+      }
+
+      const nodes = [
+        { x: 0, y: 0 },
+        { x: 0, y: -500 },
+        { x: 0, y: -1072 },
+        { x: -1200, y: -500 },
+        { x: 1200, y: -500 },
+        { x: -1972, y: -1072 },
+        { x: 1972, y: -1072 },
+      ];
+      ctx.fillStyle = "#38bdf8";
+      for (const n of nodes) {
+        const np = camera.worldToScreen(n.x, n.y);
+        ctx.beginPath();
+        ctx.arc(np.x, np.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (this.backgroundTheme === "beach") {
+      // Tropical Beach theme: Bottom of a pineapple!
+      ctx.save();
+      ctx.beginPath();
+      const firstClipPt = bodyScreen[0]!;
+      ctx.moveTo(firstClipPt.x, firstClipPt.y);
+      for (let i = 1; i < bodyScreen.length; i++) {
+        const pt = bodyScreen[i]!;
+        ctx.lineTo(pt.x, pt.y);
+      }
+      ctx.closePath();
+      ctx.clip?.();
+
+      // A. Pineapple diamond scales ("eyes")
+      const scaleRows = [
+        { y: -140, startX: -2400, count: 20, stagger: 0 },
+        { y: -280, startX: -2350, count: 19, stagger: 130 },
+        { y: -420, startX: -2300, count: 18, stagger: 0 },
+        { y: -560, startX: -2250, count: 18, stagger: 130 },
+        { y: -700, startX: -2200, count: 17, stagger: 0 },
+        { y: -840, startX: -2150, count: 17, stagger: 130 },
+        { y: -980, startX: -2100, count: 16, stagger: 0 },
+      ];
+      const stepX = 260;
+      const halfX = stepX * 0.48;
+      const halfY = 65;
+
+      const pineappleScalePalette = [
+        { top: "#fbbf24", bot: "#d97706" }, // Golden yellow / amber
+        { top: "#f59e0b", bot: "#b45309" }, // Warm gold / honey brown
+        { top: "#fcd34d", bot: "#ea580c" }, // Sunlit yellow / ripe orange
+        { top: "#f59e0b", bot: "#c2410c" }, // Deep honey / burnt orange
+      ];
+
+      for (let ri = 0; ri < scaleRows.length; ri++) {
+        const row = scaleRows[ri]!;
+        for (let ci = 0; ci < row.count; ci++) {
+          const cx = row.startX + ci * stepX + row.stagger;
+          const cy = row.y;
+          const pal =
+            pineappleScalePalette[
+              (ri * 3 + ci) % pineappleScalePalette.length
+            ]!;
+
+          // Upper facet (sunlit gold)
+          drawWorldPoly(
+            [
+              { x: cx, y: cy + halfY },
+              { x: cx + halfX, y: cy },
+              { x: cx, y: cy },
+              { x: cx - halfX, y: cy },
+            ],
+            pal.top,
+          );
+
+          // Lower facet (shaded amber)
+          drawWorldPoly(
+            [
+              { x: cx - halfX, y: cy },
+              { x: cx, y: cy },
+              { x: cx + halfX, y: cy },
+              { x: cx, y: cy - halfY },
+            ],
+            pal.bot,
+          );
+
+          // Central brown bract / spine spike ("eye" center)
+          drawWorldPoly(
+            [
+              { x: cx, y: cy + 14 },
+              { x: cx + 20, y: cy - 10 },
+              { x: cx - 20, y: cy - 10 },
+            ],
+            "#451a03",
+          );
+        }
+      }
+
+      // B. Pineapple scale groove seam lines
+      ctx.strokeStyle = "rgba(69, 26, 3, 0.45)";
+      ctx.lineWidth = 2;
+      for (let x = -3000; x <= 3000; x += 260) {
+        const p0 = camera.worldToScreen(x, 0);
+        const p1 = camera.worldToScreen(x + 1072, -1072);
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+
+        const p2 = camera.worldToScreen(x, 0);
+        const p3 = camera.worldToScreen(x - 1072, -1072);
+        ctx.beginPath();
+        ctx.moveTo(p2.x, p2.y);
+        ctx.lineTo(p3.x, p3.y);
+        ctx.stroke();
+      }
+
+      // C. Tropical crown fronds / spiky pineapple leaves under the platform rim
+      const crownLeafWidth = 140;
+      for (let lx = -2300; lx <= 2300; lx += crownLeafWidth) {
+        const leafIndex = Math.floor((lx + 2300) / crownLeafWidth);
+        const leafLen = 70 + (leafIndex % 3) * 30;
+        const leafColor = leafIndex % 2 === 0 ? "#16a34a" : "#15803d";
+        const tipHighlight = leafIndex % 3 === 0 ? "#4ade80" : "#22c55e";
+
+        drawWorldPoly(
+          [
+            { x: lx - crownLeafWidth * 0.45, y: 0 },
+            { x: lx + crownLeafWidth * 0.45, y: 0 },
+            { x: lx, y: -leafLen },
+          ],
+          leafColor,
+        );
+
+        drawWorldPoly(
+          [
+            { x: lx - crownLeafWidth * 0.15, y: 0 },
+            { x: lx + crownLeafWidth * 0.15, y: 0 },
+            { x: lx, y: -leafLen * 0.85 },
+          ],
+          tipHighlight,
+        );
+      }
+
+      // D. Woody pineapple bottom stem / navel
+      const stemCenter = camera.worldToScreen(0, -1072);
+      const stemRadiusX = Math.max(8, camera.worldLengthToScreen(240));
+      const stemRadiusY = Math.max(3, camera.worldLengthToScreen(80));
+
+      ctx.fillStyle = "#451a03";
+      ctx.beginPath();
+      ctx.ellipse(
+        stemCenter.x,
+        stemCenter.y,
+        stemRadiusX,
+        stemRadiusY,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      ctx.fillStyle = "#78350f";
+      ctx.beginPath();
+      ctx.ellipse(
+        stemCenter.x,
+        stemCenter.y,
+        stemRadiusX * 0.55,
+        stemRadiusY * 0.55,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      ctx.fillStyle = "#b45309";
+      ctx.beginPath();
+      ctx.ellipse(
+        stemCenter.x,
+        stemCenter.y,
+        stemRadiusX * 0.25,
+        stemRadiusY * 0.25,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      ctx.restore();
+    } else {
+      // Mountain theme: Low-poly rock crags with moonlit facets
+      drawWorldPoly(
+        [
+          { x: -2318, y: 0 },
+          { x: -2307, y: -124 },
+          { x: -2290, y: -331 },
+          { x: -1400, y: -420 },
+        ],
+        "#110e28",
+      );
+      drawWorldPoly(
+        [
+          { x: -2290, y: -331 },
+          { x: -2075, y: -834 },
+          { x: -1400, y: -420 },
+        ],
+        "#0d0b20",
+      );
+      drawWorldPoly(
+        [
+          { x: -2075, y: -834 },
+          { x: -1972, y: -1072 },
+          { x: -600, y: -750 },
+          { x: -1400, y: -420 },
+        ],
+        "#141032",
+      );
+      drawWorldPoly(
+        [
+          { x: -1972, y: -1072 },
+          { x: 0, y: -1072 },
+          { x: -600, y: -750 },
+        ],
+        "#090716",
+      );
+      drawWorldPoly(
+        [
+          { x: -2318, y: 0 },
+          { x: -1400, y: -420 },
+          { x: 0, y: -500 },
+          { x: 0, y: 0 },
+        ],
+        "#161338",
+      );
+      drawWorldPoly(
+        [
+          { x: -1400, y: -420 },
+          { x: -600, y: -750 },
+          { x: 0, y: -1072 },
+          { x: 0, y: -500 },
+        ],
+        "#120f2d",
+      );
+
+      drawWorldPoly(
+        [
+          { x: 2318, y: 0 },
+          { x: 2307, y: -124 },
+          { x: 2290, y: -331 },
+          { x: 1400, y: -420 },
+        ],
+        "#251f50",
+      );
+      drawWorldPoly(
+        [
+          { x: 2290, y: -331 },
+          { x: 2075, y: -834 },
+          { x: 1400, y: -420 },
+        ],
+        "#201a45",
+      );
+      drawWorldPoly(
+        [
+          { x: 2075, y: -834 },
+          { x: 1972, y: -1072 },
+          { x: 600, y: -750 },
+          { x: 1400, y: -420 },
+        ],
+        "#2b245c",
+      );
+      drawWorldPoly(
+        [
+          { x: 1972, y: -1072 },
+          { x: 0, y: -1072 },
+          { x: 600, y: -750 },
+        ],
+        "#191438",
+      );
+      drawWorldPoly(
+        [
+          { x: 2318, y: 0 },
+          { x: 1400, y: -420 },
+          { x: 0, y: -500 },
+          { x: 0, y: 0 },
+        ],
+        "#282256",
+      );
+      drawWorldPoly(
+        [
+          { x: 1400, y: -420 },
+          { x: 600, y: -750 },
+          { x: 0, y: -1072 },
+          { x: 0, y: -500 },
+        ],
+        "#221c4b",
+      );
+
+      drawWorldPoly(
+        [
+          { x: -2318, y: 0 },
+          { x: 2318, y: 0 },
+          { x: 2307, y: -32 },
+          { x: -2307, y: -32 },
+        ],
+        "#064e3b",
+      );
+      drawWorldPoly(
+        [
+          { x: 0, y: 0 },
+          { x: 2318, y: 0 },
+          { x: 2307, y: -22 },
+          { x: 0, y: -22 },
+        ],
+        "#0f766e",
+      );
+
+      ctx.strokeStyle = "rgba(168, 85, 247, 0.12)";
+      ctx.lineWidth = 1;
+      const seamPaths = [
+        [
+          { x: -1400, y: -420 },
+          { x: 0, y: -500 },
+          { x: 1400, y: -420 },
+        ],
+        [
+          { x: 0, y: 0 },
+          { x: 0, y: -500 },
+          { x: 0, y: -1072 },
+        ],
+        [
+          { x: -1400, y: -420 },
+          { x: -600, y: -750 },
+          { x: 0, y: -1072 },
+          { x: 600, y: -750 },
+          { x: 1400, y: -420 },
+        ],
+      ];
+      for (const sp of seamPaths) {
+        ctx.beginPath();
+        const p0 = camera.worldToScreen(sp[0]!.x, sp[0]!.y);
+        ctx.moveTo(p0.x, p0.y);
+        for (let i = 1; i < sp.length; i++) {
+          const pt = camera.worldToScreen(sp[i]!.x, sp[i]!.y);
+          ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    // 2. Descending slope cliff edge strokes
+    const lineSpacing = Math.max(1, camera.worldLengthToScreen(20.0));
+    const outerWidth = lineSpacing * 1.4;
+    const coreWidth = Math.max(1, lineSpacing * 0.7);
+
+    let outerColor: string;
+    let coreColor: string;
+    let bottomBorderColor: string;
+
+    if (this.backgroundTheme === "autumn") {
+      outerColor = "rgba(220, 38, 38, 0.65)";
+      coreColor = "#f59e0b";
+      bottomBorderColor = "rgba(180, 83, 9, 0.35)";
+    } else if (this.backgroundTheme === "grid") {
+      outerColor = "rgba(29, 78, 216, 0.65)";
+      coreColor = "#93c5fd";
+      bottomBorderColor = "rgba(56, 189, 248, 0.3)";
+    } else if (this.backgroundTheme === "beach") {
+      outerColor = "rgba(249, 115, 22, 0.65)";
+      coreColor = "#14b8a6";
+      bottomBorderColor = "rgba(253, 224, 71, 0.3)";
+    } else {
+      // Mountain
+      outerColor = "rgba(51, 75, 163, 0.65)";
+      coreColor = "#a855f7";
+      bottomBorderColor = "rgba(139, 202, 240, 0.3)";
+    }
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // Draw outer glow and core line for both left and right slopes
+    for (const slope of [slopes.leftSlope, slopes.rightSlope]) {
+      const screenPts = slope.map((v) => camera.worldToScreen(v.x, v.y));
+      if (screenPts.length === 0) continue;
+      const firstPt = screenPts[0]!;
+
+      // Outer glow line
+      ctx.lineWidth = outerWidth;
+      ctx.strokeStyle = outerColor;
+      ctx.beginPath();
+      ctx.moveTo(firstPt.x, firstPt.y);
+      for (let i = 1; i < screenPts.length; i++) {
+        const pt = screenPts[i]!;
+        ctx.lineTo(pt.x, pt.y);
+      }
+      ctx.stroke();
+
+      // Core crisp line
+      ctx.lineWidth = coreWidth;
+      ctx.strokeStyle = coreColor;
+      ctx.beginPath();
+      ctx.moveTo(firstPt.x, firstPt.y);
+      for (let i = 1; i < screenPts.length; i++) {
+        const pt = screenPts[i]!;
+        ctx.lineTo(pt.x, pt.y);
+      }
+      ctx.stroke();
+    }
+
+    // 3. Understage bottom edge connecting (-1972, -1072) and (1972, -1072)
+    const bottomL = camera.worldToScreen(-1972, -1072);
+    const bottomR = camera.worldToScreen(1972, -1072);
+    ctx.lineWidth = Math.max(1, lineSpacing * 0.5);
+    ctx.strokeStyle = bottomBorderColor;
+    ctx.beginPath();
+    ctx.moveTo(bottomL.x, bottomL.y);
+    ctx.lineTo(bottomR.x, bottomR.y);
+    ctx.stroke();
 
     ctx.restore();
   }
@@ -15885,33 +17116,6 @@ export class StageRenderer {
     }
 
     ctx.restore();
-  }
-
-  /** World-space coordinates under the cursor, in a small label offset from the pointer. */
-  private drawHoverCoordinates(
-    camera: Camera,
-    hoverScreen: { x: number; y: number },
-  ): void {
-    const { ctx } = this;
-    const world = camera.screenToWorld(hoverScreen.x, hoverScreen.y);
-    const label = `(${world.x.toFixed(0)}, ${world.y.toFixed(0)})`;
-
-    const offsetX = 14;
-    const offsetY = 18;
-    ctx.font = "11px system-ui, sans-serif";
-    ctx.textAlign = "left";
-    const textWidth = ctx.measureText(label).width;
-
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(
-      hoverScreen.x + offsetX - 4,
-      hoverScreen.y + offsetY - 12,
-      textWidth + 8,
-      17,
-    );
-
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.fillText(label, hoverScreen.x + offsetX, hoverScreen.y + offsetY);
   }
 
   resize(width: number, height: number): void {

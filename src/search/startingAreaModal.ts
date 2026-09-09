@@ -1,5 +1,9 @@
 import { t } from "../i18n.js";
-import { stageGeometry, DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
+import {
+  stageGeometry,
+  stageSlopes,
+  DREAM_LAND_STAGE_ID,
+} from "../stageGeometry.js";
 import type { StartingAreaBox } from "../playlist.js";
 
 // The modal only shows/allows selecting the right half (x >= 0) of Dream
@@ -48,6 +52,29 @@ function drawScene(
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  // Stage right descending slope and underbody baseline (right half only, x >= 0)
+  const slopes = stageSlopes(DREAM_LAND_STAGE_ID);
+  if (slopes) {
+    const bottomVertex = slopes.rightSlope[slopes.rightSlope.length - 1]!;
+    const pBottomCenter = worldToScreen(0, bottomVertex.y);
+
+    // Right descending slope stroke and underbody baseline
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.6)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const firstSlopePt = worldToScreen(
+      slopes.rightSlope[0]!.x,
+      slopes.rightSlope[0]!.y,
+    );
+    ctx.moveTo(firstSlopePt.x, firstSlopePt.y);
+    for (let i = 1; i < slopes.rightSlope.length; i++) {
+      const s = worldToScreen(slopes.rightSlope[i]!.x, slopes.rightSlope[i]!.y);
+      ctx.lineTo(s.x, s.y);
+    }
+    ctx.lineTo(pBottomCenter.x, pBottomCenter.y);
+    ctx.stroke();
+  }
 
   // Reference geometry: ground + platforms (right half only), for orientation.
   const platforms = stageGeometry(DREAM_LAND_STAGE_ID) ?? [];

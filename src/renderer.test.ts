@@ -2183,8 +2183,14 @@ describe("StageRenderer background themes", () => {
 
     expect(strokes).toContain("#451a03"); // Palm tree trunk
     expect(strokes).toContain("#064e3b"); // Palm frond
+    expect(strokes).toContain("#b45309"); // Pineapple tree trunk bark rings
+    expect(strokes).toContain("#86efac"); // Pineapple crown leaf spine highlights
+    expect(strokes).toContain("#15803d"); // Pineapple plant fruiting stalk
     expect(fills).toContain("#f59e0b"); // Sand root mound
-    expect(fills).toContain("#78350f"); // Coconut
+    expect(fills).toContain("#78350f"); // Coconut / fruit base
+    expect(fills).toContain("#fef08a"); // Pineapple scale sunlit facets
+    expect(fills).toContain("#14532d"); // Dark emerald pineapple crown fronds
+    expect(fills).toContain("#16a34a"); // Vibrant pineapple crown fronds
   });
 
   it("draws stage autumn trees and lanterns on the autumn theme without crashing", () => {
@@ -2236,6 +2242,89 @@ describe("StageRenderer background themes", () => {
     expect(fills).toContain("#3f3f46"); // Stone base
     expect(fills).toContain("#15803d"); // Moss
     expect(fills).toContain("#7f1d1d"); // Crimson canopy
+  });
+
+  it("draws Dream Land slopes and silhouette underbody across themes", () => {
+    const strokes: unknown[] = [];
+    const fills: unknown[] = [];
+    let closePathCount = 0;
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {
+          closePathCount++;
+        },
+        clip: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        fillRect: () => {},
+        quadraticCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        setLineDash: () => {},
+        fill: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: function (this: { strokeStyle: unknown }) {
+          strokes.push(this.strokeStyle);
+        },
+        drawImage: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    const fakeCamera = {
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+      groundScreenY: () => 400,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+
+    // Mountain theme: slope core color is #a855f7, outer is rgba(51, 75, 163, 0.65)
+    renderer.setBackgroundTheme("mountain");
+    strokes.length = 0;
+    renderer["drawStage"](fakeCamera, DREAM_LAND_STAGE_ID);
+    expect(strokes).toContain("#a855f7");
+    expect(strokes).toContain("rgba(51, 75, 163, 0.65)");
+    expect(strokes).toContain("rgba(139, 202, 240, 0.3)");
+
+    // Autumn theme: slope core color is #f59e0b, outer is rgba(220, 38, 38, 0.65)
+    renderer.setBackgroundTheme("autumn");
+    strokes.length = 0;
+    renderer["drawStage"](fakeCamera, DREAM_LAND_STAGE_ID);
+    expect(strokes).toContain("#f59e0b");
+    expect(strokes).toContain("rgba(220, 38, 38, 0.65)");
+    expect(strokes).toContain("rgba(180, 83, 9, 0.35)");
+
+    // Grid theme: slope core color is #93c5fd, outer is rgba(29, 78, 216, 0.65)
+    renderer.setBackgroundTheme("grid");
+    strokes.length = 0;
+    renderer["drawStage"](fakeCamera, DREAM_LAND_STAGE_ID);
+    expect(strokes).toContain("#93c5fd");
+    expect(strokes).toContain("rgba(29, 78, 216, 0.65)");
+    expect(strokes).toContain("rgba(56, 189, 248, 0.3)");
+
+    // Beach theme: slope core color is #14b8a6, outer is rgba(249, 115, 22, 0.65), pineapple fills
+    renderer.setBackgroundTheme("beach");
+    strokes.length = 0;
+    fills.length = 0;
+    renderer["drawStage"](fakeCamera, DREAM_LAND_STAGE_ID);
+    expect(strokes).toContain("#14b8a6");
+    expect(strokes).toContain("rgba(249, 115, 22, 0.65)");
+    expect(strokes).toContain("rgba(253, 224, 71, 0.3)");
+    expect(fills).toContain("#78350f"); // Pineapple base
+    expect(fills).toContain("#fbbf24"); // Pineapple golden scale
+    expect(fills).toContain("#16a34a"); // Pineapple crown frond
+    expect(fills).toContain("#451a03"); // Pineapple stem scar / bract
+    expect(closePathCount).toBeGreaterThan(0);
   });
 
   it("applies theme-specific colors to Donkey Kong for mountain vs grid backgrounds", () => {
@@ -3024,6 +3113,56 @@ describe("StageRenderer background themes", () => {
     expect(fills).toContain("#1e1b4b"); // Midnight stone base
     expect(fills).toContain("#f472b6"); // Sakura blossom pink
     expect(fills).toContain("#fbcfe8"); // Pale blossom petal
+  });
+
+  it("ensures falling sakura petals stop at the stage floor and never drop below ground", () => {
+    const ellipseYCoordinates: number[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: (_x: number, y: number) => {
+          ellipseYCoordinates.push(y);
+        },
+        arc: () => {},
+        fillRect: () => {},
+        quadraticCurveTo: () => {},
+        setLineDash: () => {},
+        fill: () => {},
+        stroke: () => {},
+        drawImage: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    const groundY = 0;
+    const fakeCamera = {
+      // worldToScreen simply returns world coordinates directly for precise tracking
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+      groundScreenY: () => groundY,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setBackgroundTheme("mountain");
+
+    // Sample across multiple frames covering complete fall and rest cycles
+    for (let f = 0; f < 1200; f += 30) {
+      ellipseYCoordinates.length = 0;
+      renderer["drawStageSakuraTrees"](fakeCamera, DREAM_LAND_STAGE_ID, f);
+
+      // All drawn petals must have y >= groundY (never falling below the stage)
+      for (const y of ellipseYCoordinates) {
+        expect(y).toBeGreaterThanOrEqual(groundY);
+      }
+    }
   });
 
   it("draws animated falling autumn leaves on stage without crashing", () => {
