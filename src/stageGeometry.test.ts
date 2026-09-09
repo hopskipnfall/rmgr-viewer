@@ -5,6 +5,7 @@ import {
   stageSlopes,
   stageLedges,
   stageBlastZone,
+  stageHeatmapBounds,
   DREAM_LAND_LEFT_SLOPE,
   DREAM_LAND_RIGHT_SLOPE,
   DREAM_LAND_BODY_POLYGON,
@@ -98,5 +99,36 @@ describe("stageBlastZone", () => {
     expect(bz!.rightX).toBe(9000);
     expect(bz!.bottomY).toBe(-3500);
     expect(bz!.topY).toBe(8300);
+  });
+});
+
+describe("stageHeatmapBounds", () => {
+  it("returns tight stage-framed bounds for Dream Land with 5:3 aspect ratio", () => {
+    const bounds = stageHeatmapBounds(DREAM_LAND_STAGE_ID);
+    expect(bounds).toBeDefined();
+    expect(bounds!.leftX).toBe(-3200);
+    expect(bounds!.rightX).toBe(3200);
+    expect(bounds!.bottomY).toBe(-1440);
+    expect(bounds!.topY).toBe(2400);
+
+    const width = bounds!.rightX - bounds!.leftX;
+    const height = bounds!.topY - bounds!.bottomY;
+    expect(width / height).toBeCloseTo(5 / 3, 5);
+  });
+
+  it("fully encloses stage ground, top platform, and lower hull vertices with buffer", () => {
+    const bounds = stageHeatmapBounds(DREAM_LAND_STAGE_ID)!;
+    // Dream Land ground: [-2318, 2318] at y=0
+    expect(bounds.leftX).toBeLessThan(-2318);
+    expect(bounds.rightX).toBeGreaterThan(2318);
+    // Dream Land top platform at y=1542
+    expect(bounds.topY).toBeGreaterThan(1542);
+    // Dream Land lower hull bottom at y=-1072
+    expect(bounds.bottomY).toBeLessThan(-1072);
+  });
+
+  it("returns undefined for unknown stage ID", () => {
+    expect(stageHeatmapBounds(99999)).toBeUndefined();
+    expect(stageHeatmapBounds(undefined)).toBeUndefined();
   });
 });

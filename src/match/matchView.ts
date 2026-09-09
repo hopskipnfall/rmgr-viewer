@@ -8,8 +8,8 @@ import { Camera } from "../camera.js";
 import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_LABELS, getPlayerColor } from "../players.js";
-import { collectHeatmapPoints } from "../positionHeatmap.js";
-import { renderPositionHeatmap } from "../positionHeatmapRenderer.js";
+import { collectHeatmapPoints } from "../neutralHeatmap.js";
+import { renderNeutralHeatmap } from "../neutralHeatmapRenderer.js";
 import { classifyMatchFrames, findStockLossFrames } from "../matchTimeline.js";
 import { ScrubberBar } from "../scrubberBar.js";
 import {
@@ -31,7 +31,11 @@ import {
 import { characterSize } from "../characterSizes.js";
 import { characterIconUrl } from "../characterIcons.js";
 import { ActionStateId, characterName } from "../lookups.js";
-import { DREAM_LAND_STAGE_ID, stageBlastZone } from "../stageGeometry.js";
+import {
+  DREAM_LAND_STAGE_ID,
+  stageBlastZone,
+  stageHeatmapBounds,
+} from "../stageGeometry.js";
 import { t, getLanguage } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
 import {
@@ -159,14 +163,17 @@ export class MatchViewController {
   private perspectiveToggleEl: HTMLDivElement;
   private statsCollapseBtn: HTMLButtonElement;
   private statsPanel: HTMLDivElement;
-  private positionHeatmapSection: HTMLElement;
-  private positionHeatmapCollapseBtn: HTMLButtonElement;
-  private positionHeatmapHeaderTitle: HTMLHeadingElement;
-  private positionHeatmapPanelBody: HTMLDivElement;
-  private positionHeatmapAngelToggleLabelText: HTMLSpanElement;
-  private positionHeatmapAngelToggle: HTMLInputElement;
-  private positionHeatmapCanvas: HTMLCanvasElement;
-  private positionHeatmapCollapsed = false;
+  private neutralHeatmapSection: HTMLElement;
+  private neutralHeatmapCollapseBtn: HTMLButtonElement;
+  private neutralHeatmapHeaderTitle: HTMLHeadingElement;
+  private neutralHeatmapPanelBody: HTMLDivElement;
+  private neutralHeatmapTargetMeBtn: HTMLButtonElement;
+  private neutralHeatmapTargetOpponentBtn: HTMLButtonElement;
+  private neutralHeatmapTarget: "me" | "opponent" = "me";
+  private neutralHeatmapAngelToggleLabelText: HTMLSpanElement;
+  private neutralHeatmapAngelToggle: HTMLInputElement;
+  private neutralHeatmapCanvas: HTMLCanvasElement;
+  private neutralHeatmapCollapsed = false;
   private statsEmpty: HTMLParagraphElement;
   private characterMetaWidget: HTMLElement;
   private characterMetaHeaderTitle: HTMLHeadingElement;
@@ -423,26 +430,32 @@ export class MatchViewController {
       "statsCollapseBtn",
     ) as HTMLButtonElement;
     this.statsPanel = document.getElementById("statsPanel") as HTMLDivElement;
-    this.positionHeatmapSection = document.getElementById(
-      "positionHeatmapSection",
+    this.neutralHeatmapSection = document.getElementById(
+      "neutralHeatmapSection",
     ) as HTMLElement;
-    this.positionHeatmapCollapseBtn = document.getElementById(
-      "positionHeatmapCollapseBtn",
+    this.neutralHeatmapCollapseBtn = document.getElementById(
+      "neutralHeatmapCollapseBtn",
     ) as HTMLButtonElement;
-    this.positionHeatmapHeaderTitle = document.querySelector(
-      "#positionHeatmapHeader h2",
+    this.neutralHeatmapHeaderTitle = document.querySelector(
+      "#neutralHeatmapHeader h2",
     ) as HTMLHeadingElement;
-    this.positionHeatmapPanelBody = document.getElementById(
-      "positionHeatmapPanelBody",
+    this.neutralHeatmapPanelBody = document.getElementById(
+      "neutralHeatmapPanelBody",
     ) as HTMLDivElement;
-    this.positionHeatmapAngelToggleLabelText = document.querySelector(
-      "#positionHeatmapAngelToggleLabel span",
+    this.neutralHeatmapTargetMeBtn = document.getElementById(
+      "neutralHeatmapTargetMeBtn",
+    ) as HTMLButtonElement;
+    this.neutralHeatmapTargetOpponentBtn = document.getElementById(
+      "neutralHeatmapTargetOpponentBtn",
+    ) as HTMLButtonElement;
+    this.neutralHeatmapAngelToggleLabelText = document.querySelector(
+      "#neutralHeatmapAngelToggleLabel span",
     ) as HTMLSpanElement;
-    this.positionHeatmapAngelToggle = document.getElementById(
-      "positionHeatmapAngelToggle",
+    this.neutralHeatmapAngelToggle = document.getElementById(
+      "neutralHeatmapAngelToggle",
     ) as HTMLInputElement;
-    this.positionHeatmapCanvas = document.getElementById(
-      "positionHeatmapCanvas",
+    this.neutralHeatmapCanvas = document.getElementById(
+      "neutralHeatmapCanvas",
     ) as HTMLCanvasElement;
     this.statsEmpty = document.getElementById(
       "statsEmpty",
@@ -847,18 +860,40 @@ export class MatchViewController {
       this.statsCollapseBtn.classList.toggle("collapsed", this.statsCollapsed);
     });
 
-    this.positionHeatmapCollapseBtn.addEventListener("click", () => {
-      this.positionHeatmapCollapsed = !this.positionHeatmapCollapsed;
-      this.positionHeatmapPanelBody.hidden = this.positionHeatmapCollapsed;
-      this.positionHeatmapCollapseBtn.classList.toggle(
+    this.neutralHeatmapCollapseBtn.addEventListener("click", () => {
+      this.neutralHeatmapCollapsed = !this.neutralHeatmapCollapsed;
+      this.neutralHeatmapPanelBody.hidden = this.neutralHeatmapCollapsed;
+      this.neutralHeatmapCollapseBtn.classList.toggle(
         "collapsed",
-        this.positionHeatmapCollapsed,
+        this.neutralHeatmapCollapsed,
       );
     });
 
-    this.positionHeatmapAngelToggle.addEventListener("change", () => {
+    this.neutralHeatmapTargetMeBtn.addEventListener("click", () => {
+      if (this.neutralHeatmapTarget === "me") return;
+      this.neutralHeatmapTarget = "me";
+      this.neutralHeatmapTargetMeBtn.classList.add("active");
+      this.neutralHeatmapTargetOpponentBtn.classList.remove("active");
+      this.updateNeutralHeatmapAngelToggleLabel();
       if (this.currentReplay) {
-        this.renderPositionHeatmapPanel(this.currentReplay);
+        this.renderNeutralHeatmapPanel(this.currentReplay);
+      }
+    });
+
+    this.neutralHeatmapTargetOpponentBtn.addEventListener("click", () => {
+      if (this.neutralHeatmapTarget === "opponent") return;
+      this.neutralHeatmapTarget = "opponent";
+      this.neutralHeatmapTargetOpponentBtn.classList.add("active");
+      this.neutralHeatmapTargetMeBtn.classList.remove("active");
+      this.updateNeutralHeatmapAngelToggleLabel();
+      if (this.currentReplay) {
+        this.renderNeutralHeatmapPanel(this.currentReplay);
+      }
+    });
+
+    this.neutralHeatmapAngelToggle.addEventListener("change", () => {
+      if (this.currentReplay) {
+        this.renderNeutralHeatmapPanel(this.currentReplay);
       }
     });
 
@@ -1366,13 +1401,16 @@ export class MatchViewController {
     if (this.statsEmpty) this.statsEmpty.textContent = tr.statsEmpty;
     if (this.statsCollapseBtn)
       this.statsCollapseBtn.title = tr.statsCollapseTitle;
-    if (this.positionHeatmapCollapseBtn)
-      this.positionHeatmapCollapseBtn.title = tr.positionHeatmapCollapseTitle;
-    if (this.positionHeatmapHeaderTitle)
-      this.positionHeatmapHeaderTitle.textContent = tr.positionHeatmapTitle;
-    if (this.positionHeatmapAngelToggleLabelText)
-      this.positionHeatmapAngelToggleLabelText.textContent =
-        tr.positionHeatmapAngelToggleLabel;
+    if (this.neutralHeatmapCollapseBtn)
+      this.neutralHeatmapCollapseBtn.title = tr.neutralHeatmapCollapseTitle;
+    if (this.neutralHeatmapHeaderTitle)
+      this.neutralHeatmapHeaderTitle.textContent = tr.neutralHeatmapTitle;
+    if (this.neutralHeatmapTargetMeBtn)
+      this.neutralHeatmapTargetMeBtn.textContent = tr.neutralHeatmapTargetMe;
+    if (this.neutralHeatmapTargetOpponentBtn)
+      this.neutralHeatmapTargetOpponentBtn.textContent =
+        tr.neutralHeatmapTargetOpponent;
+    this.updateNeutralHeatmapAngelToggleLabel();
     if (this.recoveryWidgetTitleEl)
       this.recoveryWidgetTitleEl.textContent = tr.recoveryWidgetTitle;
     if (this.recoveryCollapseBtn)
@@ -1505,7 +1543,7 @@ export class MatchViewController {
       this.buildPlayerPanels(this.currentReplay);
       this.buildPerspectiveToggle(this.currentReplay);
       this.renderStatsPanel(this.currentReplay);
-      this.renderPositionHeatmapPanel(this.currentReplay);
+      this.renderNeutralHeatmapPanel(this.currentReplay);
       this.buildEventLog();
       this.onFrameChange(
         this.playback?.currentIndex ?? 0,
@@ -1993,7 +2031,7 @@ export class MatchViewController {
         this.onPerspectiveChangedCb?.(port);
         this.updatePlayerPanelColors();
         this.renderStatsPanel(replay);
-        this.renderPositionHeatmapPanel(replay);
+        this.renderNeutralHeatmapPanel(replay);
         this.renderMatchTimelinePanel(replay);
         this.renderCharacterMetaPanel(replay);
         this.render12CbMatchWidget();
@@ -2165,30 +2203,41 @@ export class MatchViewController {
     }
   }
 
-  private renderPositionHeatmapPanel(replay: Replay): void {
+  private updateNeutralHeatmapAngelToggleLabel(): void {
+    if (!this.neutralHeatmapAngelToggleLabelText) return;
+    const tr = t();
+    this.neutralHeatmapAngelToggleLabelText.textContent =
+      this.neutralHeatmapTarget === "opponent"
+        ? tr.neutralHeatmapAngelToggleLabelOpponent
+        : tr.neutralHeatmapAngelToggleLabelMe;
+  }
+
+  private renderNeutralHeatmapPanel(replay: Replay): void {
     const seated = getSeatedPorts(replay);
     if (
       seated.length !== 2 ||
       this.perspectivePort === null ||
-      !stageBlastZone(replay.matchSettings?.stageId)
+      (!stageHeatmapBounds(replay.matchSettings?.stageId) &&
+        !stageBlastZone(replay.matchSettings?.stageId))
     ) {
-      this.positionHeatmapSection.hidden = true;
+      this.neutralHeatmapSection.hidden = true;
       return;
     }
 
-    this.positionHeatmapSection.hidden = false;
+    this.neutralHeatmapSection.hidden = false;
     const opponentPort = seated.find((p) => p !== this.perspectivePort)!;
 
     const points = collectHeatmapPoints(
       replay,
       this.perspectivePort,
       opponentPort,
-      this.positionHeatmapAngelToggle.checked,
+      this.neutralHeatmapAngelToggle.checked,
     );
-    renderPositionHeatmap(
-      this.positionHeatmapCanvas,
+    renderNeutralHeatmap(
+      this.neutralHeatmapCanvas,
       replay.matchSettings?.stageId,
       points,
+      this.neutralHeatmapTarget,
     );
   }
 
@@ -4048,7 +4097,7 @@ export class MatchViewController {
     this.buildPlayerPanels(replay);
     this.buildPerspectiveToggle(replay);
     this.renderStatsPanel(replay);
-    this.renderPositionHeatmapPanel(replay);
+    this.renderNeutralHeatmapPanel(replay);
     this.renderMatchTimelinePanel(replay);
     this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);

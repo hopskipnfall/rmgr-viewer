@@ -136,6 +136,37 @@ export function stageBlastZone(
   return stageId !== undefined ? STAGE_BLAST_ZONES[stageId] : undefined;
 }
 
+export interface StageHeatmapBounds {
+  readonly leftX: number;
+  readonly rightX: number;
+  readonly bottomY: number;
+  readonly topY: number;
+}
+
+/**
+ * Tightly framed heatmap bounds around the stage with a balanced buffer area.
+ * For Dream Land (stage width 4636, height 2614):
+ * - X span [-3200, 3200] (width 6400): ~72.4% stage width with ~882 units buffer on each side.
+ * - Y span [-1440, 2400] (height 3840): ground at y=0, top platform at y=1542, hull bottom at y=-1072.
+ * - Aspect ratio: 6400 / 3840 = 5 / 3 = 1.6667, matching the 600x360 heatmap canvas (1:1 pixel aspect ratio).
+ */
+export const DREAM_LAND_HEATMAP_BOUNDS: StageHeatmapBounds = {
+  leftX: -3200,
+  rightX: 3200,
+  bottomY: -1440,
+  topY: 2400,
+};
+
+const STAGE_HEATMAP_BOUNDS: Partial<Record<number, StageHeatmapBounds>> = {
+  [DREAM_LAND_STAGE_ID]: DREAM_LAND_HEATMAP_BOUNDS,
+};
+
+export function stageHeatmapBounds(
+  stageId: number | undefined,
+): StageHeatmapBounds | undefined {
+  return stageId !== undefined ? STAGE_HEATMAP_BOUNDS[stageId] : undefined;
+}
+
 export interface StageVertex {
   readonly x: number;
   readonly y: number;

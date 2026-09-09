@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
-import { collectHeatmapPoints } from "./positionHeatmap.js";
+import { collectHeatmapPoints } from "./neutralHeatmap.js";
+import {
+  renderNeutralHeatmap,
+  HEATMAP_ME_COLOR,
+  HEATMAP_OPPONENT_COLOR,
+} from "./neutralHeatmapRenderer.js";
 import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 
 function makeMockReplay(frames: Frame[], seated: PortIndex[] = [0, 1]): Replay {
@@ -151,9 +156,9 @@ describe("collectHeatmapPoints", () => {
     expect(result.opponent).toEqual([{ x: 110, y: 0 }]);
   });
 
-  it("with the toggle on, only includes frames within 300 frames of an angel-entered event for the opponent port", () => {
+  it("with the toggle on, includes perspective frames when opponent respawns and opponent frames when perspective respawns", () => {
     const frames: Frame[] = [];
-    // Frames 0-4: opponent (port 1) not respawning - outside any window.
+    // Frames 0-4: neither player respawning - outside any window.
     for (let f = 0; f < 5; f++) {
       frames.push(
         makeFrame(
@@ -163,20 +168,29 @@ describe("collectHeatmapPoints", () => {
         ),
       );
     }
-    // Frame 5: opponent enters respawn platform - "angel-entered" fires here.
+    // Frame 5: opponent (port 1) enters respawn platform - window for perspective points.
     frames.push(
       makeFrame(5, { state: IDLE, x: 1, y: 0 }, { state: ENTRY, x: 200, y: 0 }),
     );
-    // Frame 6: still within the 300-frame window (5 to 304 inclusive-exclusive).
+    // Frame 6: still within the 300-frame window after opponent respawn (5 to 304).
     frames.push(
       makeFrame(6, { state: IDLE, x: 2, y: 0 }, { state: IDLE, x: 201, y: 0 }),
     );
-    // Frame 305: outside the window (5 + 300 = 305).
+    // Frame 305: outside opponent's respawn window (5 + 300 = 305).
+    // Here, perspective (port 0) enters respawn platform - window for opponent points.
     frames.push(
       makeFrame(
         305,
-        { state: IDLE, x: 3, y: 0 },
-        { state: IDLE, x: 999, y: 999 },
+        { state: ENTRY, x: 300, y: 0 },
+        { state: IDLE, x: 50, y: 0 },
+      ),
+    );
+    // Frame 306: within 300-frame window after perspective respawn (305 to 604).
+    frames.push(
+      makeFrame(
+        306,
+        { state: IDLE, x: 301, y: 0 },
+        { state: IDLE, x: 51, y: 0 },
       ),
     );
     const replay = makeMockReplay(frames);
@@ -188,16 +202,15 @@ describe("collectHeatmapPoints", () => {
       true,
     );
 
-    // Frame indices 5 and 6 are within the window (frames array index ==
-    // frame number here since every frame number 0..6 is present in order,
-    // then index 7 holds frame number 305 which is excluded).
+    // perspective (port 0) collected only after opponent respawned (frames 5 and 6)
     expect(result.perspective).toEqual([
       { x: 1, y: 0 },
       { x: 2, y: 0 },
     ]);
+    // opponent (port 1) collected only after perspective respawned (frames 305 and 306)
     expect(result.opponent).toEqual([
-      { x: 200, y: 0 },
-      { x: 201, y: 0 },
+      { x: 50, y: 0 },
+      { x: 51, y: 0 },
     ]);
   });
 
@@ -280,5 +293,165 @@ describe("collectHeatmapPoints", () => {
 
     expect(resultOff).toEqual({ perspective: [], opponent: [] });
     expect(resultOn).toEqual({ perspective: [], opponent: [] });
+  });
+});
+
+describe("renderNeutralHeatmap", () => {
+  it("draws using blue (HEATMAP_ME_COLOR) when target is me and ignores opponent points", () => {
+    const fillStyles: string[] = [];
+    let fillRectCalls = 0;
+    const fakeCtx = {
+      clearRect: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+      fillRect: () => {
+        fillRectCalls++;
+        fillStyles.push(fakeCtx.fillStyle);
+      },
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1,
+      globalAlpha: 1,
+    };
+    const fakeCanvas = {
+      getContext: () => fakeCtx,
+      width: 600,
+      height: 360,
+    } as unknown as HTMLCanvasElement;
+
+    renderNeutralHeatmap(
+      fakeCanvas,
+      DREAM_LAND_STAGE_ID,
+      {
+        perspective: [{ x: 0, y: 0 }],
+        opponent: [{ x: 100, y: 0 }],
+      },
+      "me",
+    );
+
+    expect(fillRectCalls).toBe(9);
+    expect(fakeCtx.fillStyle).toBe(HEATMAP_ME_COLOR);
+    expect(fillStyles).toContain(HEATMAP_ME_COLOR);
+    expect(fillStyles).not.toContain(HEATMAP_OPPONENT_COLOR);
+  });
+
+  it("draws using red (HEATMAP_OPPONENT_COLOR) when target is opponent and hides perspective character", () => {
+    const fillStyles: string[] = [];
+    let fillRectCalls = 0;
+    const fakeCtx = {
+      clearRect: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+      fillRect: () => {
+        fillRectCalls++;
+        fillStyles.push(fakeCtx.fillStyle);
+      },
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1,
+      globalAlpha: 1,
+    };
+    const fakeCanvas = {
+      getContext: () => fakeCtx,
+      width: 600,
+      height: 360,
+    } as unknown as HTMLCanvasElement;
+
+    renderNeutralHeatmap(
+      fakeCanvas,
+      DREAM_LAND_STAGE_ID,
+      {
+        perspective: [{ x: 0, y: 0 }],
+        opponent: [{ x: 100, y: 0 }],
+      },
+      "opponent",
+    );
+
+    expect(fillRectCalls).toBe(9);
+    expect(fakeCtx.fillStyle).toBe(HEATMAP_OPPONENT_COLOR);
+    expect(fillStyles).toContain(HEATMAP_OPPONENT_COLOR);
+    expect(fillStyles).not.toContain(HEATMAP_ME_COLOR);
+  });
+
+  it("brightens overlapping squares when points are close to each other", () => {
+    const alphas: number[] = [];
+    const fakeCtx = {
+      clearRect: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+      fillRect: () => {
+        alphas.push(fakeCtx.globalAlpha);
+      },
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1,
+      globalAlpha: 1,
+    };
+    const fakeCanvas = {
+      getContext: () => fakeCtx,
+      width: 600,
+      height: 360,
+    } as unknown as HTMLCanvasElement;
+
+    // Two points 1 cell width apart horizontally
+    renderNeutralHeatmap(
+      fakeCanvas,
+      DREAM_LAND_STAGE_ID,
+      {
+        perspective: [
+          { x: 0, y: 0 },
+          { x: 150, y: 0 },
+        ],
+        opponent: [],
+      },
+      "me",
+    );
+
+    // Some cells overlap and have higher weight than isolated peripheral cells
+    expect(alphas.length).toBeGreaterThan(9);
+    const maxAlpha = Math.max(...alphas);
+    const minAlpha = Math.min(...alphas);
+    expect(maxAlpha).toBeCloseTo(1, 1);
+    expect(minAlpha).toBeLessThan(maxAlpha);
+  });
+});
+
+describe("neutralHeatmap i18n", () => {
+  it("provides correct English and Japanese labels including dynamic angel toggle labels", async () => {
+    const { TRANSLATIONS } = await import("./i18n.js");
+    const en = TRANSLATIONS.en;
+    const ja = TRANSLATIONS.ja;
+
+    expect(en.neutralHeatmapTitle).toBe("Neutral Heatmap");
+    expect(en.neutralHeatmapCollapseTitle).toBe(
+      "Collapse / expand Neutral Heatmap",
+    );
+    expect(en.neutralHeatmapTargetMe).toBe("Me");
+    expect(en.neutralHeatmapTargetOpponent).toBe("Opponent");
+    expect(en.neutralHeatmapAngelToggleLabelMe).toBe(
+      "Only first 5s after opponent respawns (angel invincibility)",
+    );
+    expect(en.neutralHeatmapAngelToggleLabelOpponent).toBe(
+      "Only first 5s after I respawn (angel invincibility)",
+    );
+
+    expect(ja.neutralHeatmapTitle).toBe("ニュートラルヒートマップ");
+    expect(ja.neutralHeatmapCollapseTitle).toBe(
+      "ニュートラルヒートマップの折りたたみ / 展開",
+    );
+    expect(ja.neutralHeatmapTargetMe).toBe("自分");
+    expect(ja.neutralHeatmapTargetOpponent).toBe("相手");
+    expect(ja.neutralHeatmapAngelToggleLabelMe).toBe(
+      "相手のリスポーン無敵時間の最初の5秒のみ表示",
+    );
+    expect(ja.neutralHeatmapAngelToggleLabelOpponent).toBe(
+      "自分のリスポーン無敵時間の最初の5秒のみ表示",
+    );
   });
 });

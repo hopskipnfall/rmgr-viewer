@@ -25,10 +25,12 @@ const ANGEL_WINDOW_FRAMES = 300;
  * `opponentPort`, restricted to "neutral" positioning: frames inside an
  * active neutral-hit exchange, or where either port is in the Revive1
  * (immobile spawn-platform) state, are always excluded. When
- * `onlyDuringAngelInvincibility` is true, only frames within 300 frames
- * (5s) after each of the opponent's "angel-entered" respawn events are
- * additionally included, for both ports; overlapping windows aren't
- * double-counted. Empty for any replay that isn't exactly 1v1.
+ * `onlyDuringAngelInvincibility` is true, perspectivePort positions are
+ * collected only within 300 frames (5s) after each of the opponent's
+ * respawn events, while opponentPort positions are collected only within
+ * 300 frames after each of the perspective player's respawn events.
+ * Overlapping windows aren't double-counted. Empty for any replay that
+ * isn't exactly 1v1.
  */
 export function collectHeatmapPoints(
   replay: Replay,
@@ -40,18 +42,28 @@ export function collectHeatmapPoints(
     return { perspective: [], opponent: [] };
   }
 
-  let allowedFrameIndices: Set<number> | null = null;
+  let perspectiveAllowedFrameIndices: Set<number> | null = null;
+  let opponentAllowedFrameIndices: Set<number> | null = null;
   if (onlyDuringAngelInvincibility) {
-    allowedFrameIndices = new Set<number>();
+    perspectiveAllowedFrameIndices = new Set<number>();
+    opponentAllowedFrameIndices = new Set<number>();
     for (const ev of computeAngelInvincibilityEvents(replay)) {
-      if (ev.kind !== "angel-entered" || ev.respawnPort !== opponentPort)
-        continue;
+      if (ev.kind !== "angel-entered") continue;
       const windowStart = ev.frame;
       const windowEnd = ev.frame + ANGEL_WINDOW_FRAMES;
-      for (let i = 0; i < replay.frames.length; i++) {
-        const frame = replay.frames[i];
-        if (frame && frame.frame >= windowStart && frame.frame < windowEnd) {
-          allowedFrameIndices.add(i);
+      if (ev.respawnPort === opponentPort) {
+        for (let i = 0; i < replay.frames.length; i++) {
+          const frame = replay.frames[i];
+          if (frame && frame.frame >= windowStart && frame.frame < windowEnd) {
+            perspectiveAllowedFrameIndices.add(i);
+          }
+        }
+      } else if (ev.respawnPort === perspectivePort) {
+        for (let i = 0; i < replay.frames.length; i++) {
+          const frame = replay.frames[i];
+          if (frame && frame.frame >= windowStart && frame.frame < windowEnd) {
+            opponentAllowedFrameIndices.add(i);
+          }
         }
       }
     }
@@ -75,7 +87,6 @@ export function collectHeatmapPoints(
   const opponent: HeatmapPoint[] = [];
 
   for (let i = 0; i < replay.frames.length; i++) {
-    if (allowedFrameIndices !== null && !allowedFrameIndices.has(i)) continue;
     if (exchangeFrameIndices.has(i)) continue;
     const frame = replay.frames[i];
     if (!frame) continue;
@@ -89,8 +100,20 @@ export function collectHeatmapPoints(
       continue;
     }
 
-    if (pState) perspective.push({ x: pState.positionX, y: pState.positionY });
-    if (oState) opponent.push({ x: oState.positionX, y: oState.positionY });
+    if (
+      pState &&
+      (perspectiveAllowedFrameIndices === null ||
+        perspectiveAllowedFrameIndices.has(i))
+    ) {
+      perspective.push({ x: pState.positionX, y: pState.positionY });
+    }
+    if (
+      oState &&
+      (opponentAllowedFrameIndices === null ||
+        opponentAllowedFrameIndices.has(i))
+    ) {
+      opponent.push({ x: oState.positionX, y: oState.positionY });
+    }
   }
 
   return { perspective, opponent };
