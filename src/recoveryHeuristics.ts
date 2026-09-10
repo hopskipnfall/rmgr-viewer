@@ -2168,12 +2168,12 @@ function noUpBRecoveryOutcomes(
 // caveat for future characters (Ness/Kirby) built with the same root-motion interpreter.
 //
 // FACING: modeled as facing-independent (tries both target directions unconditionally, like
-// Fox/Pikachu), NOT verified against source the way Pikachu's Quick Attack explicitly was -- the
-// physics formula itself treats direction as stick-driven (targetLr feeds the per-frame drift
-// calculation directly, the same shape as Fox/Pikachu's facing-independent moves), and the
-// strategy's own "jump to face the stage first" step implies facing is not a hard constraint when
-// a jump is available. Flagged back to the Game Expert as an assumption worth confirming, not a
-// verified fact like the rest of this section.
+// Fox/Pikachu). Confirmed against source by the Game Expert (2026-09-10 follow-up):
+// ftCaptainSpecialHiProcInterrupt updates fp->lr mid-dive via ftParamSetStickLR, gated by a
+// motion-script timing window (motion_vars.flags.flag1) and |stick.x| >
+// FTCAPTAIN_FALCONDIVE_TURN_STICK_RANGE_MIN (=18) -- genuinely stick-driven, not locked at
+// activation. It's a windowed correction (only re-checked during that flag1 window) rather than
+// continuous, but that doesn't change this model's conclusion or need modeling here.
 // ---------------------------------------------------------------------------
 
 const FALCON = {
@@ -2656,8 +2656,7 @@ export function classify(
       );
     case CHAR_FALCON:
       // Delay + jump search, no angle/magnitude search (see the section header above for why).
-      // Facing-independent (see section header caveat -- an unverified assumption, unlike the
-      // rest of this move's model).
+      // Facing-independent -- confirmed against source, see section header.
       if (jumpsRemaining > 1) return null;
       return toRecoveryVerdict(
         falconRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
