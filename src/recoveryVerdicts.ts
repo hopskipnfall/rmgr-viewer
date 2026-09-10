@@ -183,7 +183,7 @@ function findHoldEndFrameIndex(
   return replay.frames.length - 1;
 }
 
-interface VerdictSpan {
+export interface VerdictSpan {
   readonly port: PortIndex;
   readonly kind: RecoveryVerdictEventKind;
   /** The frame the verdict was actually computed on (>= the trigger frame -- see
