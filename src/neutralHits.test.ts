@@ -1008,6 +1008,124 @@ describe("classifyNeutralOpening", () => {
     expect(ev.outcome).toBe("reset");
   });
 
+  it("does not tag a hit as convertedToEdgeGuard when the classifier confirmed the victim was already dead", () => {
+    // Fox (characterId 1) at (20000, -5000) with vx=5, vy=-30, jumpsRemaining=0 is a fixture
+    // probed directly against classify() -- see classifiedSituations.test.ts -- confirmed to
+    // return "dead": no simulated strategy gets them back. The hit here knocks them straight to
+    // that position, so buildRecoveryMap flags them as "recovering" (as it always does for any
+    // offstage+actionable player) for the whole span, but it should never have been credited as a
+    // real edge-guard conversion -- the neutral hit alone already secured the kill.
+    const frames: Frame[] = [];
+    const p0 = 0 as PortIndex;
+    const p1 = 1 as PortIndex;
+
+    for (let f = 0; f < 60; f++) {
+      const inHit = f >= 0 && f < 20;
+      const dead = f >= 20 && f < 40;
+
+      let p1State = 0x00a;
+      if (inHit) p1State = 0x028;
+      else if (dead) p1State = 0x039; // Fall, actionable
+      else p1State = 0x000; // DeadD
+
+      frames.push({
+        frame: f,
+        ports: {
+          [p0]: {
+            input: { frame: f, port: p0, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
+              frame: f,
+              port: p0,
+              characterId: 0,
+              actionStateId: 0x00a,
+              actionFrameCounter: f,
+              positionX: 1000,
+              positionY: 0,
+              velocityX: 0,
+              velocityY: 0,
+              damagePercent: 0,
+              stocksRemaining: 4,
+              jumpsRemaining: 0,
+              grounded: true,
+              hurtboxState: 0,
+              hitstunCounter: 0,
+              comboHitCount: 0,
+              comboDamage: 0,
+              facingDirection: 1,
+            },
+          },
+          [p1]: {
+            input: { frame: f, port: p1, buttons: 0, stickX: 0, stickY: 0 },
+            state: {
+              frame: f,
+              port: p1,
+              characterId: 1,
+              actionStateId: p1State,
+              actionFrameCounter: f,
+              positionX: dead ? 20000 : 1200,
+              positionY: dead ? -5000 : 0,
+              velocityX: dead ? 5 : 0,
+              velocityY: dead ? -30 : 0,
+              damagePercent: f >= 0 ? 30 : 0,
+              stocksRemaining: f >= 40 ? 3 : 4,
+              jumpsRemaining: 0,
+              grounded: false,
+              hurtboxState: 0,
+              hitstunCounter: inHit ? 15 : 0,
+              comboHitCount: inHit ? 1 : 0,
+              comboDamage: 0,
+              facingDirection: -1,
+            },
+          },
+        },
+      });
+    }
+
+    const replay = {
+      header: {
+        version: 5,
+        gameFamily: "smash64",
+        goodName: "Super Smash Bros. (U) (V1.0) [!]",
+        recorderSchemaVersion: 1,
+        recordedAtEpochMillis: 1724300000000,
+        uncompressedLength: 0,
+        compressedLength: 0,
+      },
+      matchStart: {
+        playerNames: ["Harold", "George", "", ""],
+        slotType: ["human", "human", "empty", "empty"],
+      },
+      matchSettings: {
+        stageId: DREAM_LAND_STAGE_ID,
+        gameType: 2,
+        stockCountSetting: 3,
+        timeLimitMinutes: 100,
+        damageRatio: 100,
+        itemFrequency: 0,
+        teamsEnabled: false,
+        handicapMode: "off",
+        characterId: [0, 1, 0, 0],
+        costumeId: [0, 0, 0, 0],
+        teamColor: [0, 0, 0, 0],
+        portTeam: [0, 1, 0, 0],
+        portHandicap: [0, 0, 0, 0],
+        portCpuLevel: [0, 0, 0, 0],
+      },
+      frames,
+      matchEnd: { finalFrame: frames.length - 1, endReason: "normal" },
+      matchResult: { placements: [0, -1, -1, -1] },
+    } as unknown as Replay;
+
+    const events = computeNeutralHitEvents(replay);
+
+    expect(events.length).toBe(1);
+    const ev = events[0]!;
+    expect(ev.attackerPort).toBe(p0);
+    expect(ev.victimPort).toBe(p1);
+    expect(ev.convertedToKill).toBe(true);
+    expect(ev.convertedToEdgeGuard).toBe(false);
+  });
+
   it("handles reversal when defender escapes edge guard and puts attacker into disadvantage", () => {
     const frames: Frame[] = [];
     const p0 = 0 as PortIndex;

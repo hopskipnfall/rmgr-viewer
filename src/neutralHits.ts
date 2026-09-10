@@ -6,6 +6,7 @@ import {
 } from "@rmg-k/rmgr";
 import { buildRecoveryMap, buildLedgeMap } from "./ledgeTrap.js";
 import { isHitstunState } from "./edgeGuard.js";
+import { computeRecoveryVerdictSpans } from "./recoveryVerdicts.js";
 
 const PORTS: readonly PortIndex[] = [0, 1, 2, 3];
 
@@ -392,6 +393,30 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
   const ledgeMap = buildLedgeMap(replay);
   const angelMap = buildAngelMap(replay, portA, portB);
 
+  // Recovery verdict "dead" spans, per port -- used below to avoid tagging a neutral opening as
+  // "converted to edge guard" when the classifier had already confirmed the victim was
+  // unsurvivable at that point. Without this, EVERY hit that knocks someone offstage gets
+  // credited as a meaningful edge-guard setup, even when the neutral hit itself already secured
+  // the kill outright -- the "unhelpful neutral analysis commentary" the user flagged. See
+  // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+  const deadSpansByPort = new Map<
+    PortIndex,
+    { verdictFrameIndex: number; holdEndFrameIndex: number }[]
+  >();
+  for (const span of computeRecoveryVerdictSpans(replay)) {
+    if (span.verdict !== "dead") continue;
+    const list = deadSpansByPort.get(span.port) ?? [];
+    list.push({
+      verdictFrameIndex: span.verdictFrameIndex,
+      holdEndFrameIndex: span.holdEndFrameIndex,
+    });
+    deadSpansByPort.set(span.port, list);
+  }
+  const isConfirmedHopeless = (port: PortIndex, frameIndex: number): boolean =>
+    (deadSpansByPort.get(port) ?? []).some(
+      (s) => frameIndex >= s.verdictFrameIndex && frameIndex <= s.holdEndFrameIndex,
+    );
+
   interface ActiveInteraction {
     frame: number;
     frameIndex: number;
@@ -623,7 +648,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
         active = null;
       } else {
         // 2. Check situation conversions
-        if (recoveryMap[i] === vic) {
+        if (recoveryMap[i] === vic && !isConfirmedHopeless(vic, i)) {
           active.convertedToEdgeGuard = true;
           if (active.edgeGuardStartFrameIndex === undefined) {
             active.edgeGuardStartFrameIndex = i;
