@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
-import { computeClassifiedSituations } from "./classifiedSituations.js";
+import {
+  computeClassifiedSituations,
+  computeClassifiedSituationEvents,
+} from "./classifiedSituations.js";
 import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 
 // Fox fixtures probed directly against classify() (jumpsRemaining=0, actionStateId=0x39,
@@ -337,5 +340,144 @@ describe("computeClassifiedSituations", () => {
       missedLedgeHogOpportunity: false,
       possibleAccidentalSave: true,
     });
+  });
+});
+
+describe("computeClassifiedSituationEvents", () => {
+  it("emits a missed-ledge-hog event at the resolution frame, not the entry frame", () => {
+    const frames: Frame[] = [
+      makeFrame(0, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_HITSTUN,
+        x: CONTESTABLE_FIXTURE.x,
+        y: CONTESTABLE_FIXTURE.y,
+        vx: CONTESTABLE_FIXTURE.vx,
+        vy: CONTESTABLE_FIXTURE.vy,
+        hitstun: 5,
+        dmg: 50,
+      }),
+      makeFrame(1, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_FALL,
+        x: CONTESTABLE_FIXTURE.x,
+        y: CONTESTABLE_FIXTURE.y,
+        vx: CONTESTABLE_FIXTURE.vx,
+        vy: CONTESTABLE_FIXTURE.vy,
+        hitstun: 0,
+        dmg: 50,
+      }),
+      makeFrame(2, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_CLIFF_CATCH,
+        x: 2200,
+        y: 0,
+        hitstun: 0,
+        dmg: 50,
+      }),
+    ];
+
+    const events = computeClassifiedSituationEvents(makeMockReplay(frames));
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      kind: "missed-ledge-hog",
+      frame: 2,
+      frameIndex: 2,
+      recoveringPort: 1,
+      edgeGuardingPort: 0,
+    });
+  });
+
+  it("emits a possible-accidental-save event, and nothing for an unflagged situation", () => {
+    const frames: Frame[] = [
+      makeFrame(0, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_HITSTUN,
+        x: DEAD_FIXTURE.x,
+        y: DEAD_FIXTURE.y,
+        vx: DEAD_FIXTURE.vx,
+        vy: DEAD_FIXTURE.vy,
+        hitstun: 5,
+        dmg: 50,
+      }),
+      makeFrame(1, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_FALL,
+        x: DEAD_FIXTURE.x,
+        y: DEAD_FIXTURE.y,
+        vx: DEAD_FIXTURE.vx,
+        vy: DEAD_FIXTURE.vy,
+        hitstun: 0,
+        dmg: 50,
+      }),
+      makeFrame(2, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_FALL,
+        x: DEAD_FIXTURE.x,
+        y: DEAD_FIXTURE.y,
+        vx: DEAD_FIXTURE.vx,
+        vy: DEAD_FIXTURE.vy,
+        hitstun: 0,
+        dmg: 65,
+      }),
+      makeFrame(3, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_CLIFF_CATCH,
+        x: 2200,
+        y: 0,
+        hitstun: 0,
+        dmg: 65,
+      }),
+    ];
+
+    const events = computeClassifiedSituationEvents(makeMockReplay(frames));
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      kind: "possible-accidental-save",
+      frame: 3,
+      frameIndex: 3,
+      recoveringPort: 1,
+      edgeGuardingPort: 0,
+    });
+  });
+
+  it("emits nothing for a plain hopeless-and-died or free-and-succeeded situation", () => {
+    const frames: Frame[] = [
+      makeFrame(0, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_HITSTUN,
+        x: FREE_FIXTURE.x,
+        y: FREE_FIXTURE.y,
+        vx: FREE_FIXTURE.vx,
+        vy: FREE_FIXTURE.vy,
+        hitstun: 5,
+        dmg: 50,
+      }),
+      makeFrame(1, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_FALL,
+        x: FREE_FIXTURE.x,
+        y: FREE_FIXTURE.y,
+        vx: FREE_FIXTURE.vx,
+        vy: FREE_FIXTURE.vy,
+        hitstun: 0,
+        dmg: 50,
+      }),
+    ];
+    for (let f = 2; f <= 31; f++) {
+      frames.push(
+        makeFrame(f, EDGE_GUARDER_ONSTAGE, {
+          characterId: CHAR_FOX,
+          state: ACTION_STATE_STAND,
+          x: 100,
+          y: 0,
+          grounded: true,
+          hitstun: 0,
+          dmg: 50,
+        }),
+      );
+    }
+
+    const events = computeClassifiedSituationEvents(makeMockReplay(frames));
+    expect(events).toHaveLength(0);
   });
 });

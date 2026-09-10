@@ -91,6 +91,10 @@ export interface Translations {
   recoveryFailure: string;
   edgeGuardSuccess: string;
   edgeGuardFailed: string;
+  missedLedgeHogAsRecovering: string;
+  missedLedgeHogAsGuarding: string;
+  possibleAccidentalSaveAsRecovering: string;
+  possibleAccidentalSaveAsGuarding: string;
 
   ledgeGetupEntered: string;
   ledgeTrapEntered: string;
@@ -127,6 +131,11 @@ export interface Translations {
 
   // Events (Neutral Fallback)
   playerRecovering: (player: string) => string;
+  playerMissedLedgeHog: (guardingPlayer: string) => string;
+  playerPossibleAccidentalSave: (
+    recoveringPlayer: string,
+    guardingPlayer: string,
+  ) => string;
   playerLedgeGetupSuccess: (player: string) => string;
   playerLedgeGetupFailure: (player: string) => string;
   playerAngelEntered: (player: string) => string;
@@ -561,6 +570,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     recoveryFailure: "Recovery: failure",
     edgeGuardSuccess: "Edge guard: success",
     edgeGuardFailed: "Edge guard: failed",
+    missedLedgeHogAsRecovering: "Ledge hog opportunity: escaped",
+    missedLedgeHogAsGuarding: "Ledge hog opportunity: missed",
+    possibleAccidentalSaveAsRecovering: "Accidental save: survived",
+    possibleAccidentalSaveAsGuarding: "Accidental save: your hit may have helped",
 
     ledgeGetupEntered: "Ledge getup",
     ledgeTrapEntered: "Ledge trap",
@@ -606,6 +619,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralHitGrab: "Neutral hit (grab)",
 
     playerRecovering: (p) => `${p} recovering`,
+    playerMissedLedgeHog: (guardingPlayer) =>
+      `${guardingPlayer} missed a ledge-hog opportunity`,
+    playerPossibleAccidentalSave: (recoveringPlayer, guardingPlayer) =>
+      `${recoveringPlayer} may have been accidentally saved by ${guardingPlayer}`,
     playerLedgeGetupSuccess: (p) => `${p} getup: success`,
     playerLedgeGetupFailure: (p) => `${p} getup: failure`,
     playerAngelEntered: (p) => `${p} angel invincibility`,
@@ -1054,6 +1071,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     recoveryFailure: "復帰: 失敗",
     edgeGuardSuccess: "復帰阻止: 成功",
     edgeGuardFailed: "復帰阻止: 失敗",
+    missedLedgeHogAsRecovering: "崖離し放置の機会: 生還",
+    missedLedgeHogAsGuarding: "崖離し放置の機会: 見逃し",
+    possibleAccidentalSaveAsRecovering: "偶然の救済: 生還",
+    possibleAccidentalSaveAsGuarding: "偶然の救済: 自分の攻撃が助けた可能性",
 
     ledgeGetupEntered: "崖上がり",
     ledgeTrapEntered: "崖狩り",
@@ -1095,6 +1116,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralHitGrab: "立ち回りヒット (つかみ)",
 
     playerRecovering: (p) => `${p} 復帰中`,
+    playerMissedLedgeHog: (guardingPlayer) =>
+      `${guardingPlayer} が崖離し放置の機会を見逃した`,
+    playerPossibleAccidentalSave: (recoveringPlayer, guardingPlayer) =>
+      `${recoveringPlayer} は ${guardingPlayer} の攻撃で偶然救済された可能性`,
     playerLedgeGetupSuccess: (p) => `${p} 崖上がり: 成功`,
     playerLedgeGetupFailure: (p) => `${p} 崖上がり: 失敗`,
     playerAngelEntered: (p) => `${p} 復活無敵`,

@@ -64,8 +64,10 @@ import {
 } from "../recoveryVerdicts.js";
 import {
   computeClassifiedSituations,
+  computeClassifiedSituationEvents,
   hopelessEnteredFrameIndices,
   type ClassifiedSituation,
+  type ClassifiedSituationEvent,
   type SituationCategory,
 } from "../classifiedSituations.js";
 import {
@@ -118,7 +120,8 @@ export type MatchEvent =
   | AngelInvincibilityEvent
   | JigglypuffFThrowEvent
   | ShieldPressureEvent
-  | RecoveryVerdictEvent;
+  | RecoveryVerdictEvent
+  | ClassifiedSituationEvent;
 
 interface PlayerPanel {
   port: PortIndex;
@@ -2152,6 +2155,45 @@ export class MatchViewController {
       };
     }
 
+    if (
+      ev.kind === "missed-ledge-hog" ||
+      ev.kind === "possible-accidental-save"
+    ) {
+      if (perspective === null) {
+        return ev.kind === "missed-ledge-hog"
+          ? {
+              text: `${ev.frame} — ${tr.playerMissedLedgeHog(name(ev.edgeGuardingPort))}`,
+              kind: "entered",
+            }
+          : {
+              text: `${ev.frame} — ${tr.playerPossibleAccidentalSave(name(ev.recoveringPort), name(ev.edgeGuardingPort))}`,
+              kind: "entered",
+            };
+      }
+
+      const isRecoveringSide = ev.recoveringPort === perspective;
+      if (ev.kind === "missed-ledge-hog") {
+        return isRecoveringSide
+          ? {
+              text: `${ev.frame} — ${tr.missedLedgeHogAsRecovering}`,
+              kind: "success",
+            }
+          : {
+              text: `${ev.frame} — ${tr.missedLedgeHogAsGuarding}`,
+              kind: "failure",
+            };
+      }
+      return isRecoveringSide
+        ? {
+            text: `${ev.frame} — ${tr.possibleAccidentalSaveAsRecovering}`,
+            kind: "success",
+          }
+        : {
+            text: `${ev.frame} — ${tr.possibleAccidentalSaveAsGuarding}`,
+            kind: "failure",
+          };
+    }
+
     const edgeEv = ev as EdgeGuardEvent;
     if (perspective === null) {
       switch (edgeEv.kind) {
@@ -2332,7 +2374,9 @@ export class MatchViewController {
       if (
         ev.kind === "situation-entered" ||
         ev.kind === "recovery-success" ||
-        ev.kind === "recovery-failure"
+        ev.kind === "recovery-failure" ||
+        ev.kind === "missed-ledge-hog" ||
+        ev.kind === "possible-accidental-save"
       ) {
         return this.activeLogCategories.has("recovery");
       }
@@ -4449,6 +4493,7 @@ export class MatchViewController {
     const puffEvents = computeJigglypuffFThrowEvents(replay);
     const shieldEvents = computeShieldPressureEvents(replay);
     const recoveryVerdictEvents = computeRecoveryVerdictEvents(replay);
+    const classifiedSituationEvents = computeClassifiedSituationEvents(replay);
     this.matchEvents = [
       ...edgeEvents,
       ...ledgeEvents,
@@ -4457,6 +4502,7 @@ export class MatchViewController {
       ...puffEvents,
       ...shieldEvents,
       ...recoveryVerdictEvents,
+      ...classifiedSituationEvents,
     ].sort((a, b) =>
       a.frameIndex === b.frameIndex
         ? a.kind === "neutral-hit"

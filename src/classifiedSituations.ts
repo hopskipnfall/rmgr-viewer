@@ -257,3 +257,53 @@ export function hopelessEnteredFrameIndices(
       .map((s) => s.enteredFrameIndex),
   );
 }
+
+// ---------------------------------------------------------------------------
+// Event log entries for the two detectors (phase 3 --
+// docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md)
+// ---------------------------------------------------------------------------
+
+export type ClassifiedSituationEventKind =
+  | "missed-ledge-hog"
+  | "possible-accidental-save";
+
+export interface ClassifiedSituationEvent {
+  /** Frame number (from `PostFrameUpdate.frame`), at the situation's resolution -- that's the
+   * earliest point either flag is actually known to be true. */
+  readonly frame: number;
+  readonly frameIndex: number;
+  readonly kind: ClassifiedSituationEventKind;
+  readonly recoveringPort: PortIndex;
+  readonly edgeGuardingPort: PortIndex;
+}
+
+/**
+ * One event per flagged situation from computeClassifiedSituations -- missedLedgeHogOpportunity
+ * and possibleAccidentalSave each become a log entry, fired at the situation's resolution frame.
+ * A situation can produce at most one of the two (they're mutually exclusive: the first requires
+ * category "contestable", the second requires "hopeless" or "contestable"-with-the-ledge-held --
+ * see computeClassifiedSituations), so this never double-logs the same situation.
+ */
+export function computeClassifiedSituationEvents(
+  replay: Replay,
+): ClassifiedSituationEvent[] {
+  const events: ClassifiedSituationEvent[] = [];
+  for (const s of computeClassifiedSituations(replay)) {
+    const kind: ClassifiedSituationEventKind | null = s.missedLedgeHogOpportunity
+      ? "missed-ledge-hog"
+      : s.possibleAccidentalSave
+        ? "possible-accidental-save"
+        : null;
+    if (kind === null) continue;
+    const frame = replay.frames[s.resolutionFrameIndex]?.frame;
+    if (frame === undefined) continue;
+    events.push({
+      frame,
+      frameIndex: s.resolutionFrameIndex,
+      kind,
+      recoveringPort: s.recoveringPort,
+      edgeGuardingPort: s.edgeGuardingPort,
+    });
+  }
+  return events;
+}
