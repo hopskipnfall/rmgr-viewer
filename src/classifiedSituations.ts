@@ -55,6 +55,14 @@ export interface ClassifiedSituation {
    * edge-guarding port landed a hit on the recovering port during the window. Worth a look, not
    * proof of causation -- see the design doc's "Open questions". */
   readonly possibleAccidentalSave: boolean;
+
+  /** Total damage dealt by the edge-guarding port to the recovering port during the situation
+   * window (sum of extractAllHitsWithDI's damageDealt for matching hits). Feeds
+   * edgeGuardEffectivenessScore's partial-credit tiers for situations that didn't end in a kill.
+   * Deliberately NOT "damage percent" in the sense of proximity to a kill -- per the user, damage
+   * percent isn't actually a percentage of anything, just a knockback multiplier, so this is a
+   * flat cumulative-damage bucket, not scaled against the recovering player's existing damage. */
+  readonly damageDealtByGuarder: number;
 }
 
 function categoryForVerdict(verdict: RecoveryVerdict | null): SituationCategory {
@@ -121,6 +129,27 @@ function edgeGuarderLandedHitInWindow(
       hit.hitFrameIndex >= fromFrameIndex &&
       hit.hitFrameIndex <= toFrameIndex,
   );
+}
+
+function sumDamageDealtInWindow(
+  hits: readonly ReturnType<typeof extractAllHitsWithDI>[number][],
+  recoveringPort: PortIndex,
+  edgeGuardingPort: PortIndex,
+  fromFrameIndex: number,
+  toFrameIndex: number,
+): number {
+  let total = 0;
+  for (const hit of hits) {
+    if (
+      hit.victimPort === recoveringPort &&
+      hit.attackerPort === edgeGuardingPort &&
+      hit.hitFrameIndex >= fromFrameIndex &&
+      hit.hitFrameIndex <= toFrameIndex
+    ) {
+      total += hit.damageDealt;
+    }
+  }
+  return total;
 }
 
 /**
@@ -223,6 +252,14 @@ function computeClassifiedSituationsUncached(
         resolutionFrameIndex,
       );
 
+    const damageDealtByGuarder = sumDamageDealtInWindow(
+      hits,
+      recoveringPort,
+      edgeGuardingPort,
+      enteredFrameIndex,
+      resolutionFrameIndex,
+    );
+
     result.push({
       recoveringPort,
       edgeGuardingPort,
@@ -235,6 +272,7 @@ function computeClassifiedSituationsUncached(
       edgeGuarderHeldLedge,
       missedLedgeHogOpportunity,
       possibleAccidentalSave,
+      damageDealtByGuarder,
     });
   }
 
@@ -306,4 +344,80 @@ export function computeClassifiedSituationEvents(
     });
   }
   return events;
+}
+
+// ---------------------------------------------------------------------------
+// Edge Guard Effectiveness score -- per-situation partial credit beyond kill-or-not, per the user
+// (2026-09-10/11): "instead of just kills we should try quantifying and scoring how effective it
+// was" -- did it deal significant damage even without a kill, did it accidentally save the
+// opponent, did it miss a free ledge-hog kill, and of course did it take the stock.
+// ---------------------------------------------------------------------------
+
+/** Tiers, per the user directly -- not derived, a deliberate design choice. Kill still worth more
+ * than any non-kill outcome; a missed ledge-hog opportunity is worse than doing nothing (0) since
+ * it was a free kill left on the table, but not as bad as an accidental save (actively
+ * counterproductive). Damage tiers are flat cumulative-damage buckets, not scaled against the
+ * recovering player's existing damage -- see damageDealtByGuarder's own doc comment for why. */
+export const EDGE_GUARD_EFFECTIVENESS_SCORE = {
+  KILL: 100,
+  DAMAGE_HIGH: 70, // >= 35% dealt, no kill -- "significant punish"
+  DAMAGE_MID: 45, // 17-35% dealt
+  DAMAGE_LOW: 20, // 0-17% dealt (roughly one hit)
+  NO_DAMAGE: 0,
+  MISSED_LEDGE_HOG: -10,
+  ACCIDENTAL_SAVE: -50,
+} as const;
+
+const DAMAGE_HIGH_THRESHOLD = 35;
+const DAMAGE_MID_THRESHOLD = 17;
+
+/**
+ * Per-situation Edge Guard Effectiveness score (see EDGE_GUARD_EFFECTIVENESS_SCORE), or null if
+ * this situation is out of scope for scoring entirely:
+ * - category "free"/"unclassified": never scored -- same "free" isn't trusted for anything
+ *   score-affecting boundary as computeEdgeGuardStats' hopeless-exclusion.
+ * - category "hopeless" that resolved NORMALLY (opponent died as expected, no accidental save):
+ *   also excluded -- nothing was actually being tested, same reasoning as the stats exclusion.
+ *   A "hopeless" situation only ever produces a score when something anomalous happened
+ *   (the accidental-save penalty) -- missedLedgeHogOpportunity can't occur for "hopeless" by
+ *   construction (see computeClassifiedSituations), so this is the only other case to gate here.
+ */
+export function edgeGuardEffectivenessScore(
+  situation: ClassifiedSituation,
+): number | null {
+  if (situation.category !== "hopeless" && situation.category !== "contestable")
+    return null;
+  if (situation.missedLedgeHogOpportunity)
+    return EDGE_GUARD_EFFECTIVENESS_SCORE.MISSED_LEDGE_HOG;
+  if (situation.possibleAccidentalSave)
+    return EDGE_GUARD_EFFECTIVENESS_SCORE.ACCIDENTAL_SAVE;
+  if (situation.category === "hopeless") return null;
+  if (situation.resolutionKind === "recovery-failure")
+    return EDGE_GUARD_EFFECTIVENESS_SCORE.KILL;
+  if (situation.damageDealtByGuarder >= DAMAGE_HIGH_THRESHOLD)
+    return EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_HIGH;
+  if (situation.damageDealtByGuarder >= DAMAGE_MID_THRESHOLD)
+    return EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_MID;
+  if (situation.damageDealtByGuarder > 0)
+    return EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_LOW;
+  return EDGE_GUARD_EFFECTIVENESS_SCORE.NO_DAMAGE;
+}
+
+/**
+ * Average Edge Guard Effectiveness over every in-scope situation where `port` was the
+ * edge-guarder. null if there were none (not zero -- distinguishes "no scoreable situations
+ * happened" from "scored a flat 0 average").
+ */
+export function averageEdgeGuardEffectiveness(
+  situations: readonly ClassifiedSituation[],
+  port: PortIndex,
+): number | null {
+  const scores: number[] = [];
+  for (const s of situations) {
+    if (s.edgeGuardingPort !== port) continue;
+    const score = edgeGuardEffectivenessScore(s);
+    if (score !== null) scores.push(score);
+  }
+  if (scores.length === 0) return null;
+  return scores.reduce((a, b) => a + b, 0) / scores.length;
 }

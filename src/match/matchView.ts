@@ -66,6 +66,8 @@ import {
   computeClassifiedSituations,
   computeClassifiedSituationEvents,
   hopelessEnteredFrameIndices,
+  averageEdgeGuardEffectiveness,
+  edgeGuardEffectivenessScore,
   type ClassifiedSituation,
   type ClassifiedSituationEvent,
   type SituationCategory,
@@ -2848,18 +2850,40 @@ export class MatchViewController {
       const guardingContestable = guarding.filter(
         (s) => s.category === "contestable",
       );
-      if (guardingContestable.length > 0) {
-        addRow(
-          tr.edgeGuardContestableLabel,
-          // Edge-guard success = the recovering player did NOT make it back.
-          guardingContestable.filter(
-            (s) => s.resolutionKind === "recovery-failure",
-          ).length,
-          guardingContestable.length,
-          "pct-success",
-          null,
-          breakdownText(guarding),
-        );
+
+      // Edge Guard Effectiveness: replaces the old binary "contestable only" kill-rate row with
+      // partial credit for damage dealt even without a kill, and penalties for a missed ledge-hog
+      // opportunity or a possible accidental save -- per the user directly (2026-09-10/11), the
+      // plain kill-rate number was too coarse to distinguish "landed a real punish but they
+      // survived" from "did nothing" from "actively backfired." See
+      // edgeGuardEffectivenessScore's own doc comment in classifiedSituations.ts for the tiers.
+      const effectiveness = averageEdgeGuardEffectiveness(
+        classified,
+        this.perspectivePort,
+      );
+      if (effectiveness !== null) {
+        const scoredCount = guarding.filter(
+          (s) => edgeGuardEffectivenessScore(s) !== null,
+        ).length;
+        const row = document.createElement("div");
+        row.className = "stat-row";
+        const lbl = document.createElement("div");
+        lbl.className = "stat-row-label";
+        lbl.textContent = tr.edgeGuardEffectivenessLabel;
+        const val = document.createElement("div");
+        val.className = "stat-row-value";
+        const valSpan = document.createElement("span");
+        valSpan.className = `stat-pct ${effectiveness < 0 ? "pct-failure" : "pct-success"}`;
+        valSpan.textContent = Math.round(effectiveness).toString();
+        val.appendChild(valSpan);
+        val.append(`  ${tr.edgeGuardEffectivenessSummary(scoredCount)}`);
+        row.appendChild(lbl);
+        row.appendChild(val);
+        const sub = document.createElement("div");
+        sub.className = "stat-subdetail";
+        sub.textContent = breakdownText(guarding);
+        row.appendChild(sub);
+        this.statsPanel.appendChild(row);
       }
 
       // "Ledge-hog opportunities": every contestable situation where holding the ledge was the

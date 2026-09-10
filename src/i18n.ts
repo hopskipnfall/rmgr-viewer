@@ -294,7 +294,8 @@ export interface Translations {
   // Classifier-aware recovery/edge-guard breakdown (see
   // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md)
   recoveryContestableLabel: string;
-  edgeGuardContestableLabel: string;
+  edgeGuardEffectivenessLabel: string;
+  edgeGuardEffectivenessSummary: (situations: number) => string;
   ledgeHogOpportunitiesLabel: string;
   ledgeHogOpportunitiesMissedSummary: (missed: number) => string;
   situationBreakdown: (
@@ -781,7 +782,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
 
     recoveryContestableLabel: "Recovery (contestable only)",
-    edgeGuardContestableLabel: "Edge Guard (contestable only)",
+    edgeGuardEffectivenessLabel: "Edge Guard Effectiveness",
+    edgeGuardEffectivenessSummary: (situations) =>
+      `avg over ${situations} situation${situations !== 1 ? "s" : ""}`,
     ledgeHogOpportunitiesLabel: "Ledge-hog opportunities",
     ledgeHogOpportunitiesMissedSummary: (missed) =>
       `${missed} confirmed missed -- recovering player escaped via the open ledge`,
@@ -1270,7 +1273,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
 
     recoveryContestableLabel: "復帰(拮抗状況のみ)",
-    edgeGuardContestableLabel: "復帰阻止(拮抗状況のみ)",
+    edgeGuardEffectivenessLabel: "復帰阻止の有効度",
+    edgeGuardEffectivenessSummary: (situations) => `${situations}件の状況の平均`,
     ledgeHogOpportunitiesLabel: "崖離し放置の機会",
     ledgeHogOpportunitiesMissedSummary: (missed) =>
       `確定で見逃し: ${missed}件 -- 復帰側が空いた崖を掴んで生還`,

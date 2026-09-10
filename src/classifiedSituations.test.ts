@@ -3,6 +3,10 @@ import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
 import {
   computeClassifiedSituations,
   computeClassifiedSituationEvents,
+  edgeGuardEffectivenessScore,
+  averageEdgeGuardEffectiveness,
+  EDGE_GUARD_EFFECTIVENESS_SCORE,
+  type ClassifiedSituation,
 } from "./classifiedSituations.js";
 import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 
@@ -479,5 +483,161 @@ describe("computeClassifiedSituationEvents", () => {
 
     const events = computeClassifiedSituationEvents(makeMockReplay(frames));
     expect(events).toHaveLength(0);
+  });
+});
+
+describe("edgeGuardEffectivenessScore", () => {
+  const base: ClassifiedSituation = {
+    recoveringPort: 1 as PortIndex,
+    edgeGuardingPort: 0 as PortIndex,
+    enteredFrameIndex: 0,
+    resolutionFrameIndex: 10,
+    resolutionKind: "recovery-failure",
+    entryVerdict: "dead-if-ledge-occupied",
+    jumpVerdict: null,
+    category: "contestable",
+    edgeGuarderHeldLedge: false,
+    missedLedgeHogOpportunity: false,
+    possibleAccidentalSave: false,
+    damageDealtByGuarder: 0,
+  };
+
+  it("scores a contestable kill as KILL", () => {
+    expect(edgeGuardEffectivenessScore(base)).toBe(
+      EDGE_GUARD_EFFECTIVENESS_SCORE.KILL,
+    );
+  });
+
+  it("a hopeless kill is null, not KILL -- nothing was actually tested, same reasoning as the stats exclusion", () => {
+    expect(
+      edgeGuardEffectivenessScore({ ...base, category: "hopeless" }),
+    ).toBeNull();
+  });
+
+  it("buckets damage dealt when there's no kill, contestable only", () => {
+    const noKill: ClassifiedSituation = {
+      ...base,
+      resolutionKind: "recovery-success",
+    };
+    expect(
+      edgeGuardEffectivenessScore({ ...noKill, damageDealtByGuarder: 0 }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.NO_DAMAGE);
+    expect(
+      edgeGuardEffectivenessScore({ ...noKill, damageDealtByGuarder: 10 }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_LOW);
+    expect(
+      edgeGuardEffectivenessScore({ ...noKill, damageDealtByGuarder: 17 }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_MID);
+    expect(
+      edgeGuardEffectivenessScore({ ...noKill, damageDealtByGuarder: 34 }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_MID);
+    expect(
+      edgeGuardEffectivenessScore({ ...noKill, damageDealtByGuarder: 35 }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_HIGH);
+    expect(
+      edgeGuardEffectivenessScore({ ...noKill, damageDealtByGuarder: 90 }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_HIGH);
+  });
+
+  it("missedLedgeHogOpportunity overrides any damage dealt", () => {
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        resolutionKind: "recovery-success",
+        missedLedgeHogOpportunity: true,
+        damageDealtByGuarder: 90,
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.MISSED_LEDGE_HOG);
+  });
+
+  it("possibleAccidentalSave overrides any damage dealt", () => {
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        category: "hopeless",
+        resolutionKind: "recovery-success",
+        possibleAccidentalSave: true,
+        damageDealtByGuarder: 90,
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.ACCIDENTAL_SAVE);
+  });
+
+  it("is null for free/unclassified situations -- never scored", () => {
+    expect(edgeGuardEffectivenessScore({ ...base, category: "free" })).toBe(
+      null,
+    );
+    expect(
+      edgeGuardEffectivenessScore({ ...base, category: "unclassified" }),
+    ).toBe(null);
+  });
+
+  it("is null for a hopeless situation that resolved as recovery-success but wasn't an accidental save -- nothing was actually tested", () => {
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        category: "hopeless",
+        resolutionKind: "recovery-success",
+        possibleAccidentalSave: false,
+      }),
+    ).toBe(null);
+  });
+});
+
+describe("averageEdgeGuardEffectiveness", () => {
+  const makeSituation = (
+    overrides: Partial<ClassifiedSituation>,
+  ): ClassifiedSituation => ({
+    recoveringPort: 1 as PortIndex,
+    edgeGuardingPort: 0 as PortIndex,
+    enteredFrameIndex: 0,
+    resolutionFrameIndex: 10,
+    resolutionKind: "recovery-failure",
+    entryVerdict: "dead-if-ledge-occupied",
+    jumpVerdict: null,
+    category: "contestable",
+    edgeGuarderHeldLedge: false,
+    missedLedgeHogOpportunity: false,
+    possibleAccidentalSave: false,
+    damageDealtByGuarder: 0,
+    ...overrides,
+  });
+
+  it("returns null when there are no in-scope situations for that port", () => {
+    const situations = [makeSituation({ category: "free" })];
+    expect(
+      averageEdgeGuardEffectiveness(situations, 0 as PortIndex),
+    ).toBeNull();
+  });
+
+  it("averages across multiple in-scope situations, ignoring out-of-scope ones", () => {
+    const situations = [
+      makeSituation({ resolutionKind: "recovery-failure" }), // 100
+      makeSituation({
+        resolutionKind: "recovery-success",
+        damageDealtByGuarder: 0,
+      }), // 0
+      makeSituation({ category: "free" }), // excluded
+    ];
+    expect(averageEdgeGuardEffectiveness(situations, 0 as PortIndex)).toBe(
+      50,
+    );
+  });
+
+  it("only counts situations where the given port was the edge-guarder", () => {
+    const situations = [
+      makeSituation({
+        edgeGuardingPort: 0 as PortIndex,
+        resolutionKind: "recovery-failure",
+      }),
+      makeSituation({
+        edgeGuardingPort: 1 as PortIndex,
+        resolutionKind: "recovery-success",
+        damageDealtByGuarder: 0,
+      }),
+    ];
+    expect(averageEdgeGuardEffectiveness(situations, 0 as PortIndex)).toBe(
+      100,
+    );
+    expect(averageEdgeGuardEffectiveness(situations, 1 as PortIndex)).toBe(0);
   });
 });
