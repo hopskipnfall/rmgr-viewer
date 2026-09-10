@@ -701,3 +701,119 @@ describe("Pikachu: fast dead-rejection vs the real search", () => {
     expect(mismatches).toEqual([]);
   });
 });
+
+describe("Captain Falcon: Falcon Dive", () => {
+  const CHAR_FALCON = 0x07;
+
+  it("regression: real corpus fixtures that were WRONG before the delay-search fix", () => {
+    // These six exact (x, y, vx, vy, jumpsRemaining) combinations came directly from
+    // recoveryValidation.ts's WRONG output against the real replay corpus (all Captain Falcon,
+    // all with vy near -66 -- already falling close to terminal velocity, i.e. TVEL_BASE, before
+    // diving). The original immediate-activation-only model returned "dead" for all six; the real
+    // players recovered via ledge or stage. Confirmed via source review AND this exact fixture set
+    // that the fix was a genuine activation-delay search (mirroring DK/Samus/Pikachu's existing
+    // delay searches), not a data or formula error -- see recoveryHeuristics.ts's Captain Falcon
+    // section header for the full story. All six must resolve to at least "dead-if-ledge-occupied"
+    // now (matching or exceeding what the real player achieved).
+    const fixtures: {
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      jumps: number;
+    }[] = [
+      { x: -2935.0, y: 85.5, vx: -22.3, vy: 25.6, jumps: 0 },
+      { x: -4674.9, y: -96.1, vx: 2.8, vy: -66.0, jumps: 1 },
+      { x: 6686.6, y: 58.2, vx: -3.0, vy: -66.0, jumps: 1 },
+      { x: 4565.4, y: -584.8, vx: -3.0, vy: -66.0, jumps: 1 },
+      { x: 4697.9, y: -61.5, vx: -3.0, vy: -66.0, jumps: 1 },
+      { x: 3952.6, y: -597.6, vx: -3.0, vy: -66.0, jumps: 1 },
+    ];
+    for (const f of fixtures) {
+      const verdict = classify(
+        CHAR_FALCON,
+        f.x,
+        f.y,
+        f.vx,
+        f.vy,
+        f.jumps,
+        0x39,
+        1,
+      );
+      expect(
+        verdict === "dead-if-ledge-occupied" || verdict === "reaches-stage",
+      ).toBe(true);
+    }
+  });
+
+  it("is monotonic and not trivially always-true/always-false along an x sweep", () => {
+    for (const y of [-1000, 0, 1000]) {
+      let sawReachable = false;
+      let sawDead = false;
+      let wentFromDeadBackToReachable = false;
+      let seenDead = false;
+      for (let x = 2500; x <= 9000; x += 250) {
+        const verdict = classify(CHAR_FALCON, x, y, 0, 0, 0, 0x39, 1);
+        if (verdict === "dead") {
+          seenDead = true;
+          sawDead = true;
+        } else if (
+          verdict === "reaches-stage" ||
+          verdict === "dead-if-ledge-occupied"
+        ) {
+          sawReachable = true;
+          if (seenDead) wentFromDeadBackToReachable = true;
+        }
+      }
+      expect(sawReachable).toBe(true);
+      expect(sawDead).toBe(true);
+      expect(wentFromDeadBackToReachable).toBe(false);
+    }
+  });
+
+  it("jumpsRemaining=1 is never worse than jumpsRemaining=0 at the same position", () => {
+    const rank = (v: ReturnType<typeof classify>): number => {
+      switch (v) {
+        case "dead":
+          return 0;
+        case "dead-if-ledge-occupied":
+          return 1;
+        case "reaches-stage":
+          return 2;
+        default:
+          return -1;
+      }
+    };
+    for (const y of [-1500, -500, 500]) {
+      for (let x = 3000; x <= 8000; x += 500) {
+        const noJump = classify(CHAR_FALCON, x, y, 0, 0, 0, 0x39, 1);
+        const withJump = classify(CHAR_FALCON, x, y, 0, 0, 1, 0x39, 1);
+        expect(rank(withJump) >= rank(noJump)).toBe(true);
+      }
+    }
+  });
+
+  it("facing direction never changes the verdict (stick-driven, not facing-driven)", () => {
+    for (const [x, y] of [
+      [4500, 0],
+      [-4500, 0],
+      [4000, -1500],
+    ] as const) {
+      const facingRight = classify(CHAR_FALCON, x, y, 0, 0, 0, 0x39, 1);
+      const facingLeft = classify(CHAR_FALCON, x, y, 0, 0, 0, 0x39, -1);
+      expect(facingRight).toBe(facingLeft);
+    }
+  });
+
+  it("mirrors left/right symmetrically", () => {
+    for (const [x, y] of [
+      [4500, 0],
+      [6000, -1000],
+      [3500, 1000],
+    ] as const) {
+      const right = classify(CHAR_FALCON, x, y, 0, 0, 0, 0x39, 1);
+      const left = classify(CHAR_FALCON, -x, y, 0, 0, 0, 0x39, 1);
+      expect(left).toBe(right);
+    }
+  });
+});

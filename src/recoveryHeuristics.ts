@@ -2143,9 +2143,260 @@ function noUpBRecoveryOutcomes(
 }
 
 // ---------------------------------------------------------------------------
+// Captain Falcon — Falcon Dive, 0 or 1 jumps (relay from the Game Expert session, 2026-09-10;
+// ftcaptainspecialhi.c/236_CaptainMain.c/ftcaptain.h, plus a root-motion animation-curve
+// interpreter built specifically for this -- Falcon Dive is root-motion for its ENTIRE duration,
+// not formula-driven like the other seven characters).
+//
+// NO ANGLE/MAGNITUDE SEARCH, BUT A DELAY SEARCH IS STILL NEEDED: the Game Expert's relay said "no
+// search" meaning no angle x magnitude search -- the dive's direction/power isn't a free choice
+// the way Quick Attack's is, so that part holds. But their strategy (activate immediately, no
+// delay) turned out to be an incomplete recovery model, caught via this project's own
+// recoveryValidation.ts run against real Falcon matches in the corpus: 6/51 real situations came
+// back WRONG with immediate-only activation, all with the recovering player already falling near
+// terminal velocity (vy roughly -66, i.e. TVEL_BASE) before diving -- activating immediately from
+// there discards the option to drift closer to the stage under ordinary Fall-state control first,
+// the exact same "activation resets momentum, so pressing immediately can be strictly worse than
+// waiting" issue DK/Samus/Pikachu's own delay searches already exist to cover (see
+// DK.MAX_DELAY_FRAMES / SAMUS.MAX_DELAY_FRAMES elsewhere in this file). So: jumpsRemaining and
+// entry vx/vy DO matter here after all, through the standard jump-formula + delay-search shape
+// used by every other special-move character below, right up until the moment of activation --
+// only AT activation does ftCaptainSpecialHiProcStatus's confirmed zero-drift reset apply. Full
+// revalidation after adding the delay search: WRONG dropped from 6/51 to 0/51 (see
+// recoveryHeuristics.test.ts's Falcon fuzz suite and the corpus run in this change's commit
+// message). Relayed back to the Game Expert since their "no search needed" framing needs this
+// caveat for future characters (Ness/Kirby) built with the same root-motion interpreter.
+//
+// FACING: modeled as facing-independent (tries both target directions unconditionally, like
+// Fox/Pikachu), NOT verified against source the way Pikachu's Quick Attack explicitly was -- the
+// physics formula itself treats direction as stick-driven (targetLr feeds the per-frame drift
+// calculation directly, the same shape as Fox/Pikachu's facing-independent moves), and the
+// strategy's own "jump to face the stage first" step implies facing is not a hard constraint when
+// a jump is available. Flagged back to the Game Expert as an assumption worth confirming, not a
+// verified fact like the rest of this section.
+// ---------------------------------------------------------------------------
+
+const FALCON = {
+  GRAVITY: 3.4,
+  TVEL_BASE: 66.0,
+  AIR_ACCEL: 0.04,
+  AIR_SPEED_MAX_X: 31.0,
+  AIR_FRICTION: 0.2,
+  CLIFFCATCH_X: 440.0,
+  CLIFFCATCH_Y: 550.0,
+  JUMP_HEIGHT_MUL: 1.0,
+  JUMP_HEIGHT_BASE: 24.0,
+  JUMPAERIAL_HEIGHT: 0.9,
+  JUMPAERIAL_VEL_X: 0.35,
+  FALCONDIVE_AIR_ACCEL_MUL: 1.1,
+  FALCONDIVE_AIR_SPEED_MAX_MUL: 0.8,
+  FALLSPECIAL_DRIFT: 0.72,
+  MAX_DELAY_FRAMES: 90,
+};
+
+/**
+ * Root-motion curve for Falcon Dive, 65 frames, extracted from 1658_FTCaptainAnimFalconDive.c's
+ * joint2 (TransN) track via a decomp-format animation-curve interpreter (AObjEvent16 "figatree"
+ * commands + cubic Hermite interpolation) built specifically for this move. World-space delta is
+ * `curveDX(t) * -targetLr` for X (the sign flip matches ftPhysicsGetAirVelTransN's own formula)
+ * and `curveDY(t)` for Y (unflipped -- TransN's z-rotation term is 0 throughout this move). Values
+ * below are target_lr=+1 world-space (negate DX for target_lr=-1, handled by the caller).
+ *
+ * CAVEAT (from the Game Expert relay, not yet cross-validated against real replay data -- the
+ * corpus has very few Falcon matches): DY[0] = -1849, a much larger single-frame delta than
+ * anything else in the curve, traced to several zero-duration animation commands cascading on the
+ * very first frame before the first real pacing command -- plausibly real (consistent with
+ * DY[1]/DY[2]'s similarly cascade-driven 551/687), but worth a second look if this model ever
+ * produces a visibly-wrong result right at Falcon Dive activation.
+ */
+const FALCON_DIVE_DX: readonly number[] = [
+  0.0, 0.0, 0.0, 0.09, 0.23, 0.31, 0.33, 0.29, 0.19, 0.03, -0.19, -0.47, -0.81,
+  -0.7778, -0.7778, -1.4444, -0.4898, 1.7143, 2.6939, 2.449, 0.9796, -1.7143,
+  -5.6327, -7.7106, -7.1444, -6.5969, -6.0682, -5.5584, -5.0673, -4.595,
+  -4.1415, -3.7067, -3.2908, -2.8936, -2.5153, -2.1557, -1.8149, -1.4929,
+  -1.1897, -0.9053, -0.6397, -0.3928, -0.1648, 0.0445, 0.235, 0.4067, 0.5596,
+  0.6937, 0.809, 0.9055, 0.9833, 1.0422, 1.0824, 1.1038, 1.1064, 1.0902,
+  1.0552, 1.0014, 0.9288, 0.8375, 0.7274, 0.5984, 0.4507, 0.2842, 0.0,
+];
+
+const FALCON_DIVE_DY: readonly number[] = [
+  -1849.0741, 551.1481, 686.9259, 0.54, 1.38, 1.86, 1.98, 1.74, 1.14, 0.18,
+  -1.14, -2.82, -4.86, -58.963, -28.7407, 223.7037, 411.3249, 386.3098,
+  361.7973, 337.7874, 314.2801, 291.2754, 268.7732, 246.7737, 225.2768,
+  204.2825, 183.7907, 163.8016, 144.315, 125.3311, 106.8498, 88.871, 71.3949,
+  54.4213, 37.9503, 21.982, 6.5162, -8.447, -22.9075, -36.8655, -50.3209,
+  -63.2737, -75.7239, -87.6715, -99.1164, -110.0588, -120.4986, -130.4358,
+  -139.8705, -148.8025, -157.2319, -165.1587, -172.5829, -179.5045, -185.9236,
+  -191.84, -197.2538, -202.1651, -206.5737, -210.4797, -213.8832, -216.784,
+  -219.1823, -221.0779, 0.0,
+];
+
+/** The curve's own last non-terminal Y delta, used as the starting vy for ordinary
+ * applyGravity-driven FallSpecial once the recorded window runs out -- same handoff pattern as
+ * Yoshi's YOSHI_DOUBLE_JUMP_FINAL_VY. Index length-1 (the literal last entry) is 0.0 for both DX
+ * and DY, consistent with being an animation-loop-end reset rather than a real physics sample, so
+ * the handoff uses the second-to-last entry instead. */
+const FALCON_DIVE_FINAL_VY = FALCON_DIVE_DY[FALCON_DIVE_DY.length - 2]!;
+
+function falconSimulateDiveAndBeyond(
+  x0: number,
+  y0: number,
+  targetLr: 1 | -1,
+): Outcome {
+  let x = x0;
+  let y = y0;
+  let specialVelX = 0;
+  const diveCap =
+    FALCON.AIR_SPEED_MAX_X * FALCON.FALCONDIVE_AIR_SPEED_MAX_MUL;
+  const diveAccel = FALCON.AIR_ACCEL * FALCON.FALCONDIVE_AIR_ACCEL_MUL;
+
+  for (let t = 0; t < FALCON_DIVE_DX.length; t++) {
+    const prevX = x;
+    const prevY = y;
+    if (Math.abs(specialVelX) > diveCap) {
+      specialVelX += specialVelX >= 0 ? -1.0 : 1.0;
+      if (Math.abs(specialVelX) < diveCap) {
+        specialVelX = Math.sign(specialVelX) * diveCap;
+      }
+    } else {
+      const stickX = targetLr * STICK_TOWARD;
+      if (Math.abs(stickX) >= 8) {
+        specialVelX = clampMagnitude(
+          specialVelX + stickX * diveAccel,
+          diveCap,
+        );
+      }
+      specialVelX = applyFriction(specialVelX, FALCON.AIR_FRICTION);
+    }
+    x += specialVelX + FALCON_DIVE_DX[t]! * -targetLr;
+    y += FALCON_DIVE_DY[t]!;
+    const outcome = outcomeThisFrame(
+      prevX,
+      prevY,
+      x,
+      y,
+      FALCON.CLIFFCATCH_X,
+      FALCON.CLIFFCATCH_Y,
+    );
+    if (outcome) return outcome;
+    if (y < DEATH_Y) return null;
+  }
+
+  // FallSpecial: ordinary gravity/tvel, drift via the standard clampAirVelX formula (a different,
+  // lower cap than the dive's own -- FALLSPECIAL_DRIFT=0.72 vs FALCONDIVE_AIR_SPEED_MAX_MUL=0.8),
+  // stick still held toward the target. specialVelX carries over as the starting vx -- clampAirVelX
+  // re-clamps it to the new cap on its own if it's still above it.
+  let vx = specialVelX;
+  let vy = FALCON_DIVE_FINAL_VY;
+  const fallSpecialCap = FALCON.AIR_SPEED_MAX_X * FALCON.FALLSPECIAL_DRIFT;
+  for (let i = 0; i < 1000; i++) {
+    const prevX = x;
+    const prevY = y;
+    vy = applyGravity(vy, FALCON.GRAVITY, FALCON.TVEL_BASE);
+    vx = clampAirVelX(
+      vx,
+      targetLr * STICK_TOWARD,
+      FALCON.AIR_ACCEL,
+      fallSpecialCap,
+    );
+    x += vx;
+    y += vy;
+    const outcome = outcomeThisFrame(
+      prevX,
+      prevY,
+      x,
+      y,
+      FALCON.CLIFFCATCH_X,
+      FALCON.CLIFFCATCH_Y,
+    );
+    if (outcome) return outcome;
+    if (y < DEATH_Y) return null;
+  }
+  return null;
+}
+
+function falconRecoveryOutcomes(
+  x0: number,
+  y0: number,
+  vx0: number,
+  vy0: number,
+  jumpsRemaining: number,
+): RecoveryOutcomes {
+  let reachedLedge = false;
+  let reachedStage = false;
+  for (const targetLr of [1, -1] as const) {
+    if (reachedLedge && reachedStage) break;
+    let jumpVx0: number, jumpVy0: number;
+    if (jumpsRemaining === 1) {
+      jumpVx0 = targetLr * STICK_TOWARD * FALCON.JUMPAERIAL_VEL_X;
+      jumpVy0 =
+        (80 * FALCON.JUMP_HEIGHT_MUL + FALCON.JUMP_HEIGHT_BASE) *
+        FALCON.JUMPAERIAL_HEIGHT;
+    } else {
+      jumpVx0 = vx0;
+      jumpVy0 = vy0;
+    }
+    for (let delay = 0; delay <= FALCON.MAX_DELAY_FRAMES; delay++) {
+      if (reachedLedge && reachedStage) break;
+      // Pre-activation freefall: ordinary Fall-state physics (gravity + standard clampAirVelX
+      // drift), NOT the dive's own multiplied constants -- the drift-velocity reset only happens
+      // AT activation (see this section's header comment).
+      let x = x0;
+      let y = y0;
+      let vx = jumpVx0;
+      let vy = jumpVy0;
+      let died = false;
+      let preActivationOutcome: Outcome = null;
+      for (let frame = 0; frame < delay; frame++) {
+        const prevX = x;
+        const prevY = y;
+        vy = applyGravity(vy, FALCON.GRAVITY, FALCON.TVEL_BASE);
+        vx = clampAirVelX(
+          vx,
+          targetLr * STICK_TOWARD,
+          FALCON.AIR_ACCEL,
+          FALCON.AIR_SPEED_MAX_X,
+        );
+        x += vx;
+        y += vy;
+        const outcome = outcomeThisFrame(
+          prevX,
+          prevY,
+          x,
+          y,
+          FALCON.CLIFFCATCH_X,
+          FALCON.CLIFFCATCH_Y,
+        );
+        if (outcome) {
+          preActivationOutcome = outcome;
+          break;
+        }
+        if (y < DEATH_Y) {
+          died = true;
+          break;
+        }
+      }
+      if (died) continue;
+      if (preActivationOutcome) {
+        if (preActivationOutcome === "ledge" || preActivationOutcome === "both")
+          reachedLedge = true;
+        if (preActivationOutcome === "stage" || preActivationOutcome === "both")
+          reachedStage = true;
+        continue;
+      }
+      const outcome = falconSimulateDiveAndBeyond(x, y, targetLr);
+      if (outcome === "ledge" || outcome === "both") reachedLedge = true;
+      if (outcome === "stage" || outcome === "both") reachedStage = true;
+    }
+  }
+  return { canReachLedge: reachedLedge, canReachStage: reachedStage };
+}
+
+// ---------------------------------------------------------------------------
 // Character dispatch (NA/US character IDs only, per user instruction)
 // ---------------------------------------------------------------------------
 
+const CHAR_FALCON = 0x07;
 const CHAR_FOX = 0x01;
 const CHAR_DONKEY_KONG = 0x02;
 const CHAR_SAMUS = 0x03;
@@ -2162,6 +2413,7 @@ export const SUPPORTED_CHARACTERS = new Set([
   CHAR_YOSHI,
   CHAR_PIKACHU,
   CHAR_JIGGLYPUFF,
+  CHAR_FALCON,
 ]);
 
 export const ACTION_STATE_JUMP_AERIAL_F = 0x018;
@@ -2402,6 +2654,14 @@ export function classify(
       return toRecoveryVerdict(
         noUpBRecoveryOutcomes(x, y, vx, vy, jumpsRemaining, JIGGLYPUFF_ATTR),
       );
+    case CHAR_FALCON:
+      // Delay + jump search, no angle/magnitude search (see the section header above for why).
+      // Facing-independent (see section header caveat -- an unverified assumption, unlike the
+      // rest of this move's model).
+      if (jumpsRemaining > 1) return null;
+      return toRecoveryVerdict(
+        falconRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
+      );
     default:
       return null;
   }
@@ -2413,6 +2673,7 @@ export const CHARACTER_NAME: Record<number, string> = {
   [CHAR_SAMUS]: "Samus",
   [CHAR_LINK]: "Link",
   [CHAR_YOSHI]: "Yoshi",
+  [CHAR_FALCON]: "Captain Falcon",
   [CHAR_PIKACHU]: "Pikachu",
   [CHAR_JIGGLYPUFF]: "Jigglypuff",
 };
