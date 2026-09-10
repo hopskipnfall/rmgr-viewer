@@ -64,6 +64,7 @@ import {
 } from "../recoveryVerdicts.js";
 import {
   computeClassifiedSituations,
+  hopelessEnteredFrameIndices,
   type ClassifiedSituation,
   type SituationCategory,
 } from "../classifiedSituations.js";
@@ -2625,7 +2626,15 @@ export class MatchViewController {
       return;
     }
 
-    const stats = computeEdgeGuardStats(edgeEvents, this.perspectivePort);
+    // Situations the recovery classifier confirmed were unsurvivable at entry are excluded from
+    // Recovery%/EdgeGuard% entirely -- see edgeGuard.ts's computeEdgeGuardStats doc comment and
+    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+    const classifiedSituations = computeClassifiedSituations(replay);
+    const stats = computeEdgeGuardStats(
+      edgeEvents,
+      this.perspectivePort,
+      hopelessEnteredFrameIndices(classifiedSituations),
+    );
     const ledgeStats = computeLedgeTrapStats(ledgeEvents, this.perspectivePort);
     const angelStats = computeAngelInvincibilityStats(
       angelEvents,
@@ -2746,12 +2755,13 @@ export class MatchViewController {
     );
 
     // Classifier-aware breakdown (see
-    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md, phase 2). Additive to
-    // the two rows above, not a replacement -- those still count every zone-crossing regardless of
-    // whether it was ever actually contestable. Hidden entirely when there's nothing classified to
-    // show (non-Dream-Land matches, or a match with no classifier-supported characters involved).
+    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md, phase 2). The rows
+    // above already exclude "hopeless" situations entirely (see computeEdgeGuardStats' doc
+    // comment); this section adds a further, purely additive contestable-only view on top, plus
+    // the ledge-hog-opportunity stat. Hidden entirely when there's nothing classified to show
+    // (non-Dream-Land matches, or a match with no classifier-supported characters involved).
     if (replay.matchSettings?.stageId === DREAM_LAND_STAGE_ID) {
-      const classified = computeClassifiedSituations(replay);
+      const classified = classifiedSituations;
       const recovering = classified.filter(
         (s) => s.recoveringPort === this.perspectivePort,
       );

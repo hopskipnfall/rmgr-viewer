@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
-import { computeEdgeGuardEvents } from "./edgeGuard.js";
+import {
+  computeEdgeGuardEvents,
+  computeEdgeGuardStats,
+  type EdgeGuardEvent,
+} from "./edgeGuard.js";
 import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 
 function makeMockReplay(frames: Frame[]): Replay {
@@ -234,5 +238,81 @@ describe("computeEdgeGuardEvents", () => {
     // the landing frame itself (f10) already counts as streak 1, so the
     // 30th counted frame is f10 + 29 = f39.
     expect(events[1]?.frameIndex).toBe(39);
+  });
+});
+
+describe("computeEdgeGuardStats", () => {
+  const PORT_RECOVERING = 1 as PortIndex;
+  const PORT_GUARDING = 0 as PortIndex;
+
+  // Two situations: one at enteredFrameIndex=10 (resolves success at 20), one at
+  // enteredFrameIndex=100 (resolves failure at 110).
+  const events: EdgeGuardEvent[] = [
+    {
+      frame: 10,
+      frameIndex: 10,
+      kind: "situation-entered",
+      recoveringPort: PORT_RECOVERING,
+      edgeGuardingPort: PORT_GUARDING,
+    },
+    {
+      frame: 20,
+      frameIndex: 20,
+      kind: "recovery-success",
+      recoveringPort: PORT_RECOVERING,
+      edgeGuardingPort: PORT_GUARDING,
+    },
+    {
+      frame: 100,
+      frameIndex: 100,
+      kind: "situation-entered",
+      recoveringPort: PORT_RECOVERING,
+      edgeGuardingPort: PORT_GUARDING,
+    },
+    {
+      frame: 110,
+      frameIndex: 110,
+      kind: "recovery-failure",
+      recoveringPort: PORT_RECOVERING,
+      edgeGuardingPort: PORT_GUARDING,
+    },
+  ];
+
+  it("counts both situations when nothing is excluded", () => {
+    const stats = computeEdgeGuardStats(events, PORT_RECOVERING);
+    expect(stats.recoverySituations).toBe(2);
+    expect(stats.recoverySuccesses).toBe(1);
+
+    const guardStats = computeEdgeGuardStats(events, PORT_GUARDING);
+    expect(guardStats.edgeGuardSituations).toBe(2);
+    expect(guardStats.edgeGuardSuccesses).toBe(1);
+  });
+
+  it("drops an excluded situation from both the numerator and denominator, not just the numerator", () => {
+    // Exclude the first situation (the successful one) -- its success must NOT still be counted,
+    // and the situation itself must not still inflate the denominator.
+    const excluded = new Set([10]);
+
+    const stats = computeEdgeGuardStats(events, PORT_RECOVERING, excluded);
+    expect(stats.recoverySituations).toBe(1);
+    expect(stats.recoverySuccesses).toBe(0);
+
+    // The remaining (non-excluded) situation is the one that resolved as recovery-failure, i.e.
+    // an edge-guard success -- that must still be counted.
+    const guardStats = computeEdgeGuardStats(events, PORT_GUARDING, excluded);
+    expect(guardStats.edgeGuardSituations).toBe(1);
+    expect(guardStats.edgeGuardSuccesses).toBe(1);
+  });
+
+  it("excluding the second situation doesn't affect the first", () => {
+    const excluded = new Set([100]);
+
+    const stats = computeEdgeGuardStats(events, PORT_RECOVERING, excluded);
+    expect(stats.recoverySituations).toBe(1);
+    expect(stats.recoverySuccesses).toBe(1);
+
+    const guardStats = computeEdgeGuardStats(events, PORT_GUARDING, excluded);
+    expect(guardStats.edgeGuardSituations).toBe(1);
+    expect(guardStats.edgeGuardSuccesses).toBe(0);
   });
 });

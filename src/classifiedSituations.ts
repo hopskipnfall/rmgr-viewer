@@ -240,3 +240,20 @@ function computeClassifiedSituationsUncached(
 
   return result;
 }
+
+/**
+ * The `enteredFrameIndex`s of every "hopeless" situation -- pass to
+ * edgeGuard.ts's computeEdgeGuardStats as `excludeEnteredFrameIndices` so
+ * Recovery%/EdgeGuard% exclude situations the classifier confirmed were
+ * unsurvivable at entry. Only "hopeless" -- see computeEdgeGuardStats' own
+ * doc comment for why "free" isn't included here.
+ */
+export function hopelessEnteredFrameIndices(
+  situations: readonly ClassifiedSituation[],
+): Set<number> {
+  return new Set(
+    situations
+      .filter((s) => s.category === "hopeless")
+      .map((s) => s.enteredFrameIndex),
+  );
+}

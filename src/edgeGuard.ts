@@ -374,23 +374,52 @@ export interface EdgeGuardStats {
 /**
  * Derives per-port edge-guard/recovery statistics from a pre-computed event
  * list. O(n) but cheap — called on perspective changes, not every frame.
+ *
+ * `excludeEnteredFrameIndices` drops entire situations (both from the
+ * denominator and the numerator) by their `situation-entered` frameIndex —
+ * used to exclude situations the recovery classifier confirmed were
+ * "dead" (unsurvivable by any simulated strategy) at entry, per
+ * docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+ * Deliberately does NOT exclude "reaches-stage" (free) verdicts here: that
+ * verdict only proves one input sequence works, not that the situation was
+ * trivial or unaffected by matchup-specific edge-guard pressure, so it isn't
+ * confident enough to reshape the primary stat -- see the spec's discussion
+ * with the user on this. Situations with no classifier opinion (wrong stage,
+ * unsupported character, etc.) are never excluded, matching prior behavior.
+ * Relies on situations never overlapping (edgeGuard.ts only ever has one
+ * open at a time), so the most recently seen "situation-entered" frameIndex
+ * always identifies the situation a following resolution event belongs to.
  */
 export function computeEdgeGuardStats(
   events: readonly EdgeGuardEvent[],
   port: PortIndex,
+  excludeEnteredFrameIndices?: ReadonlySet<number>,
 ): EdgeGuardStats {
   let recoverySituations = 0;
   let recoverySuccesses = 0;
   let edgeGuardSituations = 0;
   let edgeGuardSuccesses = 0;
+  let currentEnteredFrameIndex: number | null = null;
 
   for (const ev of events) {
     if (ev.kind === "situation-entered") {
+      currentEnteredFrameIndex = ev.frameIndex;
+      if (excludeEnteredFrameIndices?.has(ev.frameIndex)) continue;
       if (ev.recoveringPort === port) recoverySituations++;
       else edgeGuardSituations++;
     } else if (ev.kind === "recovery-success") {
+      if (
+        currentEnteredFrameIndex !== null &&
+        excludeEnteredFrameIndices?.has(currentEnteredFrameIndex)
+      )
+        continue;
       if (ev.recoveringPort === port) recoverySuccesses++;
     } else if (ev.kind === "recovery-failure") {
+      if (
+        currentEnteredFrameIndex !== null &&
+        excludeEnteredFrameIndices?.has(currentEnteredFrameIndex)
+      )
+        continue;
       if (ev.edgeGuardingPort === port) edgeGuardSuccesses++;
     }
   }

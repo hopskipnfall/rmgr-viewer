@@ -1,5 +1,9 @@
 import { getSeatedPorts, type PortIndex, type Replay } from "@rmg-k/rmgr";
 import { computeEdgeGuardEvents, computeEdgeGuardStats } from "../edgeGuard.js";
+import {
+  computeClassifiedSituations,
+  hopelessEnteredFrameIndices,
+} from "../classifiedSituations.js";
 import { computeLedgeTrapEvents, computeLedgeTrapStats } from "../ledgeTrap.js";
 import {
   computeAngelInvincibilityEvents,
@@ -127,7 +131,14 @@ export function computeRawCountersForPort(
   const ledgeEvents = computeLedgeTrapEvents(replay);
   const angelEvents = computeAngelInvincibilityEvents(replay);
 
-  const edgeStats = computeEdgeGuardStats(edgeEvents, port);
+  // Situations the recovery classifier confirmed were unsurvivable at entry are excluded from
+  // Recovery%/EdgeGuard% entirely, here as well as in the per-match panel (matchView.ts) -- this
+  // is what feeds the library-wide aggregate stats. See edgeGuard.ts's computeEdgeGuardStats doc
+  // comment and docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+  const hopelessFrames = hopelessEnteredFrameIndices(
+    computeClassifiedSituations(replay),
+  );
+  const edgeStats = computeEdgeGuardStats(edgeEvents, port, hopelessFrames);
   const ledgeStats = computeLedgeTrapStats(ledgeEvents, port);
   const angelStats = computeAngelInvincibilityStats(angelEvents, port);
   const neutralStats = computeNeutralHitsStats(replay, port);
