@@ -1,7 +1,7 @@
 /**
- * Realtime "what does the recovery classifier say right now" event log.
- * Quick/throwaway by design (may be deleted later) -- no i18n, hardcoded
- * English text.
+ * Realtime "what does the recovery classifier say right now" event log +
+ * live stage overlay. Quick/throwaway by design (may be deleted later) --
+ * no i18n, hardcoded English text.
  */
 import type { PortIndex, Replay, StateFrame } from "@rmg-k/rmgr";
 import { getSeatedPorts } from "@rmg-k/rmgr";
@@ -11,12 +11,14 @@ import {
   DEAD_OR_RESPAWNING_STATES,
 } from "./edgeGuard.js";
 import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
-import { buildRecoveryMap } from "./ledgeTrap.js";
+import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
 import {
   classify,
   SUPPORTED_CHARACTERS,
   ACTION_STATE_JUMP_AERIAL_F,
   ACTION_STATE_JUMP_AERIAL_B,
+  LEDGE_L_X,
+  LEDGE_R_X,
   type RecoveryVerdict,
 } from "./recoveryHeuristics.js";
 
@@ -28,6 +30,16 @@ export interface RecoveryVerdictEvent {
   readonly kind: RecoveryVerdictEventKind;
   readonly port: PortIndex;
   readonly verdictText: string;
+}
+
+export interface RecoveryVerdictFrame {
+  readonly port: PortIndex;
+  readonly verdict: RecoveryVerdict;
+  /** Which ledge to highlight when verdict is "dead-if-ledge-occupied" -- the
+   * side the character was on when this verdict was computed, not
+   * necessarily the side the classifier's internal search actually lands
+   * on. */
+  readonly side: "left" | "right";
 }
 
 function classifyState(state: StateFrame): RecoveryVerdict | null {
@@ -46,8 +58,7 @@ function classifyState(state: StateFrame): RecoveryVerdict | null {
 
 /** Display wording for the log messages -- kept exactly as originally specified ("reaches
  * stage"/"reaches ledge"/"dead"), independent of the RecoveryVerdict enum's own naming. */
-function verdictText(state: StateFrame): string | null {
-  const verdict = classifyState(state);
+function verdictDisplayText(verdict: RecoveryVerdict): string {
   switch (verdict) {
     case "reaches-stage":
       return "reaches stage";
@@ -55,11 +66,8 @@ function verdictText(state: StateFrame): string | null {
       return "reaches ledge";
     case "dead":
       return "dead";
-    // "not-implemented" is treated the same as classify() returning null (no message) here --
-    // we genuinely don't have a verdict to show, same as any other unsupported case.
     case "not-implemented":
-    case null:
-      return null;
+      return "not implemented";
   }
 }
 
@@ -94,28 +102,6 @@ function isNonActionableForRecovery(state: StateFrame): boolean {
 const MAX_VERDICT_LOOKAHEAD_FRAMES = 180;
 
 /**
- * classify() is NOT a cheap constant-time check for every character --
- * Pikachu's is a nested angle x magnitude x delay search that recoveryHeuristics.ts's
- * own PIKA.ACTIVATION_DELAY_STEP comment measures at ~75ms per call, worst
- * case ~2-3s even after that search was already coarsened once. Calling it
- * on literally every frame of a long recovery window turned a single
- * replay's precompute into many real seconds of main-thread blocking on
- * load. Recomputing every Nth frame instead (holding the last verdict for
- * the frames in between, in computeRecoveryVerdictFrames below) bounds the
- * total number of classify() calls for that continuous per-frame overlay
- * without materially changing what a human watching in realtime perceives.
- *
- * Deliberately NOT applied to findFirstVerdictFrame's lookahead scan below,
- * even though that also calls classify() in a loop: that scan only runs a
- * handful of times per match (once per trigger event, not once per frame),
- * so it doesn't have this function's cost problem -- and striding it caused
- * a real bug, reporting a much-later frame (once the recovering character
- * had moved on to some unrelated action) instead of the frame the verdict
- * actually first became available on.
- */
-const VERDICT_RECOMPUTE_STEP = 60;
-
-/**
  * A trigger frame (hitstun just ended, or a fresh double jump) doesn't
  * always have a computable verdict yet -- classify() can stay gated null
  * for several more frames (Yoshi's root-motion double jump is the known
@@ -128,14 +114,17 @@ const VERDICT_RECOMPUTE_STEP = 60;
  * Gives up (returns null) if the character comes back inside the zone,
  * dies/respawns, or (when abortOnFreshJump) uses another jump before a
  * verdict appears -- in that last case the jump's own trigger will run this
- * same search from its own start point instead.
+ * same search from its own start point instead. NOT throttled/strided --
+ * see computeRecoveryVerdictSpans' own doc comment for why classify()'s
+ * cost is no longer something this module needs to defend against by
+ * skipping frames.
  */
 function findFirstVerdictFrame(
   replay: Replay,
   port: PortIndex,
   startIndex: number,
   abortOnFreshJump: boolean,
-): { frameIndex: number; text: string } | null {
+): { frameIndex: number; verdict: RecoveryVerdict } | null {
   const end = Math.min(
     replay.frames.length,
     startIndex + MAX_VERDICT_LOOKAHEAD_FRAMES,
@@ -148,119 +137,112 @@ function findFirstVerdictFrame(
     if (abortOnFreshJump && i !== startIndex && isFreshDoubleJump(state))
       return null;
     if (isNonActionableForRecovery(state)) continue;
-    const text = verdictText(state);
-    if (text !== null) return { frameIndex: i, text };
+    const verdict = classifyState(state);
+    if (verdict !== null && verdict !== "not-implemented") {
+      return { frameIndex: i, verdict };
+    }
   }
   return null;
 }
 
-export interface RecoveryVerdictFrame {
-  readonly port: PortIndex;
-  readonly verdict: RecoveryVerdict;
-  /** Which ledge to highlight when verdict is "dead-if-ledge-occupied" -- the
-   * side the character is currently off of, not necessarily the side the
-   * classifier's internal search actually lands on. */
-  readonly side: "left" | "right";
-}
-
 /**
- * One entry per replay frame: the classifier's live verdict for whichever
- * single port buildRecoveryMap (ledgeTrap.ts) currently considers
- * "recovering" -- null on frames with no active recovery situation, where
- * that port's character isn't one of the 7 supported by
- * recoveryHeuristics.ts, or while isNonActionableForRecovery is true
- * (hitstun, or FallSpecial). Both exclusions matter for the same reason:
- * classify() assumes the character can act starting from this exact frame
- * (jump, up-B, drift), which isn't true until hitstun ends or -- for
- * FallSpecial, the helpless fall after an aerial special is already spent --
- * ever again this fall. Showing a verdict there would be simulating a choice
- * they can't make. Matches the same actionable-only gating as the
- * "Recovery: ..." log event below. Drives the live stage overlay (ledge
- * highlight / skull); see StageRenderer for how it's consumed.
+ * Scans forward from a just-computed verdict's frame to find the last frame it should still be
+ * displayed/logged for, per the user's exact resolution criteria: the character dies, grabs the
+ * ledge, or crosses back to the ledge's x-range at or above ledge height (y >= 0) -- at that point
+ * the recovery attempt is essentially over (about to resolve one way or another on its own), so
+ * holding a stale verdict past it would be actively misleading rather than just imprecise. Returns
+ * the frame index of the resolving frame itself (inclusive -- the verdict is still meaningful on
+ * the exact frame something ends), or the last available frame if nothing resolves it before the
+ * replay (or this port's data) ends.
  */
-export function computeRecoveryVerdictFrames(
+function findHoldEndFrameIndex(
   replay: Replay,
-): (RecoveryVerdictFrame | null)[] {
-  const frameCount = replay.frames.length;
-  if (replay.matchSettings?.stageId !== DREAM_LAND_STAGE_ID)
-    return new Array(frameCount).fill(null);
-
-  const seated = getSeatedPorts(replay);
-  if (seated.length !== 2) return new Array(frameCount).fill(null);
-  const [portA, portB] = seated as [PortIndex, PortIndex];
-
-  const recoveryMap = buildRecoveryMap(replay, portA, portB);
-  const result: (RecoveryVerdictFrame | null)[] = new Array(frameCount).fill(
-    null,
-  );
-
-  // held/heldPort let the throttle below reuse the last computed verdict
-  // across VERDICT_RECOMPUTE_STEP frames instead of re-running classify()
-  // on every one -- see that constant's own doc comment for why. Cleared
-  // (forcing a fresh, non-throttled recompute) whenever hitstun starts, the
-  // situation closes, or the recovering port changes, so the FIRST frame of
-  // any new actionable window is always accurate rather than reusing a
-  // stale value from a different moment.
-  let held: RecoveryVerdictFrame | null = null;
-  let heldPort: PortIndex | null = null;
-
-  for (let i = 0; i < frameCount; i++) {
-    const port = recoveryMap[i] ?? null;
-    if (port === null) {
-      held = null;
-      heldPort = null;
-      continue;
-    }
+  port: PortIndex,
+  verdictFrameIndex: number,
+): number {
+  let prevState = replay.frames[verdictFrameIndex]?.ports[port]?.state;
+  for (let i = verdictFrameIndex + 1; i < replay.frames.length; i++) {
     const state = replay.frames[i]?.ports[port]?.state;
-    if (!state || isNonActionableForRecovery(state)) {
-      held = null;
-      continue;
+    if (!state) return i - 1;
+    if (DEAD_OR_RESPAWNING_STATES.has(state.actionStateId)) return i;
+    if (
+      prevState !== undefined &&
+      state.stocksRemaining < prevState.stocksRemaining
+    )
+      return i;
+    if (LEDGE_ACTION_STATES.has(state.actionStateId)) return i;
+    if (
+      state.positionY >= 0 &&
+      state.positionX >= LEDGE_L_X &&
+      state.positionX <= LEDGE_R_X
+    ) {
+      return i;
     }
-
-    const shouldRecompute =
-      held === null || port !== heldPort || i % VERDICT_RECOMPUTE_STEP === 0;
-    if (shouldRecompute) {
-      const verdict = classifyState(state);
-      held =
-        verdict === null || verdict === "not-implemented"
-          ? null
-          : {
-              port,
-              verdict,
-              side: state.positionX < 0 ? "left" : "right",
-            };
-      heldPort = port;
-    }
-    result[i] = held;
+    prevState = state;
   }
+  return replay.frames.length - 1;
+}
 
-  return result;
+interface VerdictSpan {
+  readonly port: PortIndex;
+  readonly kind: RecoveryVerdictEventKind;
+  /** The frame the verdict was actually computed on (>= the trigger frame -- see
+   * findFirstVerdictFrame). This is what gets logged/displayed from. */
+  readonly verdictFrameIndex: number;
+  readonly verdict: RecoveryVerdict;
+  readonly side: "left" | "right";
+  /** Last frame index (inclusive) this verdict should be shown for -- see
+   * findHoldEndFrameIndex. */
+  readonly holdEndFrameIndex: number;
 }
 
 /**
- * Fires "Recovery: ..." triggered by a character leaving hitstun while
- * outside the danger zone, and "Jumped: ..." triggered by their double-jump
- * while outside the zone -- independent of edgeGuard.ts's recovery-situation
- * state machine, so this can retrigger multiple times per situation (e.g.
- * re-hit and re-freed from hitstun offstage).
+ * The single source of truth for both the "Recovery: .../Jumped: ..." log events and the live
+ * stage overlay (ledge highlight / skull) -- computed ONCE per trigger (a character leaving
+ * hitstun while outside the danger zone, or using their double-jump while outside it), not
+ * continuously across every frame of a recovery situation. That distinction matters a lot for
+ * performance: classify() is NOT cheap for every character (Pikachu's nested search measured
+ * 35ms average / 477ms worst case per call on real match data), and a recovery situation can span
+ * hundreds of frames -- calling it repeatedly throughout one, even throttled, made replay loading
+ * noticeably slow. Calling it a small constant number of times per situation instead (once per
+ * trigger) is both what the feature was actually asked for and dramatically cheaper.
  *
- * The logged frame is not always the trigger frame itself: see
- * findFirstVerdictFrame -- if the classifier is still gated null right at
- * the trigger (Yoshi's root-motion jump is the known case), this scans
- * forward and reports the first frame a verdict actually exists for,
- * rather than silently dropping the event.
+ * The overlay's "hold the verdict on screen" behavior (see findHoldEndFrameIndex) is what makes
+ * dropping the continuous recompute safe from a UX standpoint: the verdict doesn't need to track
+ * the character's position frame-by-frame, it just needs to disappear once it's no longer
+ * relevant (they've died, grabbed the ledge, or made it back within reach).
+ *
+ * Memoized per replay: computeRecoveryVerdictEvents (called once from matchView.ts on load) and
+ * computeRecoveryVerdictFrames (called separately from the renderer, lazily on first render) both
+ * derive from this same computation -- without caching, a single match load would run the whole
+ * classify()-calling scan twice for no reason.
  */
-export function computeRecoveryVerdictEvents(
-  replay: Replay,
-): RecoveryVerdictEvent[] {
-  const events: RecoveryVerdictEvent[] = [];
-  if (replay.matchSettings?.stageId !== DREAM_LAND_STAGE_ID) return events;
+const verdictSpansCache = new WeakMap<Replay, VerdictSpan[]>();
+
+export function computeRecoveryVerdictSpans(replay: Replay): VerdictSpan[] {
+  const cached = verdictSpansCache.get(replay);
+  if (cached) return cached;
+  const spans = computeRecoveryVerdictSpansUncached(replay);
+  verdictSpansCache.set(replay, spans);
+  return spans;
+}
+
+function computeRecoveryVerdictSpansUncached(replay: Replay): VerdictSpan[] {
+  const spans: VerdictSpan[] = [];
+  if (replay.matchSettings?.stageId !== DREAM_LAND_STAGE_ID) return spans;
 
   const seated = getSeatedPorts(replay);
-  if (seated.length !== 2) return events;
+  if (seated.length !== 2) return spans;
 
   for (const port of seated as PortIndex[]) {
     let prevState: StateFrame | undefined;
+    // Non-null means "the most recent recovery-verdict trigger for this port, within the same
+    // unbroken situation, came back dead, at this damagePercent" -- see the isFreshDoubleJump
+    // branch below for why that lets a subsequent jump trigger skip re-running classify()
+    // entirely. Reset to null whenever the character comes back inside the safe zone (any prior
+    // situation is over, so it must not bleed into an unrelated future one) or whenever a fresh
+    // recovery-verdict is computed (always overwrites with the new result).
+    let deadAtDamagePercent: number | null = null;
 
     for (let i = 0; i < replay.frames.length; i++) {
       const state = replay.frames[i]?.ports[port]?.state;
@@ -269,45 +251,89 @@ export function computeRecoveryVerdictEvents(
         continue;
       }
 
-      if (isOutsideZone(state.positionX, state.positionY)) {
-        const justDied =
-          DEAD_OR_RESPAWNING_STATES.has(state.actionStateId) ||
-          (prevState !== undefined &&
-            state.stocksRemaining < prevState.stocksRemaining);
+      if (!isOutsideZone(state.positionX, state.positionY)) {
+        deadAtDamagePercent = null;
+        prevState = state;
+        continue;
+      }
 
-        if (prevState && !justDied) {
-          const wasInHitstun = isHitstunState(
-            prevState.actionStateId,
-            prevState.hitstunCounter,
-          );
-          const isInHitstun = isHitstunState(
-            state.actionStateId,
-            state.hitstunCounter,
-          );
-          if (wasInHitstun && !isInHitstun) {
-            const found = findFirstVerdictFrame(replay, port, i, true);
-            if (found !== null) {
-              events.push({
-                frame: replay.frames[found.frameIndex]!.frame,
-                frameIndex: found.frameIndex,
-                kind: "recovery-verdict",
+      const justDied =
+        DEAD_OR_RESPAWNING_STATES.has(state.actionStateId) ||
+        (prevState !== undefined &&
+          state.stocksRemaining < prevState.stocksRemaining);
+
+      if (prevState && !justDied) {
+        const wasInHitstun = isHitstunState(
+          prevState.actionStateId,
+          prevState.hitstunCounter,
+        );
+        const isInHitstun = isHitstunState(
+          state.actionStateId,
+          state.hitstunCounter,
+        );
+        if (wasInHitstun && !isInHitstun) {
+          const found = findFirstVerdictFrame(replay, port, i, true);
+          if (found !== null) {
+            const verdictState =
+              replay.frames[found.frameIndex]!.ports[port]!.state!;
+            spans.push({
+              port,
+              kind: "recovery-verdict",
+              verdictFrameIndex: found.frameIndex,
+              verdict: found.verdict,
+              side: verdictState.positionX < 0 ? "left" : "right",
+              holdEndFrameIndex: findHoldEndFrameIndex(
+                replay,
                 port,
-                verdictText: found.text,
-              });
-            }
+                found.frameIndex,
+              ),
+            });
+            deadAtDamagePercent =
+              found.verdict === "dead" ? verdictState.damagePercent : null;
           }
         }
+      }
 
-        if (isFreshDoubleJump(state)) {
+      if (isFreshDoubleJump(state)) {
+        // classify() for jumpsRemaining === 1 already evaluates "what if they jump right now" --
+        // the jump formula fully overrides the character's velocity for 6 of 7 characters (Yoshi
+        // is the exception, root-motion), so a dead verdict computed with the jump still
+        // available already accounts for using it. Actually using that jump moments later can't
+        // un-kill them, so re-running the full search again here would just be paying for the
+        // same answer twice -- UNLESS they've taken damage since (a hit could reset their
+        // trajectory, e.g. toward the stage, genuinely changing the outcome), in which case this
+        // falls through to a real re-evaluation same as always.
+        if (
+          deadAtDamagePercent !== null &&
+          state.damagePercent <= deadAtDamagePercent
+        ) {
+          spans.push({
+            port,
+            kind: "jumped-verdict",
+            verdictFrameIndex: i,
+            verdict: "dead",
+            side: state.positionX < 0 ? "left" : "right",
+            holdEndFrameIndex: findHoldEndFrameIndex(replay, port, i),
+          });
+        } else {
           const found = findFirstVerdictFrame(replay, port, i, false);
           if (found !== null) {
-            events.push({
-              frame: replay.frames[found.frameIndex]!.frame,
-              frameIndex: found.frameIndex,
-              kind: "jumped-verdict",
+            const verdictState =
+              replay.frames[found.frameIndex]!.ports[port]!.state!;
+            spans.push({
               port,
-              verdictText: found.text,
+              kind: "jumped-verdict",
+              verdictFrameIndex: found.frameIndex,
+              verdict: found.verdict,
+              side: verdictState.positionX < 0 ? "left" : "right",
+              holdEndFrameIndex: findHoldEndFrameIndex(
+                replay,
+                port,
+                found.frameIndex,
+              ),
             });
+            deadAtDamagePercent =
+              found.verdict === "dead" ? verdictState.damagePercent : null;
           }
         }
       }
@@ -316,5 +342,52 @@ export function computeRecoveryVerdictEvents(
     }
   }
 
-  return events.sort((a, b) => a.frameIndex - b.frameIndex);
+  return spans.sort((a, b) => a.verdictFrameIndex - b.verdictFrameIndex);
+}
+
+/** "Recovery: ..." triggered by a character leaving hitstun while outside the danger zone, and
+ * "Jumped: ..." triggered by their double-jump while outside the zone. See
+ * computeRecoveryVerdictSpans for the shared computation this is derived from. */
+export function computeRecoveryVerdictEvents(
+  replay: Replay,
+): RecoveryVerdictEvent[] {
+  return computeRecoveryVerdictSpans(replay).map((span) => ({
+    frame: replay.frames[span.verdictFrameIndex]!.frame,
+    frameIndex: span.verdictFrameIndex,
+    kind: span.kind,
+    port: span.port,
+    verdictText: verdictDisplayText(span.verdict),
+  }));
+}
+
+/**
+ * One entry per replay frame: the classifier's verdict to display for whichever single port has
+ * an active held verdict at that frame (per computeRecoveryVerdictSpans -- computed once at a
+ * trigger, then held until findHoldEndFrameIndex's resolution point). null everywhere else,
+ * including the actionable/hitstun-safe frames between a situation opening and its first trigger
+ * firing -- there is deliberately no verdict to show there, since none has been computed yet.
+ * Drives the live stage overlay (ledge highlight / skull); see StageRenderer for how it's
+ * consumed.
+ */
+export function computeRecoveryVerdictFrames(
+  replay: Replay,
+): (RecoveryVerdictFrame | null)[] {
+  const frameCount = replay.frames.length;
+  const result: (RecoveryVerdictFrame | null)[] = new Array(frameCount).fill(
+    null,
+  );
+
+  for (const span of computeRecoveryVerdictSpans(replay)) {
+    const frame: RecoveryVerdictFrame = {
+      port: span.port,
+      verdict: span.verdict,
+      side: span.side,
+    };
+    const end = Math.min(span.holdEndFrameIndex, frameCount - 1);
+    for (let i = span.verdictFrameIndex; i <= end; i++) {
+      result[i] = frame;
+    }
+  }
+
+  return result;
 }

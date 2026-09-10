@@ -12,8 +12,8 @@
 // Shared Dream Land geometry/physics helpers (dreamland_common.py, ported 1:1)
 // ---------------------------------------------------------------------------
 
-const LEDGE_L_X = -2318.0;
-const LEDGE_R_X = 2318.0;
+export const LEDGE_L_X = -2318.0;
+export const LEDGE_R_X = 2318.0;
 const CORNER_WINDOW = 800.0;
 
 // canReachStage -> canReachLedge holds by construction (see checkLedgeGrab below), so
@@ -1092,7 +1092,7 @@ function pikaTryActivation(
   return { reachedLedge, reachedStage };
 }
 
-function pikachuRecoveryOutcomes(
+export function pikachuRecoveryOutcomes(
   x0: number,
   y0: number,
   vx0: number,
@@ -2070,6 +2070,145 @@ export const SUPPORTED_CHARACTERS = new Set([
 export const ACTION_STATE_JUMP_AERIAL_F = 0x018;
 export const ACTION_STATE_JUMP_AERIAL_B = 0x019;
 
+// ---------------------------------------------------------------------------
+// Fast dead-rejection: a precomputed boundary curve lets the confirmed cost driver (Pikachu's
+// nested angle x magnitude x delay search, measured up to ~2s for a single genuinely-dead call on
+// real match data) skip straight to "dead" for the clearly-hopeless tail instead of running the
+// full search.
+//
+// The curve below is STATIC DATA, computed OFFLINE (not at runtime): each entry is
+// {y, xThreshold}, where xThreshold is the largest |x| (mirrored left/right by symmetry, vx=vy=0
+// baseline) for which classify() does NOT return "dead" at that y. Baking it in as a literal
+// array -- rather than precomputing it lazily on first use -- matters for the same reason the
+// call-site reduction in recoveryVerdicts.ts did: this project's whole point is that match loading
+// must never stall, and a "lazy but one-time" precompute would still stall the FIRST match loaded
+// in a session (measured ~13 minutes to generate this table at full precision offline -- clearly
+// not something to ever run inline). Regenerate by binary-searching classify() itself at each y
+// (see the dev script referenced in the proposal doc) if Pikachu's physics ever changes.
+//
+// jumpsRemaining===1 samples stop at y=-600: at y >= -400, the real threshold exceeds this
+// search's 10000-unit cap entirely (Pikachu's jump-formula-overridden Quick Attack has enormous
+// reach once given enough height) -- there's no usable "dead" boundary to reject against up there
+// within any realistic position (Dream Land's own blast zone is only +-9000), so those samples
+// were simply cut rather than recorded as a meaningless 10000. getPikachuDeadThreshold's
+// clamp-to-last-sample behavior for y beyond the table safely extrapolates from the y=-600 value
+// instead (see its own doc comment for why that's still conservative).
+const PIKACHU_DEAD_BOUNDARY_JUMPS_0: readonly (readonly [number, number])[] = [
+  [-3000, 4970],
+  [-2800, 5443],
+  [-2600, 5711],
+  [-2400, 6004],
+  [-2200, 6277],
+  [-2000, 6474],
+  [-1800, 6666],
+  [-1600, 6867],
+  [-1400, 7060],
+  [-1200, 7237],
+  [-1000, 7407],
+  [-800, 7569],
+  [-600, 7725],
+  [-400, 7875],
+  [-200, 8022],
+  [0, 8166],
+  [200, 8311],
+  [400, 8455],
+  [600, 8599],
+  [800, 8743],
+  [1000, 8888],
+  [1200, 9032],
+  [1400, 9176],
+  [1600, 9320],
+  [1800, 9465],
+  [2000, 9609],
+];
+
+const PIKACHU_DEAD_BOUNDARY_JUMPS_1: readonly (readonly [number, number])[] = [
+  [-3000, 8055],
+  [-2800, 8251],
+  [-2600, 8439],
+  [-2400, 8611],
+  [-2200, 8776],
+  [-2000, 8934],
+  [-1800, 9086],
+  [-1600, 9233],
+  [-1400, 9380],
+  [-1200, 9524],
+  [-1000, 9667],
+  [-800, 9811],
+  [-600, 9956],
+];
+
+/** How far past the (conservatively interpolated) threshold the real |x| must be before the fast
+ * path trusts a "dead" rejection -- guards against both inter-sample interpolation error and any
+ * residual imprecision in how the table above was generated. Generous on purpose: being
+ * conservative here only costs a few missed fast-path opportunities right at the boundary, never
+ * correctness, and the boundary region is a small fraction of the realistically-far-off-stage
+ * positions this is actually meant to catch. */
+const PIKACHU_DEAD_BOUNDARY_SAFETY_MARGIN = 400;
+
+/** Linear interpolation between the two bracketing samples, clamped to the nearest sample's value
+ * outside the table's range (safe/conservative for y below the table: the threshold trends
+ * smaller as y decreases throughout the whole measured range, so using the lowest sample's value
+ * for anything even lower is an underestimate, never an overestimate. Safe for y above the
+ * table's jumpsRemaining===1 range too, for the reason in that table's own doc comment: the true
+ * threshold there is larger, so extrapolating flat from the last known point still only
+ * underestimates reachability, meaning the fast path stays conservative, just less useful). Also
+ * takes the min against both bracketing samples, not just the lerp, guarding against a
+ * non-monotonic dip between two samples that pure linear interpolation wouldn't see. */
+function interpolatePikachuDeadThreshold(
+  table: readonly (readonly [number, number])[],
+  y: number,
+): number {
+  const first = table[0]!;
+  if (y <= first[0]) return first[1];
+  const last = table[table.length - 1]!;
+  if (y >= last[0]) return last[1];
+  for (let i = 0; i < table.length - 1; i++) {
+    const [yA, xA] = table[i]!;
+    const [yB, xB] = table[i + 1]!;
+    if (y >= yA && y <= yB) {
+      const t = (y - yA) / (yB - yA);
+      const lerp = xA + t * (xB - xA);
+      return Math.min(lerp, xA, xB);
+    }
+  }
+  return 0; // unreachable given the bounds checks above
+}
+
+/**
+ * Fast-rejects the clearly-hopeless tail of Pikachu recovery classifications without running the
+ * full search. For jumpsRemaining===1, Pikachu's jump formula fully overrides incoming velocity
+ * (see pikachuRecoveryOutcomes -- jumpVx0/jumpVy0 are formula-derived, the passed-in vx0/vy0
+ * aren't used at all for that branch), so real vx/vy genuinely cannot change the result and no
+ * velocity check is needed once position alone is confidently past the boundary. For
+ * jumpsRemaining===0, real velocity DOES matter, so this only rejects when it also isn't helping
+ * (not drifting toward the stage, not moving upward) -- otherwise returns null, meaning "run the
+ * real search," same as whenever position isn't confidently past the boundary at all.
+ */
+function fastRejectPikachuDead(
+  x: number,
+  y: number,
+  vx: number,
+  vy: number,
+  jumpsRemaining: number,
+): "dead" | null {
+  if (jumpsRemaining !== 0 && jumpsRemaining !== 1) return null;
+  const table =
+    jumpsRemaining === 0
+      ? PIKACHU_DEAD_BOUNDARY_JUMPS_0
+      : PIKACHU_DEAD_BOUNDARY_JUMPS_1;
+  const safeThreshold =
+    interpolatePikachuDeadThreshold(table, y) +
+    PIKACHU_DEAD_BOUNDARY_SAFETY_MARGIN;
+  if (Math.abs(x) <= safeThreshold) return null;
+  if (jumpsRemaining === 1) return "dead";
+  const towardStage = x < 0 ? 1 : -1;
+  const VELOCITY_HELP_EPSILON = 0.5;
+  if (vx * towardStage > VELOCITY_HELP_EPSILON) return null; // drifting toward the stage -- might help
+  if (vy > VELOCITY_HELP_EPSILON) return null; // moving upward -- might help
+  return "dead";
+}
+
 export function classify(
   characterId: number,
   x: number,
@@ -2103,6 +2242,8 @@ export function classify(
       // Quick Attack's aim is a free choice, independent of the character's current facing --
       // Pikachu can turn around with it. Facing direction never changes the result.
       if (jumpsRemaining > 1) return null;
+      if (fastRejectPikachuDead(x, y, vx, vy, jumpsRemaining) === "dead")
+        return "dead";
       return toRecoveryVerdict(
         pikachuRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
       );

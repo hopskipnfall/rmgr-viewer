@@ -12,6 +12,8 @@ import {
   evaluatePhase,
   classify,
   dkRecoveryOutcomesFrameStepped,
+  pikachuRecoveryOutcomes,
+  type RecoveryOutcomes,
 } from "./recoveryHeuristics.js";
 
 /**
@@ -613,5 +615,89 @@ describe("facing direction", () => {
       );
       expect(awayVerdict).toBe(towardVerdict);
     }
+  });
+});
+
+describe("Pikachu: fast dead-rejection vs the real search", () => {
+  const CHAR_PIKACHU = 0x09;
+  const FALL_STATE = 0x1a;
+
+  function referenceVerdict(outcomes: RecoveryOutcomes): string {
+    if (outcomes.canReachStage) return "reaches-stage";
+    if (outcomes.canReachLedge) return "dead-if-ledge-occupied";
+    return "dead";
+  }
+
+  // Deliberately small: each reference call runs Pikachu's real (uncached, un-fast-pathed) search
+  // directly, which can take hundreds of ms near a boundary -- this suite is about correctness at
+  // the highest-risk points (right around the precomputed table's boundary, where an insufficient
+  // safety margin would first show up), not broad coverage the way the other fuzz suites above
+  // are. Boundary values here are read off the same baked-in table the production code uses
+  // (PIKACHU_DEAD_BOUNDARY_JUMPS_0/1 in recoveryHeuristics.ts) rather than rediscovered via a
+  // fresh binary search, since rediscovering it is itself the expensive part and would be
+  // redundant with what the table already encodes.
+  const BOUNDARY_SAMPLES: {
+    y: number;
+    jumpsRemaining: 0 | 1;
+    xThreshold: number;
+  }[] = [
+    { y: -2000, jumpsRemaining: 0, xThreshold: 6474 },
+    { y: -600, jumpsRemaining: 0, xThreshold: 7725 },
+    { y: 400, jumpsRemaining: 0, xThreshold: 8455 },
+    { y: -2000, jumpsRemaining: 1, xThreshold: 8934 },
+    { y: -600, jumpsRemaining: 1, xThreshold: 9956 },
+  ];
+
+  it("matches the real search exactly at and beyond the boundary (velocity not helping)", () => {
+    const mismatches: string[] = [];
+    for (const { y, jumpsRemaining, xThreshold } of BOUNDARY_SAMPLES) {
+      // Offsets around the boundary, both sides, with velocity that doesn't help (falling, or
+      // drifting further away).
+      for (const offset of [-100, 0, 500, 1500]) {
+        const absX = Math.max(0, xThreshold + offset);
+        const x = -absX; // mirror doesn't matter, symmetric
+        const vx = -1; // drifting further away (toward -infinity, i.e. away from center)
+        const vy = -20; // falling
+        const got = classify(
+          CHAR_PIKACHU,
+          x,
+          y,
+          vx,
+          vy,
+          jumpsRemaining,
+          FALL_STATE,
+          1,
+        );
+        const reference = referenceVerdict(
+          pikachuRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
+        );
+        if (got !== reference) {
+          mismatches.push(
+            `y=${y} jumpsRemaining=${jumpsRemaining} x=${x} (tableThreshold=${xThreshold}, offset=${offset}): got=${got} reference=${reference}`,
+          );
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("does not fast-reject when velocity is helping, even far past the boundary (jumpsRemaining=0)", () => {
+    const mismatches: string[] = [];
+    for (const y of [-2000, -600, 400]) {
+      // Strongly helping velocity: drifting toward the stage and moving upward.
+      const x = -9000;
+      const vx = 30;
+      const vy = 40;
+      const got = classify(CHAR_PIKACHU, x, y, vx, vy, 0, FALL_STATE, 1);
+      const reference = referenceVerdict(
+        pikachuRecoveryOutcomes(x, y, vx, vy, 0),
+      );
+      if (got !== reference) {
+        mismatches.push(
+          `y=${y} x=${x} vx=${vx} vy=${vy}: got=${got} reference=${reference}`,
+        );
+      }
+    }
+    expect(mismatches).toEqual([]);
   });
 });
