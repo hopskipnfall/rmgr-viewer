@@ -1,5 +1,46 @@
 # Classifier-aware recovery/edge-guard statistics
 
+## Status (updated 2026-09-10, after implementation)
+
+Phases 1-3 shipped as designed. Phase 4 and the trust boundary underlying it
+turned out narrower than originally scoped here, after discussion with the
+user mid-implementation -- recorded below in place of the original phase 4/5
+text, since this doc should describe what's actually true, not just what was
+originally proposed.
+
+**The trust boundary that ended up governing everything:** the user does not
+trust the classifier's `"reaches-stage"` (`free`) verdict enough to let it
+change any stat, chip, or wording -- "i don't think you have enough
+information to make that judgement right now, as it's very matchup and
+situation specific." Every stat-or-display-affecting change actually shipped
+therefore keys off `"dead"` (`hopeless`) only. `free`/`contestable` remain
+purely informational (the badges from phase 2, the entryVerdict/jumpVerdict
+fields), never used to reshape a number or suppress a label. If a future
+change wants to lean on `free`, that conversation needs to happen with the
+user again -- it's not settled by anything in this doc.
+
+**What "exclude hopeless" ended up touching, concretely:**
+- `edgeGuard.ts`'s `computeEdgeGuardStats` gained an `excludeEnteredFrameIndices`
+  param (a situation is dropped from both the numerator and denominator, not
+  just hidden) -- wired into both `match/matchView.ts` (per-match panel) and
+  `data/gameSummary.ts` (feeds the library-wide aggregate rollups in
+  `data/aggregate.ts`). This is what "phase 5, revisit whether contestable-only
+  becomes the primary number" turned into in practice: not contestable-only,
+  but hopeless-excluded, applied directly to the existing Recovery%/EdgeGuard%
+  rather than staged behind an optional lens.
+- `neutralHits.ts`'s `computeNeutralHitEvents` no longer tags a hit
+  `convertedToEdgeGuard` (the "Edge Guard" chip in the Neutral Analysis panel)
+  when the victim was already classifier-confirmed-dead at that frame. This
+  -- not the match-timeline advantage/disadvantage coloring -- is what the
+  user meant by "unhelpful neutral analysis commentary." The timeline's own
+  coloring (`matchTimeline.ts`) was left untouched: a hopeless situation
+  genuinely *is* disadvantage/advantage for the two players, so there was no
+  distortion to fix there.
+
+The rest of this document is preserved as originally written (including the
+now-superseded phase 4/5 bullets in Phasing, kept for the record) except
+where noted.
+
 ## Summary
 
 Right now, `edgeGuard.ts` opens a "recovery situation" purely geometrically
@@ -194,23 +235,31 @@ presenting a partial sample as the whole picture.
 
 ## Phasing
 
-1. **Land `computeClassifiedSituations` + validate.** Same validation
+1. ✅ **Land `computeClassifiedSituations` + validate.** Same validation
    discipline as the classifier itself — run it against the full replay
    corpus (extend `scripts/recoveryValidation.ts`, or a sibling script) and
    spot-check `missedLedgeHogOpportunity`/`possibleAccidentalSave` flags
    against a handful of real matches by eye before trusting the detectors.
-2. **Surface the breakdown counts + contestable-only %s in the existing
+   Shipped in `classifiedSituations.ts` + `scripts/classifiedSituationsReport.ts`.
+2. ✅ **Surface the breakdown counts + contestable-only %s in the existing
    widgets**, additive to current behavior. No default view changes yet.
-3. **Add the ledge-hog-opportunity and accidental-save event log entries
-   and stat.**
-4. **Gate commentary wording on category**, once 2–3 feels solid.
-5. **Revisit whether contestable-only Recovery%/EdgeGuard% should become
+   Shipped in `match/matchView.ts`.
+3. ✅ **Add the ledge-hog-opportunity and accidental-save event log entries
+   and stat.** Shipped via `computeClassifiedSituationEvents`.
+4. ~~**Gate commentary wording on category**, once 2–3 feels solid.~~
+   Superseded -- see "Status" at the top of this doc. What actually shipped
+   was narrower and more concrete: suppress the Neutral Analysis panel's
+   "Edge Guard" chip specifically for classifier-confirmed-hopeless hits,
+   not a general wording pass gated on all four categories.
+5. ~~**Revisit whether contestable-only Recovery%/EdgeGuard% should become
    the primary displayed number**, once there's enough real usage to know
    whether players actually want that framing by default or as an
-   optional lens.
+   optional lens.~~ Superseded -- see "Status." The user settled this
+   directly rather than waiting for usage data: exclude `hopeless` only
+   (not `free`) from the existing Recovery%/EdgeGuard%, applied immediately
+   rather than staged behind a lens.
 
-Each phase should ship independently reviewable/testable — no need to land
-this as one large change.
+Each phase shipped independently reviewable/testable, as intended.
 
 ## Performance
 
@@ -237,12 +286,11 @@ speculatively chasing it further right now.
 
 ## Open questions
 
-- Should `"unclassified"` situations still count toward the *existing*
-  unqualified Recovery%/EdgeGuard%, or should there eventually be a toggle
-  to restrict even those to "matches where classifier coverage was high
-  enough to trust the number"? Leaning toward: leave existing stats alone
-  entirely, this is purely additive, and let real usage tell us whether
-  people want a combined view later.
+- ~~Should `"unclassified"` situations still count toward the *existing*
+  unqualified Recovery%/EdgeGuard%~~ Resolved: yes, they still count.
+  Only `hopeless` (classifier-confirmed `dead`) situations are excluded from
+  Recovery%/EdgeGuard% -- `unclassified` and `free` situations count exactly
+  as before. See "Status" at the top of this doc.
 - `possibleAccidentalSave`'s hit-correlation is a heuristic ("a hit landed
   in the window" doesn't prove causation) — worth being upfront in the UI
   copy that this is a "worth checking" flag, not a certainty, the same way
