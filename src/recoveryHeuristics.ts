@@ -1058,16 +1058,25 @@ function pikaSimulateEndAndBeyond(
   return { reachedLedge, reachedStage };
 }
 
-// Canonical double-Quick-Attack probe: diagonal zip1, near-horizontal re-aim zip2, release to
-// neutral for the extended drift. Decomp-verified against ftpikachuspecialhi.c/ftphysics.c (relay
-// from the Game Expert session, 2026-09-10): zip1/zip2 velocities are locked at activation and
-// never re-read mid-zip, the frame-9 re-aim is a single stick-angle sample gated by
-// ANGLE_DIFF_MIN, and releasing to neutral after zip2 is provably optimal for a full-magnitude zip
-// (any stick deflection past the ~8-unit deadzone clamps speed down toward air_speed_max_x*0.5,
-// well below what a strong zip carries out of VEL_BAK_MUL). 60deg/10deg picked so their difference
-// (50deg) comfortably clears the 42deg ANGLE_DIFF_MIN gate.
-const PIKA_CANONICAL_DIAG_DEG = 60;
-const PIKA_CANONICAL_REAIM_DEG = 10;
+// Canonical double-Quick-Attack probe: diagonal zip1, horizontal re-aim zip2, release to neutral
+// for the extended drift. Decomp-verified against ftpikachuspecialhi.c/ftphysics.c (relay from the
+// Game Expert session, 2026-09-10): zip1/zip2 velocities are locked at activation and never
+// re-read mid-zip, the frame-9 re-aim is a single stick-angle sample gated by ANGLE_DIFF_MIN, and
+// releasing to neutral after zip2 is provably optimal for a full-magnitude zip (any stick
+// deflection past the ~8-unit deadzone clamps speed down toward air_speed_max_x*0.5, well below
+// what a strong zip carries out of VEL_BAK_MUL).
+//
+// Angles independently confirmed optimal-for-horizontal-distance two ways (same relay,
+// 2026-09-10): simulating the decomp formulas directly shows a hard cliff at the 42deg gate itself
+// (below it, no second zip fires at all -- ~43% less total distance in their test) and a gradual
+// falloff above it as more of zip1's launch speed goes to height instead of reach, so the true
+// optimum sits right at the gate boundary; separately, 2544 real zip1->zip2 pairs pulled from the
+// nue corpus cluster hardest in exactly the 40-50deg (zip1) / 0-10deg (zip2) bands, matching that
+// theoretical optimum. 45deg/0deg used here rather than the literal 42deg cliff edge, since 42
+// itself risks landing just under the gate (losing the whole second zip) with no discretized input
+// able to hit it exactly -- their 45/0 difference (45deg) still comfortably clears ANGLE_DIFF_MIN.
+const PIKA_CANONICAL_DIAG_DEG = 45;
+const PIKA_CANONICAL_REAIM_DEG = 0;
 
 function pikaOutcomeToFlags(
   outcome: Outcome,
