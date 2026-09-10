@@ -921,6 +921,18 @@ function pikaSimulateZip(
  * what the re-aim search found (a re-aim that only reaches "ledge" doesn't rule out "just fall"
  * reaching "stage" on its own) -- that was also silently skipped before whenever re-aim found
  * *something*. */
+function pikaFullReAimGrid(): { angle: PikaAngle; magnitude: number }[] {
+  const grid: { angle: PikaAngle; magnitude: number }[] = [];
+  for (const angle of pikaAngleCandidates()) {
+    for (const magnitude of PIKA.MAGNITUDE_SAMPLES) {
+      grid.push({ angle, magnitude });
+    }
+  }
+  return grid;
+}
+
+const PIKA_FULL_REAIM_GRID = pikaFullReAimGrid();
+
 function pikaSimulateEndAndBeyond(
   x0: number,
   y0: number,
@@ -928,6 +940,7 @@ function pikaSimulateEndAndBeyond(
   vy0: number,
   firstZipAngle: number,
   usedSecondZip: boolean,
+  reAimCandidates: { angle: PikaAngle; magnitude: number }[] = PIKA_FULL_REAIM_GRID,
 ): { reachedLedge: boolean; reachedStage: boolean } {
   let vx = vx0 * PIKA.VEL_BAK_MUL;
   let vy = vy0 * PIKA.VEL_BAK_MUL;
@@ -961,43 +974,42 @@ function pikaSimulateEndAndBeyond(
   let reachedLedge = false;
   let reachedStage = false;
 
-  // frame 9: the re-aim window. Exhaustively tries every second-zip candidate.
+  // frame 9: the re-aim window. Tries every candidate in reAimCandidates (the full grid by
+  // default; a single canonical-technique candidate when called from pikaCanonicalProbe).
   if (!usedSecondZip) {
-    for (const angle of pikaAngleCandidates()) {
+    for (const { angle, magnitude } of reAimCandidates) {
       if (reachedLedge && reachedStage) break;
-      for (const magnitude of PIKA.MAGNITUDE_SAMPLES) {
-        if (reachedLedge && reachedStage) break;
-        const testAngle = angle === "straight_up" ? Math.PI / 2 : angle;
-        const rawDiff =
-          ((testAngle - firstZipAngle + Math.PI) % (2 * Math.PI)) - Math.PI;
-        const diff = Math.abs(rawDiff);
-        if (diff <= PIKA.ANGLE_DIFF_MIN) continue;
-        const zip = pikaSimulateZip(x, y, angle, magnitude, true);
-        if (
-          zip.outcome === "ledge" ||
-          zip.outcome === "stage" ||
-          zip.outcome === "both"
-        ) {
-          if (zip.outcome === "ledge" || zip.outcome === "both")
-            reachedLedge = true;
-          if (zip.outcome === "stage" || zip.outcome === "both")
-            reachedStage = true;
-          continue;
-        }
-        if (zip.outcome === null) {
-          const sub = pikaSimulateEndAndBeyond(
-            zip.x,
-            zip.y,
-            zip.vx,
-            zip.vy,
-            testAngle,
-            true,
-          );
-          reachedLedge = reachedLedge || sub.reachedLedge;
-          reachedStage = reachedStage || sub.reachedStage;
-        }
-        // outcome "died": keep trying other angles
+      const testAngle = angle === "straight_up" ? Math.PI / 2 : angle;
+      const rawDiff =
+        ((testAngle - firstZipAngle + Math.PI) % (2 * Math.PI)) - Math.PI;
+      const diff = Math.abs(rawDiff);
+      if (diff <= PIKA.ANGLE_DIFF_MIN) continue;
+      const zip = pikaSimulateZip(x, y, angle, magnitude, true);
+      if (
+        zip.outcome === "ledge" ||
+        zip.outcome === "stage" ||
+        zip.outcome === "both"
+      ) {
+        if (zip.outcome === "ledge" || zip.outcome === "both")
+          reachedLedge = true;
+        if (zip.outcome === "stage" || zip.outcome === "both")
+          reachedStage = true;
+        continue;
       }
+      if (zip.outcome === null) {
+        const sub = pikaSimulateEndAndBeyond(
+          zip.x,
+          zip.y,
+          zip.vx,
+          zip.vy,
+          testAngle,
+          true,
+          reAimCandidates,
+        );
+        reachedLedge = reachedLedge || sub.reachedLedge;
+        reachedStage = reachedStage || sub.reachedStage;
+      }
+      // outcome "died": keep trying other candidates
     }
   }
 
@@ -1044,6 +1056,71 @@ function pikaSimulateEndAndBeyond(
     if (y < DEATH_Y) return { reachedLedge, reachedStage };
   }
   return { reachedLedge, reachedStage };
+}
+
+// Canonical double-Quick-Attack probe: diagonal zip1, near-horizontal re-aim zip2, release to
+// neutral for the extended drift. Decomp-verified against ftpikachuspecialhi.c/ftphysics.c (relay
+// from the Game Expert session, 2026-09-10): zip1/zip2 velocities are locked at activation and
+// never re-read mid-zip, the frame-9 re-aim is a single stick-angle sample gated by
+// ANGLE_DIFF_MIN, and releasing to neutral after zip2 is provably optimal for a full-magnitude zip
+// (any stick deflection past the ~8-unit deadzone clamps speed down toward air_speed_max_x*0.5,
+// well below what a strong zip carries out of VEL_BAK_MUL). 60deg/10deg picked so their difference
+// (50deg) comfortably clears the 42deg ANGLE_DIFF_MIN gate.
+const PIKA_CANONICAL_DIAG_DEG = 60;
+const PIKA_CANONICAL_REAIM_DEG = 10;
+
+function pikaOutcomeToFlags(
+  outcome: Outcome,
+): { reachedLedge: boolean; reachedStage: boolean } {
+  return {
+    reachedLedge: outcome === "ledge" || outcome === "both",
+    reachedStage: outcome === "stage" || outcome === "both",
+  };
+}
+
+function pikaCanonicalReAimCandidates(
+  targetLr: 1 | -1,
+): { angle: PikaAngle; magnitude: number }[] {
+  const deg = (PIKA_CANONICAL_REAIM_DEG * Math.PI) / 180;
+  const angle = targetLr === 1 ? deg : Math.PI - deg;
+  return [{ angle, magnitude: 80 }];
+}
+
+/**
+ * Cheap first probe using the community-standard technique, tried before the full exhaustive
+ * angle x magnitude search. Any "reaches stage" result here comes from actually simulating that
+ * exact input sequence through the real physics functions -- a genuine proof of reachability, not
+ * an approximation -- so it's purely a fast-path and can never produce a false positive. Only
+ * covers delay=0 (activating immediately, the position-relevant part of the search is identical
+ * for any jumpsRemaining at delay=0 since the delay loop that consumes jump velocity doesn't run).
+ * Anything this probe doesn't resolve to "stage" still falls through to the full search below.
+ */
+function pikaCanonicalProbe(
+  x0: number,
+  y0: number,
+  targetLr: 1 | -1,
+): { reachedLedge: boolean; reachedStage: boolean } {
+  const windup = pikaSimulateWindup(x0, y0);
+  if (windup.outcome === "died")
+    return { reachedLedge: false, reachedStage: false };
+  if (windup.outcome) return pikaOutcomeToFlags(windup.outcome);
+
+  const diagDeg = (PIKA_CANONICAL_DIAG_DEG * Math.PI) / 180;
+  const diagAngle = targetLr === 1 ? diagDeg : Math.PI - diagDeg;
+  const zip1 = pikaSimulateZip(windup.x, windup.y, diagAngle, 80, false);
+  if (zip1.outcome === "died")
+    return { reachedLedge: false, reachedStage: false };
+  if (zip1.outcome) return pikaOutcomeToFlags(zip1.outcome);
+
+  return pikaSimulateEndAndBeyond(
+    zip1.x,
+    zip1.y,
+    zip1.vx,
+    zip1.vy,
+    zip1.actualAngle,
+    false,
+    pikaCanonicalReAimCandidates(targetLr),
+  );
 }
 
 function pikaTryActivation(
@@ -1105,6 +1182,17 @@ export function pikachuRecoveryOutcomes(
   // others -- see the constant's comment for why.
   let reachedLedge = false;
   let reachedStage = false;
+
+  // Fast path: try the canonical double-Quick-Attack technique first (see pikaCanonicalProbe).
+  // If it already reaches the stage, we're done -- canReachStage implies canReachLedge by
+  // construction (the decomp-accurate probe-offset ledge-catch mechanic), so there's no need to
+  // run the full exhaustive search at all.
+  for (const targetLr of [1, -1] as const) {
+    const probe = pikaCanonicalProbe(x0, y0, targetLr);
+    if (probe.reachedStage) return { canReachLedge: true, canReachStage: true };
+    if (probe.reachedLedge) reachedLedge = true;
+  }
+
   for (const targetLr of [1, -1] as const) {
     if (reachedLedge && reachedStage) break;
     let jumpVx0: number, jumpVy0: number;
