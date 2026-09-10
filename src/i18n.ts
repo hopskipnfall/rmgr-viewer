@@ -311,6 +311,8 @@ export interface Translations {
   situationMissedLedgeHogTitle: string;
   situationAccidentalSaveBadge: string;
   situationAccidentalSaveTitle: string;
+  edgeGuardEffectivenessScoreBadge: (score: number) => string;
+  edgeGuardEffectivenessScoreTitle: string;
 
   // Neutral Openings widget
   neutralHitsWidgetTitle: string;
@@ -808,6 +810,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationAccidentalSaveBadge: "⚠ accidental save?",
     situationAccidentalSaveTitle:
       "This should have been unsurvivable, but the recovering player survived after taking a hit from the edge-guarder -- worth checking whether that hit is what saved them.",
+    edgeGuardEffectivenessScoreBadge: (score) =>
+      `${score > 0 ? "+" : ""}${score}`,
+    edgeGuardEffectivenessScoreTitle:
+      "Edge Guard Effectiveness score for this situation: kill=100, damage dealt without a kill scores 20/45/70 by amount, no damage=0, missed ledge-hog=-10, possible accidental save=-50.",
 
     neutralHitsWidgetTitle: "Neutral Analysis",
     neutralFilterAll: (count) => `All (${count})`,
@@ -1298,6 +1304,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationAccidentalSaveBadge: "⚠ 偶然の救済?",
     situationAccidentalSaveTitle:
       "本来復帰不可能なはずの状況だったが、復帰阻止側の攻撃を受けた後に復帰側が生還した。その攻撃が結果的に救済した可能性がある。",
+    edgeGuardEffectivenessScoreBadge: (score) =>
+      `${score > 0 ? "+" : ""}${score}`,
+    edgeGuardEffectivenessScoreTitle:
+      "この状況の復帰阻止有効度スコア: 撃墜=100、撃墜なしでダメージを与えた場合は量に応じて20/45/70、ダメージなし=0、崖離し放置=-10、偶然の救済の可能性=-50。",
 
     neutralHitsWidgetTitle: "立ち回り分析",
     neutralFilterAll: (count) => `すべて (${count})`,

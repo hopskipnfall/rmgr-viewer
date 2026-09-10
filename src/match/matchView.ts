@@ -3071,6 +3071,12 @@ export class MatchViewController {
       category?: SituationCategory;
       missedLedgeHogOpportunity?: boolean;
       possibleAccidentalSave?: boolean;
+      /** Edge Guard Effectiveness score for this situation (see classifiedSituations.ts) --
+       * undefined if the situation isn't classified, null if classified but out of scope for
+       * scoring ("free"/"unclassified", or a hopeless situation that resolved normally). Shown
+       * per the user (2026-09-11): "we need to update that edge guards panel to show the
+       * classification of how successful the edge guard was, not just a checkmark." */
+      effectivenessScore?: number | null;
     }
 
     // Keyed by enteredFrameIndex, which is unique per situation across a match (edgeGuard.ts only
@@ -3098,6 +3104,9 @@ export class MatchViewController {
           category: classified?.category,
           missedLedgeHogOpportunity: classified?.missedLedgeHogOpportunity,
           possibleAccidentalSave: classified?.possibleAccidentalSave,
+          effectivenessScore: classified
+            ? edgeGuardEffectivenessScore(classified)
+            : undefined,
         };
       } else if (
         ev.kind === "recovery-success" ||
@@ -3182,8 +3191,10 @@ export class MatchViewController {
         category?: SituationCategory;
         missedLedgeHogOpportunity?: boolean;
         possibleAccidentalSave?: boolean;
+        effectivenessScore?: number | null;
       }>,
       isSuccessOutcome: (outcome: "success" | "failure") => boolean,
+      showEffectivenessScore = false,
     ): void => {
       if (items.length === 0) {
         const empty = document.createElement("div");
@@ -3228,6 +3239,17 @@ export class MatchViewController {
           categoryEl.className = `situation-bracket category-${sit.category}`;
           categoryEl.textContent = tr.situationCategoryLabel(sit.category);
           row.appendChild(categoryEl);
+        }
+
+        if (showEffectivenessScore && sit.effectivenessScore !== undefined) {
+          if (sit.effectivenessScore !== null) {
+            const scoreEl = document.createElement("span");
+            const score = sit.effectivenessScore;
+            scoreEl.className = `situation-bracket ${score < 0 ? "bracket-over100" : score >= 70 ? "bracket-under100" : ""}`;
+            scoreEl.textContent = tr.edgeGuardEffectivenessScoreBadge(score);
+            scoreEl.title = tr.edgeGuardEffectivenessScoreTitle;
+            row.appendChild(scoreEl);
+          }
         }
 
         if (sit.missedLedgeHogOpportunity) {
@@ -3279,6 +3301,7 @@ export class MatchViewController {
       this.edgeGuardList,
       edgeGuardSituations,
       (outcome) => outcome === "failure",
+      true,
     );
     renderList(
       this.ledgeGetupList,
