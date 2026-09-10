@@ -61,6 +61,25 @@ export function applyFriction(vx: number, friction: number): number {
   return vx;
 }
 
+/** ftPhysicsClampAirVelXStickRange + friction applied unconditionally afterward -- the special-
+ * move-specific air-drift shape used by moves whose own physics function calls this directly
+ * (Falcon Dive, Kirby Final Cutter), as opposed to the ordinary Fall-state clampAirVelX
+ * target-interpolation above. Adds stick*accel then clamps to +-cap (rather than interpolating
+ * toward a target), so a strong push and a low cap can make vx climb toward -- and hold at -- the
+ * cap each frame, rather than smoothly approaching it. */
+function clampAirVelXStickRange(
+  vx: number,
+  stickX: number,
+  accel: number,
+  cap: number,
+  friction: number,
+): number {
+  if (Math.abs(stickX) >= 8) {
+    vx = clampMagnitude(vx + stickX * accel, cap);
+  }
+  return applyFriction(vx, friction);
+}
+
 /** Interpolated x where the segment (prevX,prevY)->(x,y) crosses y=0 DESCENDING, or null if it
  * doesn't (either not descending, or doesn't bracket 0). Kept as the descending-only requirement
  * to match the decomp's real ledge-catch logic (ram-map.md section 4.6) -- an earlier version
@@ -2393,10 +2412,258 @@ function falconRecoveryOutcomes(
 }
 
 // ---------------------------------------------------------------------------
+// Kirby — Final Cutter, 0 or 1 jumps (relay from the Game Expert session, 2026-09-10;
+// ftkirbyspecialhi.c/229_KirbyMain.c/ftkirby.h, decoded with the same root-motion curve
+// interpreter built for Falcon Dive).
+//
+// CLOSED-FORM PEAK WAIT, NOT A SEARCH: unlike Falcon Dive, activation does NOT reset velocity --
+// there's no vel_air=0 anywhere in ftKirbySpecialHiProcStatus. Instead Y is simply overwritten
+// every frame by root motion (discarded by overwrite, not reset), and the decoded curve's
+// cumulative dy across its whole 60-frame run is exactly 0 (confirmed directly: ran the Game
+// Expert's own curve-interpreter script against their transcribed animation bytecode and summed
+// the result myself, not just trusting their summary). Final Cutter gains NO net height on its
+// own -- all height comes from the jump beforehand. Since Y is discarded regardless of activation
+// timing, only the STARTING position (from the jump) matters for height, and jump height is
+// provably maximized at the jump's peak (the last frame vy is still >= 0) -- so "wait for the
+// closed-form peak, then up-B" is a proven optimum here, not a heuristic requiring the kind of
+// delay search Falcon Dive needed. X is NEVER touched by root motion -- it carries over from
+// entry (or the jump's vx0) and keeps evolving via clampAirVelXStickRange, accel halved
+// (FINALCUTTER_AIR_ACCEL_MUL=0.5), cap unchanged (plain air_speed_max_x).
+//
+// AN UNVERIFIED DETAIL, carried over as-is from the relay's own transcription rather than
+// independently re-derived: the pre-activation "wait for peak" phase (ordinary jumping/falling,
+// before Final Cutter is even pressed) uses the SAME clampAirVelXStickRange formula as the move
+// itself, per their sourced Python (both phases call their own ftPhysicsClampAirVelXStickRange
+// transcription) -- NOT the ordinary Fall-state clampAirVelX target-interpolation every other
+// character's pre-activation delay phase in this file uses (DK/Samus/Falcon). Plausible if
+// ftPhysicsClampAirVelXStickRange is Kirby's OWN generic air-control function rather than
+// something Final-Cutter-specific, but not something I can confirm without the source myself --
+// flagged back to the Game Expert, not a verified fact like the rest of this section.
+//
+// LANDING CHECK: uses this file's normal outcomeThisFrame (probe-offset ledge-grab OR main-floor
+// landing), NOT ported from the relay's own Python prototype, which only checked main-floor
+// landing and skipped the ledge-grab probe entirely -- a scope simplification in their sanity-check
+// script (its own recovery_outcomes_kirby returns a single stage-only boolean), not a claim about
+// the real game. Their prototype's "0 jumps -> collapse dead-if-ledge-occupied to dead" comment was
+// describing that same simplification (no ledge case computed at all when jumpless), not a sourced
+// game-mechanic rule -- NOT carried over here. Kirby computes ledge and stage the same way as
+// every other character regardless of jumpsRemaining.
+//
+// POST-ANIMATION FALL PHASE: after the curve ends (60 frames), the relay found
+// ftKirbySpecialAirHiFallProcPhysics applies X clamp+friction only, no gravity call in that
+// status's own proc_physics -- but explicitly flagged the transition/timeout out of it as
+// unconfirmed. It wasn't safe to take literally: a true no-gravity hover left Kirby stuck floating
+// at altitude forever whenever the curve ends above ledge-grab height, caught by this project's own
+// reachability sweep, not real-corpus validation. Falls back to ordinary gravity instead (see
+// kirbySimulateFinalCutterAndBeyond's own comment at that phase) -- a deliberate, flagged
+// provisional choice, not a verified fact like the curve data above.
+//
+// FACING: modeled as facing-independent (tries both target directions unconditionally), matching
+// Falcon/Fox/Pikachu's pattern and Kirby's own formula shape (direction is stick-driven, not
+// facing-driven) -- NOT explicitly confirmed against source for Kirby specifically, same caveat
+// class as Falcon's facing assumption was before that got checked.
+// ---------------------------------------------------------------------------
+
+const KIRBY = {
+  GRAVITY: 2.4,
+  TVEL_BASE: 48.0,
+  AIR_ACCEL: 0.04,
+  AIR_SPEED_MAX_X: 28.0,
+  AIR_FRICTION: 0.5,
+  CLIFFCATCH_X: 250.0,
+  CLIFFCATCH_Y: 400.0,
+  JUMP_HEIGHT_MUL: 0.6,
+  JUMP_HEIGHT_BASE: 30.0,
+  JUMPAERIAL_HEIGHT: 0.8,
+  JUMPAERIAL_VEL_X: 0.45,
+  FINALCUTTER_AIR_ACCEL_MUL: 0.5,
+};
+
+/**
+ * Root-motion Y curve for Final Cutter, 60 frames, decoded off 1418_FTKirbyAnimFinalCutter.c's
+ * joint2 (TransN) TraY track via the Game Expert's animation-curve interpreter -- extracted by
+ * running their transcribed bytecode through their own decoder script directly (not just trusting
+ * a pasted summary). World-space delta is the raw curve value, unflipped by targetLr -- X is never
+ * touched by this curve at all (TraX is a plain step-to-0 in source, confirmed by the relay).
+ * Cumulative sum is exactly 0 (net-zero vertical loop -- see section header).
+ */
+const KIRBY_FINAL_CUTTER_DY: readonly number[] = [
+  -31.1111, -57.7778, -31.1111, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 60.0, 60.0, 80.0, 160.0, 139.68,
+  100.96, 65.12, 32.16, 2.08, -25.12, -49.44, -70.88, -89.44, -105.12,
+  -79.9067, -29.7143, -0.5131, 7.6968, -5.0845, -38.8571, -93.621, -98.0,
+  -46.0, -6.0, 22.0, 38.0, 42.0, 34.0, 14.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  0.0, 0.0, 0.0, 0.0,
+];
+
+/**
+ * KNOWN LIMITATION, found via this file's own reachability sweep (not real-corpus validation):
+ * holding the stick toward the target for this move's unusually long total duration (wait-for-peak
+ * + 60-frame curve + gravity tail -- much longer than any other character's special here) can
+ * overshoot horizontally past the ledge while Kirby is still well above landing height, especially
+ * from a starting position close to center where a fresh jump is available (the jump's own peak
+ * can put Final Cutter's curve entirely above y=0, so the curve's net-zero vertical motion never
+ * produces a landing crossing before x has already drifted out of range). This can spuriously
+ * return "dead" from positions no real recovery situation would ever start at -- classify() is
+ * only ever called after isOutsideZone (edgeGuard.ts) is already true, which requires roughly
+ * |x| >= 2916, well outside where this was observed (near x=0). Not fixed: doing so properly would
+ * need either a real per-frame stick-release strategy (not given by the source research this move
+ * is based on) or a search over when to stop holding the stick, disproportionate effort for a
+ * limitation that doesn't reach the real input domain. Flagged here rather than silently working
+ * around it.
+ */
+function kirbySimulateFinalCutterAndBeyond(
+  x0: number,
+  y0: number,
+  vx0: number,
+  targetLr: 1 | -1,
+): Outcome {
+  let x = x0;
+  let y = y0;
+  let vx = vx0;
+  const cutterAccel = KIRBY.AIR_ACCEL * KIRBY.FINALCUTTER_AIR_ACCEL_MUL;
+
+  for (const dy of KIRBY_FINAL_CUTTER_DY) {
+    const prevX = x;
+    const prevY = y;
+    vx = clampAirVelXStickRange(
+      vx,
+      targetLr * STICK_TOWARD,
+      cutterAccel,
+      KIRBY.AIR_SPEED_MAX_X,
+      KIRBY.AIR_FRICTION,
+    );
+    x += vx;
+    y += dy;
+    const outcome = outcomeThisFrame(
+      prevX,
+      prevY,
+      x,
+      y,
+      KIRBY.CLIFFCATCH_X,
+      KIRBY.CLIFFCATCH_Y,
+    );
+    if (outcome) return outcome;
+    if (y < DEATH_Y) return null;
+  }
+
+  // Post-animation SpecialAirHiFall: per the relay, X clamp+friction only, no gravity call found
+  // in that status's own proc_physics -- explicitly flagged by them as not fully source-confirmed
+  // for a hard timeout ("flagging in case real-corpus validation surfaces a mismatch"). It did:
+  // modeling it as a literal permanent no-gravity hover left Kirby stuck floating at altitude
+  // forever whenever Final Cutter's curve ends above ledge-grab height, which doesn't match Kirby
+  // having one of the best (not infinite/broken) recoveries in the real game, and isn't how any
+  // other character's post-special "helpless fall" tail works in this file. Falls back to ordinary
+  // gravity here instead, matching every other character's established pattern -- a deliberate,
+  // flagged provisional choice pending real source/corpus confirmation of what actually gates the
+  // transition out of this status, not a verified fact like the curve data above.
+  let vy = 0;
+  for (let i = 0; i < 1000; i++) {
+    const prevX = x;
+    const prevY = y;
+    vy = applyGravity(vy, KIRBY.GRAVITY, KIRBY.TVEL_BASE);
+    vx = clampAirVelXStickRange(
+      vx,
+      targetLr * STICK_TOWARD,
+      cutterAccel,
+      KIRBY.AIR_SPEED_MAX_X,
+      KIRBY.AIR_FRICTION,
+    );
+    x += vx;
+    y += vy;
+    const outcome = outcomeThisFrame(
+      prevX,
+      prevY,
+      x,
+      y,
+      KIRBY.CLIFFCATCH_X,
+      KIRBY.CLIFFCATCH_Y,
+    );
+    if (outcome) return outcome;
+    if (y < DEATH_Y) return null;
+  }
+  return null;
+}
+
+function kirbyRecoveryOutcomes(
+  x0: number,
+  y0: number,
+  vx0: number,
+  vy0: number,
+  jumpsRemaining: number,
+): RecoveryOutcomes {
+  let reachedLedge = false;
+  let reachedStage = false;
+  for (const targetLr of [1, -1] as const) {
+    if (reachedLedge && reachedStage) break;
+    let vx: number, vy: number;
+    if (jumpsRemaining === 1) {
+      vy =
+        (80 * KIRBY.JUMP_HEIGHT_MUL + KIRBY.JUMP_HEIGHT_BASE) *
+        KIRBY.JUMPAERIAL_HEIGHT;
+      vx = targetLr * STICK_TOWARD * KIRBY.JUMPAERIAL_VEL_X;
+    } else {
+      vx = vx0;
+      vy = vy0;
+    }
+
+    // Closed-form wait-for-peak: height is maximized at the last frame vy is still >= 0.
+    const waitFrames = vy > 0 ? Math.floor(vy / KIRBY.GRAVITY) : 0;
+    let x = x0;
+    let y = y0;
+    let died = false;
+    let preActivationOutcome: Outcome = null;
+    for (let f = 0; f < waitFrames; f++) {
+      const prevX = x;
+      const prevY = y;
+      vy = applyGravity(vy, KIRBY.GRAVITY, KIRBY.TVEL_BASE);
+      vx = clampAirVelXStickRange(
+        vx,
+        targetLr * STICK_TOWARD,
+        KIRBY.AIR_ACCEL,
+        KIRBY.AIR_SPEED_MAX_X,
+        KIRBY.AIR_FRICTION,
+      );
+      x += vx;
+      y += vy;
+      const outcome = outcomeThisFrame(
+        prevX,
+        prevY,
+        x,
+        y,
+        KIRBY.CLIFFCATCH_X,
+        KIRBY.CLIFFCATCH_Y,
+      );
+      if (outcome) {
+        preActivationOutcome = outcome;
+        break;
+      }
+      if (y < DEATH_Y) {
+        died = true;
+        break;
+      }
+    }
+    if (died) continue;
+    if (preActivationOutcome) {
+      if (preActivationOutcome === "ledge" || preActivationOutcome === "both")
+        reachedLedge = true;
+      if (preActivationOutcome === "stage" || preActivationOutcome === "both")
+        reachedStage = true;
+      continue;
+    }
+    const outcome = kirbySimulateFinalCutterAndBeyond(x, y, vx, targetLr);
+    if (outcome === "ledge" || outcome === "both") reachedLedge = true;
+    if (outcome === "stage" || outcome === "both") reachedStage = true;
+  }
+  return { canReachLedge: reachedLedge, canReachStage: reachedStage };
+}
+
+// ---------------------------------------------------------------------------
 // Character dispatch (NA/US character IDs only, per user instruction)
 // ---------------------------------------------------------------------------
 
 const CHAR_FALCON = 0x07;
+const CHAR_KIRBY = 0x08;
 const CHAR_FOX = 0x01;
 const CHAR_DONKEY_KONG = 0x02;
 const CHAR_SAMUS = 0x03;
@@ -2414,6 +2681,7 @@ export const SUPPORTED_CHARACTERS = new Set([
   CHAR_PIKACHU,
   CHAR_JIGGLYPUFF,
   CHAR_FALCON,
+  CHAR_KIRBY,
 ]);
 
 export const ACTION_STATE_JUMP_AERIAL_F = 0x018;
@@ -2661,6 +2929,15 @@ export function classify(
       return toRecoveryVerdict(
         falconRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
       );
+    case CHAR_KIRBY:
+      // Closed-form wait-for-peak, no search needed (see the section header above for why --
+      // Y is fully discarded by root motion regardless of activation timing, so only starting
+      // position from the jump's provable peak matters). Facing-independent, unverified against
+      // source for Kirby specifically -- see section header.
+      if (jumpsRemaining > 1) return null;
+      return toRecoveryVerdict(
+        kirbyRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
+      );
     default:
       return null;
   }
@@ -2673,6 +2950,7 @@ export const CHARACTER_NAME: Record<number, string> = {
   [CHAR_LINK]: "Link",
   [CHAR_YOSHI]: "Yoshi",
   [CHAR_FALCON]: "Captain Falcon",
+  [CHAR_KIRBY]: "Kirby",
   [CHAR_PIKACHU]: "Pikachu",
   [CHAR_JIGGLYPUFF]: "Jigglypuff",
 };

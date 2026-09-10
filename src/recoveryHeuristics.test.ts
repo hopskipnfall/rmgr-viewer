@@ -817,3 +817,83 @@ describe("Captain Falcon: Falcon Dive", () => {
     }
   });
 });
+
+describe("Kirby: Final Cutter", () => {
+  const CHAR_KIRBY = 0x08;
+
+  // NOTE on x range: starts at 2900, not 0 -- realistic invocation range. classify() is only ever
+  // called from real recovery situations, which by construction (isOutsideZone in edgeGuard.ts)
+  // never start closer to center than roughly x=2916. Below that, a KNOWN, DOCUMENTED limitation
+  // in kirbySimulateFinalCutterAndBeyond's own section-header comment applies: holding the stick
+  // toward the target for this move's unusually long total duration (wait-for-peak + 60-frame
+  // curve + gravity tail) can overshoot horizontally past the ledge while still well above landing
+  // height, spuriously returning "dead" from positions close enough to center that no real
+  // recovery situation ever actually starts there. Not exercised here since it's out of the real
+  // input domain -- see that comment for the full story if this ever needs revisiting.
+
+  it("is not trivially always-true/always-false along a realistic x sweep (jumpsRemaining=1)", () => {
+    // jumpsRemaining=1, not 0: Final Cutter's own root motion nets to exactly zero height (see
+    // KIRBY_FINAL_CUTTER_DY's doc comment) -- ALL height in a Kirby recovery comes from the jump.
+    // With jumpsRemaining=0 and no entry vy, "always dead regardless of x" is a real, expected
+    // result at a sufficiently negative y (there's no jump to provide the only source of lift),
+    // not something this sanity check should assume away.
+    for (const y of [-1000, 0, 1000]) {
+      let sawReachable = false;
+      let sawDead = false;
+      for (let x = 2900; x <= 8000; x += 250) {
+        const verdict = classify(CHAR_KIRBY, x, y, 0, 0, 1, 0x39, 1);
+        if (verdict === "dead") sawDead = true;
+        else if (verdict === "reaches-stage" || verdict === "dead-if-ledge-occupied")
+          sawReachable = true;
+      }
+      expect(sawReachable).toBe(true);
+      expect(sawDead).toBe(true);
+    }
+  });
+
+  it("jumpsRemaining=1 is never worse than jumpsRemaining=0 at the same position", () => {
+    const rank = (v: ReturnType<typeof classify>): number => {
+      switch (v) {
+        case "dead":
+          return 0;
+        case "dead-if-ledge-occupied":
+          return 1;
+        case "reaches-stage":
+          return 2;
+        default:
+          return -1;
+      }
+    };
+    for (const y of [-1500, -500, 500]) {
+      for (let x = 2900; x <= 8000; x += 300) {
+        const noJump = classify(CHAR_KIRBY, x, y, 0, 0, 0, 0x39, 1);
+        const withJump = classify(CHAR_KIRBY, x, y, 0, 0, 1, 0x39, 1);
+        expect(rank(withJump) >= rank(noJump)).toBe(true);
+      }
+    }
+  });
+
+  it("facing direction never changes the verdict", () => {
+    for (const [x, y] of [
+      [3500, 0],
+      [-3500, 0],
+      [3000, -1200],
+    ] as const) {
+      const facingRight = classify(CHAR_KIRBY, x, y, 0, 0, 0, 0x39, 1);
+      const facingLeft = classify(CHAR_KIRBY, x, y, 0, 0, 0, 0x39, -1);
+      expect(facingRight).toBe(facingLeft);
+    }
+  });
+
+  it("mirrors left/right symmetrically", () => {
+    for (const [x, y] of [
+      [3500, 0],
+      [5000, -1000],
+      [3000, 1000],
+    ] as const) {
+      const right = classify(CHAR_KIRBY, x, y, 0, 0, 0, 0x39, 1);
+      const left = classify(CHAR_KIRBY, -x, y, 0, 0, 0, 0x39, 1);
+      expect(left).toBe(right);
+    }
+  });
+});
