@@ -46,7 +46,7 @@ const LEDGE_STATES = new Set([
 // — the dead player's position is frozen at their blast-zone KO point and
 // will almost always be outside the zone, producing false entries the frame
 // after a stock is lost.
-const DEAD_OR_RESPAWNING_STATES = new Set([
+export const DEAD_OR_RESPAWNING_STATES = new Set([
   0x000, // DeadD
   0x001, // DeadS
   0x002, // DeadU

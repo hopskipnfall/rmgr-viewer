@@ -59,6 +59,10 @@ import {
   type LedgeTrapEvent,
 } from "../ledgeTrap.js";
 import {
+  computeRecoveryVerdictEvents,
+  type RecoveryVerdictEvent,
+} from "../recoveryVerdicts.js";
+import {
   computeAngelInvincibilityEvents,
   computeAngelInvincibilityStats,
   type AngelInvincibilityEvent,
@@ -107,7 +111,8 @@ export type MatchEvent =
   | LedgeTrapEvent
   | AngelInvincibilityEvent
   | JigglypuffFThrowEvent
-  | ShieldPressureEvent;
+  | ShieldPressureEvent
+  | RecoveryVerdictEvent;
 
 interface PlayerPanel {
   port: PortIndex;
@@ -195,6 +200,8 @@ export class MatchViewController {
   private stageOverlayList: HTMLDivElement;
   private qaOverlayExitBtn: HTMLButtonElement;
   private hudToggleBtn: HTMLButtonElement;
+  private fpsToggleBtn: HTMLButtonElement;
+  private fpsDisplay: HTMLDivElement;
   private recoveryWidget: HTMLElement;
   private recoveryCollapseBtn: HTMLButtonElement;
   private recoveryWidgetTitleEl: HTMLHeadingElement;
@@ -341,6 +348,10 @@ export class MatchViewController {
     "recovery" | "ledge" | "angel" | "neutral" | "character" | "debug"
   >;
   private hudOverlayEnabled = false;
+  private fpsEnabled = false;
+  private fpsIntervalId: number | null = null;
+  private fpsFrameCount = 0;
+  private lastFpsTimestamp = 0;
   private matchupBaseline: DerivedRates | null = null;
   private onPerspectiveChangedCb?: (port: PortIndex) => void;
 
@@ -542,6 +553,10 @@ export class MatchViewController {
     this.hudToggleBtn = document.getElementById(
       "hudToggleBtn",
     ) as HTMLButtonElement;
+    this.fpsToggleBtn = document.getElementById(
+      "fpsToggleBtn",
+    ) as HTMLButtonElement;
+    this.fpsDisplay = document.getElementById("fpsDisplay") as HTMLDivElement;
 
     this.recoveryWidget = document.getElementById(
       "recoveryWidget",
@@ -1070,6 +1085,31 @@ export class MatchViewController {
 
     this.hudToggleBtn.classList.toggle("active", this.hudOverlayEnabled);
 
+    try {
+      this.fpsEnabled = localStorage.getItem("rmgr-viewer-fps") === "true";
+    } catch {
+      this.fpsEnabled = false;
+    }
+    this.fpsToggleBtn.classList.toggle("active", this.fpsEnabled);
+    this.fpsDisplay.hidden = !this.fpsEnabled;
+    this.fpsDisplay.textContent = "0.0 FPS";
+
+    this.fpsToggleBtn.addEventListener("click", () => {
+      this.fpsEnabled = !this.fpsEnabled;
+      this.fpsToggleBtn.classList.toggle("active", this.fpsEnabled);
+      this.fpsDisplay.hidden = !this.fpsEnabled;
+      try {
+        localStorage.setItem("rmgr-viewer-fps", String(this.fpsEnabled));
+      } catch {
+        // Ignore localStorage write error
+      }
+      if (this.fpsEnabled) {
+        this.startFpsTracking();
+      } else {
+        this.stopFpsTracking();
+      }
+    });
+
     this.playPauseBtn.addEventListener("click", () => {
       this.dismissQuickAttackOverlay();
       this.playback?.toggle();
@@ -1268,6 +1308,9 @@ export class MatchViewController {
     window.addEventListener("keydown", this.boundOnKeyDown);
     window.addEventListener("resize", this.boundOnResize);
     this.resizeStageCanvas();
+    if (this.fpsEnabled) {
+      this.startFpsTracking();
+    }
   }
 
   public deactivate(): void {
@@ -1278,6 +1321,31 @@ export class MatchViewController {
     );
     window.removeEventListener("keydown", this.boundOnKeyDown);
     window.removeEventListener("resize", this.boundOnResize);
+    this.stopFpsTracking();
+  }
+
+  private startFpsTracking(): void {
+    this.stopFpsTracking();
+    this.fpsFrameCount = 0;
+    this.lastFpsTimestamp = performance.now();
+    this.fpsDisplay.textContent = "0.0 FPS";
+    this.fpsIntervalId = window.setInterval(() => {
+      const now = performance.now();
+      const elapsed = now - this.lastFpsTimestamp;
+      if (elapsed > 0) {
+        const fps = (this.fpsFrameCount * 1000) / elapsed;
+        this.fpsDisplay.textContent = `${fps.toFixed(1)} FPS`;
+      }
+      this.fpsFrameCount = 0;
+      this.lastFpsTimestamp = now;
+    }, 500);
+  }
+
+  private stopFpsTracking(): void {
+    if (this.fpsIntervalId !== null) {
+      window.clearInterval(this.fpsIntervalId);
+      this.fpsIntervalId = null;
+    }
   }
 
   public setLeftSidebarCollapsed(collapsed: boolean): void {
@@ -1548,6 +1616,18 @@ export class MatchViewController {
       this.hudToggleBtn.textContent = tr.hudOverlay;
       this.hudToggleBtn.title = tr.hudOverlayTitle;
     }
+    if (this.fpsToggleBtn) {
+      this.fpsToggleBtn.textContent = tr.fpsToggle;
+      this.fpsToggleBtn.title = tr.fpsToggleTitle;
+    }
+    if (this.logFilterHeaderTitle) {
+      this.logFilterHeaderTitle.textContent = tr.logFiltersTitle;
+    }
+    if (this.logFilterCollapseBtn) {
+      this.logFilterCollapseBtn.title = tr.situationCollapseTitle(
+        tr.logFiltersTitle,
+      );
+    }
     if (this.qaOverlayExitBtn) {
       this.qaOverlayExitBtn.textContent = "✕ " + tr.hideQuickAttackOverlayBtn;
     }
@@ -1722,6 +1802,9 @@ export class MatchViewController {
     _frameIndex: number,
     snap: boolean,
   ): void {
+    if (this.fpsEnabled) {
+      this.fpsFrameCount++;
+    }
     this.lastFrame = frame;
     const targets: Array<{ x: number; y: number }> = [];
     if (this.stageRenderer.isQuickAttackOverlayActive()) {
@@ -2055,6 +2138,14 @@ export class MatchViewController {
       }
     }
 
+    if (ev.kind === "recovery-verdict" || ev.kind === "jumped-verdict") {
+      const prefix = ev.kind === "recovery-verdict" ? "Recovery" : "Jumped";
+      return {
+        text: `${ev.frame} — ${prefix}: ${ev.verdictText}`,
+        kind: "entered",
+      };
+    }
+
     const edgeEv = ev as EdgeGuardEvent;
     if (perspective === null) {
       switch (edgeEv.kind) {
@@ -2162,6 +2253,11 @@ export class MatchViewController {
   private renderLogFilterWidget(): void {
     const tr = t();
     this.logFilterHeaderTitle.textContent = tr.logFiltersTitle;
+    this.logFilterCollapseBtn.title = tr.situationCollapseTitle(
+      tr.logFiltersTitle,
+    );
+    this.hudToggleBtn.classList.toggle("active", this.hudOverlayEnabled);
+    this.fpsToggleBtn.classList.toggle("active", this.fpsEnabled);
     this.logFilterChips.innerHTML = "";
 
     const categories: Array<{
@@ -2264,6 +2360,11 @@ export class MatchViewController {
   }
 
   private updateEventLogHighlight(currentFrameIndex: number): void {
+    const LOG_DURATION_FRAMES = 300; // Messages disappear after 5 seconds (at 60 FPS)
+    const HIGHLIGHT_DURATION_FRAMES = 60; // 1 second incoming highlight fade
+    const EXIT_FADE_FRAMES = 60; // 1 second fade out before disappearing
+    const MAX_VISIBLE_LOGS = 10; // Up to 10 entries shown instead of 3
+
     let activeIdx = -1;
     for (let i = 0; i < this.currentLogEvents.length; i++) {
       const ev = this.currentLogEvents[i];
@@ -2281,24 +2382,68 @@ export class MatchViewController {
       !this.currentReplay
     ) {
       this.stageOverlay.hidden = true;
-    } else {
-      this.stageOverlay.hidden = false;
-      this.stageOverlayList.innerHTML = "";
-      const startIdx = Math.max(0, activeIdx - 2);
-      for (let i = startIdx; i <= activeIdx; i++) {
-        const ev = this.currentLogEvents[i];
-        if (!ev) continue;
-        const { text, kind } = this.eventLabel(
+      return;
+    }
+
+    // Collect all events that occurred in the last LOG_DURATION_FRAMES (5 seconds)
+    const activeEvents: Array<{
+      ev: MatchEvent;
+      isLatest: boolean;
+      ageFrames: number;
+    }> = [];
+
+    for (let i = 0; i <= activeIdx; i++) {
+      const ev = this.currentLogEvents[i];
+      if (!ev) continue;
+      const ageFrames = currentFrameIndex - ev.frameIndex;
+      if (ageFrames >= 0 && ageFrames <= LOG_DURATION_FRAMES) {
+        activeEvents.push({
           ev,
-          this.currentReplay,
-          this.perspectivePort,
-        );
-        const isLatest = i === activeIdx;
-        const entry = document.createElement("div");
-        entry.className = `overlay-entry kind-${kind}${isLatest ? " is-current" : ""}`;
-        entry.textContent = text;
-        this.stageOverlayList.appendChild(entry);
+          isLatest: i === activeIdx,
+          ageFrames,
+        });
       }
+    }
+
+    if (activeEvents.length === 0) {
+      this.stageOverlay.hidden = true;
+      return;
+    }
+
+    this.stageOverlay.hidden = false;
+    this.stageOverlayList.innerHTML = "";
+
+    const visibleEvents = activeEvents.slice(-MAX_VISIBLE_LOGS);
+
+    for (const item of visibleEvents) {
+      const { ev, isLatest, ageFrames } = item;
+      const { text, kind } = this.eventLabel(
+        ev,
+        this.currentReplay,
+        this.perspectivePort,
+      );
+
+      const highlightRatio = Math.max(
+        0,
+        1 - ageFrames / HIGHLIGHT_DURATION_FRAMES,
+      );
+      const isIncoming = highlightRatio > 0;
+
+      // Smoothly fade out during the last EXIT_FADE_FRAMES before 300 frames
+      const exitFadeRatio =
+        ageFrames > LOG_DURATION_FRAMES - EXIT_FADE_FRAMES
+          ? Math.max(0, (LOG_DURATION_FRAMES - ageFrames) / EXIT_FADE_FRAMES)
+          : 1;
+
+      const baseOpacity = 0.85 + 0.15 * highlightRatio;
+      const finalOpacity = baseOpacity * exitFadeRatio;
+
+      const entry = document.createElement("div");
+      entry.className = `overlay-entry kind-${kind}${isLatest ? " is-current" : ""}${isIncoming ? " is-incoming" : ""}`;
+      entry.style.setProperty("--highlight-ratio", highlightRatio.toFixed(3));
+      entry.style.opacity = finalOpacity.toFixed(3);
+      entry.textContent = text;
+      this.stageOverlayList.appendChild(entry);
     }
   }
 
@@ -4154,6 +4299,7 @@ export class MatchViewController {
     this.neutralHitEvents = neutralEvents;
     const puffEvents = computeJigglypuffFThrowEvents(replay);
     const shieldEvents = computeShieldPressureEvents(replay);
+    const recoveryVerdictEvents = computeRecoveryVerdictEvents(replay);
     this.matchEvents = [
       ...edgeEvents,
       ...ledgeEvents,
@@ -4161,6 +4307,7 @@ export class MatchViewController {
       ...neutralEvents,
       ...puffEvents,
       ...shieldEvents,
+      ...recoveryVerdictEvents,
     ].sort((a, b) =>
       a.frameIndex === b.frameIndex
         ? a.kind === "neutral-hit"
