@@ -1,5 +1,6 @@
 import { t } from "../i18n.js";
 import type { DerivedRates, RateDeltas } from "../data/aggregate.js";
+import { edgeGuardEffectivenessGrade } from "../classifiedSituations.js";
 
 export class StatCards {
   private container: HTMLElement;
@@ -26,9 +27,19 @@ export class StatCards {
       totalHits = 0,
       stocks = 0,
       customFraction?: string,
+      isGradeRate = false,
+      gradeAvg: number | null = null,
     ): string => {
-      const isLowN = isHitsRate ? stocks < 5 : total < 10 && total > 0;
-      const hasData = isHitsRate ? stocks > 0 : total > 0;
+      const isLowN = isHitsRate
+        ? stocks < 5
+        : isGradeRate
+          ? total < 10 && total > 0
+          : total < 10 && total > 0;
+      const hasData = isHitsRate
+        ? stocks > 0
+        : isGradeRate
+          ? gradeAvg !== null
+          : total > 0;
 
       let valueDisplay = "—";
       const fractionDisplay =
@@ -40,35 +51,43 @@ export class StatCards {
       if (isHitsRate) {
         valueDisplay =
           hitsValue !== null ? tr.hitsPerStockUnit(hitsValue.toFixed(1)) : "—";
+      } else if (isGradeRate) {
+        valueDisplay =
+          gradeAvg !== null ? edgeGuardEffectivenessGrade(gradeAvg) : "—";
       } else if (pct !== null) {
         valueDisplay = `${Math.round(pct)}%`;
       }
 
       const barWidth = isHitsRate
         ? Math.min(100, hitsValue !== null ? hitsValue * 15 : 0)
-        : pct !== null
-          ? Math.max(0, Math.min(100, Math.round(pct)))
-          : 0;
+        : isGradeRate
+          ? gradeAvg !== null
+            ? Math.max(0, Math.min(100, ((gradeAvg + 50) / 150) * 100))
+            : 0
+          : pct !== null
+            ? Math.max(0, Math.min(100, Math.round(pct)))
+            : 0;
 
       let deltaMarkup = "";
       if (showDeltas && delta !== null) {
         const sign = delta > 0 ? "▲" : delta < 0 ? "▼" : "";
         const absVal = Math.abs(delta);
-        const deltaClass = isHitsRate
-          ? delta < 0
-            ? "delta-pos" // Fewer hits to take a stock is better
+        const deltaClass =
+          isHitsRate
+            ? delta < 0
+              ? "delta-pos" // Fewer hits to take a stock is better
+              : delta > 0
+                ? "delta-neg"
+                : ""
             : delta > 0
-              ? "delta-neg"
-              : ""
-          : delta > 0
-            ? "delta-pos"
-            : delta < 0
-              ? "delta-neg"
-              : "";
+              ? "delta-pos"
+              : delta < 0
+                ? "delta-neg"
+                : "";
 
         deltaMarkup = `
           <span class="stat-card-delta ${deltaClass}">
-            ${sign}${absVal}${isHitsRate ? "" : "%"} ${escapeHtml(tr.vsAll(""))}
+            ${sign}${absVal}${isHitsRate || isGradeRate ? "" : "%"} ${escapeHtml(tr.vsAll(""))}
           </span>
         `;
       }
@@ -113,11 +132,18 @@ export class StatCards {
           deltas?.recoveryPctDelta ?? null,
         )}
         ${renderCard(
-          tr.edgeGuard,
-          rates.edgeGuardPct,
-          rates.edgeGuardSuccesses,
-          rates.edgeGuardTotal,
-          deltas?.edgeGuardPctDelta ?? null,
+          tr.edgeGuardEffectivenessLabel,
+          null,
+          0,
+          rates.edgeGuardEffectivenessCount,
+          deltas?.edgeGuardEffectivenessDelta ?? null,
+          false,
+          null,
+          0,
+          0,
+          tr.edgeGuardEffectivenessSummary(rates.edgeGuardEffectivenessCount),
+          true,
+          rates.edgeGuardEffectivenessAvg,
         )}
         ${renderCard(
           tr.ledgeGetup,

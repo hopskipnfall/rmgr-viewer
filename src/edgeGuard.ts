@@ -400,26 +400,29 @@ export interface EdgeGuardStats {
   /** Situations where this port was the one recovering. */
   recoverySituations: number;
   recoverySuccesses: number;
-  /** Situations where this port was edge-guarding. */
-  edgeGuardSituations: number;
-  /** Times this port successfully edge-guarded (opponent died). */
-  edgeGuardSuccesses: number;
 }
 
 /**
- * Derives per-port edge-guard/recovery statistics from a pre-computed event
- * list. O(n) but cheap — called on perspective changes, not every frame.
+ * Derives per-port recovery statistics from a pre-computed event list. O(n)
+ * but cheap — called on perspective changes, not every frame.
+ *
+ * (Edge-guard-side stats used to live here too, as a plain "opponent died"
+ * kill rate, but that metric was retired in favor of Edge Guard Effectiveness
+ * -- see edgeGuardEffectivenessScore in classifiedSituations.ts, which scores
+ * every in-scope situation directly off the classifier's own category and
+ * already excludes "hopeless" situations on its own terms, so no separate
+ * exclusion set is needed for it.)
  *
  * `excludeEnteredFrameIndices` drops entire situations (both from the
  * denominator and the numerator) by their `situation-entered` frameIndex —
  * used to exclude situations the recovery classifier confirmed were
  * "dead" (unsurvivable by any simulated strategy) at entry, per
  * docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
- * Deliberately does NOT exclude "reaches-stage" (free) verdicts here: that
- * verdict only proves one input sequence works, not that the situation was
- * trivial or unaffected by matchup-specific edge-guard pressure, so it isn't
- * confident enough to reshape the primary stat -- see the spec's discussion
- * with the user on this. Situations with no classifier opinion (wrong stage,
+ * Deliberately does NOT exclude "reaches-stage" verdicts here: that verdict
+ * only proves one input sequence works, not that the situation was trivial
+ * or unaffected by matchup-specific edge-guard pressure -- confirmed against
+ * real data (2026-09-11): in one 30-game sample, 20.7% of "reaches-stage"
+ * situations still ended in a real kill. Situations with no classifier opinion (wrong stage,
  * unsupported character, etc.) are never excluded, matching prior behavior.
  * Relies on situations never overlapping (edgeGuard.ts only ever has one
  * open at a time), so the most recently seen "situation-entered" frameIndex
@@ -432,8 +435,6 @@ export function computeEdgeGuardStats(
 ): EdgeGuardStats {
   let recoverySituations = 0;
   let recoverySuccesses = 0;
-  let edgeGuardSituations = 0;
-  let edgeGuardSuccesses = 0;
   let currentEnteredFrameIndex: number | null = null;
 
   for (const ev of events) {
@@ -441,7 +442,6 @@ export function computeEdgeGuardStats(
       currentEnteredFrameIndex = ev.frameIndex;
       if (excludeEnteredFrameIndices?.has(ev.frameIndex)) continue;
       if (ev.recoveringPort === port) recoverySituations++;
-      else edgeGuardSituations++;
     } else if (ev.kind === "recovery-success") {
       if (
         currentEnteredFrameIndex !== null &&
@@ -449,21 +449,12 @@ export function computeEdgeGuardStats(
       )
         continue;
       if (ev.recoveringPort === port) recoverySuccesses++;
-    } else if (ev.kind === "recovery-failure") {
-      if (
-        currentEnteredFrameIndex !== null &&
-        excludeEnteredFrameIndices?.has(currentEnteredFrameIndex)
-      )
-        continue;
-      if (ev.edgeGuardingPort === port) edgeGuardSuccesses++;
     }
   }
 
   return {
     recoverySituations,
     recoverySuccesses,
-    edgeGuardSituations,
-    edgeGuardSuccesses,
   };
 }
 

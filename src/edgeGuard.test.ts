@@ -352,10 +352,6 @@ describe("computeEdgeGuardStats", () => {
     const stats = computeEdgeGuardStats(events, PORT_RECOVERING);
     expect(stats.recoverySituations).toBe(2);
     expect(stats.recoverySuccesses).toBe(1);
-
-    const guardStats = computeEdgeGuardStats(events, PORT_GUARDING);
-    expect(guardStats.edgeGuardSituations).toBe(2);
-    expect(guardStats.edgeGuardSuccesses).toBe(1);
   });
 
   it("drops an excluded situation from both the numerator and denominator, not just the numerator", () => {
@@ -366,12 +362,6 @@ describe("computeEdgeGuardStats", () => {
     const stats = computeEdgeGuardStats(events, PORT_RECOVERING, excluded);
     expect(stats.recoverySituations).toBe(1);
     expect(stats.recoverySuccesses).toBe(0);
-
-    // The remaining (non-excluded) situation is the one that resolved as recovery-failure, i.e.
-    // an edge-guard success -- that must still be counted.
-    const guardStats = computeEdgeGuardStats(events, PORT_GUARDING, excluded);
-    expect(guardStats.edgeGuardSituations).toBe(1);
-    expect(guardStats.edgeGuardSuccesses).toBe(1);
   });
 
   it("excluding the second situation doesn't affect the first", () => {
@@ -380,9 +370,5 @@ describe("computeEdgeGuardStats", () => {
     const stats = computeEdgeGuardStats(events, PORT_RECOVERING, excluded);
     expect(stats.recoverySituations).toBe(1);
     expect(stats.recoverySuccesses).toBe(1);
-
-    const guardStats = computeEdgeGuardStats(events, PORT_GUARDING, excluded);
-    expect(guardStats.edgeGuardSituations).toBe(1);
-    expect(guardStats.edgeGuardSuccesses).toBe(0);
   });
 });

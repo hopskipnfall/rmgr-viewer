@@ -8,8 +8,8 @@ function makeSummary(id: string, yourChar: number): GameSummary {
   const counters: RawCounters = {
     recoverySituations: 0,
     recoverySuccesses: 0,
-    edgeGuardSituations: 0,
-    edgeGuardSuccesses: 0,
+    edgeGuardEffectivenessSum: 0,
+    edgeGuardEffectivenessCount: 0,
     ledgeGetupSituations: 0,
     ledgeGetupSuccesses: 0,
     ledgeTrapSituations: 0,

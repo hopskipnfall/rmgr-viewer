@@ -236,6 +236,7 @@ export interface Translations {
   recoveryDeltaLabel: string;
   edgeGuardDeltaLabel: string;
   deltaVsBaseline: (baselinePct: number) => string;
+  deltaVsEffectivenessBaseline: (baselineAvg: number) => string;
   deltaNoData: string;
   neutralScoreNoData: string;
   neutralFingerprintTitle: string;
@@ -300,24 +301,23 @@ export interface Translations {
   ledgeHogOpportunitiesMissedSummary: (missed: number) => string;
   situationBreakdown: (
     hopeless: number,
-    free: number,
     contestable: number,
     unclassified: number,
   ) => string;
   situationCategoryLabel: (
-    category: "hopeless" | "free" | "contestable" | "unclassified",
+    category: "hopeless" | "contestable" | "unclassified",
   ) => string;
   situationMissedLedgeHogBadge: string;
   situationMissedLedgeHogTitle: string;
   situationAccidentalSaveBadge: string;
   situationAccidentalSaveTitle: string;
-  edgeGuardEffectivenessScoreBadge: (score: number, detail: string) => string;
-  edgeGuardEffectivenessScoreTitle: string;
+  edgeGuardEffectivenessScorePointsTitle: (score: number) => string;
   edgeGuardEffectivenessDetailKO: string;
   edgeGuardEffectivenessDetailMissedLedgeHog: string;
   edgeGuardEffectivenessDetailAccidentalSave: string;
   edgeGuardEffectivenessDetailDamage: (pct: number) => string;
-  edgeGuardEffectivenessDetailNoDamage: string;
+  edgeGuardEffectivenessDetailReset: string;
+  edgeGuardEffectivenessDetailWithHitTaken: (base: string) => string;
 
   // Neutral Openings widget
   neutralHitsWidgetTitle: string;
@@ -338,6 +338,7 @@ export interface Translations {
   neutralReasonUnknown: string;
   neutralReasonReversal: string;
   neutralHitsBadge: (count: number) => string;
+  neutralResultBadge: (pct: number) => string;
   neutralConversionEdgeGuard: string;
   neutralConversionLedgeTrap: string;
   neutralConversionKO: string;
@@ -734,6 +735,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     recoveryDeltaLabel: "Recovery Δ",
     edgeGuardDeltaLabel: "Edge Guard Δ",
     deltaVsBaseline: (baseline) => `vs ${Math.round(baseline)}% baseline`,
+    deltaVsEffectivenessBaseline: (baseline) =>
+      `vs ${Math.round(baseline)} avg baseline`,
     deltaNoData: "Not enough data",
     neutralScoreNoData: "Not enough data yet",
     neutralFingerprintTitle: "Neutral Fingerprint",
@@ -795,14 +798,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     ledgeHogOpportunitiesLabel: "Ledge-hog opportunities",
     ledgeHogOpportunitiesMissedSummary: (missed) =>
       `${missed} confirmed missed -- recovering player escaped via the open ledge`,
-    situationBreakdown: (hopeless, free, contestable, unclassified) =>
-      `Hopeless: ${hopeless} · Free: ${free} · Contestable: ${contestable} · Unclassified: ${unclassified}`,
+    situationBreakdown: (hopeless, contestable, unclassified) =>
+      `Hopeless: ${hopeless} · Contestable: ${contestable} · Unclassified: ${unclassified}`,
     situationCategoryLabel: (category) => {
       switch (category) {
         case "hopeless":
           return "hopeless";
-        case "free":
-          return "free";
         case "contestable":
           return "contestable";
         case "unclassified":
@@ -815,15 +816,14 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationAccidentalSaveBadge: "⚠ accidental save?",
     situationAccidentalSaveTitle:
       "This should have been unsurvivable, but the recovering player survived after taking a hit from the edge-guarder -- worth checking whether that hit is what saved them.",
-    edgeGuardEffectivenessScoreBadge: (score, detail) =>
-      `${score > 0 ? "+" : ""}${score} (${detail})`,
-    edgeGuardEffectivenessScoreTitle:
-      "Edge Guard Effectiveness score for this situation: kill=100, damage dealt without a kill scores 20/45/70 by amount, no damage=0, missed ledge-hog=-10, possible accidental save=-50.",
+    edgeGuardEffectivenessScorePointsTitle: (score) =>
+      `Edge Guard Effectiveness: ${score > 0 ? "+" : ""}${score} points`,
     edgeGuardEffectivenessDetailKO: "KO",
     edgeGuardEffectivenessDetailMissedLedgeHog: "missed ledge hog",
     edgeGuardEffectivenessDetailAccidentalSave: "accidental save",
     edgeGuardEffectivenessDetailDamage: (pct) => `${pct}% dealt`,
-    edgeGuardEffectivenessDetailNoDamage: "no damage",
+    edgeGuardEffectivenessDetailReset: "Reset",
+    edgeGuardEffectivenessDetailWithHitTaken: (base) => `${base}, got hit`,
 
     neutralHitsWidgetTitle: "Neutral Analysis",
     neutralFilterAll: (count) => `All (${count})`,
@@ -843,6 +843,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralReasonUnknown: "Neutral Hit",
     neutralReasonReversal: "Reversal",
     neutralHitsBadge: (count) => `${count} ${count === 1 ? "hit" : "hits"}`,
+    neutralResultBadge: (pct) => `Result: ${pct}%`,
     neutralConversionEdgeGuard: "Edge Guard",
     neutralConversionLedgeTrap: "Ledge Trap",
     neutralConversionKO: "KO",
@@ -1236,6 +1237,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     recoveryDeltaLabel: "復帰 Δ",
     edgeGuardDeltaLabel: "復帰阻止 Δ",
     deltaVsBaseline: (baseline) => `基準値 ${Math.round(baseline)}% との差`,
+    deltaVsEffectivenessBaseline: (baseline) =>
+      `基準値 ${Math.round(baseline)} との差`,
     deltaNoData: "データ不足",
     neutralScoreNoData: "まだデータが十分ではありません",
     neutralFingerprintTitle: "ニュートラル傾向",
@@ -1294,14 +1297,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     ledgeHogOpportunitiesLabel: "崖離し放置の機会",
     ledgeHogOpportunitiesMissedSummary: (missed) =>
       `確定で見逃し: ${missed}件 -- 復帰側が空いた崖を掴んで生還`,
-    situationBreakdown: (hopeless, free, contestable, unclassified) =>
-      `絶望的: ${hopeless} · 安全: ${free} · 拮抗: ${contestable} · 未分類: ${unclassified}`,
+    situationBreakdown: (hopeless, contestable, unclassified) =>
+      `絶望的: ${hopeless} · 拮抗: ${contestable} · 未分類: ${unclassified}`,
     situationCategoryLabel: (category) => {
       switch (category) {
         case "hopeless":
           return "絶望的";
-        case "free":
-          return "安全";
         case "contestable":
           return "拮抗";
         case "unclassified":
@@ -1314,15 +1315,14 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationAccidentalSaveBadge: "⚠ 偶然の救済?",
     situationAccidentalSaveTitle:
       "本来復帰不可能なはずの状況だったが、復帰阻止側の攻撃を受けた後に復帰側が生還した。その攻撃が結果的に救済した可能性がある。",
-    edgeGuardEffectivenessScoreBadge: (score, detail) =>
-      `${score > 0 ? "+" : ""}${score} (${detail})`,
-    edgeGuardEffectivenessScoreTitle:
-      "この状況の復帰阻止有効度スコア: 撃墜=100、撃墜なしでダメージを与えた場合は量に応じて20/45/70、ダメージなし=0、崖離し放置=-10、偶然の救済の可能性=-50。",
+    edgeGuardEffectivenessScorePointsTitle: (score) =>
+      `復帰阻止有効度: ${score > 0 ? "+" : ""}${score}点`,
     edgeGuardEffectivenessDetailKO: "撃墜",
     edgeGuardEffectivenessDetailMissedLedgeHog: "崖離し放置",
     edgeGuardEffectivenessDetailAccidentalSave: "偶然の救済",
     edgeGuardEffectivenessDetailDamage: (pct) => `${pct}%与えた`,
-    edgeGuardEffectivenessDetailNoDamage: "ダメージなし",
+    edgeGuardEffectivenessDetailReset: "仕切り直し",
+    edgeGuardEffectivenessDetailWithHitTaken: (base) => `${base}、被弾`,
 
     neutralHitsWidgetTitle: "立ち回り分析",
     neutralFilterAll: (count) => `すべて (${count})`,
@@ -1342,6 +1342,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralReasonUnknown: "立ち回りヒット",
     neutralReasonReversal: "反撃",
     neutralHitsBadge: (count) => `${count}ヒット`,
+    neutralResultBadge: (pct) => `結果: ${pct}%`,
     neutralConversionEdgeGuard: "復帰阻止",
     neutralConversionLedgeTrap: "崖狩り",
     neutralConversionKO: "撃墜",

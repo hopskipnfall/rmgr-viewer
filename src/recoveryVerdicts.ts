@@ -1,7 +1,11 @@
 /**
- * Realtime "what does the recovery classifier say right now" event log +
- * live stage overlay. Quick/throwaway by design (may be deleted later) --
- * no i18n, hardcoded English text.
+ * Realtime "what does the recovery classifier say right now" live stage overlay (ledge highlight /
+ * skull), computed via computeRecoveryVerdictSpans/computeRecoveryVerdictFrames. The original
+ * text-log half of this module (computeRecoveryVerdictEvents, "Recovery: reaches stage" / "Jumped:
+ * reaches stage") was retired 2026-09-11, superseded by classifiedSituations.ts's
+ * missed-ledge-hog/possible-accidental-save events and the Recovery/Edge Guard situation panels --
+ * per the user, that debug log was no longer needed. computeRecoveryVerdictSpans itself remains
+ * very much load-bearing: classifiedSituations.ts is built directly on it.
  */
 import type { PortIndex, Replay, StateFrame } from "@rmg-k/rmgr";
 import { getSeatedPorts } from "@rmg-k/rmgr";
@@ -23,14 +27,6 @@ import {
 } from "./recoveryHeuristics.js";
 
 export type RecoveryVerdictEventKind = "recovery-verdict" | "jumped-verdict";
-
-export interface RecoveryVerdictEvent {
-  readonly frame: number;
-  readonly frameIndex: number;
-  readonly kind: RecoveryVerdictEventKind;
-  readonly port: PortIndex;
-  readonly verdictText: string;
-}
 
 export interface RecoveryVerdictFrame {
   readonly port: PortIndex;
@@ -54,21 +50,6 @@ function classifyState(state: StateFrame): RecoveryVerdict | null {
     state.actionStateId,
     state.facingDirection,
   );
-}
-
-/** Display wording for the log messages -- kept exactly as originally specified ("reaches
- * stage"/"reaches ledge"/"dead"), independent of the RecoveryVerdict enum's own naming. */
-function verdictDisplayText(verdict: RecoveryVerdict): string {
-  switch (verdict) {
-    case "reaches-stage":
-      return "reaches stage";
-    case "dead-if-ledge-occupied":
-      return "reaches ledge";
-    case "dead":
-      return "dead";
-    case "not-implemented":
-      return "not implemented";
-  }
 }
 
 function isFreshDoubleJump(state: StateFrame): boolean {
@@ -271,7 +252,21 @@ function computeRecoveryVerdictSpansUncached(replay: Replay): VerdictSpan[] {
           state.actionStateId,
           state.hitstunCounter,
         );
-        if (wasInHitstun && !isInHitstun) {
+        // Third trigger, alongside hitstun-exit and fresh-double-jump below: the frame a
+        // situation actually opens (mirrors edgeGuard.ts's own "outside the zone AND actionable"
+        // condition), for a player who drifts outside the zone under residual momentum from a
+        // jump/hit that happened earlier -- without this, a situation could open with NEITHER of
+        // the other two triggers ever firing while still outside (the jump/hit that put them
+        // there happened before crossing the boundary), leaving entryVerdict permanently null and
+        // the situation shown as "unclassified" even for a fully-supported character. Found via a
+        // real user report: a Captain Falcon situation showing "unclassified" despite Falcon
+        // being supported -- classify() itself returned a real answer when called directly at
+        // that exact frame, it just never got invoked. Gated on `!wasInHitstun` so it never
+        // double-fires alongside the hitstun-exit trigger on the same frame.
+        const justCrossedOutsideWhileActionable =
+          !wasInHitstun &&
+          !isOutsideZone(prevState.positionX, prevState.positionY);
+        if (!isInHitstun && (wasInHitstun || justCrossedOutsideWhileActionable)) {
           const found = findFirstVerdictFrame(replay, port, i, true);
           if (found !== null) {
             const verdictState =
@@ -343,21 +338,6 @@ function computeRecoveryVerdictSpansUncached(replay: Replay): VerdictSpan[] {
   }
 
   return spans.sort((a, b) => a.verdictFrameIndex - b.verdictFrameIndex);
-}
-
-/** "Recovery: ..." triggered by a character leaving hitstun while outside the danger zone, and
- * "Jumped: ..." triggered by their double-jump while outside the zone. See
- * computeRecoveryVerdictSpans for the shared computation this is derived from. */
-export function computeRecoveryVerdictEvents(
-  replay: Replay,
-): RecoveryVerdictEvent[] {
-  return computeRecoveryVerdictSpans(replay).map((span) => ({
-    frame: replay.frames[span.verdictFrameIndex]!.frame,
-    frameIndex: span.verdictFrameIndex,
-    kind: span.kind,
-    port: span.port,
-    verdictText: verdictDisplayText(span.verdict),
-  }));
 }
 
 /**

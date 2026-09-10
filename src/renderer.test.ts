@@ -271,13 +271,13 @@ describe("isPikachuCharacter", () => {
 });
 
 describe("getPikachuSpecialType", () => {
-  it("classifies Thunder (Down-B) correctly", () => {
-    expect(getPikachuSpecialType(0x09, 0x0e3)).toBe("thunder");
-    expect(getPikachuSpecialType(0x09, 0x0e4)).toBe("thunder");
-    expect(getPikachuSpecialType(0x09, 0x0e5)).toBe("thunder");
-    expect(getPikachuSpecialType(0x09, 0x0e6)).toBe("thunder");
-    expect(getPikachuSpecialType(0x09, 0x0e7)).toBe("thunder");
-    expect(getPikachuSpecialType(0x32, 0x0e3)).toBe("thunder");
+  it("returns null for Thunder (Down-B) states as they are handled by real weapon markers", () => {
+    expect(getPikachuSpecialType(0x09, 0x0e3)).toBeNull();
+    expect(getPikachuSpecialType(0x09, 0x0e4)).toBeNull();
+    expect(getPikachuSpecialType(0x09, 0x0e5)).toBeNull();
+    expect(getPikachuSpecialType(0x09, 0x0e6)).toBeNull();
+    expect(getPikachuSpecialType(0x09, 0x0e7)).toBeNull();
+    expect(getPikachuSpecialType(0x32, 0x0e3)).toBeNull();
   });
 
   it("classifies Quick Attack (Up-B) correctly", () => {
@@ -1014,10 +1014,10 @@ describe("getFalconSpecialType", () => {
 });
 
 describe("getPikachuSpecialType", () => {
-  it("identifies Thunder (Down-B) states", () => {
-    expect(getPikachuSpecialType(0x09, 0x0e3)).toBe("thunder");
-    expect(getPikachuSpecialType(0x09, 0x0e5)).toBe("thunder");
-    expect(getPikachuSpecialType(0x32, 0x0e7)).toBe("thunder");
+  it("returns null for Thunder (Down-B) states as they are handled by real weapon markers", () => {
+    expect(getPikachuSpecialType(0x09, 0x0e3)).toBeNull();
+    expect(getPikachuSpecialType(0x09, 0x0e5)).toBeNull();
+    expect(getPikachuSpecialType(0x32, 0x0e7)).toBeNull();
   });
 
   it("identifies Quick Attack (Up-B) zip states", () => {

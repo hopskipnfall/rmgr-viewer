@@ -59,15 +59,12 @@ import {
   type LedgeTrapEvent,
 } from "../ledgeTrap.js";
 import {
-  computeRecoveryVerdictEvents,
-  type RecoveryVerdictEvent,
-} from "../recoveryVerdicts.js";
-import {
   computeClassifiedSituations,
   computeClassifiedSituationEvents,
   hopelessEnteredFrameIndices,
   averageEdgeGuardEffectiveness,
   edgeGuardEffectivenessScore,
+  edgeGuardEffectivenessGrade,
   type ClassifiedSituation,
   type ClassifiedSituationEvent,
   type SituationCategory,
@@ -122,7 +119,6 @@ export type MatchEvent =
   | AngelInvincibilityEvent
   | JigglypuffFThrowEvent
   | ShieldPressureEvent
-  | RecoveryVerdictEvent
   | ClassifiedSituationEvent;
 
 interface PlayerPanel {
@@ -2149,14 +2145,6 @@ export class MatchViewController {
       }
     }
 
-    if (ev.kind === "recovery-verdict" || ev.kind === "jumped-verdict") {
-      const prefix = ev.kind === "recovery-verdict" ? "Recovery" : "Jumped";
-      return {
-        text: `${ev.frame} — ${prefix}: ${ev.verdictText}`,
-        kind: "entered",
-      };
-    }
-
     if (
       ev.kind === "missed-ledge-hog" ||
       ev.kind === "possible-accidental-save"
@@ -2673,7 +2661,7 @@ export class MatchViewController {
     }
 
     // Situations the recovery classifier confirmed were unsurvivable at entry are excluded from
-    // Recovery%/EdgeGuard% entirely -- see edgeGuard.ts's computeEdgeGuardStats doc comment and
+    // Recovery% entirely -- see edgeGuard.ts's computeEdgeGuardStats doc comment and
     // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
     const classifiedSituations = computeClassifiedSituations(replay);
     const stats = computeEdgeGuardStats(
@@ -2792,14 +2780,6 @@ export class MatchViewController {
       "pct-success",
       this.matchupBaseline?.recoveryPct,
     );
-    addRow(
-      tr.edgeGuard,
-      stats.edgeGuardSuccesses,
-      stats.edgeGuardSituations,
-      "pct-success",
-      this.matchupBaseline?.edgeGuardPct,
-    );
-
     // Classifier-aware breakdown (see
     // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md, phase 2). The rows
     // above already exclude "hopeless" situations entirely (see computeEdgeGuardStats' doc
@@ -2818,21 +2798,23 @@ export class MatchViewController {
       const breakdownText = (situations: ClassifiedSituation[]): string => {
         const counts: Record<SituationCategory, number> = {
           hopeless: 0,
-          free: 0,
           contestable: 0,
           unclassified: 0,
         };
         for (const s of situations) counts[s.category]++;
         return tr.situationBreakdown(
           counts.hopeless,
-          counts.free,
           counts.contestable,
           counts.unclassified,
         );
       };
 
+      // Kept narrow to entryVerdict === "dead-if-ledge-occupied" specifically, NOT the broader
+      // "contestable" category -- this sub-stat's whole point is the true ledge-hinges-the-outcome
+      // 50/50, and diluting it with the "reaches-stage" situations now folded into "contestable"
+      // would make it meaningless (see classifiedSituations.ts's top doc comment).
       const recoveringContestable = recovering.filter(
-        (s) => s.category === "contestable",
+        (s) => s.entryVerdict === "dead-if-ledge-occupied",
       );
       if (recoveringContestable.length > 0) {
         addRow(
@@ -2847,8 +2829,10 @@ export class MatchViewController {
         );
       }
 
+      // Same narrowing as recoveringContestable above -- "Ledge-hog opportunities" only makes
+      // sense for the situations where holding the ledge is literally the deciding factor.
       const guardingContestable = guarding.filter(
-        (s) => s.category === "contestable",
+        (s) => s.entryVerdict === "dead-if-ledge-occupied",
       );
 
       // Edge Guard Effectiveness: replaces the old binary "contestable only" kill-rate row with
@@ -2861,7 +2845,12 @@ export class MatchViewController {
         classified,
         this.perspectivePort,
       );
-      if (effectiveness !== null) {
+      // Always shown whenever this port had any edge-guard situations at all, even when none of
+      // them were in scope for scoring ("—") -- per the user (2026-09-11): "the match stats panel
+      // doesn't have edge guard effectiveness," reported against a match where scoreable
+      // (contestable/anomalous) situations happened to be zero. Hiding the row entirely in that
+      // case reads as broken rather than "nothing scoreable happened."
+      if (guarding.length > 0) {
         const scoredCount = guarding.filter(
           (s) => edgeGuardEffectivenessScore(s) !== null,
         ).length;
@@ -2873,8 +2862,16 @@ export class MatchViewController {
         const val = document.createElement("div");
         val.className = "stat-row-value";
         const valSpan = document.createElement("span");
-        valSpan.className = `stat-pct ${effectiveness < 0 ? "pct-failure" : "pct-success"}`;
-        valSpan.textContent = Math.round(effectiveness).toString();
+        if (effectiveness !== null) {
+          valSpan.className = `stat-pct ${effectiveness < 0 ? "pct-failure" : "pct-success"}`;
+          valSpan.textContent = edgeGuardEffectivenessGrade(effectiveness);
+          valSpan.title = tr.edgeGuardEffectivenessScorePointsTitle(
+            Math.round(effectiveness),
+          );
+        } else {
+          valSpan.className = "stat-pct";
+          valSpan.textContent = "—";
+        }
         val.appendChild(valSpan);
         val.append(`  ${tr.edgeGuardEffectivenessSummary(scoredCount)}`);
         row.appendChild(lbl);
@@ -3073,7 +3070,7 @@ export class MatchViewController {
       possibleAccidentalSave?: boolean;
       /** Edge Guard Effectiveness score for this situation (see classifiedSituations.ts) --
        * undefined if the situation isn't classified, null if classified but out of scope for
-       * scoring ("free"/"unclassified", or a hopeless situation that resolved normally). Shown
+       * scoring ("unclassified", or a hopeless situation that resolved normally). Shown
        * per the user (2026-09-11): "we need to update that edge guards panel to show the
        * classification of how successful the edge guard was, not just a checkmark." */
       effectivenessScore?: number | null;
@@ -3083,6 +3080,11 @@ export class MatchViewController {
        * doesn't list the scoring result (KO, how much damage, etc.) ... so i can't independently
        * verify this." */
       damageDealtByGuarder?: number;
+      /** Was the edge-guarder hit by the recovering player during the situation window? Feeds a
+       * flat -25 modifier in edgeGuardEffectivenessScore, applied on top of whatever the base
+       * tier is -- per the user (2026-09-11): "if the player is hit with an attack by the
+       * recovering character before they grab ledge or land on stage, that's a -25." */
+      edgeGuarderWasHit?: boolean;
     }
 
     // Keyed by enteredFrameIndex, which is unique per situation across a match (edgeGuard.ts only
@@ -3114,6 +3116,7 @@ export class MatchViewController {
             ? edgeGuardEffectivenessScore(classified)
             : undefined,
           damageDealtByGuarder: classified?.damageDealtByGuarder,
+          edgeGuarderWasHit: classified?.edgeGuarderWasHit,
         };
       } else if (
         ev.kind === "recovery-success" ||
@@ -3208,6 +3211,7 @@ export class MatchViewController {
         possibleAccidentalSave?: boolean;
         effectivenessScore?: number | null;
         damageDealtByGuarder?: number;
+        edgeGuarderWasHit?: boolean;
       }>,
       isSuccessOutcome: (outcome: "success" | "failure") => boolean,
       showEffectivenessScore = false,
@@ -3250,60 +3254,69 @@ export class MatchViewController {
           row.appendChild(bracketEl);
         }
 
-        // "free" is deliberately never shown as a per-situation badge -- per the user
-        // (2026-09-11, twice): it doesn't correlate with how hard a recovery actually is (higher
-        // up generally means more options/mixups regardless of verdict; low can be all-but-certain
-        // death even when classified "free"), so displaying it next to a specific situation
-        // implies a confidence about difficulty the classifier was never claiming. "hopeless" and
-        // "contestable" stay -- those ARE trusted claims (see edgeGuardEffectivenessScore's own
-        // scoping, which already excludes "free" from anything score-affecting).
-        if (sit.category && sit.category !== "free") {
+        // "contestable" is deliberately never shown as a per-situation badge -- per the user
+        // (2026-09-11): "let's also remove 'contestable' from the recovery and edge guard panels,
+        // it's just noise." Now that "reaches-stage" and "dead-if-ledge-occupied" (and
+        // "unclassified", scored as if it were "reaches-stage") are all merged/treated as
+        // "contestable", it's the label on the overwhelming majority of rows and stopped meaning
+        // anything specific. "hopeless" stays -- that one IS still a distinct, trusted claim.
+        if (sit.category && sit.category !== "contestable") {
           const categoryEl = document.createElement("span");
           categoryEl.className = `situation-bracket category-${sit.category}`;
           categoryEl.textContent = tr.situationCategoryLabel(sit.category);
           row.appendChild(categoryEl);
         }
 
-        if (showEffectivenessScore && sit.effectivenessScore !== undefined) {
-          if (sit.effectivenessScore !== null) {
-            const scoreEl = document.createElement("span");
-            const score = sit.effectivenessScore;
-            // The raw fact behind the number, shown inline (not just in a hover title) so the
-            // score can be independently checked, not trusted as a black box -- per the user
-            // (2026-09-11): "the edge guards panel doesn't list the scoring result (KO, how much
-            // damage, etc.) ... so i can't independently verify this."
-            let detail: string;
-            if (sit.missedLedgeHogOpportunity) {
-              detail = tr.edgeGuardEffectivenessDetailMissedLedgeHog;
-            } else if (sit.possibleAccidentalSave) {
-              detail = tr.edgeGuardEffectivenessDetailAccidentalSave;
-            } else if (sit.outcome === "failure") {
-              detail = tr.edgeGuardEffectivenessDetailKO;
-            } else if ((sit.damageDealtByGuarder ?? 0) > 0) {
-              detail = tr.edgeGuardEffectivenessDetailDamage(
-                Math.round(sit.damageDealtByGuarder!),
-              );
-            } else {
-              detail = tr.edgeGuardEffectivenessDetailNoDamage;
-            }
-            scoreEl.className = `situation-bracket ${score < 0 ? "bracket-over100" : score >= 70 ? "bracket-under100" : ""}`;
-            scoreEl.textContent = tr.edgeGuardEffectivenessScoreBadge(
-              score,
-              detail,
+        // The outcome label IS the result for Edge Guard rows now -- per the user (2026-09-11): "we
+        // should remove the checkmark and replace it with a 'KO' label or '<16%' etc," reaffirmed
+        // (2026-09-11, later): "the 'edge guard' panel still is just showing a check or x ... I
+        // told you to replace that with something related to the scoring (e.g. KO, reset, damage
+        // >=65%)". This must show for EVERY resolved situation, not just ones that count toward
+        // the Effectiveness average -- damageDealtByGuarder/outcome describe what actually
+        // happened regardless of whether the classifier trusted the situation enough to score it
+        // (a hopeless situation that resolved normally, or one the classifier had no opinion on at
+        // all, still has a real, displayable outcome). Only genuinely open (unresolved) situations
+        // fall back to the plain "..." badge below, since there's nothing to describe yet.
+        let scoreLabelShown = false;
+        if (showEffectivenessScore && sit.outcome !== "open") {
+          const scoreEl = document.createElement("span");
+          const score = sit.effectivenessScore;
+          let detail: string;
+          if (sit.missedLedgeHogOpportunity) {
+            detail = tr.edgeGuardEffectivenessDetailMissedLedgeHog;
+          } else if (sit.possibleAccidentalSave) {
+            detail = tr.edgeGuardEffectivenessDetailAccidentalSave;
+          } else if (sit.outcome === "failure") {
+            detail = tr.edgeGuardEffectivenessDetailKO;
+          } else if ((sit.damageDealtByGuarder ?? 0) > 0) {
+            detail = tr.edgeGuardEffectivenessDetailDamage(
+              Math.round(sit.damageDealtByGuarder!),
             );
-            scoreEl.title = tr.edgeGuardEffectivenessScoreTitle;
-            row.appendChild(scoreEl);
+          } else {
+            detail = tr.edgeGuardEffectivenessDetailReset;
           }
+          if (sit.edgeGuarderWasHit) {
+            detail = tr.edgeGuardEffectivenessDetailWithHitTaken(detail);
+          }
+          scoreEl.className = `situation-bracket ${score !== undefined && score !== null ? (score < 0 ? "bracket-over100" : score >= 70 ? "bracket-under100" : "") : ""}`;
+          scoreEl.textContent = detail;
+          if (score !== undefined && score !== null) {
+            scoreEl.title = tr.edgeGuardEffectivenessScorePointsTitle(score);
+          }
+          row.appendChild(scoreEl);
+          scoreLabelShown = true;
         }
 
-        if (sit.missedLedgeHogOpportunity) {
+        // Recovery list only, or an Edge Guard situation with no tier label shown above -- Edge
+        // Guard rows with a tier label already say this via that label.
+        if (!scoreLabelShown && sit.missedLedgeHogOpportunity) {
           const flagEl = document.createElement("span");
           flagEl.className = "situation-bracket category-flag";
           flagEl.textContent = tr.situationMissedLedgeHogBadge;
           flagEl.title = tr.situationMissedLedgeHogTitle;
           row.appendChild(flagEl);
         }
-        if (sit.possibleAccidentalSave) {
+        if (!scoreLabelShown && sit.possibleAccidentalSave) {
           const flagEl = document.createElement("span");
           flagEl.className = "situation-bracket category-flag";
           flagEl.textContent = tr.situationAccidentalSaveBadge;
@@ -3311,18 +3324,20 @@ export class MatchViewController {
           row.appendChild(flagEl);
         }
 
-        const badgeEl = document.createElement("span");
-        if (isSuccess === true) {
-          badgeEl.className = "situation-badge success";
-          badgeEl.textContent = tr.situationSuccessBadge;
-        } else if (isSuccess === false) {
-          badgeEl.className = "situation-badge failure";
-          badgeEl.textContent = tr.situationFailureBadge;
-        } else {
-          badgeEl.className = "situation-badge open";
-          badgeEl.textContent = tr.situationOpenBadge;
+        if (!scoreLabelShown) {
+          const badgeEl = document.createElement("span");
+          if (isSuccess === true) {
+            badgeEl.className = "situation-badge success";
+            badgeEl.textContent = tr.situationSuccessBadge;
+          } else if (isSuccess === false) {
+            badgeEl.className = "situation-badge failure";
+            badgeEl.textContent = tr.situationFailureBadge;
+          } else {
+            badgeEl.className = "situation-badge open";
+            badgeEl.textContent = tr.situationOpenBadge;
+          }
+          row.appendChild(badgeEl);
         }
-        row.appendChild(badgeEl);
 
         row.addEventListener("click", () => {
           this.dismissQuickAttackOverlay();
@@ -3376,6 +3391,10 @@ export class MatchViewController {
       row.dataset.frameIndex = String(e.frameIndex);
       row.dataset.endFrameIndex = String(e.endFrameIndex ?? e.frameIndex + 60);
 
+      // Top line: time column + chips, side by side. A separate result line (below) can follow.
+      const topLine = document.createElement("div");
+      topLine.className = "neutral-interaction-top";
+
       // Left column: Elapsed Time (top) and Frame Number (bottom)
       const timeCol = document.createElement("div");
       timeCol.className = "neutral-time-col";
@@ -3390,7 +3409,7 @@ export class MatchViewController {
 
       timeCol.appendChild(timeEl);
       timeCol.appendChild(frameEl);
-      row.appendChild(timeCol);
+      topLine.appendChild(timeCol);
 
       // Right area: chips flow in order, left-aligned, wrapping if needed
       const chipsWrap = document.createElement("div");
@@ -3546,7 +3565,27 @@ export class MatchViewController {
         chipsWrap.appendChild(resetBadge);
       }
 
-      row.appendChild(chipsWrap);
+      topLine.appendChild(chipsWrap);
+      row.appendChild(topLine);
+
+      // Cumulative damage across the whole interaction, shown as its own line below the chips
+      // rather than a highlighted chip -- per the user (2026-09-11): a KO's result IS "KO," the
+      // damage total doesn't matter alongside it; otherwise show it, but plainly ("Result: 65%"),
+      // not competing visually with the chip row. Skipped for a reversal, same reasoning as
+      // before: totalDamageDealt is the ORIGINAL attacker's damage, not a meaningful summary once
+      // who's attacking has flipped mid-exchange.
+      if (
+        !e.convertedToKill &&
+        e.outcome !== "reversal" &&
+        (e.totalDamageDealt ?? 0) > 0
+      ) {
+        const resultLine = document.createElement("div");
+        resultLine.className = "neutral-result-line";
+        resultLine.textContent = tr.neutralResultBadge(
+          Math.round(e.totalDamageDealt!),
+        );
+        row.appendChild(resultLine);
+      }
 
       row.addEventListener("click", () => {
         this.dismissQuickAttackOverlay();
@@ -4613,7 +4652,12 @@ export class MatchViewController {
     this.neutralHitEvents = neutralEvents;
     const puffEvents = computeJigglypuffFThrowEvents(replay);
     const shieldEvents = computeShieldPressureEvents(replay);
-    const recoveryVerdictEvents = computeRecoveryVerdictEvents(replay);
+    // Superseded by classifiedSituationEvents (missed-ledge-hog / possible-accidental-save) and
+    // the Recovery/Edge Guard situation panels -- the old "Recovery: reaches stage" / "Jumped:
+    // reaches stage" debug log lines are no longer emitted. computeRecoveryVerdictSpans itself is
+    // still very much in use (classifiedSituations.ts is built directly on it), only this
+    // throwaway-by-design text log on top of it is retired. Per the user (2026-09-11): "the debug
+    // logging for the heuristic can probably be removed now."
     const classifiedSituationEvents = computeClassifiedSituationEvents(replay);
     this.matchEvents = [
       ...edgeEvents,
@@ -4622,7 +4666,6 @@ export class MatchViewController {
       ...neutralEvents,
       ...puffEvents,
       ...shieldEvents,
-      ...recoveryVerdictEvents,
       ...classifiedSituationEvents,
     ].sort((a, b) =>
       a.frameIndex === b.frameIndex

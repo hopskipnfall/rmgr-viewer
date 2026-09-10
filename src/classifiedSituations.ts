@@ -1,7 +1,19 @@
 /**
  * Annotates edgeGuard.ts's recovery/edge-guard situations with the recovery classifier's verdict,
- * splitting them into hopeless/free/contestable/unclassified and detecting two directly-actionable
+ * splitting them into hopeless/contestable/unclassified and detecting two directly-actionable
  * patterns: missed ledge-hog opportunities and possible accidental saves.
+ *
+ * "hopeless" vs "contestable" is deliberately a 2-way split, not 3-way -- per the user
+ * (2026-09-11): distinguishing "the recovering player can reach the stage outright" from "they can
+ * only reach the ledge, and it's contestable" would require significant matchup/meta-specific
+ * analysis we don't have, character by character. Checked against real data first: in one 30-game
+ * sample, the classifier's "reaches-stage" verdict (what used to be its own "free" category) was
+ * wrong -- the recovering player still died -- 20.7% of the time (86/415), while "dead" (hopeless)
+ * held up. So "reaches-stage" and "dead-if-ledge-occupied" are both just "contestable" now, scored
+ * identically -- only "dead" is trusted as a real claim of "effectively dead unless the opponent
+ * interferes." The narrower ledge-hinges-the-outcome fact (was the "contestable" category) is still
+ * available where it's actually needed (missedLedgeHogOpportunity, possibleAccidentalSave, and the
+ * two "contestable only" sub-stats in matchView.ts) via the raw `entryVerdict` field itself.
  *
  * See docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md for the design this
  * implements (phase 1: the correlation layer + validation, no UI yet).
@@ -21,8 +33,7 @@ import type { RecoveryVerdict } from "./recoveryHeuristics.js";
 
 export type SituationCategory =
   | "hopeless" // entryVerdict === "dead"
-  | "free" // entryVerdict === "reaches-stage"
-  | "contestable" // entryVerdict === "dead-if-ledge-occupied"
+  | "contestable" // entryVerdict === "reaches-stage" or "dead-if-ledge-occupied" -- see this file's top doc comment for why these two are merged
   | "unclassified"; // entryVerdict is null (unsupported character/state, etc.)
 
 export interface ClassifiedSituation {
@@ -45,15 +56,17 @@ export interface ClassifiedSituation {
    * between the situation opening and its resolution? */
   readonly edgeGuarderHeldLedge: boolean;
 
-  /** category === "contestable", edge-guarder did NOT hold the ledge, and the recovering player
-   * survived by being in a ledge-action-state at the resolution frame. The direct "you just
-   * needed to hold the ledge" case. */
+  /** entryVerdict === "dead-if-ledge-occupied" specifically (not the broader "contestable"
+   * category -- see this file's top doc comment), edge-guarder did NOT hold the ledge, and the
+   * recovering player survived by being in a ledge-action-state at the resolution frame. The
+   * direct "you just needed to hold the ledge" case. */
   readonly missedLedgeHogOpportunity: boolean;
 
-  /** The situation should have been unsurvivable (category "hopeless", or "contestable" with
-   * edgeGuarderHeldLedge true), but resolutionKind is "recovery-success" anyway, AND the
-   * edge-guarding port landed a hit on the recovering port during the window. Worth a look, not
-   * proof of causation -- see the design doc's "Open questions". */
+  /** The situation should have been unsurvivable (category "hopeless", or entryVerdict
+   * "dead-if-ledge-occupied" with edgeGuarderHeldLedge true), but resolutionKind is
+   * "recovery-success" anyway, AND the edge-guarding port landed a hit on the recovering port
+   * during the window. Worth a look, not proof of causation -- see the design doc's "Open
+   * questions". */
   readonly possibleAccidentalSave: boolean;
 
   /** Total damage dealt by the edge-guarding port to the recovering port during the situation
@@ -63,6 +76,15 @@ export interface ClassifiedSituation {
    * percent isn't actually a percentage of anything, just a knockback multiplier, so this is a
    * flat cumulative-damage bucket, not scaled against the recovering player's existing damage. */
   readonly damageDealtByGuarder: number;
+
+  /** Did the recovering port land an attack on the edge-guarding port at any point between the
+   * situation opening and its resolution (whether that resolution is a kill, a ledge grab, or a
+   * landing)? A single boolean, not a count -- per the user (2026-09-11): "make sure we don't
+   * double-count if they get hit by two attacks." Feeds a flat -15 penalty in
+   * edgeGuardEffectivenessScore, but ONLY when the recovering player actually got away -- getting
+   * hit on the way to a real kill anyway doesn't cost anything (see that function's own
+   * doc comment). */
+  readonly edgeGuarderWasHit: boolean;
 }
 
 function categoryForVerdict(verdict: RecoveryVerdict | null): SituationCategory {
@@ -70,7 +92,6 @@ function categoryForVerdict(verdict: RecoveryVerdict | null): SituationCategory 
     case "dead":
       return "hopeless";
     case "reaches-stage":
-      return "free";
     case "dead-if-ledge-occupied":
       return "contestable";
     case "not-implemented":
@@ -79,7 +100,21 @@ function categoryForVerdict(verdict: RecoveryVerdict | null): SituationCategory 
   }
 }
 
-/** The first span for `port` within [fromFrameIndex, toFrameIndex] whose kind matches, or null. */
+/**
+ * The first span for `port` within [fromFrameIndex, toFrameIndex] whose kind matches, or null.
+ *
+ * `allowHeldFromBeforeWindow`: when true, also matches a span whose `verdictFrameIndex` is BEFORE
+ * `fromFrameIndex`, as long as its `holdEndFrameIndex` still reaches into the window -- i.e. the
+ * verdict was computed earlier but is still validly held. Needed for entryVerdict: recoveryVerdicts.ts's
+ * own trigger (hitstun-exit, etc.) and edgeGuard.ts's "situation-entered" are computed independently
+ * and can disagree on exactly which frame a recovery attempt "begins" -- found via a real case
+ * (2026-09-11): a Pikachu exited real hitstun into Quick Attack's own action states at frame 6352,
+ * but edgeGuard.ts didn't open its situation until frame 6413, 61 frames later, while the verdict
+ * computed at 6352 was held all the way to 6428 (the situation's own resolution frame) -- a dead
+ * miss under a point-in-window check, even though the held verdict covered the whole situation.
+ * Left false for jumpVerdict: a jump trigger that fired before the situation even opened isn't "a
+ * jump during this situation," regardless of how long its verdict stays held.
+ */
 function findSpanInWindow(
   spans: readonly VerdictSpan[],
   port: PortIndex,
@@ -87,15 +122,17 @@ function findSpanInWindow(
   fromFrameIndex: number,
   toFrameIndex: number,
   pickLast: boolean,
+  allowHeldFromBeforeWindow = false,
 ): VerdictSpan | null {
   let found: VerdictSpan | null = null;
   for (const span of spans) {
     if (span.port !== port || span.kind !== kind) continue;
-    if (
-      span.verdictFrameIndex < fromFrameIndex ||
-      span.verdictFrameIndex > toFrameIndex
-    )
+    if (span.verdictFrameIndex > toFrameIndex) continue;
+    if (allowHeldFromBeforeWindow) {
+      if (span.holdEndFrameIndex < fromFrameIndex) continue;
+    } else if (span.verdictFrameIndex < fromFrameIndex) {
       continue;
+    }
     found = span;
     if (!pickLast) break;
   }
@@ -126,6 +163,22 @@ function edgeGuarderLandedHitInWindow(
     (hit) =>
       hit.victimPort === recoveringPort &&
       hit.attackerPort === edgeGuardingPort &&
+      hit.hitFrameIndex >= fromFrameIndex &&
+      hit.hitFrameIndex <= toFrameIndex,
+  );
+}
+
+function edgeGuarderWasHitInWindow(
+  hits: readonly ReturnType<typeof extractAllHitsWithDI>[number][],
+  recoveringPort: PortIndex,
+  edgeGuardingPort: PortIndex,
+  fromFrameIndex: number,
+  toFrameIndex: number,
+): boolean {
+  return hits.some(
+    (hit) =>
+      hit.victimPort === edgeGuardingPort &&
+      hit.attackerPort === recoveringPort &&
       hit.hitFrameIndex >= fromFrameIndex &&
       hit.hitFrameIndex <= toFrameIndex,
   );
@@ -206,6 +259,7 @@ function computeClassifiedSituationsUncached(
       enteredFrameIndex,
       resolutionFrameIndex,
       false,
+      true,
     );
     const jumpSpan = findSpanInWindow(
       spans,
@@ -227,30 +281,49 @@ function computeClassifiedSituationsUncached(
       resolutionFrameIndex,
     );
 
+    // These two stay keyed off the raw entryVerdict, not the (now broader) `category` -- they only
+    // make sense for the narrow "ledge-holding is literally the deciding factor" verdict, not the
+    // merged hopeless/contestable split used for scoring (see this file's top doc comment).
     const shouldHaveBeenUnsurvivable =
       category === "hopeless" ||
-      (category === "contestable" && edgeGuarderHeldLedge);
+      (entryVerdict === "dead-if-ledge-occupied" && edgeGuarderHeldLedge);
 
     const recoveringAtResolution =
       replay.frames[resolutionFrameIndex]?.ports[recoveringPort]?.state;
 
     const missedLedgeHogOpportunity =
-      category === "contestable" &&
+      entryVerdict === "dead-if-ledge-occupied" &&
       !edgeGuarderHeldLedge &&
       resolution.kind === "recovery-success" &&
       recoveringAtResolution !== undefined &&
       LEDGE_ACTION_STATES.has(recoveringAtResolution.actionStateId);
 
+    const edgeGuarderWasHit = edgeGuarderWasHitInWindow(
+      hits,
+      recoveringPort,
+      edgeGuardingPort,
+      enteredFrameIndex,
+      resolutionFrameIndex,
+    );
+
+    // Checks BOTH directions -- per the user (2026-09-11): Falcon can save himself by landing his
+    // up-B as a grab on the edge-guarder, which resets his own recovery and gives him another
+    // shot, with no error on the edge-guarder's part at all. That's still worth flagging the same
+    // way as the edge-guarder accidentally hitting the recoverer: "a hit connected here and this
+    // should have been unsurvivable, go take a look" -- the flag was never claiming the
+    // edge-guarder caused it, just that a hit is a plausible explanation for the anomaly (see this
+    // field's own doc comment).
     const possibleAccidentalSave =
       shouldHaveBeenUnsurvivable &&
       resolution.kind === "recovery-success" &&
-      edgeGuarderLandedHitInWindow(
-        hits,
-        recoveringPort,
-        edgeGuardingPort,
-        enteredFrameIndex,
-        resolutionFrameIndex,
-      );
+      (edgeGuarderWasHit ||
+        edgeGuarderLandedHitInWindow(
+          hits,
+          recoveringPort,
+          edgeGuardingPort,
+          enteredFrameIndex,
+          resolutionFrameIndex,
+        ));
 
     const damageDealtByGuarder = sumDamageDealtInWindow(
       hits,
@@ -273,6 +346,7 @@ function computeClassifiedSituationsUncached(
       missedLedgeHogOpportunity,
       possibleAccidentalSave,
       damageDealtByGuarder,
+      edgeGuarderWasHit,
     });
   }
 
@@ -282,9 +356,10 @@ function computeClassifiedSituationsUncached(
 /**
  * The `enteredFrameIndex`s of every "hopeless" situation -- pass to
  * edgeGuard.ts's computeEdgeGuardStats as `excludeEnteredFrameIndices` so
- * Recovery%/EdgeGuard% exclude situations the classifier confirmed were
- * unsurvivable at entry. Only "hopeless" -- see computeEdgeGuardStats' own
- * doc comment for why "free" isn't included here.
+ * Recovery% excludes situations the classifier confirmed were unsurvivable
+ * at entry. Only "hopeless" -- "contestable" isn't trusted enough to exclude
+ * anything (see this file's top doc comment) -- see computeEdgeGuardStats'
+ * own doc comment too.
  */
 export function hopelessEnteredFrameIndices(
   situations: readonly ClassifiedSituation[],
@@ -366,41 +441,68 @@ export const EDGE_GUARD_EFFECTIVENESS_SCORE = {
   NO_DAMAGE: 0,
   MISSED_LEDGE_HOG: -10,
   ACCIDENTAL_SAVE: -50,
+  /** Applied on top of whatever the base tier above is (not a replacement) -- but ONLY when the
+   * recovering player actually got away (resolutionKind !== "recovery-failure"). Getting clipped
+   * on the way to securing the kill anyway doesn't cost anything -- per the user (2026-09-11):
+   * "if the player gets hit but also the recovering player dies -> that counts as a KO and
+   * doesn't take away points. if the opponent recovers to the stage and also hits them in the
+   * process that's -15." A flat one-time penalty, not per-hit -- see edgeGuarderWasHit's own doc
+   * comment for why. */
+  HIT_BY_RECOVERING_PLAYER: -15,
 } as const;
 
 const DAMAGE_HIGH_THRESHOLD = 35;
 const DAMAGE_MID_THRESHOLD = 17;
 
 /**
- * Per-situation Edge Guard Effectiveness score (see EDGE_GUARD_EFFECTIVENESS_SCORE), or null if
- * this situation is out of scope for scoring entirely:
- * - category "free"/"unclassified": never scored -- same "free" isn't trusted for anything
- *   score-affecting boundary as computeEdgeGuardStats' hopeless-exclusion.
- * - category "hopeless" that resolved NORMALLY (opponent died as expected, no accidental save):
- *   also excluded -- nothing was actually being tested, same reasoning as the stats exclusion.
- *   A "hopeless" situation only ever produces a score when something anomalous happened
- *   (the accidental-save penalty) -- missedLedgeHogOpportunity can't occur for "hopeless" by
- *   construction (see computeClassifiedSituations), so this is the only other case to gate here.
+ * Per-situation Edge Guard Effectiveness score (see EDGE_GUARD_EFFECTIVENESS_SCORE). Only "hopeless"
+ * situations that resolved NORMALLY (opponent died as expected, no accidental save) are excluded
+ * (null) -- nothing was actually being tested, same reasoning as the stats exclusion. A "hopeless"
+ * situation only ever produces a score when something anomalous happened (the accidental-save
+ * penalty) -- missedLedgeHogOpportunity requires entryVerdict "dead-if-ledge-occupied" by
+ * construction (see computeClassifiedSituations), which can never be "hopeless", so that's the
+ * only other case to gate here.
+ *
+ * "unclassified" (no classifier opinion at all -- unsupported character, or no trigger fired) is
+ * NOT excluded here, unlike category "unclassified" being excluded from Recovery% -- per the user
+ * (2026-09-11): "for unsupported characters, or when NOT_SUPPORTED is returned, let's just assume
+ * the answer was STAGE_REACHABLE for scoring purposes." So it flows through the same tiers as
+ * "contestable" (which already covers both the narrow ledge-hinges-the-outcome verdict and the
+ * former "reaches stage" verdict -- see this file's top doc comment).
  */
 export function edgeGuardEffectivenessScore(
   situation: ClassifiedSituation,
 ): number | null {
-  if (situation.category !== "hopeless" && situation.category !== "contestable")
+  let baseScore: number;
+  if (situation.missedLedgeHogOpportunity) {
+    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.MISSED_LEDGE_HOG;
+  } else if (situation.possibleAccidentalSave) {
+    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.ACCIDENTAL_SAVE;
+  } else if (situation.category === "hopeless") {
     return null;
-  if (situation.missedLedgeHogOpportunity)
-    return EDGE_GUARD_EFFECTIVENESS_SCORE.MISSED_LEDGE_HOG;
-  if (situation.possibleAccidentalSave)
-    return EDGE_GUARD_EFFECTIVENESS_SCORE.ACCIDENTAL_SAVE;
-  if (situation.category === "hopeless") return null;
-  if (situation.resolutionKind === "recovery-failure")
-    return EDGE_GUARD_EFFECTIVENESS_SCORE.KILL;
-  if (situation.damageDealtByGuarder >= DAMAGE_HIGH_THRESHOLD)
-    return EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_HIGH;
-  if (situation.damageDealtByGuarder >= DAMAGE_MID_THRESHOLD)
-    return EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_MID;
-  if (situation.damageDealtByGuarder > 0)
-    return EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_LOW;
-  return EDGE_GUARD_EFFECTIVENESS_SCORE.NO_DAMAGE;
+  } else if (situation.resolutionKind === "recovery-failure") {
+    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.KILL;
+  } else if (situation.damageDealtByGuarder >= DAMAGE_HIGH_THRESHOLD) {
+    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_HIGH;
+  } else if (situation.damageDealtByGuarder >= DAMAGE_MID_THRESHOLD) {
+    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_MID;
+  } else if (situation.damageDealtByGuarder > 0) {
+    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_LOW;
+  } else {
+    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.NO_DAMAGE;
+  }
+
+  // Only applies when the recovering player actually got away -- a real kill (resolutionKind
+  // "recovery-failure") is the one baseScore that can never reach here already being anything but
+  // KILL, but this check also matters for missedLedgeHogOpportunity/possibleAccidentalSave, both
+  // of which are ALSO only ever set on a "recovery-success" resolution (see
+  // computeClassifiedSituations) -- so this is really just "was there a kill," spelled out
+  // directly rather than relied on implicitly.
+  const applyHitPenalty =
+    situation.edgeGuarderWasHit && situation.resolutionKind !== "recovery-failure";
+  return applyHitPenalty
+    ? baseScore + EDGE_GUARD_EFFECTIVENESS_SCORE.HIT_BY_RECOVERING_PLAYER
+    : baseScore;
 }
 
 /**
@@ -420,4 +522,27 @@ export function averageEdgeGuardEffectiveness(
   }
   if (scores.length === 0) return null;
   return scores.reduce((a, b) => a + b, 0) / scores.length;
+}
+
+export type EdgeGuardEffectivenessGrade = "S" | "A" | "B" | "C" | "D" | "F";
+
+/**
+ * Letter grade for an Edge Guard Effectiveness average, rhythm-game style -- per the user
+ * (2026-09-11): "instead of showing a % number for edge guards (it is no longer scored as a %,
+ * it's an average of scores ranging from -50 to 100) maybe we could show a letter rating."
+ * Boundaries line up with the tier values themselves (EDGE_GUARD_EFFECTIVENESS_SCORE), so a player
+ * whose situations land squarely on one tier gets that tier's own letter -- S reserved for a clean
+ * 100 (every in-scope situation was a kill, nothing else dragging the average down), F for
+ * anything that averages out negative (a real problem happened -- missed ledge-hog, accidental
+ * save, or enough "got hit and they still escaped" penalties to tip it under 0).
+ */
+export function edgeGuardEffectivenessGrade(
+  averageScore: number,
+): EdgeGuardEffectivenessGrade {
+  if (averageScore >= 100) return "S";
+  if (averageScore >= 70) return "A";
+  if (averageScore >= 45) return "B";
+  if (averageScore >= 20) return "C";
+  if (averageScore >= 0) return "D";
+  return "F";
 }

@@ -5,6 +5,7 @@ import {
   computeClassifiedSituationEvents,
   edgeGuardEffectivenessScore,
   averageEdgeGuardEffectiveness,
+  edgeGuardEffectivenessGrade,
   EDGE_GUARD_EFFECTIVENESS_SCORE,
   type ClassifiedSituation,
 } from "./classifiedSituations.js";
@@ -233,7 +234,7 @@ describe("computeClassifiedSituations", () => {
     expect(situations[0]).toMatchObject({
       resolutionKind: "recovery-success",
       entryVerdict: "reaches-stage",
-      category: "free",
+      category: "contestable",
       edgeGuarderHeldLedge: false,
       missedLedgeHogOpportunity: false,
       possibleAccidentalSave: false,
@@ -343,6 +344,70 @@ describe("computeClassifiedSituations", () => {
       // even though the resolution frame happens to also be a ledge-action-state.
       missedLedgeHogOpportunity: false,
       possibleAccidentalSave: true,
+    });
+  });
+
+  it("flags a possible accidental save when the RECOVERING player lands the hit instead (e.g. Falcon's up-B connecting as a grab on the edge-guarder gives him another shot)", () => {
+    const frames: Frame[] = [
+      makeFrame(0, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_HITSTUN,
+        x: DEAD_FIXTURE.x,
+        y: DEAD_FIXTURE.y,
+        vx: DEAD_FIXTURE.vx,
+        vy: DEAD_FIXTURE.vy,
+        hitstun: 5,
+        dmg: 50,
+      }),
+      makeFrame(1, EDGE_GUARDER_ONSTAGE, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_FALL,
+        x: DEAD_FIXTURE.x,
+        y: DEAD_FIXTURE.y,
+        vx: DEAD_FIXTURE.vx,
+        vy: DEAD_FIXTURE.vy,
+        hitstun: 0,
+        dmg: 50,
+      }),
+      // f2: the RECOVERING player's own attack connects on the edge-guarder this time
+      // (damagePercent jump on port 0, the edge-guarder, instead of port 1).
+      makeFrame(
+        2,
+        { ...EDGE_GUARDER_ONSTAGE, dmg: 15 },
+        {
+          characterId: CHAR_FOX,
+          state: ACTION_STATE_FALL,
+          x: DEAD_FIXTURE.x,
+          y: DEAD_FIXTURE.y,
+          vx: DEAD_FIXTURE.vx,
+          vy: DEAD_FIXTURE.vy,
+          hitstun: 0,
+          dmg: 50,
+        },
+      ),
+      // f3: against the odds, grabs the ledge anyway.
+      makeFrame(
+        3,
+        { ...EDGE_GUARDER_ONSTAGE, dmg: 15 },
+        {
+          characterId: CHAR_FOX,
+          state: ACTION_STATE_CLIFF_CATCH,
+          x: 2200,
+          y: 0,
+          hitstun: 0,
+          dmg: 50,
+        },
+      ),
+    ];
+
+    const situations = computeClassifiedSituations(makeMockReplay(frames));
+    expect(situations).toHaveLength(1);
+    expect(situations[0]).toMatchObject({
+      resolutionKind: "recovery-success",
+      entryVerdict: "dead",
+      category: "hopeless",
+      possibleAccidentalSave: true,
+      edgeGuarderWasHit: true,
     });
   });
 });
@@ -500,6 +565,7 @@ describe("edgeGuardEffectivenessScore", () => {
     missedLedgeHogOpportunity: false,
     possibleAccidentalSave: false,
     damageDealtByGuarder: 0,
+    edgeGuarderWasHit: false,
   };
 
   it("scores a contestable kill as KILL", () => {
@@ -562,13 +628,35 @@ describe("edgeGuardEffectivenessScore", () => {
     ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.ACCIDENTAL_SAVE);
   });
 
-  it("is null for free/unclassified situations -- never scored", () => {
-    expect(edgeGuardEffectivenessScore({ ...base, category: "free" })).toBe(
-      null,
-    );
+  it("scores unclassified situations the same as contestable, assuming reaches-stage -- per the user (2026-09-11): 'for unsupported characters, or when NOT_SUPPORTED is returned, let's just assume the answer was STAGE_REACHABLE for scoring purposes'", () => {
     expect(
-      edgeGuardEffectivenessScore({ ...base, category: "unclassified" }),
-    ).toBe(null);
+      edgeGuardEffectivenessScore({
+        ...base,
+        category: "unclassified",
+        entryVerdict: null,
+        resolutionKind: "recovery-failure",
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.KILL);
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        category: "unclassified",
+        entryVerdict: null,
+        resolutionKind: "recovery-success",
+        damageDealtByGuarder: 0,
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.NO_DAMAGE);
+  });
+
+  it("scores a former-'reaches-stage' situation the same as any other contestable one -- the free/contestable split was retired", () => {
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        category: "contestable",
+        entryVerdict: "reaches-stage",
+        resolutionKind: "recovery-failure",
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.KILL);
   });
 
   it("is null for a hopeless situation that resolved as recovery-success but wasn't an accidental save -- nothing was actually tested", () => {
@@ -578,6 +666,70 @@ describe("edgeGuardEffectivenessScore", () => {
         category: "hopeless",
         resolutionKind: "recovery-success",
         possibleAccidentalSave: false,
+      }),
+    ).toBe(null);
+  });
+
+  it("applies a flat -15 penalty on top of the base tier when the edge-guarder was hit AND the recovering player got away", () => {
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        resolutionKind: "recovery-success",
+        damageDealtByGuarder: 90,
+        edgeGuarderWasHit: true,
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_HIGH - 15);
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        resolutionKind: "recovery-success",
+        damageDealtByGuarder: 0,
+        edgeGuarderWasHit: true,
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.NO_DAMAGE - 15);
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        resolutionKind: "recovery-success",
+        missedLedgeHogOpportunity: true,
+        edgeGuarderWasHit: true,
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.MISSED_LEDGE_HOG - 15);
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        category: "hopeless",
+        resolutionKind: "recovery-success",
+        possibleAccidentalSave: true,
+        edgeGuarderWasHit: true,
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.ACCIDENTAL_SAVE - 15);
+  });
+
+  it("does NOT apply the hit penalty when the recovering player still died -- a hit that doesn't prevent the kill costs nothing, per the user", () => {
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        resolutionKind: "recovery-failure",
+        edgeGuarderWasHit: true,
+      }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.KILL);
+  });
+
+  it("does not apply the hit penalty when edgeGuarderWasHit is false", () => {
+    expect(
+      edgeGuardEffectivenessScore({ ...base, edgeGuarderWasHit: false }),
+    ).toBe(EDGE_GUARD_EFFECTIVENESS_SCORE.KILL);
+  });
+
+  it("still returns null for a hopeless situation with no anomaly even if edgeGuarderWasHit is true -- the hit penalty never expands scope on its own", () => {
+    expect(
+      edgeGuardEffectivenessScore({
+        ...base,
+        category: "hopeless",
+        resolutionKind: "recovery-success",
+        possibleAccidentalSave: false,
+        edgeGuarderWasHit: true,
       }),
     ).toBe(null);
   });
@@ -599,11 +751,18 @@ describe("averageEdgeGuardEffectiveness", () => {
     missedLedgeHogOpportunity: false,
     possibleAccidentalSave: false,
     damageDealtByGuarder: 0,
+    edgeGuarderWasHit: false,
     ...overrides,
   });
 
   it("returns null when there are no in-scope situations for that port", () => {
-    const situations = [makeSituation({ category: "free" })];
+    const situations = [
+      makeSituation({
+        category: "hopeless",
+        entryVerdict: "dead",
+        resolutionKind: "recovery-success",
+      }),
+    ];
     expect(
       averageEdgeGuardEffectiveness(situations, 0 as PortIndex),
     ).toBeNull();
@@ -616,7 +775,11 @@ describe("averageEdgeGuardEffectiveness", () => {
         resolutionKind: "recovery-success",
         damageDealtByGuarder: 0,
       }), // 0
-      makeSituation({ category: "free" }), // excluded
+      makeSituation({
+        category: "hopeless",
+        entryVerdict: "dead",
+        resolutionKind: "recovery-success",
+      }), // excluded -- a hopeless kill that resolved normally, nothing was tested
     ];
     expect(averageEdgeGuardEffectiveness(situations, 0 as PortIndex)).toBe(
       50,
@@ -639,5 +802,36 @@ describe("averageEdgeGuardEffectiveness", () => {
       100,
     );
     expect(averageEdgeGuardEffectiveness(situations, 1 as PortIndex)).toBe(0);
+  });
+});
+
+describe("edgeGuardEffectivenessGrade", () => {
+  it("returns S only for a clean 100", () => {
+    expect(edgeGuardEffectivenessGrade(100)).toBe("S");
+  });
+
+  it("returns A just below 100 and down to 70", () => {
+    expect(edgeGuardEffectivenessGrade(99.9)).toBe("A");
+    expect(edgeGuardEffectivenessGrade(70)).toBe("A");
+  });
+
+  it("returns B just below 70 and down to 45", () => {
+    expect(edgeGuardEffectivenessGrade(69.9)).toBe("B");
+    expect(edgeGuardEffectivenessGrade(45)).toBe("B");
+  });
+
+  it("returns C just below 45 and down to 20", () => {
+    expect(edgeGuardEffectivenessGrade(44.9)).toBe("C");
+    expect(edgeGuardEffectivenessGrade(20)).toBe("C");
+  });
+
+  it("returns D just below 20 and down to 0", () => {
+    expect(edgeGuardEffectivenessGrade(19.9)).toBe("D");
+    expect(edgeGuardEffectivenessGrade(0)).toBe("D");
+  });
+
+  it("returns F for anything negative", () => {
+    expect(edgeGuardEffectivenessGrade(-0.1)).toBe("F");
+    expect(edgeGuardEffectivenessGrade(-50)).toBe("F");
   });
 });

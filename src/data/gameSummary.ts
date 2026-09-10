@@ -3,6 +3,7 @@ import { computeEdgeGuardEvents, computeEdgeGuardStats } from "../edgeGuard.js";
 import {
   computeClassifiedSituations,
   hopelessEnteredFrameIndices,
+  edgeGuardEffectivenessScore,
 } from "../classifiedSituations.js";
 import { computeLedgeTrapEvents, computeLedgeTrapStats } from "../ledgeTrap.js";
 import {
@@ -29,8 +30,10 @@ export interface KillComboSummary {
 export interface RawCounters {
   recoverySituations: number;
   recoverySuccesses: number;
-  edgeGuardSituations: number;
-  edgeGuardSuccesses: number;
+  /** Sum of edgeGuardEffectivenessScore() across every in-scope situation this port edge-guarded. */
+  edgeGuardEffectivenessSum: number;
+  /** Count of situations included in edgeGuardEffectivenessSum -- divide to get the average. */
+  edgeGuardEffectivenessCount: number;
   ledgeGetupSituations: number;
   ledgeGetupSuccesses: number;
   ledgeTrapSituations: number;
@@ -93,8 +96,8 @@ export function createEmptyCounters(): RawCounters {
   return {
     recoverySituations: 0,
     recoverySuccesses: 0,
-    edgeGuardSituations: 0,
-    edgeGuardSuccesses: 0,
+    edgeGuardEffectivenessSum: 0,
+    edgeGuardEffectivenessCount: 0,
     ledgeGetupSituations: 0,
     ledgeGetupSuccesses: 0,
     ledgeTrapSituations: 0,
@@ -132,13 +135,23 @@ export function computeRawCountersForPort(
   const angelEvents = computeAngelInvincibilityEvents(replay);
 
   // Situations the recovery classifier confirmed were unsurvivable at entry are excluded from
-  // Recovery%/EdgeGuard% entirely, here as well as in the per-match panel (matchView.ts) -- this
-  // is what feeds the library-wide aggregate stats. See edgeGuard.ts's computeEdgeGuardStats doc
-  // comment and docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
-  const hopelessFrames = hopelessEnteredFrameIndices(
-    computeClassifiedSituations(replay),
-  );
+  // Recovery% entirely, here as well as in the per-match panel (matchView.ts) -- this is what
+  // feeds the library-wide aggregate stats. See edgeGuard.ts's computeEdgeGuardStats doc comment
+  // and docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+  const classifiedSituations = computeClassifiedSituations(replay);
+  const hopelessFrames = hopelessEnteredFrameIndices(classifiedSituations);
   const edgeStats = computeEdgeGuardStats(edgeEvents, port, hopelessFrames);
+
+  let edgeGuardEffectivenessSum = 0;
+  let edgeGuardEffectivenessCount = 0;
+  for (const situation of classifiedSituations) {
+    if (situation.edgeGuardingPort !== port) continue;
+    const score = edgeGuardEffectivenessScore(situation);
+    if (score !== null) {
+      edgeGuardEffectivenessSum += score;
+      edgeGuardEffectivenessCount++;
+    }
+  }
   const ledgeStats = computeLedgeTrapStats(ledgeEvents, port);
   const angelStats = computeAngelInvincibilityStats(angelEvents, port);
   const neutralStats = computeNeutralHitsStats(replay, port);
@@ -177,8 +190,8 @@ export function computeRawCountersForPort(
   return {
     recoverySituations: edgeStats.recoverySituations,
     recoverySuccesses: edgeStats.recoverySuccesses,
-    edgeGuardSituations: edgeStats.edgeGuardSituations,
-    edgeGuardSuccesses: edgeStats.edgeGuardSuccesses,
+    edgeGuardEffectivenessSum,
+    edgeGuardEffectivenessCount,
     ledgeGetupSituations: ledgeStats.ledgeGetupSituations,
     ledgeGetupSuccesses: ledgeStats.ledgeGetupSuccesses,
     ledgeTrapSituations: ledgeStats.ledgeTrapSituations,
