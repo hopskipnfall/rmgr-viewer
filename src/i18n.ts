@@ -73,6 +73,8 @@ export interface Translations {
   eventLog: string;
   eventLogEmpty: string;
   logFiltersTitle: string;
+  fpsToggle: string;
+  fpsToggleTitle: string;
   logFilterRecovery: string;
   logFilterLedge: string;
   logFilterAngel: string;
@@ -279,6 +281,26 @@ export interface Translations {
   situationOpenBadge: string;
   noSituations: string;
   situationCollapseTitle: (name: string) => string;
+
+  // Classifier-aware recovery/edge-guard breakdown (see
+  // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md)
+  recoveryContestableLabel: string;
+  edgeGuardContestableLabel: string;
+  ledgeHogOpportunitiesLabel: string;
+  ledgeHogOpportunitiesMissedSummary: (missed: number) => string;
+  situationBreakdown: (
+    hopeless: number,
+    free: number,
+    contestable: number,
+    unclassified: number,
+  ) => string;
+  situationCategoryLabel: (
+    category: "hopeless" | "free" | "contestable" | "unclassified",
+  ) => string;
+  situationMissedLedgeHogBadge: string;
+  situationMissedLedgeHogTitle: string;
+  situationAccidentalSaveBadge: string;
+  situationAccidentalSaveTitle: string;
 
   // Neutral Openings widget
   neutralHitsWidgetTitle: string;
@@ -517,7 +539,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     eventLog: "Event Log",
     eventLogEmpty: "No events yet.",
-    logFiltersTitle: "Log Filters",
+    logFiltersTitle: "Debug",
+    fpsToggle: "FPS",
+    fpsToggleTitle: "Toggle FPS display on replay",
     logFilterRecovery: "Recovery",
     logFilterLedge: "Ledge",
     logFilterAngel: "Angel",
@@ -526,8 +550,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFilterDebug: "Window Starts (Debug)",
     logOpeningPrefix: "Opening",
     logPunishPrefix: "Punish",
-    hudOverlay: "LOG",
-    hudOverlayShow: "LOG",
+    hudOverlay: "Log",
+    hudOverlayShow: "Log",
     hudOverlayHide: "Hide Log",
     hudOverlayTitle: "Toggle on-screen event log",
 
@@ -738,6 +762,32 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationOpenBadge: "…",
     noSituations: "None in this replay.",
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
+
+    recoveryContestableLabel: "Recovery (contestable only)",
+    edgeGuardContestableLabel: "Edge Guard (contestable only)",
+    ledgeHogOpportunitiesLabel: "Ledge-hog opportunities",
+    ledgeHogOpportunitiesMissedSummary: (missed) =>
+      `${missed} confirmed missed -- recovering player escaped via the open ledge`,
+    situationBreakdown: (hopeless, free, contestable, unclassified) =>
+      `Hopeless: ${hopeless} · Free: ${free} · Contestable: ${contestable} · Unclassified: ${unclassified}`,
+    situationCategoryLabel: (category) => {
+      switch (category) {
+        case "hopeless":
+          return "hopeless";
+        case "free":
+          return "free";
+        case "contestable":
+          return "contestable";
+        case "unclassified":
+          return "unclassified";
+      }
+    },
+    situationMissedLedgeHogBadge: "⚠ ledge hog",
+    situationMissedLedgeHogTitle:
+      "This was survivable only if the edge-guarder held the ledge -- they didn't, and the recovering player escaped via it anyway.",
+    situationAccidentalSaveBadge: "⚠ accidental save?",
+    situationAccidentalSaveTitle:
+      "This should have been unsurvivable, but the recovering player survived after taking a hit from the edge-guarder -- worth checking whether that hit is what saved them.",
 
     neutralHitsWidgetTitle: "Neutral Analysis",
     neutralFilterAll: (count) => `All (${count})`,
@@ -982,7 +1032,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     eventLog: "イベントログ",
     eventLogEmpty: "イベントはまだありません。",
-    logFiltersTitle: "ログ フィルター",
+    logFiltersTitle: "デバッグ",
+    fpsToggle: "FPS",
+    fpsToggleTitle: "リプレイのFPS表示の切り替え",
     logFilterRecovery: "復帰・阻止",
     logFilterLedge: "崖",
     logFilterAngel: "復活無敵",
@@ -1191,6 +1243,32 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationOpenBadge: "…",
     noSituations: "このリプレイには該当なし。",
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
+
+    recoveryContestableLabel: "復帰(拮抗状況のみ)",
+    edgeGuardContestableLabel: "復帰阻止(拮抗状況のみ)",
+    ledgeHogOpportunitiesLabel: "崖離し放置の機会",
+    ledgeHogOpportunitiesMissedSummary: (missed) =>
+      `確定で見逃し: ${missed}件 -- 復帰側が空いた崖を掴んで生還`,
+    situationBreakdown: (hopeless, free, contestable, unclassified) =>
+      `絶望的: ${hopeless} · 安全: ${free} · 拮抗: ${contestable} · 未分類: ${unclassified}`,
+    situationCategoryLabel: (category) => {
+      switch (category) {
+        case "hopeless":
+          return "絶望的";
+        case "free":
+          return "安全";
+        case "contestable":
+          return "拮抗";
+        case "unclassified":
+          return "未分類";
+      }
+    },
+    situationMissedLedgeHogBadge: "⚠ 崖離し放置",
+    situationMissedLedgeHogTitle:
+      "崖を掴まれていれば復帰不可能だった状況。復帰阻止側は崖を掴んでおらず、復帰側はそのまま崖を掴んで生還した。",
+    situationAccidentalSaveBadge: "⚠ 偶然の救済?",
+    situationAccidentalSaveTitle:
+      "本来復帰不可能なはずの状況だったが、復帰阻止側の攻撃を受けた後に復帰側が生還した。その攻撃が結果的に救済した可能性がある。",
 
     neutralHitsWidgetTitle: "立ち回り分析",
     neutralFilterAll: (count) => `すべて (${count})`,

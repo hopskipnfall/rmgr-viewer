@@ -63,6 +63,11 @@ import {
   type RecoveryVerdictEvent,
 } from "../recoveryVerdicts.js";
 import {
+  computeClassifiedSituations,
+  type ClassifiedSituation,
+  type SituationCategory,
+} from "../classifiedSituations.js";
+import {
   computeAngelInvincibilityEvents,
   computeAngelInvincibilityStats,
   type AngelInvincibilityEvent,
@@ -2637,6 +2642,7 @@ export class MatchViewController {
       total: number,
       successClass: "pct-success" | "pct-failure",
       baselinePct?: number | null,
+      subtext?: string,
     ): void => {
       const row = document.createElement("div");
       row.className = "stat-row";
@@ -2668,6 +2674,12 @@ export class MatchViewController {
 
       row.appendChild(lbl);
       row.appendChild(val);
+      if (subtext) {
+        const sub = document.createElement("div");
+        sub.className = "stat-subdetail";
+        sub.textContent = subtext;
+        row.appendChild(sub);
+      }
       this.statsPanel.appendChild(row);
     };
 
@@ -2732,6 +2744,94 @@ export class MatchViewController {
       "pct-success",
       this.matchupBaseline?.edgeGuardPct,
     );
+
+    // Classifier-aware breakdown (see
+    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md, phase 2). Additive to
+    // the two rows above, not a replacement -- those still count every zone-crossing regardless of
+    // whether it was ever actually contestable. Hidden entirely when there's nothing classified to
+    // show (non-Dream-Land matches, or a match with no classifier-supported characters involved).
+    if (replay.matchSettings?.stageId === DREAM_LAND_STAGE_ID) {
+      const classified = computeClassifiedSituations(replay);
+      const recovering = classified.filter(
+        (s) => s.recoveringPort === this.perspectivePort,
+      );
+      const guarding = classified.filter(
+        (s) => s.edgeGuardingPort === this.perspectivePort,
+      );
+
+      const breakdownText = (situations: ClassifiedSituation[]): string => {
+        const counts: Record<SituationCategory, number> = {
+          hopeless: 0,
+          free: 0,
+          contestable: 0,
+          unclassified: 0,
+        };
+        for (const s of situations) counts[s.category]++;
+        return tr.situationBreakdown(
+          counts.hopeless,
+          counts.free,
+          counts.contestable,
+          counts.unclassified,
+        );
+      };
+
+      const recoveringContestable = recovering.filter(
+        (s) => s.category === "contestable",
+      );
+      if (recoveringContestable.length > 0) {
+        addRow(
+          tr.recoveryContestableLabel,
+          recoveringContestable.filter(
+            (s) => s.resolutionKind === "recovery-success",
+          ).length,
+          recoveringContestable.length,
+          "pct-success",
+          null,
+          breakdownText(recovering),
+        );
+      }
+
+      const guardingContestable = guarding.filter(
+        (s) => s.category === "contestable",
+      );
+      if (guardingContestable.length > 0) {
+        addRow(
+          tr.edgeGuardContestableLabel,
+          // Edge-guard success = the recovering player did NOT make it back.
+          guardingContestable.filter(
+            (s) => s.resolutionKind === "recovery-failure",
+          ).length,
+          guardingContestable.length,
+          "pct-success",
+          null,
+          breakdownText(guarding),
+        );
+      }
+
+      // "Ledge-hog opportunities": every contestable situation where holding the ledge was the
+      // correct, decisive call. successes = how often they actually held it; the subtext calls
+      // out how many of the misses were confirmed (via missedLedgeHogOpportunity) to actually
+      // cost the kill, vs. just being technically open but not exploited.
+      if (guardingContestable.length > 0) {
+        const held = guardingContestable.filter(
+          (s) => s.edgeGuarderHeldLedge,
+        ).length;
+        const missed = guardingContestable.filter(
+          (s) => s.missedLedgeHogOpportunity,
+        ).length;
+        addRow(
+          tr.ledgeHogOpportunitiesLabel,
+          held,
+          guardingContestable.length,
+          "pct-success",
+          null,
+          missed > 0
+            ? tr.ledgeHogOpportunitiesMissedSummary(missed)
+            : undefined,
+        );
+      }
+    }
+
     const addLedgeRow = (
       label: string,
       successes: number,
@@ -2890,7 +2990,17 @@ export class MatchViewController {
       outcome: "success" | "failure" | "open";
       recoveringPort: PortIndex;
       edgeGuardingPort: PortIndex;
+      category?: SituationCategory;
+      missedLedgeHogOpportunity?: boolean;
+      possibleAccidentalSave?: boolean;
     }
+
+    // Keyed by enteredFrameIndex, which is unique per situation across a match (edgeGuard.ts only
+    // ever has one situation open at a time) -- see
+    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md, phase 2.
+    const classifiedByEntry = new Map<number, ClassifiedSituation>(
+      computeClassifiedSituations(replay).map((s) => [s.enteredFrameIndex, s]),
+    );
 
     const edgeSituations: EdgeSituationRecord[] = [];
     let currentEdgeSit: EdgeSituationRecord | null = null;
@@ -2900,12 +3010,16 @@ export class MatchViewController {
         if (currentEdgeSit) {
           edgeSituations.push(currentEdgeSit);
         }
+        const classified = classifiedByEntry.get(ev.frameIndex);
         currentEdgeSit = {
           enteredFrameIndex: ev.frameIndex,
           enteredFrame: ev.frame,
           outcome: "open",
           recoveringPort: ev.recoveringPort,
           edgeGuardingPort: ev.edgeGuardingPort,
+          category: classified?.category,
+          missedLedgeHogOpportunity: classified?.missedLedgeHogOpportunity,
+          possibleAccidentalSave: classified?.possibleAccidentalSave,
         };
       } else if (
         ev.kind === "recovery-success" ||
@@ -2987,6 +3101,9 @@ export class MatchViewController {
         outcome: "success" | "failure" | "open";
         damageAtEntry?: number;
         isUnder100?: boolean;
+        category?: SituationCategory;
+        missedLedgeHogOpportunity?: boolean;
+        possibleAccidentalSave?: boolean;
       }>,
       isSuccessOutcome: (outcome: "success" | "failure") => boolean,
     ): void => {
@@ -3026,6 +3143,28 @@ export class MatchViewController {
           bracketEl.className = `situation-bracket ${isUnder100 ? "bracket-under100" : "bracket-over100"}`;
           bracketEl.textContent = `${isUnder100 ? "<100%" : "≥100%"} (${sit.damageAtEntry}%)`;
           row.appendChild(bracketEl);
+        }
+
+        if (sit.category) {
+          const categoryEl = document.createElement("span");
+          categoryEl.className = `situation-bracket category-${sit.category}`;
+          categoryEl.textContent = tr.situationCategoryLabel(sit.category);
+          row.appendChild(categoryEl);
+        }
+
+        if (sit.missedLedgeHogOpportunity) {
+          const flagEl = document.createElement("span");
+          flagEl.className = "situation-bracket category-flag";
+          flagEl.textContent = tr.situationMissedLedgeHogBadge;
+          flagEl.title = tr.situationMissedLedgeHogTitle;
+          row.appendChild(flagEl);
+        }
+        if (sit.possibleAccidentalSave) {
+          const flagEl = document.createElement("span");
+          flagEl.className = "situation-bracket category-flag";
+          flagEl.textContent = tr.situationAccidentalSaveBadge;
+          flagEl.title = tr.situationAccidentalSaveTitle;
+          row.appendChild(flagEl);
         }
 
         const badgeEl = document.createElement("span");

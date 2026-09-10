@@ -127,8 +127,23 @@ function edgeGuarderLandedHitInWindow(
  * Read-only correlation layer: no new classifier calls (reuses computeRecoveryVerdictSpans, which
  * is memoized per-replay), a cheap ledge-occupancy scan per situation, and a hit-window filter over
  * extractAllHitsWithDI's already-computed results.
+ *
+ * Memoized per replay (matchView.ts calls this from renderStatsPanel, which re-runs on every
+ * perspective-port toggle, not just on load).
  */
+const classifiedSituationsCache = new WeakMap<Replay, ClassifiedSituation[]>();
+
 export function computeClassifiedSituations(
+  replay: Replay,
+): ClassifiedSituation[] {
+  const cached = classifiedSituationsCache.get(replay);
+  if (cached) return cached;
+  const result = computeClassifiedSituationsUncached(replay);
+  classifiedSituationsCache.set(replay, result);
+  return result;
+}
+
+function computeClassifiedSituationsUncached(
   replay: Replay,
 ): ClassifiedSituation[] {
   const edgeGuardEvents = computeEdgeGuardEvents(replay);
