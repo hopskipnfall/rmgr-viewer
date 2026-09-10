@@ -58,12 +58,43 @@ export const DEAD_OR_RESPAWNING_STATES = new Set([
   0x009, // ReviveWait
 ]);
 
-// Frames at 60 fps that a player must stay grounded and out of hitstun to
-// count as "recovered to stage."
-// TODO: hitstunCounter === 0 is the only actionable check for now; certain
-// non-hitstun states (e.g. landing lag, tumble) may also prevent meaningful
-// movement — revisit once we have a fuller taxonomy of "actionable" states.
+// Frames at 60 fps that a player must stay grounded and out of hitstun (or a
+// grab) to count as "recovered to stage."
 const RECOVERY_GROUNDED_FRAMES = 30; // 0.5 s × 60 fps
+
+// Grabbed/held/thrown states. Found via a real bug report: a player who lands
+// and is immediately grabbed, thrown, and killed was resolving as
+// "recovery-success" — grab/throw action states aren't hitstun
+// (isHitstunState doesn't cover them, they're a separate state family), so
+// the 0.5s grounded-and-safe clock kept running straight through the grab and
+// resolved success before the resulting stock loss ever registered. Treated
+// identically to hitstun below: resets the streak AND the "touched ground"
+// progress, same "require a fresh landing" reasoning that already applied to
+// hitstun. There isn't a single canonical export for this set in the
+// codebase yet (neutralHits.ts/ledgeTrap.ts/renderer.ts/combos.ts each have
+// their own copy) — this one can't import theirs without a circular
+// dependency (they import from edgeGuard.ts already), so it's defined here
+// too, same values.
+const CAPTURE_STATES = new Set([
+  0x0ab, // CapturePulled
+  0x0ac, // CaptureWait
+  0x0ad, // CaptureDamage
+  0x0ae,
+  0x0af,
+  0x0b0, // Yoshi egg lay capture
+  0x0b1,
+  0x0b2,
+  0x0b3, // CaptureFalconDive (Captain Falcon & J Falcon Up-B grab)
+  0x0b4,
+  0x0b5,
+  0x0b6, // CaptureCargo / CommandGrabHold
+  0x0b7,
+  0x0b8,
+  0x0b9, // CapturePulled / ThrowTransition
+  0x0ba, // DamageThrown / Thrown
+  0x0bb,
+  0x0bc,
+]);
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -187,6 +218,10 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
       const edgeGuardingPost = edgeGuardingPort === portA ? postA : postB;
       const recoveringInHitstun =
         recoveringPort === portA ? aInHitstun : bInHitstun;
+      // See CAPTURE_STATES' own comment above -- a grab/throw isn't hitstun but must be treated
+      // the same way for the grounded-safety-clock logic below.
+      const recoveringUnsafe =
+        recoveringInHitstun || CAPTURE_STATES.has(recoveringPost.actionStateId);
 
       // Resolution: recovering player lost a stock → recovery failure (edge-guard success).
       if (recoveringPost.stocksRemaining < situation.recoveringStocksAtEntry) {
@@ -230,20 +265,20 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
       }
 
       // Resolution: grounded + actionable for 0.5 s.
-      if (recoveringPost.grounded && !recoveringInHitstun) {
+      if (recoveringPost.grounded && !recoveringUnsafe) {
         situation.hasTouchedGround = true;
       }
-      if (recoveringInHitstun) {
+      if (recoveringUnsafe) {
         situation.safeFrameStreak = 0;
-        // A hit also undoes any earlier "touched ground" progress, not
-        // just the streak - otherwise a player launched again right after
-        // landing (e.g. onto a side platform, immediately re-hit) stays
-        // "touched" from that earlier landing, and once THIS hitstun
-        // happens to run out - even while still airborne and falling
-        // toward the blast zone, nowhere near safe - the 0.5s clock
-        // silently resumes and can resolve "recovery-success" without
-        // them ever having actually landed again. Require a fresh landing
-        // before the clock can restart.
+        // A hit (or a grab -- see CAPTURE_STATES above) also undoes any
+        // earlier "touched ground" progress, not just the streak - otherwise
+        // a player launched again right after landing (e.g. onto a side
+        // platform, immediately re-hit or grabbed) stays "touched" from that
+        // earlier landing, and once THIS hitstun/grab happens to end - even
+        // while still airborne and falling toward the blast zone, nowhere
+        // near safe - the 0.5s clock silently resumes and can resolve
+        // "recovery-success" without them ever having actually landed
+        // again. Require a fresh landing before the clock can restart.
         situation.hasTouchedGround = false;
       } else if (situation.hasTouchedGround) {
         situation.safeFrameStreak++;
