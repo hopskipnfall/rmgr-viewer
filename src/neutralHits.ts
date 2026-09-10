@@ -88,6 +88,13 @@ export interface NeutralHitEvent {
   readonly reasonDetail?: string;
   readonly winnerPort?: PortIndex | null;
   readonly totalHitsLanded?: number;
+  /** Hits landed before any situation conversion (the original neutral opening), and hits landed
+   * during one (edge-guard/ledge-trap) -- splits totalHitsLanded so the UI can attribute hits to
+   * the right phase instead of one combined count next to the opening reason. situationHits is 0
+   * (not undefined) when there was no conversion. preSituationHits + situationHits ===
+   * totalHitsLanded. */
+  readonly preSituationHits?: number;
+  readonly situationHits?: number;
   readonly totalDamageDealt?: number;
   readonly damageTakenDuringAdvantage?: number;
   readonly convertedToEdgeGuard?: boolean;
@@ -444,6 +451,34 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
     ledgeTrapStartFrameIndex?: number;
     ledgeTrapEndFrameIndex?: number;
     killFrameIndex?: number;
+    /** Snapshot of the attacker's hit count at the moment they FIRST entered a tracked situation
+     * (edge-guard or ledge-trap, whichever came first) -- undefined if no situation conversion has
+     * happened (yet). Lets the UI show "N hits" for the original neutral opening separately from
+     * "M hits" landed once the victim was already offstage/at the ledge, instead of one combined
+     * total that visually attributes every hit to the opening reason. See splitHitsBySituation. */
+    hitsBeforeSituation?: number;
+  }
+
+  /** Splits an interaction's total hit count into "before any situation conversion" (the original
+   * neutral opening) and "during the situation" (edge-guard/ledge-trap), per the user (2026-09-11):
+   * a combined "3 hits" badge next to "Jump Punish" wrongly implied all 3 hits happened during that
+   * initial punish, when really 1 did and the other 2 landed later during the ledge-trap phase.
+   * situationHits is 0 (not undefined) when no conversion happened, so callers can render it
+   * unconditionally without a null check. */
+  function splitHitsBySituation(
+    active: ActiveInteraction,
+    attackerIsPortA: boolean,
+  ): { preSituationHits: number; situationHits: number } {
+    const totalHits = attackerIsPortA
+      ? active.totalHitsA
+      : active.totalHitsB;
+    if (active.hitsBeforeSituation === undefined) {
+      return { preSituationHits: totalHits, situationHits: 0 };
+    }
+    return {
+      preSituationHits: active.hitsBeforeSituation,
+      situationHits: totalHits - active.hitsBeforeSituation,
+    };
   }
 
   let active: ActiveInteraction | null = null;
@@ -588,6 +623,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
           winnerPort: active.winnerPort,
           totalHitsLanded:
             att === portA ? active.totalHitsA : active.totalHitsB,
+          ...splitHitsBySituation(active, att === portA),
           totalDamageDealt: att === portA ? totalDamageA : totalDamageB,
           damageTakenDuringAdvantage:
             att === portA ? totalDamageB : totalDamageA,
@@ -630,6 +666,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
           winnerPort: vic,
           totalHitsLanded:
             att === portA ? active.totalHitsA : active.totalHitsB,
+          ...splitHitsBySituation(active, att === portA),
           totalDamageDealt: att === portA ? totalDamageA : totalDamageB,
           damageTakenDuringAdvantage:
             att === portA ? totalDamageB : totalDamageA,
@@ -652,6 +689,10 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
           active.convertedToEdgeGuard = true;
           if (active.edgeGuardStartFrameIndex === undefined) {
             active.edgeGuardStartFrameIndex = i;
+            if (active.hitsBeforeSituation === undefined) {
+              active.hitsBeforeSituation =
+                att === portA ? active.totalHitsA : active.totalHitsB;
+            }
           }
           active.edgeGuardEndFrameIndex = i;
           active.winnerPort = att;
@@ -663,6 +704,10 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
           active.convertedToLedgeTrap = true;
           if (active.ledgeTrapStartFrameIndex === undefined) {
             active.ledgeTrapStartFrameIndex = i;
+            if (active.hitsBeforeSituation === undefined) {
+              active.hitsBeforeSituation =
+                att === portA ? active.totalHitsA : active.totalHitsB;
+            }
           }
           active.ledgeTrapEndFrameIndex = i;
           active.winnerPort = att;
@@ -715,6 +760,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
             winnerPort: vic,
             totalHitsLanded:
               att === portA ? active.totalHitsA : active.totalHitsB,
+            ...splitHitsBySituation(active, att === portA),
             totalDamageDealt: damageAttDealt,
             damageTakenDuringAdvantage: damageVicDealt,
             convertedToEdgeGuard: active.convertedToEdgeGuard,
@@ -822,6 +868,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
                 winnerPort: active.winnerPort,
                 totalHitsLanded:
                   att === portA ? active.totalHitsA : active.totalHitsB,
+                ...splitHitsBySituation(active, att === portA),
                 totalDamageDealt: damageAttDealt,
                 damageTakenDuringAdvantage: damageVicDealt,
                 convertedToEdgeGuard: active.convertedToEdgeGuard,
@@ -902,6 +949,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
       reasonDetail: active.reasonDetail,
       winnerPort: isKO ? att : (active.winnerPort ?? att),
       totalHitsLanded: att === portA ? active.totalHitsA : active.totalHitsB,
+      ...splitHitsBySituation(active, att === portA),
       totalDamageDealt: damageAttDealt,
       damageTakenDuringAdvantage: damageVicDealt,
       convertedToEdgeGuard: active.convertedToEdgeGuard,
