@@ -3077,6 +3077,12 @@ export class MatchViewController {
        * per the user (2026-09-11): "we need to update that edge guards panel to show the
        * classification of how successful the edge guard was, not just a checkmark." */
       effectivenessScore?: number | null;
+      /** Raw damage dealt by the edge-guarder during the situation window -- shown alongside
+       * effectivenessScore so the score can be independently checked against the underlying fact,
+       * not just trusted as a black-box number. Per the user (2026-09-11): "the edge guards panel
+       * doesn't list the scoring result (KO, how much damage, etc.) ... so i can't independently
+       * verify this." */
+      damageDealtByGuarder?: number;
     }
 
     // Keyed by enteredFrameIndex, which is unique per situation across a match (edgeGuard.ts only
@@ -3107,6 +3113,7 @@ export class MatchViewController {
           effectivenessScore: classified
             ? edgeGuardEffectivenessScore(classified)
             : undefined,
+          damageDealtByGuarder: classified?.damageDealtByGuarder,
         };
       } else if (
         ev.kind === "recovery-success" ||
@@ -3171,7 +3178,15 @@ export class MatchViewController {
       (s) => s.recoveringPort === this.perspectivePort,
     );
     const edgeGuardSituations = edgeSituations.filter(
-      (s) => s.edgeGuardingPort === this.perspectivePort,
+      (s) =>
+        s.edgeGuardingPort === this.perspectivePort &&
+        // Hopeless situations don't belong in the Edge Guard list at all unless the edge-guarder
+        // managed to mess it up (a possible accidental save) -- per the user (2026-09-11): a
+        // situation the recovering player was never going to escape isn't a real edge-guard test,
+        // same reasoning as excluding it from EdgeGuard% and the Neutral Analysis "Edge Guard"
+        // chip. Doesn't affect the Recovery list -- that's still relevant context from the
+        // recovering player's own perspective.
+        !(s.category === "hopeless" && !s.possibleAccidentalSave),
     );
     const ledgeGetupSituations = ledgeSituations.filter(
       (s) => s.ledgePort === this.perspectivePort,
@@ -3192,6 +3207,7 @@ export class MatchViewController {
         missedLedgeHogOpportunity?: boolean;
         possibleAccidentalSave?: boolean;
         effectivenessScore?: number | null;
+        damageDealtByGuarder?: number;
       }>,
       isSuccessOutcome: (outcome: "success" | "failure") => boolean,
       showEffectivenessScore = false,
@@ -3234,7 +3250,14 @@ export class MatchViewController {
           row.appendChild(bracketEl);
         }
 
-        if (sit.category) {
+        // "free" is deliberately never shown as a per-situation badge -- per the user
+        // (2026-09-11, twice): it doesn't correlate with how hard a recovery actually is (higher
+        // up generally means more options/mixups regardless of verdict; low can be all-but-certain
+        // death even when classified "free"), so displaying it next to a specific situation
+        // implies a confidence about difficulty the classifier was never claiming. "hopeless" and
+        // "contestable" stay -- those ARE trusted claims (see edgeGuardEffectivenessScore's own
+        // scoping, which already excludes "free" from anything score-affecting).
+        if (sit.category && sit.category !== "free") {
           const categoryEl = document.createElement("span");
           categoryEl.className = `situation-bracket category-${sit.category}`;
           categoryEl.textContent = tr.situationCategoryLabel(sit.category);
@@ -3245,8 +3268,29 @@ export class MatchViewController {
           if (sit.effectivenessScore !== null) {
             const scoreEl = document.createElement("span");
             const score = sit.effectivenessScore;
+            // The raw fact behind the number, shown inline (not just in a hover title) so the
+            // score can be independently checked, not trusted as a black box -- per the user
+            // (2026-09-11): "the edge guards panel doesn't list the scoring result (KO, how much
+            // damage, etc.) ... so i can't independently verify this."
+            let detail: string;
+            if (sit.missedLedgeHogOpportunity) {
+              detail = tr.edgeGuardEffectivenessDetailMissedLedgeHog;
+            } else if (sit.possibleAccidentalSave) {
+              detail = tr.edgeGuardEffectivenessDetailAccidentalSave;
+            } else if (sit.outcome === "failure") {
+              detail = tr.edgeGuardEffectivenessDetailKO;
+            } else if ((sit.damageDealtByGuarder ?? 0) > 0) {
+              detail = tr.edgeGuardEffectivenessDetailDamage(
+                Math.round(sit.damageDealtByGuarder!),
+              );
+            } else {
+              detail = tr.edgeGuardEffectivenessDetailNoDamage;
+            }
             scoreEl.className = `situation-bracket ${score < 0 ? "bracket-over100" : score >= 70 ? "bracket-under100" : ""}`;
-            scoreEl.textContent = tr.edgeGuardEffectivenessScoreBadge(score);
+            scoreEl.textContent = tr.edgeGuardEffectivenessScoreBadge(
+              score,
+              detail,
+            );
             scoreEl.title = tr.edgeGuardEffectivenessScoreTitle;
             row.appendChild(scoreEl);
           }
@@ -3396,7 +3440,22 @@ export class MatchViewController {
       }
       chipsWrap.appendChild(badgeEl);
 
-      if (e.totalHitsLanded !== undefined && e.totalHitsLanded > 1) {
+      // Hits are split into "before any situation conversion" (the original opening) and "during
+      // one" (edge-guard/ledge-trap), per the user (2026-09-11): a single combined "3 hits" badge
+      // shown right next to the opening reason wrongly implied all 3 hits happened during that
+      // initial punish, when e.g. 1 did and 2 more landed later at the ledge. When there's no
+      // conversion, preSituationHits === totalHitsLanded and situationHits is 0, so this reduces
+      // to the old single-badge behavior automatically.
+      const preSituationHits = e.preSituationHits ?? e.totalHitsLanded;
+      const hasSituationHits = (e.situationHits ?? 0) > 0;
+      // Shown whenever there's more than one hit, OR whenever a split is actually happening (even
+      // a single pre-conversion hit) -- once the interaction is split into two phases, "1 hit"
+      // disambiguates the opening from an implicit "some unknown number," per the user's own
+      // desired wording ("Jump Punish, 1 hit, Ledge Trap, 2 hit").
+      if (
+        preSituationHits !== undefined &&
+        (preSituationHits > 1 || hasSituationHits)
+      ) {
         const hitsBadge = document.createElement("span");
         hitsBadge.className = "neutral-badge-hits";
         hitsBadge.dataset.chip = "hits";
@@ -3404,11 +3463,26 @@ export class MatchViewController {
         hitsBadge.dataset.endFrame = String(
           e.lastHitFrameIndex ?? e.frameIndex + 45,
         );
-        hitsBadge.textContent = tr.neutralHitsBadge(e.totalHitsLanded);
+        hitsBadge.textContent = tr.neutralHitsBadge(preSituationHits);
         chipsWrap.appendChild(hitsBadge);
       }
 
-      if (e.convertedToEdgeGuard) {
+      // Only the more specific tag is shown when both apply -- a ledge-trap situation always
+      // implies the victim was also in an edge-guard/recovery situation en route to the ledge, so
+      // showing both is redundant (per the user, 2026-09-11).
+      if (e.convertedToLedgeTrap) {
+        const ltBadge = document.createElement("span");
+        ltBadge.className = "neutral-badge-conversion";
+        ltBadge.dataset.chip = "ledge-trap";
+        ltBadge.dataset.startFrame = String(
+          e.ledgeTrapStartFrameIndex ?? e.frameIndex,
+        );
+        ltBadge.dataset.endFrame = String(
+          e.ledgeTrapEndFrameIndex ?? e.endFrameIndex ?? e.frameIndex + 60,
+        );
+        ltBadge.textContent = tr.neutralConversionLedgeTrap;
+        chipsWrap.appendChild(ltBadge);
+      } else if (e.convertedToEdgeGuard) {
         const egBadge = document.createElement("span");
         egBadge.className = "neutral-badge-conversion";
         egBadge.dataset.chip = "edge-guard";
@@ -3422,18 +3496,18 @@ export class MatchViewController {
         chipsWrap.appendChild(egBadge);
       }
 
-      if (e.convertedToLedgeTrap) {
-        const ltBadge = document.createElement("span");
-        ltBadge.className = "neutral-badge-conversion";
-        ltBadge.dataset.chip = "ledge-trap";
-        ltBadge.dataset.startFrame = String(
-          e.ledgeTrapStartFrameIndex ?? e.frameIndex,
+      if (e.situationHits !== undefined && e.situationHits > 0) {
+        const situationHitsBadge = document.createElement("span");
+        situationHitsBadge.className = "neutral-badge-hits";
+        situationHitsBadge.dataset.chip = "situation-hits";
+        situationHitsBadge.dataset.startFrame = String(
+          e.ledgeTrapStartFrameIndex ?? e.edgeGuardStartFrameIndex ?? e.frameIndex,
         );
-        ltBadge.dataset.endFrame = String(
-          e.ledgeTrapEndFrameIndex ?? e.endFrameIndex ?? e.frameIndex + 60,
+        situationHitsBadge.dataset.endFrame = String(
+          e.lastHitFrameIndex ?? e.endFrameIndex ?? e.frameIndex + 60,
         );
-        ltBadge.textContent = tr.neutralConversionLedgeTrap;
-        chipsWrap.appendChild(ltBadge);
+        situationHitsBadge.textContent = tr.neutralHitsBadge(e.situationHits);
+        chipsWrap.appendChild(situationHitsBadge);
       }
 
       if (e.convertedToKill) {
