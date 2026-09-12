@@ -8,7 +8,8 @@
  * ledge/stage" but the player did anyway, without taking damage along the way (taking a hit can
  * assist recovery, which would confound the test).
  *
- * NA (US) character variants only, per an earlier scope decision. Dream Land only.
+ * Whatever's in SUPPORTED_CHARACTERS (NA + the JP variants confirmed region-independent -- see its
+ * own doc comment in recoveryHeuristics.ts). Dream Land only.
  *
  * Tracked (not .tmp.ts) and imports the real classify() from src/recoveryHeuristics.ts directly
  * -- an earlier version of this script embedded a full standalone duplicate of the physics, which

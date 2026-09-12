@@ -13,6 +13,7 @@ import {
   classify,
   dkRecoveryOutcomesFrameStepped,
   pikachuRecoveryOutcomes,
+  SUPPORTED_CHARACTERS,
   type RecoveryOutcomes,
 } from "./recoveryHeuristics.js";
 
@@ -895,5 +896,169 @@ describe("Kirby: Final Cutter", () => {
       const left = classify(CHAR_KIRBY, -x, y, 0, 0, 0, 0x39, 1);
       expect(left).toBe(right);
     }
+  });
+});
+
+// JP region-variant IDs, per rmgr-ts's CharacterId table (not exported from recoveryHeuristics.ts,
+// same convention as CHAR_DONKEY_KONG/CHAR_LINK/CHAR_KIRBY above being declared locally in tests).
+describe("JP region variants", () => {
+  const CHAR_FOX = 0x01;
+  const CHAR_FOX_JP = 0x29;
+  const CHAR_DONKEY_KONG = 0x02;
+  const CHAR_DONKEY_KONG_JP = 0x2c;
+  const CHAR_SAMUS = 0x03;
+  const CHAR_SAMUS_JP = 0x24;
+  const CHAR_LINK = 0x05;
+  const CHAR_LINK_JP = 0x27;
+  const CHAR_YOSHI = 0x06;
+  const CHAR_YOSHI_JP = 0x31;
+  const CHAR_FALCON = 0x07;
+  const CHAR_FALCON_JP = 0x28;
+  const CHAR_KIRBY = 0x08;
+  const CHAR_KIRBY_JP = 0x30;
+  const CHAR_PIKACHU = 0x09;
+  const CHAR_PIKACHU_JP = 0x32;
+  const CHAR_JIGGLYPUFF = 0x0a;
+  const CHAR_JIGGLYPUFF_JP = 0x2e;
+
+  it("are all present in SUPPORTED_CHARACTERS", () => {
+    for (const id of [
+      CHAR_FOX_JP,
+      CHAR_DONKEY_KONG_JP,
+      CHAR_SAMUS_JP,
+      CHAR_LINK_JP,
+      CHAR_YOSHI_JP,
+      CHAR_FALCON_JP,
+      CHAR_KIRBY_JP,
+      CHAR_PIKACHU_JP,
+      CHAR_JIGGLYPUFF_JP,
+    ]) {
+      expect(SUPPORTED_CHARACTERS.has(id)).toBe(true);
+    }
+  });
+
+  // Fox, Samus, Pikachu, and Jigglypuff are confirmed region-independent (per the Game Expert
+  // session's smashremix decomp audit, 2026-09-11: zero region-gated fields in their FTAttributes
+  // tables relevant to recovery physics) -- their JP IDs must produce IDENTICAL verdicts to the US
+  // ID at every input, not just some.
+  it.each([
+    ["Fox", CHAR_FOX, CHAR_FOX_JP],
+    ["Samus", CHAR_SAMUS, CHAR_SAMUS_JP],
+    ["Pikachu", CHAR_PIKACHU, CHAR_PIKACHU_JP],
+    ["Jigglypuff", CHAR_JIGGLYPUFF, CHAR_JIGGLYPUFF_JP],
+  ])(
+    "%s: JP produces identical verdicts to US across random trials (region-independent)",
+    (_name, usId, jpId) => {
+      for (let i = 0; i < 500; i++) {
+        const x = randRange(-6000, 6000);
+        const y = randRange(-3000, 2000);
+        const vx = randRange(-45, 45);
+        const vy = randRange(-60, 90);
+        const jumpsRemaining = Math.random() < 0.5 ? 0 : 1;
+        const facingDirection = x <= 0 ? 1 : -1;
+        const us = classify(
+          usId,
+          x,
+          y,
+          vx,
+          vy,
+          jumpsRemaining,
+          0,
+          facingDirection,
+        );
+        const jp = classify(
+          jpId,
+          x,
+          y,
+          vx,
+          vy,
+          jumpsRemaining,
+          0,
+          facingDirection,
+        );
+        expect(jp).toBe(us);
+      }
+    },
+  );
+
+  // Kirby's only region-gated FTAttributes field is cosmetic model size (not fed into the
+  // physics model at all), so it gets the same "always identical" treatment, but with the
+  // Final Cutter action state (0x39 is Kirby's own Fall state, matching the facing-symmetry
+  // tests above) since jumpsRemaining alone doesn't gate Kirby's dispatch.
+  it("Kirby: JP produces identical verdicts to US across random trials (cosmetic-only region field)", () => {
+    for (let i = 0; i < 500; i++) {
+      const x = randRange(-6000, 6000);
+      const y = randRange(-3000, 2000);
+      const vx = randRange(-45, 45);
+      const vy = randRange(-60, 90);
+      const jumpsRemaining = Math.random() < 0.5 ? 0 : 1;
+      const facingDirection = x <= 0 ? 1 : -1;
+      const us = classify(
+        CHAR_KIRBY,
+        x,
+        y,
+        vx,
+        vy,
+        jumpsRemaining,
+        0x39,
+        facingDirection,
+      );
+      const jp = classify(
+        CHAR_KIRBY_JP,
+        x,
+        y,
+        vx,
+        vy,
+        jumpsRemaining,
+        0x39,
+        facingDirection,
+      );
+      expect(jp).toBe(us);
+    }
+  });
+
+  // DK, Link, Falcon, and Yoshi DO have real recovery-relevant physics differences between
+  // regions (per the same decomp audit) -- these assert the JP dispatch is actually wired to
+  // different constants, not silently falling back to the US ones through a forgotten parameter
+  // thread. Collects mismatches across a random sweep and asserts at least one exists; the exact
+  // rate isn't the point (that's covered by scripts/recoveryValidation.ts against real replay
+  // data), just that the wiring produces a real behavioral difference somewhere.
+  it.each([
+    ["Donkey Kong", CHAR_DONKEY_KONG, CHAR_DONKEY_KONG_JP],
+    ["Link", CHAR_LINK, CHAR_LINK_JP],
+    ["Captain Falcon", CHAR_FALCON, CHAR_FALCON_JP],
+    ["Yoshi", CHAR_YOSHI, CHAR_YOSHI_JP],
+  ])("%s: JP produces at least one different verdict from US (real physics differences)", (_name, usId, jpId) => {
+    let sawDifference = false;
+    for (let i = 0; i < 500 && !sawDifference; i++) {
+      const x = randRange(-6000, 6000);
+      const y = randRange(-3000, 2000);
+      const vx = randRange(-45, 45);
+      const vy = randRange(-60, 90);
+      const jumpsRemaining = Math.random() < 0.5 ? 0 : 1;
+      const facingDirection = x <= 0 ? 1 : -1;
+      const us = classify(
+        usId,
+        x,
+        y,
+        vx,
+        vy,
+        jumpsRemaining,
+        0,
+        facingDirection,
+      );
+      const jp = classify(
+        jpId,
+        x,
+        y,
+        vx,
+        vy,
+        jumpsRemaining,
+        0,
+        facingDirection,
+      );
+      if (us !== jp) sawDifference = true;
+    }
+    expect(sawDifference).toBe(true);
   });
 });

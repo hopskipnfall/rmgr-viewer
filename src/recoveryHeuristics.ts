@@ -5,7 +5,11 @@
  * (1,733/1,733 correct as of this port). Pure physics only - no replay-scanning logic; see
  * src/recoveryVerdicts.ts for how this gets applied to a real Replay.
  *
- * NA (US) character variants only, per an earlier scope decision. Dream Land only.
+ * NA (US) character variants, plus their JP region variants -- per the Game Expert session's
+ * smashremix decomp audit (2026-09-11): Fox, Samus, Pikachu, Jigglypuff, and Kirby are genuinely
+ * region-independent for recovery physics; DK, Link, Falcon, and Yoshi have real region-specific
+ * constants (see each one's own `_JP` attrs object/constant for exactly what differs). See
+ * SUPPORTED_CHARACTERS' own doc comment for the full character list. Dream Land only.
  */
 
 // ---------------------------------------------------------------------------
@@ -562,6 +566,19 @@ const LINK = {
   JUMPAERIAL_VEL_X: 0.35,
 };
 
+/**
+ * JP region variant: gravity, Spin Attack's initial launch speed, and its post-move helpless-fall
+ * drift all differ from US -- per the Game Expert session's smashremix decomp audit (2026-09-11),
+ * confirmed against the full dLinkMain_attr table (every other field -- jump formula constants,
+ * air accel/speed, cliffcatch reach -- is unchanged, single-value, no region gating).
+ */
+const LINK_JP: typeof LINK = {
+  ...LINK,
+  GRAVITY: 3.2,
+  SPINATTACK_AIR_VEL_Y: 71.0,
+  FALLSPECIAL_DRIFT: 0.75,
+};
+
 /** Link-specific facing-gated ledge check: unlike every other character (and the shared
  * checkLedgeGrabProbeOnly, which tests both corners unconditionally), Link's up-B has no aim --
  * drift is stick-driven toward whichever ledge targetLr is currently testing -- so only that one
@@ -629,24 +646,25 @@ function linkSimulateUpB(
   y0: number,
   vx0: number,
   targetLr: 1 | -1,
+  attrs: typeof LINK,
 ): Outcome {
-  let vy = LINK.SPINATTACK_AIR_VEL_Y;
+  let vy = attrs.SPINATTACK_AIR_VEL_Y;
   let vx = vx0;
   let x = x0;
   let y = y0;
-  for (let frame = 0; frame < LINK.SPINATTACK_DURATION_FRAMES; frame++) {
+  for (let frame = 0; frame < attrs.SPINATTACK_DURATION_FRAMES; frame++) {
     const gravity =
-      frame >= LINK.SPINATTACK_GRAVITY_SWITCH_FRAME
-        ? LINK.GRAVITY
-        : LINK.GRAVITY * LINK.SPINATTACK_GRAVITY_MUL;
+      frame >= attrs.SPINATTACK_GRAVITY_SWITCH_FRAME
+        ? attrs.GRAVITY
+        : attrs.GRAVITY * attrs.SPINATTACK_GRAVITY_MUL;
     const prevX = x;
     const prevY = y;
-    vy = applyGravity(vy, gravity, LINK.TVEL_BASE);
+    vy = applyGravity(vy, gravity, attrs.TVEL_BASE);
     vx = clampAirVelX(
       vx,
       targetLr * STICK_TOWARD,
-      LINK.AIR_ACCEL * LINK.SPINATTACK_AIR_DRIFT_MUL,
-      LINK.AIR_SPEED_MAX_X,
+      attrs.AIR_ACCEL * attrs.SPINATTACK_AIR_DRIFT_MUL,
+      attrs.AIR_SPEED_MAX_X,
     );
     x += vx;
     y += vy;
@@ -656,20 +674,20 @@ function linkSimulateUpB(
       x,
       y,
       targetLr,
-      LINK.CLIFFCATCH_X,
-      LINK.CLIFFCATCH_Y,
+      attrs.CLIFFCATCH_X,
+      attrs.CLIFFCATCH_Y,
     );
     if (outcome) return outcome;
   }
   for (let frame = 0; frame < MAX_HELPLESS_FRAMES; frame++) {
     const prevX = x;
     const prevY = y;
-    vy = applyGravity(vy, LINK.GRAVITY, LINK.TVEL_BASE);
+    vy = applyGravity(vy, attrs.GRAVITY, attrs.TVEL_BASE);
     vx = clampAirVelX(
       vx,
       targetLr * STICK_TOWARD,
-      LINK.AIR_ACCEL * LINK.FALLSPECIAL_DRIFT,
-      LINK.AIR_SPEED_MAX_X,
+      attrs.AIR_ACCEL * attrs.FALLSPECIAL_DRIFT,
+      attrs.AIR_SPEED_MAX_X,
     );
     x += vx;
     y += vy;
@@ -679,8 +697,8 @@ function linkSimulateUpB(
       x,
       y,
       targetLr,
-      LINK.CLIFFCATCH_X,
-      LINK.CLIFFCATCH_Y,
+      attrs.CLIFFCATCH_X,
+      attrs.CLIFFCATCH_Y,
     );
     if (outcome) return outcome;
     if (y < DEATH_Y) return null;
@@ -694,6 +712,7 @@ function linkRecoveryOutcomes(
   vx0: number,
   vy0: number,
   jumpsRemaining: number,
+  attrs: typeof LINK = LINK,
 ): RecoveryOutcomes {
   let reachedLedge = false;
   let reachedStage = false;
@@ -701,15 +720,15 @@ function linkRecoveryOutcomes(
     if (reachedLedge && reachedStage) break;
     let jumpVx0: number, jumpVy0: number;
     if (jumpsRemaining === 1) {
-      jumpVx0 = targetLr * STICK_TOWARD * LINK.JUMPAERIAL_VEL_X;
+      jumpVx0 = targetLr * STICK_TOWARD * attrs.JUMPAERIAL_VEL_X;
       jumpVy0 =
-        (80 * LINK.JUMP_HEIGHT_MUL + LINK.JUMP_HEIGHT_BASE) *
-        LINK.JUMPAERIAL_HEIGHT;
+        (80 * attrs.JUMP_HEIGHT_MUL + attrs.JUMP_HEIGHT_BASE) *
+        attrs.JUMPAERIAL_HEIGHT;
     } else {
       jumpVx0 = vx0;
       jumpVy0 = vy0;
     }
-    for (let delay = 0; delay <= LINK.MAX_DELAY_FRAMES; delay++) {
+    for (let delay = 0; delay <= attrs.MAX_DELAY_FRAMES; delay++) {
       if (reachedLedge && reachedStage) break;
       let x = x0;
       let y = y0;
@@ -720,12 +739,12 @@ function linkRecoveryOutcomes(
       for (let frame = 0; frame < delay; frame++) {
         const prevX = x;
         const prevY = y;
-        vy = applyGravity(vy, LINK.GRAVITY, LINK.TVEL_BASE);
+        vy = applyGravity(vy, attrs.GRAVITY, attrs.TVEL_BASE);
         vx = clampAirVelX(
           vx,
           targetLr * STICK_TOWARD,
-          LINK.AIR_ACCEL,
-          LINK.AIR_SPEED_MAX_X,
+          attrs.AIR_ACCEL,
+          attrs.AIR_SPEED_MAX_X,
         );
         x += vx;
         y += vy;
@@ -735,8 +754,8 @@ function linkRecoveryOutcomes(
           x,
           y,
           targetLr,
-          LINK.CLIFFCATCH_X,
-          LINK.CLIFFCATCH_Y,
+          attrs.CLIFFCATCH_X,
+          attrs.CLIFFCATCH_Y,
         );
         if (outcome) break;
         if (y < DEATH_Y) {
@@ -745,7 +764,7 @@ function linkRecoveryOutcomes(
         }
       }
       if (outcome === null && !died) {
-        outcome = linkSimulateUpB(x, y, vx, targetLr);
+        outcome = linkSimulateUpB(x, y, vx, targetLr, attrs);
       }
       if (outcome === "ledge" || outcome === "both") reachedLedge = true;
       if (outcome === "stage" || outcome === "both") reachedStage = true;
@@ -758,9 +777,11 @@ function linkRecoveryOutcomes(
 // Pikachu — Quick Attack, 0 jumps only (pikachu_recovery_sim.py)
 //
 // This is the character whose search cost was directly reported as a live-viewer problem (35ms
-// average / 477ms worst case per call on real match data). The dominant cost is the angle x
-// magnitude x recursive-second-zip explosion in pikaTryActivation/pikaSimulateEndAndBeyond (up to
-// ~11,664 branches for a genuinely-dead situation), not any single phase's frame count.
+// average / 477ms worst case per call on real match data, later re-measured corpus-wide at 6.0ms
+// average / 542.8ms worst case -- Pikachu alone accounted for 94.7% of all classify() time across
+// every character combined). The dominant cost is the angle x magnitude x recursive-second-zip
+// explosion in pikaTryActivation/pikaSimulateEndAndBeyond (up to ~11,664 branches for a genuinely-
+// dead situation), not any single phase's frame count.
 //
 // TRIED converting the shared 400-frame helpless-fall tail (every leaf of that search tree ends
 // in it) to the closed-form evaluatePhase used by DK below -- the Python port did this and
@@ -777,11 +798,24 @@ function linkRecoveryOutcomes(
 // closed-form machinery is here. Reverted; kept fully frame-stepped. See
 // pikaSimulateEndAndBeyond's tail for the numbers.
 //
-// A higher-leverage fix that hasn't been implemented: pikaTryActivation(x0, y0) takes ONLY
-// position (activation zeroes both vx and vy), making the entire expensive subtree a pure function
-// of two scalars -- a strong memoization/tabulation candidate that could turn this into a lookup
-// rather than a search, which would sidestep the closed-form-vs-frame-stepped tradeoff entirely.
-// Not yet done.
+// FIXED (2026-09-11, via a dedicated optimization pass -- see PIKA_PRUNE_MARGIN's own block right
+// above pikaSimulateEndAndBeyond): exact, answer-preserving early exits that recognize when a
+// remaining branch's deterministic trajectory (friction-decayed drift, or vy already <= 0 and
+// below outcome-check height) provably cannot produce an outcome, and return the same flags that
+// branch would have returned anyway instead of frame-stepping it out to death/the 400-frame cap.
+// No search order, grid, or delay step changed -- verified via a differential check against a
+// frozen pre-optimization reference across every real Pikachu input in the corpus plus thousands
+// of random ones (0 mismatches), the existing test suite, and scripts/recoveryValidation.ts's
+// real-corpus wrong-count (unchanged). Result: corpus-wide Pikachu total time dropped ~25x (27.1s
+// -> 1.08s across 283 files), worst single call from 542.8ms to 21.2ms. The memoization idea below
+// was never pursued once this landed -- remaining headroom is well under 1s total, not worth the
+// complexity.
+//
+// A higher-leverage fix that was considered but not implemented: pikaTryActivation(x0, y0) takes
+// ONLY position (activation zeroes both vx and vy), making the entire expensive subtree a pure
+// function of two scalars -- a memoization/tabulation candidate that could turn this into a lookup
+// rather than a search. Left on the table given the pruning fix above already closed nearly all of
+// the gap.
 // ---------------------------------------------------------------------------
 
 const PIKA = {
@@ -952,6 +986,44 @@ function pikaFullReAimGrid(): { angle: PikaAngle; magnitude: number }[] {
 
 const PIKA_FULL_REAIM_GRID = pikaFullReAimGrid();
 
+// ---- Exact (answer-preserving) pruning bounds for the search below ----
+//
+// Every outcomeThisFrame hit needs a DESCENDING crossing of y=0 by either the body (stage, crossing
+// x within the ledges) or the ledge probe (body + (+-CLIFFCATCH_X, CLIFFCATCH_Y), crossing x within
+// CORNER_WINDOW of a corner). So a frame can only produce an outcome if (a) its prevY >=
+// -CLIFFCATCH_Y and (b) the crossing point -- interpolated between prevX and x -- has |x| <=
+// LEDGE_R_X + CLIFFCATCH_X. A branch of the search whose remaining trajectory provably violates
+// (a) or (b) on every future frame contributes nothing, and every exit path of that remainder
+// (death, frame cap, loop exhaustion) returns the same flags either way -- so skipping it is exact,
+// not an approximation. The bounds below are all deliberately loose upper bounds on travel, with a
+// PIKA_PRUNE_MARGIN of slack far larger than any floating-point accumulation error (~1e-11 units).
+const PIKA_PRUNE_MARGIN = 1.0;
+const PIKA_OUTCOME_ABS_X_MAX = LEDGE_R_X + PIKA.CLIFFCATCH_X;
+/** Upper bound on total future |dx| while vx only decays by AIR_FRICTION per frame (the end window
+ * and the helpless-fall tail both do exactly that): sum_k max(v - f*k, 0) <= v^2 / (2f). */
+function pikaFrictionDriftBound(vx: number): number {
+  return (vx * vx) / (2 * PIKA.AIR_FRICTION);
+}
+/** Fastest possible second zip (magnitude 80 or straight-up, both = CONTROLLER_RANGE_MAX). */
+const PIKA_SECOND_ZIP_SPEED_MAX =
+  (PIKA.VEL_BASE * PIKA.CONTROLLER_RANGE_MAX + PIKA.VEL_ADD) * PIKA.VEL_MUL;
+/** Max |dx| over an entire re-aim subtree (second zip + its end window + helpless tail). */
+const PIKA_REAIM_SUBTREE_X_REACH =
+  PIKA.ZIP_TIME * PIKA_SECOND_ZIP_SPEED_MAX +
+  pikaFrictionDriftBound(PIKA_SECOND_ZIP_SPEED_MAX * PIKA.VEL_BAK_MUL);
+/** Max upward dy over an entire re-aim subtree: the zip itself, then the end window (vy shrinks
+ * geometrically by 8/9, so total rise <= 8 * vy), then the tail (gravity 3/frame from at most that
+ * same vy: rise <= vy^2 / (2g) + vy). Very loose on purpose. */
+const PIKA_REAIM_SUBTREE_Y_RISE = (() => {
+  const v = PIKA_SECOND_ZIP_SPEED_MAX * PIKA.VEL_BAK_MUL;
+  return (
+    PIKA.ZIP_TIME * PIKA_SECOND_ZIP_SPEED_MAX +
+    (PIKA.VEL_Y_DIV - 1) * v +
+    (v * v) / (2 * PIKA.GRAVITY) +
+    v
+  );
+})();
+
 function pikaSimulateEndAndBeyond(
   x0: number,
   y0: number,
@@ -966,9 +1038,27 @@ function pikaSimulateEndAndBeyond(
   let x = x0;
   let y = y0;
 
+  // Exact prune (see PIKA_PRUNE_MARGIN's block): with the second zip already spent, everything
+  // left is deterministic -- the end window then the helpless tail, both only decaying vx by
+  // AIR_FRICTION -- so if that can't carry the body back within outcome range, the result is
+  // already known to be {false, false}.
+  if (
+    usedSecondZip &&
+    Math.abs(x) - pikaFrictionDriftBound(vx) - PIKA_PRUNE_MARGIN >
+      PIKA_OUTCOME_ABS_X_MAX
+  ) {
+    return { reachedLedge: false, reachedStage: false };
+  }
+
   for (let frame = 0; frame < PIKA.END_WINDOW_FRAME; frame++) {
     const prevX = x;
     const prevY = y;
+    // Exact prune: with no re-aim left, vy <= 0 stays <= 0 through the rest of the window (it only
+    // shrinks by vy/9) and the tail (applyGravity never raises a non-positive vy above 0), so y
+    // never increases again -- and prevY < -CLIFFCATCH_Y already rules out every outcome check.
+    if (usedSecondZip && vy <= 0 && prevY < -PIKA.CLIFFCATCH_Y) {
+      return { reachedLedge: false, reachedStage: false };
+    }
     vy -= vy / PIKA.VEL_Y_DIV;
     vx = applyFriction(vx, PIKA.AIR_FRICTION);
     x += vx;
@@ -995,7 +1085,13 @@ function pikaSimulateEndAndBeyond(
 
   // frame 9: the re-aim window. Tries every candidate in reAimCandidates (the full grid by
   // default; a single canonical-technique candidate when called from pikaCanonicalProbe).
-  if (!usedSecondZip) {
+  // Exact prune: skip the whole re-aim grid when no second zip (+ its own deterministic
+  // remainder) could bring the body back within outcome range horizontally or vertically.
+  const reAimCanMatter =
+    Math.abs(x) - PIKA_REAIM_SUBTREE_X_REACH - PIKA_PRUNE_MARGIN <=
+      PIKA_OUTCOME_ABS_X_MAX &&
+    y + PIKA_REAIM_SUBTREE_Y_RISE + PIKA_PRUNE_MARGIN >= -PIKA.CLIFFCATCH_Y;
+  if (!usedSecondZip && reAimCanMatter) {
     for (const { angle, magnitude } of reAimCandidates) {
       if (reachedLedge && reachedStage) break;
       const testAngle = angle === "straight_up" ? Math.PI / 2 : angle;
@@ -1052,9 +1148,22 @@ function pikaSimulateEndAndBeyond(
   // improve here (~363ms vs ~477ms, matching the ~2x Python claim) -- it's specifically the
   // majority non-pathological case that got worse. Kept frame-stepped until/unless evaluatePhase
   // itself gets cheap enough (e.g. non-closure-based) to win here too.
+  //
+  // Both exits below are exact prunes (see PIKA_PRUNE_MARGIN's block): every way out of this loop
+  // other than an outcome returns the current flags unchanged, so once no future frame can
+  // produce an outcome, returning now gives the identical result.
+  if (
+    Math.abs(x) - pikaFrictionDriftBound(vx) - PIKA_PRUNE_MARGIN >
+    PIKA_OUTCOME_ABS_X_MAX
+  ) {
+    return { reachedLedge, reachedStage };
+  }
   for (let frame = 0; frame < PIKA.MAX_HELPLESS_FRAMES; frame++) {
     const prevX = x;
     const prevY = y;
+    // Falling (applyGravity keeps a non-positive vy non-positive) and already below the lowest
+    // height any outcome check can fire from.
+    if (vy <= 0 && prevY < -PIKA.CLIFFCATCH_Y) return { reachedLedge, reachedStage };
     vy = applyGravity(vy, PIKA.GRAVITY, PIKA.TVEL_BASE);
     vx = applyFriction(vx, PIKA.AIR_FRICTION);
     x += vx;
@@ -1480,13 +1589,22 @@ const DK = {
   JUMPAERIAL_VEL_X: 0.5,
 };
 
+/**
+ * JP region variant differs in exactly one field -- per the Game Expert session's smashremix
+ * decomp audit (2026-09-11), confirmed against the full dDonkeyMain_attr table AND the Spinning
+ * Kong header block (ground/air accel, vel max, gravity multipliers, fallspecial drift, landing
+ * lag): everything else is single-value, no region gating.
+ */
+const DK_JP_SPINNINGKONG_AIR_VEL_Y = 18.0;
+
 function dkSimulateSpinningKong(
   x0: number,
   y0: number,
   vx0: number,
   targetLr: 1 | -1,
+  spinningKongAirVelY: number,
 ): Outcome {
-  const vy0 = DK.SPINNINGKONG_AIR_VEL_Y;
+  const vy0 = spinningKongAirVelY;
   const vxClamped = clampMagnitude(vx0, DK.SPINNINGKONG_AIR_VEL_MAX);
 
   const durationEarly = Math.min(
@@ -1553,6 +1671,7 @@ function dkRecoveryOutcomes(
   vx0: number,
   vy0: number,
   jumpsRemaining: number,
+  spinningKongAirVelY: number = DK.SPINNINGKONG_AIR_VEL_Y,
 ): RecoveryOutcomes {
   let reachedLedge = false;
   let reachedStage = false;
@@ -1585,7 +1704,13 @@ function dkRecoveryOutcomes(
       let outcome = phase.outcome;
       if (outcome === null && !phase.died) {
         const [x, y, vx] = phase.endState!;
-        outcome = dkSimulateSpinningKong(x, y, vx, targetLr);
+        outcome = dkSimulateSpinningKong(
+          x,
+          y,
+          vx,
+          targetLr,
+          spinningKongAirVelY,
+        );
       }
       if (outcome === "ledge" || outcome === "both") reachedLedge = true;
       if (outcome === "stage" || outcome === "both") reachedStage = true;
@@ -2020,6 +2145,26 @@ const YOSHI_ATTR: NoUpBAttr = {
   doubleJumpDyCurve: YOSHI_DOUBLE_JUMP_DY_CURVE,
 };
 
+/**
+ * JP region variant -- per the Game Expert session's smashremix decomp audit (2026-09-11):
+ * gravity, tvelBase, airSpeedMaxX, and jumpaerialVelX all differ (nearly every constant Yoshi's
+ * recovery model touches, since it's entirely the jump-aerial root-motion move). jumpHeightMul/
+ * jumpHeightBase/jumpaerialHeight/airAccel/cliffcatchX/cliffcatchY are unchanged.
+ *
+ * doubleJumpDyCurve is DELIBERATELY the same curve object, not a new extraction: the decomp's raw
+ * animation keyframe data has zero region gating, and this was directly confirmed against a real
+ * 106-frame JP Yoshi double-jump trace in our corpus (260822222803-kusora_JPN-nue-22.rmgr, port 1,
+ * frame 5359) -- its first 16 real (non-keyframe-frozen) samples match YOSHI_DOUBLE_JUMP_DY_CURVE
+ * exactly, not even rescaled.
+ */
+const YOSHI_ATTR_JP: NoUpBAttr = {
+  ...YOSHI_ATTR,
+  gravity: 2.7,
+  tvelBase: 55.0,
+  airSpeedMaxX: 40.0,
+  jumpaerialVelX: 0.35,
+};
+
 const JIGGLYPUFF_ATTR: NoUpBAttr = {
   gravity: 2.0,
   tvelBase: 38.0,
@@ -2214,6 +2359,24 @@ const FALCON = {
 };
 
 /**
+ * JP region variant -- per the Game Expert session's smashremix decomp audit (2026-09-11),
+ * confirmed against the full FTAttributes table and ftcaptain.h. Note: decomp's `jump_vel_x`
+ * (0.31 US / 0.35 JP) is a SEPARATE, ground-jump-only field this classifier never touches (we only
+ * ever evaluate at jumpsRemaining <= 1, i.e. the double jump, which uses `jumpaerial_vel_x` --
+ * confirmed region-independent at 0.35 both regions, matching our existing JUMPAERIAL_VEL_X). Also
+ * unchanged: gravity, air_accel, air_speed_max_x, cliffcatch reach, Dive's own
+ * UNK_TIMER/TURN_STICK_RANGE_MIN/FALLSPECIAL_DRIFT/LANDING_LAG.
+ */
+const FALCON_JP: typeof FALCON = {
+  ...FALCON,
+  TVEL_BASE: 60.0,
+  JUMP_HEIGHT_BASE: 25.0,
+  JUMPAERIAL_HEIGHT: 0.95,
+  FALCONDIVE_AIR_ACCEL_MUL: 1.2,
+  FALCONDIVE_AIR_SPEED_MAX_MUL: 0.84,
+};
+
+/**
  * Root-motion curve for Falcon Dive, 65 frames, extracted from 1658_FTCaptainAnimFalconDive.c's
  * joint2 (TransN) track via a decomp-format animation-curve interpreter (AObjEvent16 "figatree"
  * commands + cubic Hermite interpolation) built specifically for this move. World-space delta is
@@ -2261,13 +2424,13 @@ function falconSimulateDiveAndBeyond(
   x0: number,
   y0: number,
   targetLr: 1 | -1,
+  attrs: typeof FALCON,
 ): Outcome {
   let x = x0;
   let y = y0;
   let specialVelX = 0;
-  const diveCap =
-    FALCON.AIR_SPEED_MAX_X * FALCON.FALCONDIVE_AIR_SPEED_MAX_MUL;
-  const diveAccel = FALCON.AIR_ACCEL * FALCON.FALCONDIVE_AIR_ACCEL_MUL;
+  const diveCap = attrs.AIR_SPEED_MAX_X * attrs.FALCONDIVE_AIR_SPEED_MAX_MUL;
+  const diveAccel = attrs.AIR_ACCEL * attrs.FALCONDIVE_AIR_ACCEL_MUL;
 
   for (let t = 0; t < FALCON_DIVE_DX.length; t++) {
     const prevX = x;
@@ -2285,7 +2448,7 @@ function falconSimulateDiveAndBeyond(
           diveCap,
         );
       }
-      specialVelX = applyFriction(specialVelX, FALCON.AIR_FRICTION);
+      specialVelX = applyFriction(specialVelX, attrs.AIR_FRICTION);
     }
     x += specialVelX + FALCON_DIVE_DX[t]! * -targetLr;
     y += FALCON_DIVE_DY[t]!;
@@ -2294,8 +2457,8 @@ function falconSimulateDiveAndBeyond(
       prevY,
       x,
       y,
-      FALCON.CLIFFCATCH_X,
-      FALCON.CLIFFCATCH_Y,
+      attrs.CLIFFCATCH_X,
+      attrs.CLIFFCATCH_Y,
     );
     if (outcome) return outcome;
     if (y < DEATH_Y) return null;
@@ -2307,15 +2470,15 @@ function falconSimulateDiveAndBeyond(
   // re-clamps it to the new cap on its own if it's still above it.
   let vx = specialVelX;
   let vy = FALCON_DIVE_FINAL_VY;
-  const fallSpecialCap = FALCON.AIR_SPEED_MAX_X * FALCON.FALLSPECIAL_DRIFT;
+  const fallSpecialCap = attrs.AIR_SPEED_MAX_X * attrs.FALLSPECIAL_DRIFT;
   for (let i = 0; i < 1000; i++) {
     const prevX = x;
     const prevY = y;
-    vy = applyGravity(vy, FALCON.GRAVITY, FALCON.TVEL_BASE);
+    vy = applyGravity(vy, attrs.GRAVITY, attrs.TVEL_BASE);
     vx = clampAirVelX(
       vx,
       targetLr * STICK_TOWARD,
-      FALCON.AIR_ACCEL,
+      attrs.AIR_ACCEL,
       fallSpecialCap,
     );
     x += vx;
@@ -2325,8 +2488,8 @@ function falconSimulateDiveAndBeyond(
       prevY,
       x,
       y,
-      FALCON.CLIFFCATCH_X,
-      FALCON.CLIFFCATCH_Y,
+      attrs.CLIFFCATCH_X,
+      attrs.CLIFFCATCH_Y,
     );
     if (outcome) return outcome;
     if (y < DEATH_Y) return null;
@@ -2340,6 +2503,7 @@ function falconRecoveryOutcomes(
   vx0: number,
   vy0: number,
   jumpsRemaining: number,
+  attrs: typeof FALCON = FALCON,
 ): RecoveryOutcomes {
   let reachedLedge = false;
   let reachedStage = false;
@@ -2347,15 +2511,15 @@ function falconRecoveryOutcomes(
     if (reachedLedge && reachedStage) break;
     let jumpVx0: number, jumpVy0: number;
     if (jumpsRemaining === 1) {
-      jumpVx0 = targetLr * STICK_TOWARD * FALCON.JUMPAERIAL_VEL_X;
+      jumpVx0 = targetLr * STICK_TOWARD * attrs.JUMPAERIAL_VEL_X;
       jumpVy0 =
-        (80 * FALCON.JUMP_HEIGHT_MUL + FALCON.JUMP_HEIGHT_BASE) *
-        FALCON.JUMPAERIAL_HEIGHT;
+        (80 * attrs.JUMP_HEIGHT_MUL + attrs.JUMP_HEIGHT_BASE) *
+        attrs.JUMPAERIAL_HEIGHT;
     } else {
       jumpVx0 = vx0;
       jumpVy0 = vy0;
     }
-    for (let delay = 0; delay <= FALCON.MAX_DELAY_FRAMES; delay++) {
+    for (let delay = 0; delay <= attrs.MAX_DELAY_FRAMES; delay++) {
       if (reachedLedge && reachedStage) break;
       // Pre-activation freefall: ordinary Fall-state physics (gravity + standard clampAirVelX
       // drift), NOT the dive's own multiplied constants -- the drift-velocity reset only happens
@@ -2369,12 +2533,12 @@ function falconRecoveryOutcomes(
       for (let frame = 0; frame < delay; frame++) {
         const prevX = x;
         const prevY = y;
-        vy = applyGravity(vy, FALCON.GRAVITY, FALCON.TVEL_BASE);
+        vy = applyGravity(vy, attrs.GRAVITY, attrs.TVEL_BASE);
         vx = clampAirVelX(
           vx,
           targetLr * STICK_TOWARD,
-          FALCON.AIR_ACCEL,
-          FALCON.AIR_SPEED_MAX_X,
+          attrs.AIR_ACCEL,
+          attrs.AIR_SPEED_MAX_X,
         );
         x += vx;
         y += vy;
@@ -2383,8 +2547,8 @@ function falconRecoveryOutcomes(
           prevY,
           x,
           y,
-          FALCON.CLIFFCATCH_X,
-          FALCON.CLIFFCATCH_Y,
+          attrs.CLIFFCATCH_X,
+          attrs.CLIFFCATCH_Y,
         );
         if (outcome) {
           preActivationOutcome = outcome;
@@ -2403,7 +2567,7 @@ function falconRecoveryOutcomes(
           reachedStage = true;
         continue;
       }
-      const outcome = falconSimulateDiveAndBeyond(x, y, targetLr);
+      const outcome = falconSimulateDiveAndBeyond(x, y, targetLr, attrs);
       if (outcome === "ledge" || outcome === "both") reachedLedge = true;
       if (outcome === "stage" || outcome === "both") reachedStage = true;
     }
@@ -2659,7 +2823,7 @@ function kirbyRecoveryOutcomes(
 }
 
 // ---------------------------------------------------------------------------
-// Character dispatch (NA/US character IDs only, per user instruction)
+// Character dispatch (NA/US character IDs, plus their JP region-variant IDs -- see below)
 // ---------------------------------------------------------------------------
 
 const CHAR_FALCON = 0x07;
@@ -2672,6 +2836,24 @@ const CHAR_YOSHI = 0x06;
 const CHAR_PIKACHU = 0x09;
 const CHAR_JIGGLYPUFF = 0x0a;
 
+/**
+ * JP region-variant IDs for the 9 supported characters (per rmgr-ts's CharacterId table). Dispatched
+ * to the exact same simulators as their US counterparts below -- per the user (2026-09-11): "There
+ * are no real differences except for heights, constants, etc. No actual mechanical differences,"
+ * being investigated/confirmed against the smashremix decomp (see recoveryHeuristics.ts's own
+ * top-of-file doc comment for the validation status) and empirically against real JP-character
+ * replay data via scripts/recoveryValidation.ts.
+ */
+const CHAR_FALCON_JP = 0x28;
+const CHAR_KIRBY_JP = 0x30;
+const CHAR_FOX_JP = 0x29;
+const CHAR_DONKEY_KONG_JP = 0x2c;
+const CHAR_SAMUS_JP = 0x24;
+const CHAR_LINK_JP = 0x27;
+const CHAR_YOSHI_JP = 0x31;
+const CHAR_PIKACHU_JP = 0x32;
+const CHAR_JIGGLYPUFF_JP = 0x2e;
+
 export const SUPPORTED_CHARACTERS = new Set([
   CHAR_FOX,
   CHAR_DONKEY_KONG,
@@ -2682,6 +2864,24 @@ export const SUPPORTED_CHARACTERS = new Set([
   CHAR_JIGGLYPUFF,
   CHAR_FALCON,
   CHAR_KIRBY,
+  // JP variants -- per the Game Expert session's smashremix decomp audit (2026-09-11). Fox, Samus,
+  // Pikachu, and Jigglypuff are genuinely region-independent (no recovery-relevant constant
+  // differences at all); Kirby's only region-gated field is cosmetic model size, so its model
+  // carries over unchanged too. DK, Link, Falcon, and Yoshi DO have real physics differences
+  // (DK's up-B launch speed; Link's gravity and Spin Attack constants; Falcon's jump-formula and
+  // Dive multipliers; Yoshi's gravity/tvelBase/airSpeedMaxX/jumpaerialVelX, the character whose
+  // whole recovery model is a root-motion move) -- those are now wired in via region-specific attrs
+  // objects (LINK_JP, DK_JP_SPINNINGKONG_AIR_VEL_Y, FALCON_JP, YOSHI_ATTR_JP), each character's own
+  // dispatch case in classify() below, not silently reusing the US constants.
+  CHAR_FOX_JP,
+  CHAR_DONKEY_KONG_JP,
+  CHAR_SAMUS_JP,
+  CHAR_LINK_JP,
+  CHAR_YOSHI_JP,
+  CHAR_PIKACHU_JP,
+  CHAR_JIGGLYPUFF_JP,
+  CHAR_FALCON_JP,
+  CHAR_KIRBY_JP,
 ]);
 
 export const ACTION_STATE_JUMP_AERIAL_F = 0x018;
@@ -2826,7 +3026,7 @@ function fastRejectPikachuDead(
   return "dead";
 }
 
-export function classify(
+function classifyImpl(
   characterId: number,
   x: number,
   y: number,
@@ -2837,10 +3037,18 @@ export function classify(
   facingDirection: 1 | -1,
 ): RecoveryVerdict | null {
   switch (characterId) {
-    case CHAR_LINK: {
+    case CHAR_LINK:
+    case CHAR_LINK_JP: {
       if (jumpsRemaining > 1) return null;
       const verdict = toRecoveryVerdict(
-        linkRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
+        linkRecoveryOutcomes(
+          x,
+          y,
+          vx,
+          vy,
+          jumpsRemaining,
+          characterId === CHAR_LINK_JP ? LINK_JP : LINK,
+        ),
       );
       // Link CAN technically turn around via neutral-B, but it's so slow (and his recovery
       // already so weak) that it's never actually useful -- treated as if he can't. Vanilla SSB64
@@ -2856,6 +3064,7 @@ export function classify(
       return verdict;
     }
     case CHAR_PIKACHU:
+    case CHAR_PIKACHU_JP:
       // Quick Attack's aim is a free choice, independent of the character's current facing --
       // Pikachu can turn around with it. Facing direction never changes the result.
       if (jumpsRemaining > 1) return null;
@@ -2864,7 +3073,8 @@ export function classify(
       return toRecoveryVerdict(
         pikachuRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
       );
-    case CHAR_SAMUS: {
+    case CHAR_SAMUS:
+    case CHAR_SAMUS_JP: {
       if (jumpsRemaining > 1) return null;
       const verdict = toRecoveryVerdict(
         samusRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
@@ -2878,10 +3088,20 @@ export function classify(
       }
       return verdict;
     }
-    case CHAR_DONKEY_KONG: {
+    case CHAR_DONKEY_KONG:
+    case CHAR_DONKEY_KONG_JP: {
       if (jumpsRemaining > 1) return null;
       const verdict = toRecoveryVerdict(
-        dkRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
+        dkRecoveryOutcomes(
+          x,
+          y,
+          vx,
+          vy,
+          jumpsRemaining,
+          characterId === CHAR_DONKEY_KONG_JP
+            ? DK_JP_SPINNINGKONG_AIR_VEL_Y
+            : DK.SPINNINGKONG_AIR_VEL_Y,
+        ),
       );
       // DK can't use up-B (Spinning Kong) to turn around, but CAN turn around with neutral-B --
       // same "not worth modeling this combined maneuver right now" treatment as Samus.
@@ -2891,6 +3111,7 @@ export function classify(
       return verdict;
     }
     case CHAR_FOX:
+    case CHAR_FOX_JP:
       // Firefox's dash direction is a free choice, independent of facing, same as Pikachu's Quick
       // Attack -- Fox can turn around with it. Facing direction never changes the result.
       if (jumpsRemaining > 1) return null;
@@ -2898,6 +3119,7 @@ export function classify(
         foxRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
       );
     case CHAR_YOSHI:
+    case CHAR_YOSHI_JP:
       // Yoshi's second jump is root-motion driven (ftPhysicsGetAirVelTransN), not the
       // closed-form jump formula every other character uses - jumpsRemaining === 1 is modeled
       // via an empirically-extracted position-delta curve instead (YOSHI_DOUBLE_JUMP_DY_CURVE),
@@ -2915,21 +3137,38 @@ export function classify(
         return null;
       if (jumpsRemaining > 1) return null;
       return toRecoveryVerdict(
-        noUpBRecoveryOutcomes(x, y, vx, vy, jumpsRemaining, YOSHI_ATTR),
+        noUpBRecoveryOutcomes(
+          x,
+          y,
+          vx,
+          vy,
+          jumpsRemaining,
+          characterId === CHAR_YOSHI_JP ? YOSHI_ATTR_JP : YOSHI_ATTR,
+        ),
       );
     case CHAR_JIGGLYPUFF:
+    case CHAR_JIGGLYPUFF_JP:
       if (jumpsRemaining > 1) return null;
       return toRecoveryVerdict(
         noUpBRecoveryOutcomes(x, y, vx, vy, jumpsRemaining, JIGGLYPUFF_ATTR),
       );
     case CHAR_FALCON:
+    case CHAR_FALCON_JP:
       // Delay + jump search, no angle/magnitude search (see the section header above for why).
       // Facing-independent -- confirmed against source, see section header.
       if (jumpsRemaining > 1) return null;
       return toRecoveryVerdict(
-        falconRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
+        falconRecoveryOutcomes(
+          x,
+          y,
+          vx,
+          vy,
+          jumpsRemaining,
+          characterId === CHAR_FALCON_JP ? FALCON_JP : FALCON,
+        ),
       );
     case CHAR_KIRBY:
+    case CHAR_KIRBY_JP:
       // Closed-form wait-for-peak, no search needed (see the section header above for why --
       // Y is fully discarded by root motion regardless of activation timing, so only starting
       // position from the jump's provable peak matters). Facing-independent, unverified against
@@ -2943,6 +3182,94 @@ export function classify(
   }
 }
 
+/**
+ * Per-call profiling record for a single `classify()` invocation -- character, every input, the
+ * result, and how long the call took. Populated only while `startClassifyProfiling()` is active;
+ * see that function's own doc comment for why this exists and how to use it.
+ */
+export interface ClassifyCallRecord {
+  characterId: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  jumpsRemaining: number;
+  actionStateId: number;
+  facingDirection: 1 | -1;
+  verdict: RecoveryVerdict | null;
+  durationMs: number;
+}
+
+let classifyProfilingLog: ClassifyCallRecord[] | null = null;
+
+/**
+ * Starts recording every `classify()` call (inputs, result, wall-clock duration) into an
+ * in-memory log, for profiling where the recovery classifier's latency actually goes across a
+ * real corpus -- see scripts/classifyLatencyProfile.mts, which drives this. A thin wrapper around
+ * classifyImpl (the actual physics dispatch, unchanged) so normal production use (profiling never
+ * started) pays only one extra `if` per call -- negligible next to the search costs being
+ * measured (Pikachu's nested search alone has been measured up to ~2s for a single call).
+ */
+export function startClassifyProfiling(): void {
+  classifyProfilingLog = [];
+}
+
+/** Stops recording and returns everything collected since the last `startClassifyProfiling()`. */
+export function stopClassifyProfiling(): ClassifyCallRecord[] {
+  const log = classifyProfilingLog ?? [];
+  classifyProfilingLog = null;
+  return log;
+}
+
+export function classify(
+  characterId: number,
+  x: number,
+  y: number,
+  vx: number,
+  vy: number,
+  jumpsRemaining: number,
+  actionStateId: number,
+  facingDirection: 1 | -1,
+): RecoveryVerdict | null {
+  if (classifyProfilingLog === null) {
+    return classifyImpl(
+      characterId,
+      x,
+      y,
+      vx,
+      vy,
+      jumpsRemaining,
+      actionStateId,
+      facingDirection,
+    );
+  }
+  const start = performance.now();
+  const verdict = classifyImpl(
+    characterId,
+    x,
+    y,
+    vx,
+    vy,
+    jumpsRemaining,
+    actionStateId,
+    facingDirection,
+  );
+  const durationMs = performance.now() - start;
+  classifyProfilingLog.push({
+    characterId,
+    x,
+    y,
+    vx,
+    vy,
+    jumpsRemaining,
+    actionStateId,
+    facingDirection,
+    verdict,
+    durationMs,
+  });
+  return verdict;
+}
+
 export const CHARACTER_NAME: Record<number, string> = {
   [CHAR_FOX]: "Fox",
   [CHAR_DONKEY_KONG]: "Donkey Kong",
@@ -2953,4 +3280,13 @@ export const CHARACTER_NAME: Record<number, string> = {
   [CHAR_KIRBY]: "Kirby",
   [CHAR_PIKACHU]: "Pikachu",
   [CHAR_JIGGLYPUFF]: "Jigglypuff",
+  [CHAR_FOX_JP]: "Fox (JP)",
+  [CHAR_DONKEY_KONG_JP]: "Donkey Kong (JP)",
+  [CHAR_SAMUS_JP]: "Samus (JP)",
+  [CHAR_LINK_JP]: "Link (JP)",
+  [CHAR_YOSHI_JP]: "Yoshi (JP)",
+  [CHAR_FALCON_JP]: "Captain Falcon (JP)",
+  [CHAR_KIRBY_JP]: "Kirby (JP)",
+  [CHAR_PIKACHU_JP]: "Pikachu (JP)",
+  [CHAR_JIGGLYPUFF_JP]: "Jigglypuff (JP)",
 };
