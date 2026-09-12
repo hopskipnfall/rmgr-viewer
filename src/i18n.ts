@@ -794,12 +794,16 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     recoveryContestableLabel: "Recovery (contestable only)",
     edgeGuardEffectivenessLabel: "Edge Guard Effectiveness",
     edgeGuardEffectivenessSummary: (situations) =>
-      `avg over ${situations} situation${situations !== 1 ? "s" : ""}`,
+      `from ${situations} edge guard${situations !== 1 ? "s" : ""}`,
     ledgeHogOpportunitiesLabel: "Ledge-hog opportunities",
     ledgeHogOpportunitiesMissedSummary: (missed) =>
       `${missed} confirmed missed -- recovering player escaped via the open ledge`,
     situationBreakdown: (hopeless, contestable, unclassified) =>
       `Hopeless: ${hopeless} · Contestable: ${contestable} · Unclassified: ${unclassified}`,
+    // Only "hopeless" is ever actually rendered as a per-situation badge (see matchView.ts's own
+    // gate) -- per the user (2026-09-12), "contestable" and "unclassified" aren't actionable for
+    // the user and shouldn't say anything at all, not even a softer placeholder. These two cases
+    // are kept only so the switch stays exhaustive; their text is never shown.
     situationCategoryLabel: (category) => {
       switch (category) {
         case "hopeless":
@@ -807,7 +811,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
         case "contestable":
           return "contestable";
         case "unclassified":
-          return "unclassified";
+          return "";
       }
     },
     situationMissedLedgeHogBadge: "⚠ ledge hog",
@@ -1293,7 +1297,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     recoveryContestableLabel: "復帰(拮抗状況のみ)",
     edgeGuardEffectivenessLabel: "復帰阻止の有効度",
-    edgeGuardEffectivenessSummary: (situations) => `${situations}件の状況の平均`,
+    edgeGuardEffectivenessSummary: (situations) => `${situations}件の崖狩りより`,
     ledgeHogOpportunitiesLabel: "崖離し放置の機会",
     ledgeHogOpportunitiesMissedSummary: (missed) =>
       `確定で見逃し: ${missed}件 -- 復帰側が空いた崖を掴んで生還`,
@@ -1306,7 +1310,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
         case "contestable":
           return "拮抗";
         case "unclassified":
-          return "未分類";
+          return "";
       }
     },
     situationMissedLedgeHogBadge: "⚠ 崖離し放置",

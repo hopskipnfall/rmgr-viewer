@@ -2864,7 +2864,7 @@ export class MatchViewController {
         const valSpan = document.createElement("span");
         if (effectiveness !== null) {
           valSpan.className = `stat-pct ${effectiveness < 0 ? "pct-failure" : "pct-success"}`;
-          valSpan.textContent = edgeGuardEffectivenessGrade(effectiveness);
+          valSpan.textContent = `${edgeGuardEffectivenessGrade(effectiveness)} (${Math.round(effectiveness)})`;
           valSpan.title = tr.edgeGuardEffectivenessScorePointsTitle(
             Math.round(effectiveness),
           );
@@ -2876,10 +2876,9 @@ export class MatchViewController {
         val.append(`  ${tr.edgeGuardEffectivenessSummary(scoredCount)}`);
         row.appendChild(lbl);
         row.appendChild(val);
-        const sub = document.createElement("div");
-        sub.className = "stat-subdetail";
-        sub.textContent = breakdownText(guarding);
-        row.appendChild(sub);
+        // No hopeless/contestable/unclassified breakdown here -- per the user (2026-09-12), it
+        // wasn't actionable for the user (unlike the Recovery-contestable-only row below, which
+        // keeps its own breakdownText call).
         this.statsPanel.appendChild(row);
       }
 
@@ -3254,13 +3253,15 @@ export class MatchViewController {
           row.appendChild(bracketEl);
         }
 
-        // "contestable" is deliberately never shown as a per-situation badge -- per the user
-        // (2026-09-11): "let's also remove 'contestable' from the recovery and edge guard panels,
-        // it's just noise." Now that "reaches-stage" and "dead-if-ledge-occupied" (and
-        // "unclassified", scored as if it were "reaches-stage") are all merged/treated as
-        // "contestable", it's the label on the overwhelming majority of rows and stopped meaning
-        // anything specific. "hopeless" stays -- that one IS still a distinct, trusted claim.
-        if (sit.category && sit.category !== "contestable") {
+        // Only "hopeless" is ever shown as a per-situation badge. "contestable" is noise -- per
+        // the user (2026-09-11): now that "reaches-stage"/"dead-if-ledge-occupied"/"unclassified"
+        // are all merged/treated as "contestable" for scoring, it's the label on the overwhelming
+        // majority of rows and stopped meaning anything specific. "unclassified" is hidden too --
+        // per the user (2026-09-12): a Luigi mirror match showing "unclassified" on every single
+        // row (Luigi isn't supported yet) prompted "i don't even want us to say 'no data'. i just
+        // don't think we should say anything because it isn't actionable for the user." "hopeless"
+        // stays -- that one IS still a distinct, trusted claim.
+        if (sit.category === "hopeless") {
           const categoryEl = document.createElement("span");
           categoryEl.className = `situation-bracket category-${sit.category}`;
           categoryEl.textContent = tr.situationCategoryLabel(sit.category);
