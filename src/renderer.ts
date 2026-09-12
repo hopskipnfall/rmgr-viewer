@@ -39,6 +39,10 @@ import {
 } from "./ledgeGrabRange.js";
 import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
 import { isHitstunState, computeEdgeGuardEvents } from "./edgeGuard.js";
+import {
+  computeRecoveryVerdictFrames,
+  type RecoveryVerdictFrame,
+} from "./recoveryVerdicts.js";
 import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
 import { characterIconUrl } from "./characterIcons.js";
 import {
@@ -763,8 +767,7 @@ export function isPikachuCharacter(characterId: number): boolean {
   );
 }
 
-export type PikachuSpecialType =
-  "thunder" | "quick_attack" | "quick_attack_zip";
+export type PikachuSpecialType = "quick_attack" | "quick_attack_zip";
 
 export function getPikachuSpecialType(
   characterId: number,
@@ -784,7 +787,9 @@ export function getPikachuSpecialType(
   ) {
     return null;
   }
-  // Down-B Thunder states: 0xe3, 0xe4, 0xe5, 0xe6, 0xe7
+  // Down-B: Thunder (0x0e3..0x0e7). No synthetic lightning bolt drawn for this
+  // anymore - the recorded Weapon objects (WPKind.ThunderHead / WPKind.ThunderTrail,
+  // drawn by drawItemObjects() in renderer.ts) are the real descending lightning bolt.
   if (
     actionStateId === 0x0e3 ||
     actionStateId === 0x0e4 ||
@@ -792,7 +797,7 @@ export function getPikachuSpecialType(
     actionStateId === 0x0e6 ||
     actionStateId === 0x0e7
   ) {
-    return "thunder";
+    return null;
   }
   // Up-B Quick Attack zip/flight states: 0xec (Zip 1), 0xed (Zip 2)
   if (actionStateId === 0x0ec || actionStateId === 0x0ed) {
@@ -1898,6 +1903,22 @@ export class StageRenderer {
     return events;
   }
 
+  private recoveryVerdictFramesCache = new WeakMap<
+    Replay,
+    (RecoveryVerdictFrame | null)[]
+  >();
+
+  private getRecoveryVerdictFrames(
+    replay: Replay,
+  ): (RecoveryVerdictFrame | null)[] {
+    let frames = this.recoveryVerdictFramesCache.get(replay);
+    if (!frames) {
+      frames = computeRecoveryVerdictFrames(replay);
+      this.recoveryVerdictFramesCache.set(replay, frames);
+    }
+    return frames;
+  }
+
   // Frame indices where ANY seated port respawns (leaves Revive2, see
   // REVIVE2_ACTION_STATE_ID's own doc comment) - frame 0 always counts
   // too, even though the game's pre-battle frames may not literally be in
@@ -2111,6 +2132,14 @@ export class StageRenderer {
           : [];
       this.drawLedgeGrabZoneHighlight(camera, stageId, ledgeGrabCandidates);
 
+      const recoveryVerdict =
+        replay && frameIndex !== undefined
+          ? (this.getRecoveryVerdictFrames(replay)[frameIndex] ?? null)
+          : null;
+      if (recoveryVerdict?.verdict === "dead-if-ledge-occupied") {
+        this.drawRecoveryLedgeHighlight(camera, stageId, recoveryVerdict.side);
+      }
+
       // Draw motion trails (Pikachu Quick Attack streaks, Fox Fire Fox streaks, Roll trails) before characters
       if (replay && frameIndex !== undefined) {
         for (const key of Object.keys(frame.ports)) {
@@ -2147,6 +2176,9 @@ export class StageRenderer {
           replay,
           frameIndex,
           isPaused,
+          recoveryVerdict && recoveryVerdict.port === port
+            ? recoveryVerdict
+            : null,
         );
       }
       this.drawItemObjects(camera, frame.items ?? [], replay, frame, isPaused);
@@ -2349,6 +2381,10 @@ export class StageRenderer {
         // The generic diamond and most custom shapes are small enough for a
         // fixed label offset, but bigger shapes like boomerang, fireball, pk fire, bomb, and thunder jolt need more
         // clearance so the label doesn't sit on top of their aura/arc.
+        const isThunderBolt =
+          isWeapon &&
+          (item.kind === WPKind.ThunderHead ||
+            item.kind === WPKind.ThunderTrail);
         const isVeryTall = !isWeapon && item.kind === ITKind.PKFirePillar;
         const isBomb =
           (!isWeapon &&
@@ -2375,13 +2411,15 @@ export class StageRenderer {
             item.kind === ITKind.Bumper ||
             item.kind === ITKind.StageBumper;
 
-        const baseOffset = isVeryTall
-          ? 76
-          : isBomb
-            ? 48
-            : isLargeObject
-              ? 34
-              : 24;
+        const baseOffset = isThunderBolt
+          ? 96
+          : isVeryTall
+            ? 76
+            : isBomb
+              ? 48
+              : isLargeObject
+                ? 34
+                : 24;
         const labelOffset = Math.max(
           baseOffset,
           (baseOffset - 2) * markerScale,
@@ -2798,9 +2836,13 @@ export class StageRenderer {
         this.drawPKThunderHeadMarker(ctx, x, y, spinAngle);
         return true;
       case WPKind.PKThunderTrail:
-      case WPKind.ThunderHead:
-      case WPKind.ThunderTrail:
         this.drawPKThunderTrailMarker(ctx, x, y, spinAngle);
+        return true;
+      case WPKind.ThunderHead:
+        this.drawThunderHeadMarker(ctx, x, y, spinAngle);
+        return true;
+      case WPKind.ThunderTrail:
+        this.drawThunderTrailMarker(ctx, x, y, spinAngle);
         return true;
       case WPKind.ChargeShot: // Samus - pulsing electric plasma orb
         this.drawChargeShotMarker(ctx, x, y, spinAngle);
@@ -3604,6 +3646,235 @@ export class StageRenderer {
       );
       ctx.stroke();
     }
+
+    ctx.restore();
+  }
+
+  /**
+   * Pikachu Down-B Thunder Trail marker (WPKind.ThunderTrail):
+   * Trailing vertical lightning column segment crashing down from the sky.
+   * Adjacent segments are spaced 450 world units (~171 screen px) apart.
+   * Spanning from y - 88 to y + 88 with anchored center endpoints ensures
+   * adjacent segments connect seamlessly into a continuous, crackling lightning bolt.
+   */
+  private drawThunderTrailMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    spinAngle = 0,
+  ): void {
+    ctx.save();
+    // Use spinAngle and y coordinate to give each segment a jagged zig-zag
+    // while keeping the outer ends anchored at the center x.
+    const seed = spinAngle * 4.3 + y * 0.02;
+    const dx1 = Math.sin(seed + 1.2) * 14 + 10;
+    const dx2 = -Math.sin(seed + 2.5) * 16 - 12;
+    const dx3 = Math.sin(seed + 3.8) * 15 + 11;
+    const dx4 = -Math.sin(seed + 5.1) * 17 - 13;
+    const dx5 = Math.sin(seed + 6.4) * 14 + 9;
+
+    const pts = [
+      { x: x, y: y - 88 },
+      { x: x + dx1, y: y - 58 },
+      { x: x + dx2, y: y - 29 },
+      { x: x + dx3, y: y },
+      { x: x + dx4, y: y + 29 },
+      { x: x + dx5, y: y + 58 },
+      { x: x, y: y + 88 },
+    ];
+
+    const buildPath = () => {
+      ctx.beginPath();
+      const first = pts[0]!;
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i]!;
+        ctx.lineTo(pt.x, pt.y);
+      }
+    };
+
+    // 1. Wide electric aura / ambient glow
+    buildPath();
+    ctx.strokeStyle = "rgba(250, 204, 21, 0.4)";
+    ctx.lineWidth = 14;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "miter";
+    ctx.miterLimit = 3;
+    ctx.shadowColor = "#f59e0b";
+    ctx.shadowBlur = 18;
+    ctx.stroke();
+
+    // 2. Mid electric yellow energy body
+    buildPath();
+    ctx.strokeStyle = "#fde047";
+    ctx.lineWidth = 5.5;
+    ctx.shadowColor = "#ffd700";
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+
+    // 3. Searing white-hot core
+    buildPath();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2.4;
+    ctx.shadowColor = "#ffffff";
+    ctx.shadowBlur = 4;
+    ctx.stroke();
+
+    // 4. Branching electric discharge arcs
+    const p2 = pts[2]!;
+    const p4 = pts[4]!;
+    ctx.strokeStyle = "rgba(254, 240, 138, 0.85)";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(p2.x, p2.y);
+    ctx.lineTo(p2.x - 16, p2.y - 14);
+    ctx.lineTo(p2.x - 24, p2.y - 8);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(p4.x, p4.y);
+    ctx.lineTo(p4.x + 18, p4.y + 12);
+    ctx.lineTo(p4.x + 26, p4.y + 20);
+    ctx.stroke();
+
+    // 5. Plasma energy nodes at vertices
+    ctx.fillStyle = "#ffffff";
+    for (let i = 1; i < pts.length - 1; i++) {
+      const pt = pts[i]!;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Pikachu Down-B Thunder Head marker (WPKind.ThunderHead):
+   * The leading impact head of the lightning strike crashing down from the sky.
+   * Connects at top with trailing segments (y - 88) and terminates in a powerful
+   * electric arrowhead / diamond impact spear with downward discharge prongs.
+   */
+  private drawThunderHeadMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    spinAngle = 0,
+  ): void {
+    ctx.save();
+    const seed = spinAngle * 4.3 + y * 0.02;
+    const dx1 = Math.sin(seed + 1.2) * 14 + 10;
+    const dx2 = -Math.sin(seed + 2.5) * 16 - 12;
+    const dx3 = Math.sin(seed + 3.8) * 15 + 11;
+    const dx4 = -Math.sin(seed + 5.1) * 17 - 13;
+
+    const pts = [
+      { x: x, y: y - 88 },
+      { x: x + dx1, y: y - 60 },
+      { x: x + dx2, y: y - 34 },
+      { x: x + dx3, y: y - 10 },
+      { x: x + dx4, y: y + 10 },
+      { x: x, y: y + 26 }, // Head impact tip
+    ];
+
+    const buildPath = () => {
+      ctx.beginPath();
+      const first = pts[0]!;
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i]!;
+        ctx.lineTo(pt.x, pt.y);
+      }
+    };
+
+    // 1. Column glow
+    buildPath();
+    ctx.strokeStyle = "rgba(250, 204, 21, 0.45)";
+    ctx.lineWidth = 14;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "miter";
+    ctx.miterLimit = 3;
+    ctx.shadowColor = "#f59e0b";
+    ctx.shadowBlur = 20;
+    ctx.stroke();
+
+    // Mid yellow stroke
+    buildPath();
+    ctx.strokeStyle = "#fde047";
+    ctx.lineWidth = 6;
+    ctx.shadowColor = "#ffd700";
+    ctx.shadowBlur = 12;
+    ctx.stroke();
+
+    // White core
+    buildPath();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2.6;
+    ctx.stroke();
+
+    // 2. Powerful crashing arrowhead / diamond impact spear
+    const lastPt = pts[pts.length - 1]!;
+    const tipX = lastPt.x;
+    const tipY = lastPt.y;
+
+    // Outer spear aura
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY + 16);
+    ctx.lineTo(tipX + 20, tipY - 14);
+    ctx.lineTo(tipX, tipY - 6);
+    ctx.lineTo(tipX - 20, tipY - 14);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(253, 224, 71, 0.5)";
+    ctx.shadowColor = "#ffd700";
+    ctx.shadowBlur = 24;
+    ctx.fill();
+
+    // Inner diamond spear
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY + 14);
+    ctx.lineTo(tipX + 14, tipY - 10);
+    ctx.lineTo(tipX, tipY - 4);
+    ctx.lineTo(tipX - 14, tipY - 10);
+    ctx.closePath();
+    ctx.fillStyle = "#fef08a";
+    ctx.fill();
+
+    // White-hot core diamond
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY + 9);
+    ctx.lineTo(tipX + 7, tipY - 6);
+    ctx.lineTo(tipX, tipY - 2);
+    ctx.lineTo(tipX - 7, tipY - 6);
+    ctx.closePath();
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    // Downward radiating lightning discharge prongs
+    ctx.strokeStyle = "#fef08a";
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.shadowColor = "#ffd700";
+    ctx.shadowBlur = 10;
+
+    // Left prong
+    ctx.beginPath();
+    ctx.moveTo(tipX - 6, tipY + 6);
+    ctx.lineTo(tipX - 22, tipY + 26);
+    ctx.lineTo(tipX - 30, tipY + 36);
+    ctx.stroke();
+
+    // Right prong
+    ctx.beginPath();
+    ctx.moveTo(tipX + 6, tipY + 6);
+    ctx.lineTo(tipX + 22, tipY + 26);
+    ctx.lineTo(tipX + 30, tipY + 36);
+    ctx.stroke();
+
+    // Center piercing spark
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY + 12);
+    ctx.lineTo(tipX + Math.sin(seed * 3) * 6, tipY + 34);
+    ctx.stroke();
 
     ctx.restore();
   }
@@ -9920,6 +10191,44 @@ export class StageRenderer {
     }
   }
 
+  /**
+   * Advisory highlight for the recovery classifier: the recovering port
+   * can't make it back to the stage, but can still grab the ledge from
+   * here, so this is the moment to ledge-hog rather than let them past. A
+   * distinct green glow, separate from drawLedgeGrabZoneHighlight's
+   * theme-colored bar (which means something different -- "a player's own
+   * ledge-grab check point is nearby right now", not "here's what the
+   * classifier recommends"). See computeRecoveryVerdictFrames().
+   */
+  private drawRecoveryLedgeHighlight(
+    camera: Camera,
+    stageId: number | undefined,
+    side: "left" | "right",
+  ): void {
+    const ledges = stageLedges(stageId);
+    if (!ledges) return;
+    const ledge = ledges.find((l) => l.side === side);
+    if (!ledge) return;
+
+    const inwardSign = side === "left" ? 1 : -1;
+    const innerX = ledge.x + inwardSign * LEDGE_GRAB_ZONE_WIDTH;
+    const outer = camera.worldToScreen(ledge.x, ledge.y);
+    const inner = camera.worldToScreen(innerX, ledge.y);
+
+    const { ctx } = this;
+    ctx.save();
+    ctx.strokeStyle = "rgba(74, 222, 128, 0.9)";
+    ctx.lineWidth = 14;
+    ctx.lineCap = "round";
+    ctx.shadowColor = "rgba(74, 222, 128, 0.8)";
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(outer.x, outer.y);
+    ctx.lineTo(inner.x, inner.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   /** The luminous ledge-grab check-point dot(s) - see computeLedgeGrabCandidates(). Drawn on top of everything else so it's never hidden behind a player marker. */
   private drawLedgeGrabDots(
     camera: Camera,
@@ -10001,6 +10310,7 @@ export class StageRenderer {
     replay?: Replay | null,
     frameIndex?: number,
     isPaused?: boolean,
+    recoveryVerdict?: RecoveryVerdictFrame | null,
   ): void {
     const { ctx } = this;
     // positionY is the character's foot position, not their center - Teeter
@@ -10968,7 +11278,6 @@ export class StageRenderer {
         facingRight,
         color,
         pikaSpecial,
-        post.actionFrameCounter,
       );
     }
     if (foxSpecial) {
@@ -11166,6 +11475,19 @@ export class StageRenderer {
     ctx.shadowBlur = 4;
     ctx.fillText(`${post.damagePercent}%`, x, labelY);
     ctx.shadowBlur = 0;
+
+    // Recovery classifier says this port can neither land on stage nor grab
+    // the ledge from here -- a doomed recovery. See computeRecoveryVerdictFrames().
+    if (recoveryVerdict?.verdict === "dead") {
+      ctx.save();
+      ctx.font = "20px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.shadowColor = "rgba(0,0,0,0.85)";
+      ctx.shadowBlur = 4;
+      ctx.fillText("💀", x, labelY - 22);
+      ctx.restore();
+    }
 
     // Active combo hits count (large punchy number) if 2 or more hits in combo
     if (comboHits >= 2) {
@@ -16958,85 +17280,10 @@ export class StageRenderer {
     facingRight: boolean,
     _color: string,
     specialType: PikachuSpecialType,
-    frameCounter: number,
   ): void {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
     const noseX = x + dir * halfWidth;
-
-    if (specialType === "thunder") {
-      ctx.save();
-      // 1. Full-height lightning bolt coming down from sky (Y=0) straight to Pikachu (centerY)
-      const boltStartY = 0;
-      const boltEndY = centerY - heightPx * 0.2;
-      const totalHeight = Math.max(20, boltEndY - boltStartY);
-      const segments = 8;
-      const segH = totalHeight / segments;
-
-      // Seeded zigzag offsets based on frame counter to animate lightning jitter
-      const seed = frameCounter * 7.3;
-      ctx.beginPath();
-      ctx.moveTo(x, boltStartY);
-      for (let i = 1; i < segments; i++) {
-        const jitter = Math.sin(seed + i * 2.4) * (halfWidth * 0.85);
-        ctx.lineTo(x + jitter, boltStartY + i * segH);
-      }
-      ctx.lineTo(x, boltEndY);
-
-      // Outer electric yellow aura
-      ctx.strokeStyle = "rgba(255, 215, 0, 0.6)";
-      ctx.lineWidth = 5;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.shadowColor = "#ffd700";
-      ctx.shadowBlur = 14;
-      ctx.stroke();
-
-      // Bright yellow energy mid-stroke
-      ctx.beginPath();
-      ctx.moveTo(x, boltStartY);
-      for (let i = 1; i < segments; i++) {
-        const jitter = Math.sin(seed + i * 2.4) * (halfWidth * 0.85);
-        ctx.lineTo(x + jitter, boltStartY + i * segH);
-      }
-      ctx.lineTo(x, boltEndY);
-      ctx.strokeStyle = "#ffe600";
-      ctx.lineWidth = 2.8;
-      ctx.stroke();
-
-      // Crisp white central lightning core
-      ctx.beginPath();
-      ctx.moveTo(x, boltStartY);
-      for (let i = 1; i < segments; i++) {
-        const jitter = Math.sin(seed + i * 2.4) * (halfWidth * 0.85);
-        ctx.lineTo(x + jitter, boltStartY + i * segH);
-      }
-      ctx.lineTo(x, boltEndY);
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
-
-      // 2. Electric shockwave impact halo around Pikachu
-      const haloRadius = Math.max(14, halfWidth * 1.2);
-      ctx.beginPath();
-      ctx.arc(x, centerY, haloRadius, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255, 215, 0, 0.3)";
-      ctx.shadowColor = "#ffd700";
-      ctx.shadowBlur = 14;
-      ctx.fill();
-
-      // Radiating electric spark ring
-      ctx.beginPath();
-      ctx.arc(x, centerY, haloRadius * 1.2, 0, Math.PI * 2);
-      ctx.strokeStyle = "#ffe600";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.restore();
-      return;
-    }
 
     if (specialType === "quick_attack_zip") {
       ctx.save();

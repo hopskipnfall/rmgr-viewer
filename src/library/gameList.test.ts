@@ -42,8 +42,8 @@ describe("GameList rendering", () => {
         0: {
           recoverySituations: 4,
           recoverySuccesses: 3,
-          edgeGuardSituations: 3,
-          edgeGuardSuccesses: 2,
+          edgeGuardEffectivenessSum: 210,
+          edgeGuardEffectivenessCount: 3,
           ledgeGetupSituations: 2,
           ledgeGetupSuccesses: 2,
           ledgeTrapSituations: 1,
@@ -82,7 +82,7 @@ describe("GameList rendering", () => {
     // Check supplementary body contents
     expect(html).toContain("Stocks Remaining: 3");
     expect(html).toContain("Rec</span> 75% (3/4)");
-    expect(html).toContain("EG</span> 67% (2/3)");
+    expect(html).toContain("EG</span> A (3)");
     expect(html).toContain("Getup</span> 100% (2/2)");
     expect(html).toContain('class="session-group"');
     expect(html).toContain('class="session-header"');

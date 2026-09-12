@@ -9,6 +9,7 @@ import {
 } from "../data/identity.js";
 import { hasVideoLink } from "../video/youtubeSync.js";
 import { groupGamesIntoSessions, type SessionGroup } from "../data/session.js";
+import { edgeGuardEffectivenessGrade } from "../classifiedSituations.js";
 
 function formatDuration(frames: number): string {
   const totalSecs = Math.floor(frames / 60);
@@ -487,12 +488,12 @@ export class GameList {
           `<span class="game-stat-chip"><span class="chip-label">Rec</span> ${pct}% (${stats.recoverySuccesses}/${stats.recoverySituations})</span>`,
         );
       }
-      if (stats.edgeGuardSituations > 0) {
-        const pct = Math.round(
-          (stats.edgeGuardSuccesses / stats.edgeGuardSituations) * 100,
-        );
+      if (stats.edgeGuardEffectivenessCount > 0) {
+        const avg =
+          stats.edgeGuardEffectivenessSum / stats.edgeGuardEffectivenessCount;
+        const grade = edgeGuardEffectivenessGrade(avg);
         statChips.push(
-          `<span class="game-stat-chip"><span class="chip-label">EG</span> ${pct}% (${stats.edgeGuardSuccesses}/${stats.edgeGuardSituations})</span>`,
+          `<span class="game-stat-chip"><span class="chip-label">EG</span> ${grade} (${stats.edgeGuardEffectivenessCount})</span>`,
         );
       }
       if (stats.ledgeGetupSituations > 0) {

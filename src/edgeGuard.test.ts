@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
-import { computeEdgeGuardEvents } from "./edgeGuard.js";
+import {
+  computeEdgeGuardEvents,
+  computeEdgeGuardStats,
+  type EdgeGuardEvent,
+} from "./edgeGuard.js";
 import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 
 function makeMockReplay(frames: Frame[]): Replay {
@@ -101,6 +105,95 @@ const OFFSTAGE_X = 5000;
 const ONSTAGE = { state: 0x0e, x: 0, y: 0, grounded: true, hitstun: 0 };
 
 describe("computeEdgeGuardEvents", () => {
+  it("does not resolve recovery-success while the recovering player is grabbed right after landing, even if the grab+throw ends in death", () => {
+    // Real bug report: 260823171117-Wario-Player-30.rmgr, frame 9123 -- Wario lands, is
+    // immediately grabbed, back-thrown, and killed, but the situation had already resolved
+    // "recovery-success" (via the grounded-safety-clock) before the death registered, because
+    // grab/throw action states aren't hitstun and the clock kept running straight through them.
+    const frames: Frame[] = [];
+
+    // f0-f9: port 1 falling offstage, actionable, un-grounded - situation opens.
+    for (let f = 0; f <= 9; f++) {
+      frames.push(
+        makeFrame(f, ONSTAGE, {
+          state: 0x39,
+          x: OFFSTAGE_X - f * 50,
+          y: 1000 - f * 20,
+          grounded: false,
+          hitstun: 0,
+        }),
+      );
+    }
+    // f10: lands, grounded and actionable - hasTouchedGround latches true, streak starts.
+    frames.push(
+      makeFrame(10, ONSTAGE, {
+        state: 0x0e,
+        x: 1400,
+        y: 0,
+        grounded: true,
+        hitstun: 0,
+      }),
+    );
+    // f11: grabbed (CaptureWait) almost immediately after landing - well under the 30-frame
+    // safety window. Under the bug, the streak (still only 1 frame in) wouldn't yet have
+    // resolved success on its own here, so this alone doesn't reproduce it -- the bug needs the
+    // grab+throw sequence itself to run long enough for the streak to keep silently climbing
+    // through it. f11-f40: held in the grab (30 frames - long enough that, if grab/throw were
+    // wrongly treated as "safe" like the pre-fix code did, the streak would hit 30 and resolve
+    // success right in the middle of the grab).
+    for (let f = 11; f <= 40; f++) {
+      frames.push(
+        makeFrame(f, ONSTAGE, {
+          state: 0x0ac,
+          x: 1400,
+          y: 0,
+          grounded: false,
+          hitstun: 0,
+        }),
+      );
+    }
+    // f41: thrown (DamageThrown).
+    frames.push(
+      makeFrame(41, ONSTAGE, {
+        state: 0x0ba,
+        x: 1400,
+        y: 0,
+        grounded: false,
+        hitstun: 0,
+      }),
+    );
+    // f42: dies (stock lost) - the real, final resolution.
+    frames.push(
+      makeFrame(42, ONSTAGE, {
+        state: 0x00,
+        x: OFFSTAGE_X,
+        y: -4000,
+        grounded: false,
+        hitstun: 0,
+        stocks: 2,
+      }),
+    );
+
+    const replay = makeMockReplay(frames);
+    const events = computeEdgeGuardEvents(replay);
+
+    // Exactly one situation, resolved by the actual death - no spurious "recovery-success" from
+    // the 0.5s clock running through the grab/throw sequence.
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      kind: "situation-entered",
+      frameIndex: 0,
+      recoveringPort: 1,
+      edgeGuardingPort: 0,
+    });
+    expect(events[1]).toMatchObject({
+      kind: "recovery-failure",
+      frameIndex: 42,
+      recoveringPort: 1,
+      edgeGuardingPort: 0,
+    });
+  });
+
   it("keeps a recovery situation open through a hit that lands right after a landing, instead of resolving it early", () => {
     const frames: Frame[] = [];
 
@@ -234,5 +327,67 @@ describe("computeEdgeGuardEvents", () => {
     // the landing frame itself (f10) already counts as streak 1, so the
     // 30th counted frame is f10 + 29 = f39.
     expect(events[1]?.frameIndex).toBe(39);
+  });
+});
+
+describe("computeEdgeGuardStats", () => {
+  const PORT_RECOVERING = 1 as PortIndex;
+  const PORT_GUARDING = 0 as PortIndex;
+
+  // Two situations: one at enteredFrameIndex=10 (resolves success at 20), one at
+  // enteredFrameIndex=100 (resolves failure at 110).
+  const events: EdgeGuardEvent[] = [
+    {
+      frame: 10,
+      frameIndex: 10,
+      kind: "situation-entered",
+      recoveringPort: PORT_RECOVERING,
+      edgeGuardingPort: PORT_GUARDING,
+    },
+    {
+      frame: 20,
+      frameIndex: 20,
+      kind: "recovery-success",
+      recoveringPort: PORT_RECOVERING,
+      edgeGuardingPort: PORT_GUARDING,
+    },
+    {
+      frame: 100,
+      frameIndex: 100,
+      kind: "situation-entered",
+      recoveringPort: PORT_RECOVERING,
+      edgeGuardingPort: PORT_GUARDING,
+    },
+    {
+      frame: 110,
+      frameIndex: 110,
+      kind: "recovery-failure",
+      recoveringPort: PORT_RECOVERING,
+      edgeGuardingPort: PORT_GUARDING,
+    },
+  ];
+
+  it("counts both situations when nothing is excluded", () => {
+    const stats = computeEdgeGuardStats(events, PORT_RECOVERING);
+    expect(stats.recoverySituations).toBe(2);
+    expect(stats.recoverySuccesses).toBe(1);
+  });
+
+  it("drops an excluded situation from both the numerator and denominator, not just the numerator", () => {
+    // Exclude the first situation (the successful one) -- its success must NOT still be counted,
+    // and the situation itself must not still inflate the denominator.
+    const excluded = new Set([10]);
+
+    const stats = computeEdgeGuardStats(events, PORT_RECOVERING, excluded);
+    expect(stats.recoverySituations).toBe(1);
+    expect(stats.recoverySuccesses).toBe(0);
+  });
+
+  it("excluding the second situation doesn't affect the first", () => {
+    const excluded = new Set([100]);
+
+    const stats = computeEdgeGuardStats(events, PORT_RECOVERING, excluded);
+    expect(stats.recoverySituations).toBe(1);
+    expect(stats.recoverySuccesses).toBe(1);
   });
 });

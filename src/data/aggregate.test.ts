@@ -33,8 +33,8 @@ function makeSummary(opts: {
   const fullCounters: RawCounters = {
     recoverySituations: 0,
     recoverySuccesses: 0,
-    edgeGuardSituations: 0,
-    edgeGuardSuccesses: 0,
+    edgeGuardEffectivenessSum: 0,
+    edgeGuardEffectivenessCount: 0,
     ledgeGetupSituations: 0,
     ledgeGetupSuccesses: 0,
     ledgeTrapSituations: 0,
@@ -183,8 +183,8 @@ describe("aggregate module", () => {
       id: "gDL",
       stageId: DREAM_LAND_STAGE_ID,
       yourStats: {
-        edgeGuardSituations: 10,
-        edgeGuardSuccesses: 8,
+        edgeGuardEffectivenessSum: 80,
+        edgeGuardEffectivenessCount: 10,
         angelAvoidSituations: 5,
         angelAvoidSuccesses: 5,
       },
@@ -193,8 +193,8 @@ describe("aggregate module", () => {
       id: "gOther",
       stageId: 99, // Non-Dream-Land stage
       yourStats: {
-        edgeGuardSituations: 100, // Should be ignored
-        edgeGuardSuccesses: 100,
+        edgeGuardEffectivenessSum: 10000, // Should be ignored
+        edgeGuardEffectivenessCount: 100,
         angelAvoidSituations: 10,
         angelAvoidSuccesses: 5,
       },
@@ -205,10 +205,9 @@ describe("aggregate module", () => {
 
     expect(agg.totalGames).toBe(2);
     expect(agg.dreamLandGames).toBe(1);
-    // Edge guard only from Dream Land: 8 / 10
-    expect(agg.edgeGuardTotal).toBe(10);
-    expect(agg.edgeGuardSuccesses).toBe(8);
-    expect(agg.edgeGuardPct).toBe(80);
+    // Edge guard effectiveness only from Dream Land: 80 / 10
+    expect(agg.edgeGuardEffectivenessCount).toBe(10);
+    expect(agg.edgeGuardEffectivenessAvg).toBe(8);
 
     // Angel avoid from both stages: (5+5) / (5+10) = 10 / 15
     expect(agg.angelAvoidTotal).toBe(15);

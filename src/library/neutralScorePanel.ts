@@ -35,6 +35,16 @@ function fmtDelta(pp: number | null, baselinePct: number | null): string {
   return `${sign}${pp}pp <span class="neutral-score-delta-sub">${escapeHtml(tr.deltaVsBaseline(baselinePct))}</span>`;
 }
 
+function fmtScoreDelta(
+  delta: number | null,
+  baselineAvg: number | null,
+): string {
+  const tr = t();
+  if (delta === null || baselineAvg === null) return tr.deltaNoData;
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${delta} <span class="neutral-score-delta-sub">${escapeHtml(tr.deltaVsEffectivenessBaseline(baselineAvg))}</span>`;
+}
+
 function deltaClass(pp: number | null): string {
   if (pp === null) return "";
   return pp > 0 ? "delta-pos" : pp < 0 ? "delta-neg" : "";
@@ -175,8 +185,8 @@ export class NeutralScorePanel {
           </div>
           <div class="support-stat">
             <div class="support-stat-label">${escapeHtml(tr.edgeGuardDeltaLabel)}</div>
-            <div class="support-stat-value ${deltaClass(baselineDeltas?.edgeGuardDeltaPct ?? null)}">
-              ${fmtDelta(baselineDeltas?.edgeGuardDeltaPct ?? null, baselineDeltas?.edgeGuardBaselinePct ?? null)}
+            <div class="support-stat-value ${deltaClass(baselineDeltas?.edgeGuardEffectivenessDelta ?? null)}">
+              ${fmtScoreDelta(baselineDeltas?.edgeGuardEffectivenessDelta ?? null, baselineDeltas?.edgeGuardEffectivenessBaseline ?? null)}
             </div>
           </div>
         </div>

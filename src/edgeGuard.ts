@@ -46,7 +46,7 @@ const LEDGE_STATES = new Set([
 // — the dead player's position is frozen at their blast-zone KO point and
 // will almost always be outside the zone, producing false entries the frame
 // after a stock is lost.
-const DEAD_OR_RESPAWNING_STATES = new Set([
+export const DEAD_OR_RESPAWNING_STATES = new Set([
   0x000, // DeadD
   0x001, // DeadS
   0x002, // DeadU
@@ -58,12 +58,43 @@ const DEAD_OR_RESPAWNING_STATES = new Set([
   0x009, // ReviveWait
 ]);
 
-// Frames at 60 fps that a player must stay grounded and out of hitstun to
-// count as "recovered to stage."
-// TODO: hitstunCounter === 0 is the only actionable check for now; certain
-// non-hitstun states (e.g. landing lag, tumble) may also prevent meaningful
-// movement — revisit once we have a fuller taxonomy of "actionable" states.
+// Frames at 60 fps that a player must stay grounded and out of hitstun (or a
+// grab) to count as "recovered to stage."
 const RECOVERY_GROUNDED_FRAMES = 30; // 0.5 s × 60 fps
+
+// Grabbed/held/thrown states. Found via a real bug report: a player who lands
+// and is immediately grabbed, thrown, and killed was resolving as
+// "recovery-success" — grab/throw action states aren't hitstun
+// (isHitstunState doesn't cover them, they're a separate state family), so
+// the 0.5s grounded-and-safe clock kept running straight through the grab and
+// resolved success before the resulting stock loss ever registered. Treated
+// identically to hitstun below: resets the streak AND the "touched ground"
+// progress, same "require a fresh landing" reasoning that already applied to
+// hitstun. There isn't a single canonical export for this set in the
+// codebase yet (neutralHits.ts/ledgeTrap.ts/renderer.ts/combos.ts each have
+// their own copy) — this one can't import theirs without a circular
+// dependency (they import from edgeGuard.ts already), so it's defined here
+// too, same values.
+const CAPTURE_STATES = new Set([
+  0x0ab, // CapturePulled
+  0x0ac, // CaptureWait
+  0x0ad, // CaptureDamage
+  0x0ae,
+  0x0af,
+  0x0b0, // Yoshi egg lay capture
+  0x0b1,
+  0x0b2,
+  0x0b3, // CaptureFalconDive (Captain Falcon & J Falcon Up-B grab)
+  0x0b4,
+  0x0b5,
+  0x0b6, // CaptureCargo / CommandGrabHold
+  0x0b7,
+  0x0b8,
+  0x0b9, // CapturePulled / ThrowTransition
+  0x0ba, // DamageThrown / Thrown
+  0x0bb,
+  0x0bc,
+]);
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -187,6 +218,10 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
       const edgeGuardingPost = edgeGuardingPort === portA ? postA : postB;
       const recoveringInHitstun =
         recoveringPort === portA ? aInHitstun : bInHitstun;
+      // See CAPTURE_STATES' own comment above -- a grab/throw isn't hitstun but must be treated
+      // the same way for the grounded-safety-clock logic below.
+      const recoveringUnsafe =
+        recoveringInHitstun || CAPTURE_STATES.has(recoveringPost.actionStateId);
 
       // Resolution: recovering player lost a stock → recovery failure (edge-guard success).
       if (recoveringPost.stocksRemaining < situation.recoveringStocksAtEntry) {
@@ -230,20 +265,20 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
       }
 
       // Resolution: grounded + actionable for 0.5 s.
-      if (recoveringPost.grounded && !recoveringInHitstun) {
+      if (recoveringPost.grounded && !recoveringUnsafe) {
         situation.hasTouchedGround = true;
       }
-      if (recoveringInHitstun) {
+      if (recoveringUnsafe) {
         situation.safeFrameStreak = 0;
-        // A hit also undoes any earlier "touched ground" progress, not
-        // just the streak - otherwise a player launched again right after
-        // landing (e.g. onto a side platform, immediately re-hit) stays
-        // "touched" from that earlier landing, and once THIS hitstun
-        // happens to run out - even while still airborne and falling
-        // toward the blast zone, nowhere near safe - the 0.5s clock
-        // silently resumes and can resolve "recovery-success" without
-        // them ever having actually landed again. Require a fresh landing
-        // before the clock can restart.
+        // A hit (or a grab -- see CAPTURE_STATES above) also undoes any
+        // earlier "touched ground" progress, not just the streak - otherwise
+        // a player launched again right after landing (e.g. onto a side
+        // platform, immediately re-hit or grabbed) stays "touched" from that
+        // earlier landing, and once THIS hitstun/grab happens to end - even
+        // while still airborne and falling toward the blast zone, nowhere
+        // near safe - the 0.5s clock silently resumes and can resolve
+        // "recovery-success" without them ever having actually landed
+        // again. Require a fresh landing before the clock can restart.
         situation.hasTouchedGround = false;
       } else if (situation.hasTouchedGround) {
         situation.safeFrameStreak++;
@@ -365,41 +400,61 @@ export interface EdgeGuardStats {
   /** Situations where this port was the one recovering. */
   recoverySituations: number;
   recoverySuccesses: number;
-  /** Situations where this port was edge-guarding. */
-  edgeGuardSituations: number;
-  /** Times this port successfully edge-guarded (opponent died). */
-  edgeGuardSuccesses: number;
 }
 
 /**
- * Derives per-port edge-guard/recovery statistics from a pre-computed event
- * list. O(n) but cheap — called on perspective changes, not every frame.
+ * Derives per-port recovery statistics from a pre-computed event list. O(n)
+ * but cheap — called on perspective changes, not every frame.
+ *
+ * (Edge-guard-side stats used to live here too, as a plain "opponent died"
+ * kill rate, but that metric was retired in favor of Edge Guard Effectiveness
+ * -- see edgeGuardEffectivenessScore in classifiedSituations.ts, which scores
+ * every in-scope situation directly off the classifier's own category and
+ * already excludes "hopeless" situations on its own terms, so no separate
+ * exclusion set is needed for it.)
+ *
+ * `excludeEnteredFrameIndices` drops entire situations (both from the
+ * denominator and the numerator) by their `situation-entered` frameIndex —
+ * used to exclude situations the recovery classifier confirmed were
+ * "dead" (unsurvivable by any simulated strategy) at entry, per
+ * docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+ * Deliberately does NOT exclude "reaches-stage" verdicts here: that verdict
+ * only proves one input sequence works, not that the situation was trivial
+ * or unaffected by matchup-specific edge-guard pressure -- confirmed against
+ * real data (2026-09-11): in one 30-game sample, 20.7% of "reaches-stage"
+ * situations still ended in a real kill. Situations with no classifier opinion (wrong stage,
+ * unsupported character, etc.) are never excluded, matching prior behavior.
+ * Relies on situations never overlapping (edgeGuard.ts only ever has one
+ * open at a time), so the most recently seen "situation-entered" frameIndex
+ * always identifies the situation a following resolution event belongs to.
  */
 export function computeEdgeGuardStats(
   events: readonly EdgeGuardEvent[],
   port: PortIndex,
+  excludeEnteredFrameIndices?: ReadonlySet<number>,
 ): EdgeGuardStats {
   let recoverySituations = 0;
   let recoverySuccesses = 0;
-  let edgeGuardSituations = 0;
-  let edgeGuardSuccesses = 0;
+  let currentEnteredFrameIndex: number | null = null;
 
   for (const ev of events) {
     if (ev.kind === "situation-entered") {
+      currentEnteredFrameIndex = ev.frameIndex;
+      if (excludeEnteredFrameIndices?.has(ev.frameIndex)) continue;
       if (ev.recoveringPort === port) recoverySituations++;
-      else edgeGuardSituations++;
     } else if (ev.kind === "recovery-success") {
+      if (
+        currentEnteredFrameIndex !== null &&
+        excludeEnteredFrameIndices?.has(currentEnteredFrameIndex)
+      )
+        continue;
       if (ev.recoveringPort === port) recoverySuccesses++;
-    } else if (ev.kind === "recovery-failure") {
-      if (ev.edgeGuardingPort === port) edgeGuardSuccesses++;
     }
   }
 
   return {
     recoverySituations,
     recoverySuccesses,
-    edgeGuardSituations,
-    edgeGuardSuccesses,
   };
 }
 

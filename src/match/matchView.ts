@@ -59,6 +59,17 @@ import {
   type LedgeTrapEvent,
 } from "../ledgeTrap.js";
 import {
+  computeClassifiedSituations,
+  computeClassifiedSituationEvents,
+  hopelessEnteredFrameIndices,
+  averageEdgeGuardEffectiveness,
+  edgeGuardEffectivenessScore,
+  edgeGuardEffectivenessGrade,
+  type ClassifiedSituation,
+  type ClassifiedSituationEvent,
+  type SituationCategory,
+} from "../classifiedSituations.js";
+import {
   computeAngelInvincibilityEvents,
   computeAngelInvincibilityStats,
   type AngelInvincibilityEvent,
@@ -107,7 +118,8 @@ export type MatchEvent =
   | LedgeTrapEvent
   | AngelInvincibilityEvent
   | JigglypuffFThrowEvent
-  | ShieldPressureEvent;
+  | ShieldPressureEvent
+  | ClassifiedSituationEvent;
 
 interface PlayerPanel {
   port: PortIndex;
@@ -195,6 +207,8 @@ export class MatchViewController {
   private stageOverlayList: HTMLDivElement;
   private qaOverlayExitBtn: HTMLButtonElement;
   private hudToggleBtn: HTMLButtonElement;
+  private fpsToggleBtn: HTMLButtonElement;
+  private fpsDisplay: HTMLDivElement;
   private recoveryWidget: HTMLElement;
   private recoveryCollapseBtn: HTMLButtonElement;
   private recoveryWidgetTitleEl: HTMLHeadingElement;
@@ -341,6 +355,10 @@ export class MatchViewController {
     "recovery" | "ledge" | "angel" | "neutral" | "character" | "debug"
   >;
   private hudOverlayEnabled = false;
+  private fpsEnabled = false;
+  private fpsIntervalId: number | null = null;
+  private fpsFrameCount = 0;
+  private lastFpsTimestamp = 0;
   private matchupBaseline: DerivedRates | null = null;
   private onPerspectiveChangedCb?: (port: PortIndex) => void;
 
@@ -542,6 +560,10 @@ export class MatchViewController {
     this.hudToggleBtn = document.getElementById(
       "hudToggleBtn",
     ) as HTMLButtonElement;
+    this.fpsToggleBtn = document.getElementById(
+      "fpsToggleBtn",
+    ) as HTMLButtonElement;
+    this.fpsDisplay = document.getElementById("fpsDisplay") as HTMLDivElement;
 
     this.recoveryWidget = document.getElementById(
       "recoveryWidget",
@@ -1070,6 +1092,31 @@ export class MatchViewController {
 
     this.hudToggleBtn.classList.toggle("active", this.hudOverlayEnabled);
 
+    try {
+      this.fpsEnabled = localStorage.getItem("rmgr-viewer-fps") === "true";
+    } catch {
+      this.fpsEnabled = false;
+    }
+    this.fpsToggleBtn.classList.toggle("active", this.fpsEnabled);
+    this.fpsDisplay.hidden = !this.fpsEnabled;
+    this.fpsDisplay.textContent = "0.0 FPS";
+
+    this.fpsToggleBtn.addEventListener("click", () => {
+      this.fpsEnabled = !this.fpsEnabled;
+      this.fpsToggleBtn.classList.toggle("active", this.fpsEnabled);
+      this.fpsDisplay.hidden = !this.fpsEnabled;
+      try {
+        localStorage.setItem("rmgr-viewer-fps", String(this.fpsEnabled));
+      } catch {
+        // Ignore localStorage write error
+      }
+      if (this.fpsEnabled) {
+        this.startFpsTracking();
+      } else {
+        this.stopFpsTracking();
+      }
+    });
+
     this.playPauseBtn.addEventListener("click", () => {
       this.dismissQuickAttackOverlay();
       this.playback?.toggle();
@@ -1268,6 +1315,9 @@ export class MatchViewController {
     window.addEventListener("keydown", this.boundOnKeyDown);
     window.addEventListener("resize", this.boundOnResize);
     this.resizeStageCanvas();
+    if (this.fpsEnabled) {
+      this.startFpsTracking();
+    }
   }
 
   public deactivate(): void {
@@ -1278,6 +1328,31 @@ export class MatchViewController {
     );
     window.removeEventListener("keydown", this.boundOnKeyDown);
     window.removeEventListener("resize", this.boundOnResize);
+    this.stopFpsTracking();
+  }
+
+  private startFpsTracking(): void {
+    this.stopFpsTracking();
+    this.fpsFrameCount = 0;
+    this.lastFpsTimestamp = performance.now();
+    this.fpsDisplay.textContent = "0.0 FPS";
+    this.fpsIntervalId = window.setInterval(() => {
+      const now = performance.now();
+      const elapsed = now - this.lastFpsTimestamp;
+      if (elapsed > 0) {
+        const fps = (this.fpsFrameCount * 1000) / elapsed;
+        this.fpsDisplay.textContent = `${fps.toFixed(1)} FPS`;
+      }
+      this.fpsFrameCount = 0;
+      this.lastFpsTimestamp = now;
+    }, 500);
+  }
+
+  private stopFpsTracking(): void {
+    if (this.fpsIntervalId !== null) {
+      window.clearInterval(this.fpsIntervalId);
+      this.fpsIntervalId = null;
+    }
   }
 
   public setLeftSidebarCollapsed(collapsed: boolean): void {
@@ -1548,6 +1623,18 @@ export class MatchViewController {
       this.hudToggleBtn.textContent = tr.hudOverlay;
       this.hudToggleBtn.title = tr.hudOverlayTitle;
     }
+    if (this.fpsToggleBtn) {
+      this.fpsToggleBtn.textContent = tr.fpsToggle;
+      this.fpsToggleBtn.title = tr.fpsToggleTitle;
+    }
+    if (this.logFilterHeaderTitle) {
+      this.logFilterHeaderTitle.textContent = tr.logFiltersTitle;
+    }
+    if (this.logFilterCollapseBtn) {
+      this.logFilterCollapseBtn.title = tr.situationCollapseTitle(
+        tr.logFiltersTitle,
+      );
+    }
     if (this.qaOverlayExitBtn) {
       this.qaOverlayExitBtn.textContent = "✕ " + tr.hideQuickAttackOverlayBtn;
     }
@@ -1722,6 +1809,9 @@ export class MatchViewController {
     _frameIndex: number,
     snap: boolean,
   ): void {
+    if (this.fpsEnabled) {
+      this.fpsFrameCount++;
+    }
     this.lastFrame = frame;
     const targets: Array<{ x: number; y: number }> = [];
     if (this.stageRenderer.isQuickAttackOverlayActive()) {
@@ -2055,6 +2145,45 @@ export class MatchViewController {
       }
     }
 
+    if (
+      ev.kind === "missed-ledge-hog" ||
+      ev.kind === "possible-accidental-save"
+    ) {
+      if (perspective === null) {
+        return ev.kind === "missed-ledge-hog"
+          ? {
+              text: `${ev.frame} — ${tr.playerMissedLedgeHog(name(ev.edgeGuardingPort))}`,
+              kind: "entered",
+            }
+          : {
+              text: `${ev.frame} — ${tr.playerPossibleAccidentalSave(name(ev.recoveringPort), name(ev.edgeGuardingPort))}`,
+              kind: "entered",
+            };
+      }
+
+      const isRecoveringSide = ev.recoveringPort === perspective;
+      if (ev.kind === "missed-ledge-hog") {
+        return isRecoveringSide
+          ? {
+              text: `${ev.frame} — ${tr.missedLedgeHogAsRecovering}`,
+              kind: "success",
+            }
+          : {
+              text: `${ev.frame} — ${tr.missedLedgeHogAsGuarding}`,
+              kind: "failure",
+            };
+      }
+      return isRecoveringSide
+        ? {
+            text: `${ev.frame} — ${tr.possibleAccidentalSaveAsRecovering}`,
+            kind: "success",
+          }
+        : {
+            text: `${ev.frame} — ${tr.possibleAccidentalSaveAsGuarding}`,
+            kind: "failure",
+          };
+    }
+
     const edgeEv = ev as EdgeGuardEvent;
     if (perspective === null) {
       switch (edgeEv.kind) {
@@ -2162,6 +2291,11 @@ export class MatchViewController {
   private renderLogFilterWidget(): void {
     const tr = t();
     this.logFilterHeaderTitle.textContent = tr.logFiltersTitle;
+    this.logFilterCollapseBtn.title = tr.situationCollapseTitle(
+      tr.logFiltersTitle,
+    );
+    this.hudToggleBtn.classList.toggle("active", this.hudOverlayEnabled);
+    this.fpsToggleBtn.classList.toggle("active", this.fpsEnabled);
     this.logFilterChips.innerHTML = "";
 
     const categories: Array<{
@@ -2230,7 +2364,9 @@ export class MatchViewController {
       if (
         ev.kind === "situation-entered" ||
         ev.kind === "recovery-success" ||
-        ev.kind === "recovery-failure"
+        ev.kind === "recovery-failure" ||
+        ev.kind === "missed-ledge-hog" ||
+        ev.kind === "possible-accidental-save"
       ) {
         return this.activeLogCategories.has("recovery");
       }
@@ -2264,6 +2400,11 @@ export class MatchViewController {
   }
 
   private updateEventLogHighlight(currentFrameIndex: number): void {
+    const LOG_DURATION_FRAMES = 300; // Messages disappear after 5 seconds (at 60 FPS)
+    const HIGHLIGHT_DURATION_FRAMES = 60; // 1 second incoming highlight fade
+    const EXIT_FADE_FRAMES = 60; // 1 second fade out before disappearing
+    const MAX_VISIBLE_LOGS = 10; // Up to 10 entries shown instead of 3
+
     let activeIdx = -1;
     for (let i = 0; i < this.currentLogEvents.length; i++) {
       const ev = this.currentLogEvents[i];
@@ -2281,24 +2422,68 @@ export class MatchViewController {
       !this.currentReplay
     ) {
       this.stageOverlay.hidden = true;
-    } else {
-      this.stageOverlay.hidden = false;
-      this.stageOverlayList.innerHTML = "";
-      const startIdx = Math.max(0, activeIdx - 2);
-      for (let i = startIdx; i <= activeIdx; i++) {
-        const ev = this.currentLogEvents[i];
-        if (!ev) continue;
-        const { text, kind } = this.eventLabel(
+      return;
+    }
+
+    // Collect all events that occurred in the last LOG_DURATION_FRAMES (5 seconds)
+    const activeEvents: Array<{
+      ev: MatchEvent;
+      isLatest: boolean;
+      ageFrames: number;
+    }> = [];
+
+    for (let i = 0; i <= activeIdx; i++) {
+      const ev = this.currentLogEvents[i];
+      if (!ev) continue;
+      const ageFrames = currentFrameIndex - ev.frameIndex;
+      if (ageFrames >= 0 && ageFrames <= LOG_DURATION_FRAMES) {
+        activeEvents.push({
           ev,
-          this.currentReplay,
-          this.perspectivePort,
-        );
-        const isLatest = i === activeIdx;
-        const entry = document.createElement("div");
-        entry.className = `overlay-entry kind-${kind}${isLatest ? " is-current" : ""}`;
-        entry.textContent = text;
-        this.stageOverlayList.appendChild(entry);
+          isLatest: i === activeIdx,
+          ageFrames,
+        });
       }
+    }
+
+    if (activeEvents.length === 0) {
+      this.stageOverlay.hidden = true;
+      return;
+    }
+
+    this.stageOverlay.hidden = false;
+    this.stageOverlayList.innerHTML = "";
+
+    const visibleEvents = activeEvents.slice(-MAX_VISIBLE_LOGS);
+
+    for (const item of visibleEvents) {
+      const { ev, isLatest, ageFrames } = item;
+      const { text, kind } = this.eventLabel(
+        ev,
+        this.currentReplay,
+        this.perspectivePort,
+      );
+
+      const highlightRatio = Math.max(
+        0,
+        1 - ageFrames / HIGHLIGHT_DURATION_FRAMES,
+      );
+      const isIncoming = highlightRatio > 0;
+
+      // Smoothly fade out during the last EXIT_FADE_FRAMES before 300 frames
+      const exitFadeRatio =
+        ageFrames > LOG_DURATION_FRAMES - EXIT_FADE_FRAMES
+          ? Math.max(0, (LOG_DURATION_FRAMES - ageFrames) / EXIT_FADE_FRAMES)
+          : 1;
+
+      const baseOpacity = 0.85 + 0.15 * highlightRatio;
+      const finalOpacity = baseOpacity * exitFadeRatio;
+
+      const entry = document.createElement("div");
+      entry.className = `overlay-entry kind-${kind}${isLatest ? " is-current" : ""}${isIncoming ? " is-incoming" : ""}`;
+      entry.style.setProperty("--highlight-ratio", highlightRatio.toFixed(3));
+      entry.style.opacity = finalOpacity.toFixed(3);
+      entry.textContent = text;
+      this.stageOverlayList.appendChild(entry);
     }
   }
 
@@ -2475,7 +2660,15 @@ export class MatchViewController {
       return;
     }
 
-    const stats = computeEdgeGuardStats(edgeEvents, this.perspectivePort);
+    // Situations the recovery classifier confirmed were unsurvivable at entry are excluded from
+    // Recovery% entirely -- see edgeGuard.ts's computeEdgeGuardStats doc comment and
+    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+    const classifiedSituations = computeClassifiedSituations(replay);
+    const stats = computeEdgeGuardStats(
+      edgeEvents,
+      this.perspectivePort,
+      hopelessEnteredFrameIndices(classifiedSituations),
+    );
     const ledgeStats = computeLedgeTrapStats(ledgeEvents, this.perspectivePort);
     const angelStats = computeAngelInvincibilityStats(
       angelEvents,
@@ -2492,6 +2685,7 @@ export class MatchViewController {
       total: number,
       successClass: "pct-success" | "pct-failure",
       baselinePct?: number | null,
+      subtext?: string,
     ): void => {
       const row = document.createElement("div");
       row.className = "stat-row";
@@ -2523,6 +2717,12 @@ export class MatchViewController {
 
       row.appendChild(lbl);
       row.appendChild(val);
+      if (subtext) {
+        const sub = document.createElement("div");
+        sub.className = "stat-subdetail";
+        sub.textContent = subtext;
+        row.appendChild(sub);
+      }
       this.statsPanel.appendChild(row);
     };
 
@@ -2580,13 +2780,132 @@ export class MatchViewController {
       "pct-success",
       this.matchupBaseline?.recoveryPct,
     );
-    addRow(
-      tr.edgeGuard,
-      stats.edgeGuardSuccesses,
-      stats.edgeGuardSituations,
-      "pct-success",
-      this.matchupBaseline?.edgeGuardPct,
-    );
+    // Classifier-aware breakdown (see
+    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md, phase 2). The rows
+    // above already exclude "hopeless" situations entirely (see computeEdgeGuardStats' doc
+    // comment); this section adds a further, purely additive contestable-only view on top, plus
+    // the ledge-hog-opportunity stat. Hidden entirely when there's nothing classified to show
+    // (non-Dream-Land matches, or a match with no classifier-supported characters involved).
+    if (replay.matchSettings?.stageId === DREAM_LAND_STAGE_ID) {
+      const classified = classifiedSituations;
+      const recovering = classified.filter(
+        (s) => s.recoveringPort === this.perspectivePort,
+      );
+      const guarding = classified.filter(
+        (s) => s.edgeGuardingPort === this.perspectivePort,
+      );
+
+      const breakdownText = (situations: ClassifiedSituation[]): string => {
+        const counts: Record<SituationCategory, number> = {
+          hopeless: 0,
+          contestable: 0,
+          unclassified: 0,
+        };
+        for (const s of situations) counts[s.category]++;
+        return tr.situationBreakdown(
+          counts.hopeless,
+          counts.contestable,
+          counts.unclassified,
+        );
+      };
+
+      // Kept narrow to entryVerdict === "dead-if-ledge-occupied" specifically, NOT the broader
+      // "contestable" category -- this sub-stat's whole point is the true ledge-hinges-the-outcome
+      // 50/50, and diluting it with the "reaches-stage" situations now folded into "contestable"
+      // would make it meaningless (see classifiedSituations.ts's top doc comment).
+      const recoveringContestable = recovering.filter(
+        (s) => s.entryVerdict === "dead-if-ledge-occupied",
+      );
+      if (recoveringContestable.length > 0) {
+        addRow(
+          tr.recoveryContestableLabel,
+          recoveringContestable.filter(
+            (s) => s.resolutionKind === "recovery-success",
+          ).length,
+          recoveringContestable.length,
+          "pct-success",
+          null,
+          breakdownText(recovering),
+        );
+      }
+
+      // Same narrowing as recoveringContestable above -- "Ledge-hog opportunities" only makes
+      // sense for the situations where holding the ledge is literally the deciding factor.
+      const guardingContestable = guarding.filter(
+        (s) => s.entryVerdict === "dead-if-ledge-occupied",
+      );
+
+      // Edge Guard Effectiveness: replaces the old binary "contestable only" kill-rate row with
+      // partial credit for damage dealt even without a kill, and penalties for a missed ledge-hog
+      // opportunity or a possible accidental save -- per the user directly (2026-09-10/11), the
+      // plain kill-rate number was too coarse to distinguish "landed a real punish but they
+      // survived" from "did nothing" from "actively backfired." See
+      // edgeGuardEffectivenessScore's own doc comment in classifiedSituations.ts for the tiers.
+      const effectiveness = averageEdgeGuardEffectiveness(
+        classified,
+        this.perspectivePort,
+      );
+      // Always shown whenever this port had any edge-guard situations at all, even when none of
+      // them were in scope for scoring ("—") -- per the user (2026-09-11): "the match stats panel
+      // doesn't have edge guard effectiveness," reported against a match where scoreable
+      // (contestable/anomalous) situations happened to be zero. Hiding the row entirely in that
+      // case reads as broken rather than "nothing scoreable happened."
+      if (guarding.length > 0) {
+        const scoredCount = guarding.filter(
+          (s) => edgeGuardEffectivenessScore(s) !== null,
+        ).length;
+        const row = document.createElement("div");
+        row.className = "stat-row";
+        const lbl = document.createElement("div");
+        lbl.className = "stat-row-label";
+        lbl.textContent = tr.edgeGuardEffectivenessLabel;
+        const val = document.createElement("div");
+        val.className = "stat-row-value";
+        const valSpan = document.createElement("span");
+        if (effectiveness !== null) {
+          valSpan.className = `stat-pct ${effectiveness < 0 ? "pct-failure" : "pct-success"}`;
+          valSpan.textContent = `${edgeGuardEffectivenessGrade(effectiveness)} (${Math.round(effectiveness)})`;
+          valSpan.title = tr.edgeGuardEffectivenessScorePointsTitle(
+            Math.round(effectiveness),
+          );
+        } else {
+          valSpan.className = "stat-pct";
+          valSpan.textContent = "—";
+        }
+        val.appendChild(valSpan);
+        val.append(`  ${tr.edgeGuardEffectivenessSummary(scoredCount)}`);
+        row.appendChild(lbl);
+        row.appendChild(val);
+        // No hopeless/contestable/unclassified breakdown here -- per the user (2026-09-12), it
+        // wasn't actionable for the user (unlike the Recovery-contestable-only row below, which
+        // keeps its own breakdownText call).
+        this.statsPanel.appendChild(row);
+      }
+
+      // "Ledge-hog opportunities": every contestable situation where holding the ledge was the
+      // correct, decisive call. successes = how often they actually held it; the subtext calls
+      // out how many of the misses were confirmed (via missedLedgeHogOpportunity) to actually
+      // cost the kill, vs. just being technically open but not exploited.
+      if (guardingContestable.length > 0) {
+        const held = guardingContestable.filter(
+          (s) => s.edgeGuarderHeldLedge,
+        ).length;
+        const missed = guardingContestable.filter(
+          (s) => s.missedLedgeHogOpportunity,
+        ).length;
+        addRow(
+          tr.ledgeHogOpportunitiesLabel,
+          held,
+          guardingContestable.length,
+          "pct-success",
+          null,
+          missed > 0
+            ? tr.ledgeHogOpportunitiesMissedSummary(missed)
+            : undefined,
+        );
+      }
+    }
+
     const addLedgeRow = (
       label: string,
       successes: number,
@@ -2745,7 +3064,34 @@ export class MatchViewController {
       outcome: "success" | "failure" | "open";
       recoveringPort: PortIndex;
       edgeGuardingPort: PortIndex;
+      category?: SituationCategory;
+      missedLedgeHogOpportunity?: boolean;
+      possibleAccidentalSave?: boolean;
+      /** Edge Guard Effectiveness score for this situation (see classifiedSituations.ts) --
+       * undefined if the situation isn't classified, null if classified but out of scope for
+       * scoring ("unclassified", or a hopeless situation that resolved normally). Shown
+       * per the user (2026-09-11): "we need to update that edge guards panel to show the
+       * classification of how successful the edge guard was, not just a checkmark." */
+      effectivenessScore?: number | null;
+      /** Raw damage dealt by the edge-guarder during the situation window -- shown alongside
+       * effectivenessScore so the score can be independently checked against the underlying fact,
+       * not just trusted as a black-box number. Per the user (2026-09-11): "the edge guards panel
+       * doesn't list the scoring result (KO, how much damage, etc.) ... so i can't independently
+       * verify this." */
+      damageDealtByGuarder?: number;
+      /** Was the edge-guarder hit by the recovering player during the situation window? Feeds a
+       * flat -25 modifier in edgeGuardEffectivenessScore, applied on top of whatever the base
+       * tier is -- per the user (2026-09-11): "if the player is hit with an attack by the
+       * recovering character before they grab ledge or land on stage, that's a -25." */
+      edgeGuarderWasHit?: boolean;
     }
+
+    // Keyed by enteredFrameIndex, which is unique per situation across a match (edgeGuard.ts only
+    // ever has one situation open at a time) -- see
+    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md, phase 2.
+    const classifiedByEntry = new Map<number, ClassifiedSituation>(
+      computeClassifiedSituations(replay).map((s) => [s.enteredFrameIndex, s]),
+    );
 
     const edgeSituations: EdgeSituationRecord[] = [];
     let currentEdgeSit: EdgeSituationRecord | null = null;
@@ -2755,12 +3101,21 @@ export class MatchViewController {
         if (currentEdgeSit) {
           edgeSituations.push(currentEdgeSit);
         }
+        const classified = classifiedByEntry.get(ev.frameIndex);
         currentEdgeSit = {
           enteredFrameIndex: ev.frameIndex,
           enteredFrame: ev.frame,
           outcome: "open",
           recoveringPort: ev.recoveringPort,
           edgeGuardingPort: ev.edgeGuardingPort,
+          category: classified?.category,
+          missedLedgeHogOpportunity: classified?.missedLedgeHogOpportunity,
+          possibleAccidentalSave: classified?.possibleAccidentalSave,
+          effectivenessScore: classified
+            ? edgeGuardEffectivenessScore(classified)
+            : undefined,
+          damageDealtByGuarder: classified?.damageDealtByGuarder,
+          edgeGuarderWasHit: classified?.edgeGuarderWasHit,
         };
       } else if (
         ev.kind === "recovery-success" ||
@@ -2825,7 +3180,15 @@ export class MatchViewController {
       (s) => s.recoveringPort === this.perspectivePort,
     );
     const edgeGuardSituations = edgeSituations.filter(
-      (s) => s.edgeGuardingPort === this.perspectivePort,
+      (s) =>
+        s.edgeGuardingPort === this.perspectivePort &&
+        // Hopeless situations don't belong in the Edge Guard list at all unless the edge-guarder
+        // managed to mess it up (a possible accidental save) -- per the user (2026-09-11): a
+        // situation the recovering player was never going to escape isn't a real edge-guard test,
+        // same reasoning as excluding it from EdgeGuard% and the Neutral Analysis "Edge Guard"
+        // chip. Doesn't affect the Recovery list -- that's still relevant context from the
+        // recovering player's own perspective.
+        !(s.category === "hopeless" && !s.possibleAccidentalSave),
     );
     const ledgeGetupSituations = ledgeSituations.filter(
       (s) => s.ledgePort === this.perspectivePort,
@@ -2842,8 +3205,15 @@ export class MatchViewController {
         outcome: "success" | "failure" | "open";
         damageAtEntry?: number;
         isUnder100?: boolean;
+        category?: SituationCategory;
+        missedLedgeHogOpportunity?: boolean;
+        possibleAccidentalSave?: boolean;
+        effectivenessScore?: number | null;
+        damageDealtByGuarder?: number;
+        edgeGuarderWasHit?: boolean;
       }>,
       isSuccessOutcome: (outcome: "success" | "failure") => boolean,
+      showEffectivenessScore = false,
     ): void => {
       if (items.length === 0) {
         const empty = document.createElement("div");
@@ -2883,18 +3253,92 @@ export class MatchViewController {
           row.appendChild(bracketEl);
         }
 
-        const badgeEl = document.createElement("span");
-        if (isSuccess === true) {
-          badgeEl.className = "situation-badge success";
-          badgeEl.textContent = tr.situationSuccessBadge;
-        } else if (isSuccess === false) {
-          badgeEl.className = "situation-badge failure";
-          badgeEl.textContent = tr.situationFailureBadge;
-        } else {
-          badgeEl.className = "situation-badge open";
-          badgeEl.textContent = tr.situationOpenBadge;
+        // Only "hopeless" is ever shown as a per-situation badge. "contestable" is noise -- per
+        // the user (2026-09-11): now that "reaches-stage"/"dead-if-ledge-occupied"/"unclassified"
+        // are all merged/treated as "contestable" for scoring, it's the label on the overwhelming
+        // majority of rows and stopped meaning anything specific. "unclassified" is hidden too --
+        // per the user (2026-09-12): a Luigi mirror match showing "unclassified" on every single
+        // row (Luigi isn't supported yet) prompted "i don't even want us to say 'no data'. i just
+        // don't think we should say anything because it isn't actionable for the user." "hopeless"
+        // stays -- that one IS still a distinct, trusted claim.
+        if (sit.category === "hopeless") {
+          const categoryEl = document.createElement("span");
+          categoryEl.className = `situation-bracket category-${sit.category}`;
+          categoryEl.textContent = tr.situationCategoryLabel(sit.category);
+          row.appendChild(categoryEl);
         }
-        row.appendChild(badgeEl);
+
+        // The outcome label IS the result for Edge Guard rows now -- per the user (2026-09-11): "we
+        // should remove the checkmark and replace it with a 'KO' label or '<16%' etc," reaffirmed
+        // (2026-09-11, later): "the 'edge guard' panel still is just showing a check or x ... I
+        // told you to replace that with something related to the scoring (e.g. KO, reset, damage
+        // >=65%)". This must show for EVERY resolved situation, not just ones that count toward
+        // the Effectiveness average -- damageDealtByGuarder/outcome describe what actually
+        // happened regardless of whether the classifier trusted the situation enough to score it
+        // (a hopeless situation that resolved normally, or one the classifier had no opinion on at
+        // all, still has a real, displayable outcome). Only genuinely open (unresolved) situations
+        // fall back to the plain "..." badge below, since there's nothing to describe yet.
+        let scoreLabelShown = false;
+        if (showEffectivenessScore && sit.outcome !== "open") {
+          const scoreEl = document.createElement("span");
+          const score = sit.effectivenessScore;
+          let detail: string;
+          if (sit.missedLedgeHogOpportunity) {
+            detail = tr.edgeGuardEffectivenessDetailMissedLedgeHog;
+          } else if (sit.possibleAccidentalSave) {
+            detail = tr.edgeGuardEffectivenessDetailAccidentalSave;
+          } else if (sit.outcome === "failure") {
+            detail = tr.edgeGuardEffectivenessDetailKO;
+          } else if ((sit.damageDealtByGuarder ?? 0) > 0) {
+            detail = tr.edgeGuardEffectivenessDetailDamage(
+              Math.round(sit.damageDealtByGuarder!),
+            );
+          } else {
+            detail = tr.edgeGuardEffectivenessDetailReset;
+          }
+          if (sit.edgeGuarderWasHit) {
+            detail = tr.edgeGuardEffectivenessDetailWithHitTaken(detail);
+          }
+          scoreEl.className = `situation-bracket ${score !== undefined && score !== null ? (score < 0 ? "bracket-over100" : score >= 70 ? "bracket-under100" : "") : ""}`;
+          scoreEl.textContent = detail;
+          if (score !== undefined && score !== null) {
+            scoreEl.title = tr.edgeGuardEffectivenessScorePointsTitle(score);
+          }
+          row.appendChild(scoreEl);
+          scoreLabelShown = true;
+        }
+
+        // Recovery list only, or an Edge Guard situation with no tier label shown above -- Edge
+        // Guard rows with a tier label already say this via that label.
+        if (!scoreLabelShown && sit.missedLedgeHogOpportunity) {
+          const flagEl = document.createElement("span");
+          flagEl.className = "situation-bracket category-flag";
+          flagEl.textContent = tr.situationMissedLedgeHogBadge;
+          flagEl.title = tr.situationMissedLedgeHogTitle;
+          row.appendChild(flagEl);
+        }
+        if (!scoreLabelShown && sit.possibleAccidentalSave) {
+          const flagEl = document.createElement("span");
+          flagEl.className = "situation-bracket category-flag";
+          flagEl.textContent = tr.situationAccidentalSaveBadge;
+          flagEl.title = tr.situationAccidentalSaveTitle;
+          row.appendChild(flagEl);
+        }
+
+        if (!scoreLabelShown) {
+          const badgeEl = document.createElement("span");
+          if (isSuccess === true) {
+            badgeEl.className = "situation-badge success";
+            badgeEl.textContent = tr.situationSuccessBadge;
+          } else if (isSuccess === false) {
+            badgeEl.className = "situation-badge failure";
+            badgeEl.textContent = tr.situationFailureBadge;
+          } else {
+            badgeEl.className = "situation-badge open";
+            badgeEl.textContent = tr.situationOpenBadge;
+          }
+          row.appendChild(badgeEl);
+        }
 
         row.addEventListener("click", () => {
           this.dismissQuickAttackOverlay();
@@ -2917,6 +3361,7 @@ export class MatchViewController {
       this.edgeGuardList,
       edgeGuardSituations,
       (outcome) => outcome === "failure",
+      true,
     );
     renderList(
       this.ledgeGetupList,
@@ -2947,6 +3392,10 @@ export class MatchViewController {
       row.dataset.frameIndex = String(e.frameIndex);
       row.dataset.endFrameIndex = String(e.endFrameIndex ?? e.frameIndex + 60);
 
+      // Top line: time column + chips, side by side. A separate result line (below) can follow.
+      const topLine = document.createElement("div");
+      topLine.className = "neutral-interaction-top";
+
       // Left column: Elapsed Time (top) and Frame Number (bottom)
       const timeCol = document.createElement("div");
       timeCol.className = "neutral-time-col";
@@ -2961,7 +3410,7 @@ export class MatchViewController {
 
       timeCol.appendChild(timeEl);
       timeCol.appendChild(frameEl);
-      row.appendChild(timeCol);
+      topLine.appendChild(timeCol);
 
       // Right area: chips flow in order, left-aligned, wrapping if needed
       const chipsWrap = document.createElement("div");
@@ -3011,7 +3460,22 @@ export class MatchViewController {
       }
       chipsWrap.appendChild(badgeEl);
 
-      if (e.totalHitsLanded !== undefined && e.totalHitsLanded > 1) {
+      // Hits are split into "before any situation conversion" (the original opening) and "during
+      // one" (edge-guard/ledge-trap), per the user (2026-09-11): a single combined "3 hits" badge
+      // shown right next to the opening reason wrongly implied all 3 hits happened during that
+      // initial punish, when e.g. 1 did and 2 more landed later at the ledge. When there's no
+      // conversion, preSituationHits === totalHitsLanded and situationHits is 0, so this reduces
+      // to the old single-badge behavior automatically.
+      const preSituationHits = e.preSituationHits ?? e.totalHitsLanded;
+      const hasSituationHits = (e.situationHits ?? 0) > 0;
+      // Shown whenever there's more than one hit, OR whenever a split is actually happening (even
+      // a single pre-conversion hit) -- once the interaction is split into two phases, "1 hit"
+      // disambiguates the opening from an implicit "some unknown number," per the user's own
+      // desired wording ("Jump Punish, 1 hit, Ledge Trap, 2 hit").
+      if (
+        preSituationHits !== undefined &&
+        (preSituationHits > 1 || hasSituationHits)
+      ) {
         const hitsBadge = document.createElement("span");
         hitsBadge.className = "neutral-badge-hits";
         hitsBadge.dataset.chip = "hits";
@@ -3019,11 +3483,26 @@ export class MatchViewController {
         hitsBadge.dataset.endFrame = String(
           e.lastHitFrameIndex ?? e.frameIndex + 45,
         );
-        hitsBadge.textContent = tr.neutralHitsBadge(e.totalHitsLanded);
+        hitsBadge.textContent = tr.neutralHitsBadge(preSituationHits);
         chipsWrap.appendChild(hitsBadge);
       }
 
-      if (e.convertedToEdgeGuard) {
+      // Only the more specific tag is shown when both apply -- a ledge-trap situation always
+      // implies the victim was also in an edge-guard/recovery situation en route to the ledge, so
+      // showing both is redundant (per the user, 2026-09-11).
+      if (e.convertedToLedgeTrap) {
+        const ltBadge = document.createElement("span");
+        ltBadge.className = "neutral-badge-conversion";
+        ltBadge.dataset.chip = "ledge-trap";
+        ltBadge.dataset.startFrame = String(
+          e.ledgeTrapStartFrameIndex ?? e.frameIndex,
+        );
+        ltBadge.dataset.endFrame = String(
+          e.ledgeTrapEndFrameIndex ?? e.endFrameIndex ?? e.frameIndex + 60,
+        );
+        ltBadge.textContent = tr.neutralConversionLedgeTrap;
+        chipsWrap.appendChild(ltBadge);
+      } else if (e.convertedToEdgeGuard) {
         const egBadge = document.createElement("span");
         egBadge.className = "neutral-badge-conversion";
         egBadge.dataset.chip = "edge-guard";
@@ -3037,18 +3516,20 @@ export class MatchViewController {
         chipsWrap.appendChild(egBadge);
       }
 
-      if (e.convertedToLedgeTrap) {
-        const ltBadge = document.createElement("span");
-        ltBadge.className = "neutral-badge-conversion";
-        ltBadge.dataset.chip = "ledge-trap";
-        ltBadge.dataset.startFrame = String(
-          e.ledgeTrapStartFrameIndex ?? e.frameIndex,
+      if (e.situationHits !== undefined && e.situationHits > 0) {
+        const situationHitsBadge = document.createElement("span");
+        situationHitsBadge.className = "neutral-badge-hits";
+        situationHitsBadge.dataset.chip = "situation-hits";
+        situationHitsBadge.dataset.startFrame = String(
+          e.ledgeTrapStartFrameIndex ??
+            e.edgeGuardStartFrameIndex ??
+            e.frameIndex,
         );
-        ltBadge.dataset.endFrame = String(
-          e.ledgeTrapEndFrameIndex ?? e.endFrameIndex ?? e.frameIndex + 60,
+        situationHitsBadge.dataset.endFrame = String(
+          e.lastHitFrameIndex ?? e.endFrameIndex ?? e.frameIndex + 60,
         );
-        ltBadge.textContent = tr.neutralConversionLedgeTrap;
-        chipsWrap.appendChild(ltBadge);
+        situationHitsBadge.textContent = tr.neutralHitsBadge(e.situationHits);
+        chipsWrap.appendChild(situationHitsBadge);
       }
 
       if (e.convertedToKill) {
@@ -3087,7 +3568,27 @@ export class MatchViewController {
         chipsWrap.appendChild(resetBadge);
       }
 
-      row.appendChild(chipsWrap);
+      topLine.appendChild(chipsWrap);
+      row.appendChild(topLine);
+
+      // Cumulative damage across the whole interaction, shown as its own line below the chips
+      // rather than a highlighted chip -- per the user (2026-09-11): a KO's result IS "KO," the
+      // damage total doesn't matter alongside it; otherwise show it, but plainly ("Result: 65%"),
+      // not competing visually with the chip row. Skipped for a reversal, same reasoning as
+      // before: totalDamageDealt is the ORIGINAL attacker's damage, not a meaningful summary once
+      // who's attacking has flipped mid-exchange.
+      if (
+        !e.convertedToKill &&
+        e.outcome !== "reversal" &&
+        (e.totalDamageDealt ?? 0) > 0
+      ) {
+        const resultLine = document.createElement("div");
+        resultLine.className = "neutral-result-line";
+        resultLine.textContent = tr.neutralResultBadge(
+          Math.round(e.totalDamageDealt!),
+        );
+        row.appendChild(resultLine);
+      }
 
       row.addEventListener("click", () => {
         this.dismissQuickAttackOverlay();
@@ -4154,6 +4655,13 @@ export class MatchViewController {
     this.neutralHitEvents = neutralEvents;
     const puffEvents = computeJigglypuffFThrowEvents(replay);
     const shieldEvents = computeShieldPressureEvents(replay);
+    // Superseded by classifiedSituationEvents (missed-ledge-hog / possible-accidental-save) and
+    // the Recovery/Edge Guard situation panels -- the old "Recovery: reaches stage" / "Jumped:
+    // reaches stage" debug log lines are no longer emitted. computeRecoveryVerdictSpans itself is
+    // still very much in use (classifiedSituations.ts is built directly on it), only this
+    // throwaway-by-design text log on top of it is retired. Per the user (2026-09-11): "the debug
+    // logging for the heuristic can probably be removed now."
+    const classifiedSituationEvents = computeClassifiedSituationEvents(replay);
     this.matchEvents = [
       ...edgeEvents,
       ...ledgeEvents,
@@ -4161,6 +4669,7 @@ export class MatchViewController {
       ...neutralEvents,
       ...puffEvents,
       ...shieldEvents,
+      ...classifiedSituationEvents,
     ].sort((a, b) =>
       a.frameIndex === b.frameIndex
         ? a.kind === "neutral-hit"

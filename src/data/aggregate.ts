@@ -36,9 +36,9 @@ export interface DerivedRates {
   recoverySuccesses: number;
   recoveryTotal: number;
 
-  edgeGuardPct: number | null;
-  edgeGuardSuccesses: number;
-  edgeGuardTotal: number;
+  /** Average Edge Guard Effectiveness score (-50..100) across in-scope situations. */
+  edgeGuardEffectivenessAvg: number | null;
+  edgeGuardEffectivenessCount: number;
 
   ledgeGetupPct: number | null;
   ledgeGetupSuccesses: number;
@@ -91,7 +91,7 @@ export interface ReasonDifferential {
 export interface RateDeltas {
   winRatePctDelta: number | null;
   recoveryPctDelta: number | null;
-  edgeGuardPctDelta: number | null;
+  edgeGuardEffectivenessDelta: number | null;
   ledgeGetupPctDelta: number | null;
   ledgeTrapPctDelta: number | null;
   angelAvoidPctDelta: number | null;
@@ -201,8 +201,8 @@ export function aggregateFilteredGames(
   // Dream Land only counters
   let recoverySituations = 0;
   let recoverySuccesses = 0;
-  let edgeGuardSituations = 0;
-  let edgeGuardSuccesses = 0;
+  let edgeGuardEffectivenessSum = 0;
+  let edgeGuardEffectivenessCount = 0;
   let ledgeGetupSituations = 0;
   let ledgeGetupSuccesses = 0;
   let ledgeTrapSituations = 0;
@@ -248,8 +248,8 @@ export function aggregateFilteredGames(
       dreamLandGames++;
       recoverySituations += stats.recoverySituations;
       recoverySuccesses += stats.recoverySuccesses;
-      edgeGuardSituations += stats.edgeGuardSituations;
-      edgeGuardSuccesses += stats.edgeGuardSuccesses;
+      edgeGuardEffectivenessSum += stats.edgeGuardEffectivenessSum;
+      edgeGuardEffectivenessCount += stats.edgeGuardEffectivenessCount;
       ledgeGetupSituations += stats.ledgeGetupSituations;
       ledgeGetupSuccesses += stats.ledgeGetupSuccesses;
       ledgeTrapSituations += stats.ledgeTrapSituations;
@@ -294,9 +294,11 @@ export function aggregateFilteredGames(
     recoverySuccesses,
     recoveryTotal: recoverySituations,
 
-    edgeGuardPct: rate(edgeGuardSuccesses, edgeGuardSituations),
-    edgeGuardSuccesses,
-    edgeGuardTotal: edgeGuardSituations,
+    edgeGuardEffectivenessAvg:
+      edgeGuardEffectivenessCount > 0
+        ? edgeGuardEffectivenessSum / edgeGuardEffectivenessCount
+        : null,
+    edgeGuardEffectivenessCount,
 
     ledgeGetupPct: rate(ledgeGetupSuccesses, ledgeGetupSituations),
     ledgeGetupSuccesses,
@@ -381,10 +383,10 @@ export function computeRateDeltas(
   return {
     winRatePctDelta: delta(filtered.winRatePct, baseline.winRatePct, true),
     recoveryPctDelta: delta(filtered.recoveryPct, baseline.recoveryPct, true),
-    edgeGuardPctDelta: delta(
-      filtered.edgeGuardPct,
-      baseline.edgeGuardPct,
-      true,
+    edgeGuardEffectivenessDelta: delta(
+      filtered.edgeGuardEffectivenessAvg,
+      baseline.edgeGuardEffectivenessAvg,
+      false,
     ),
     ledgeGetupPctDelta: delta(
       filtered.ledgeGetupPct,
@@ -661,13 +663,36 @@ function shrinkRate(
   return { raw, shrunk, successes, opportunities };
 }
 
+export interface ShrunkAverage {
+  raw: number | null;
+  shrunk: number | null;
+  count: number;
+}
+
+/** Same shrinkage idea as shrinkRate, but for an average score (e.g. Edge Guard Effectiveness) rather than a success/opportunity ratio. */
+function shrinkAverage(
+  avg: number | null,
+  count: number,
+  parentAvg: number | null,
+): ShrunkAverage {
+  if (avg === null || count === 0) {
+    return { raw: null, shrunk: parentAvg, count: 0 };
+  }
+  if (parentAvg === null) {
+    return { raw: avg, shrunk: avg, count };
+  }
+  const shrunk =
+    (avg * count + SHRINKAGE_K * parentAvg) / (count + SHRINKAGE_K);
+  return { raw: avg, shrunk, count };
+}
+
 export interface CharacterBaselines {
   globalRecovery: ShrunkRate;
-  globalEdgeGuard: ShrunkRate;
+  globalEdgeGuard: ShrunkAverage;
   /** Recovery baseline per your-character ID, shrunk toward the global rate. */
   recoveryByMyCharacter: Map<number, ShrunkRate>;
-  /** Edge guard baseline per opponent-character ID, shrunk toward the global rate. */
-  edgeGuardByOppCharacter: Map<number, ShrunkRate>;
+  /** Edge guard effectiveness baseline per opponent-character ID, shrunk toward the global average. */
+  edgeGuardByOppCharacter: Map<number, ShrunkAverage>;
 }
 
 /**
@@ -687,14 +712,14 @@ export function computeCharacterBaselines(
     overall.recoveryTotal,
     null,
   );
-  const globalEdgeGuard = shrinkRate(
-    overall.edgeGuardSuccesses,
-    overall.edgeGuardTotal,
+  const globalEdgeGuard = shrinkAverage(
+    overall.edgeGuardEffectivenessAvg,
+    overall.edgeGuardEffectivenessCount,
     null,
   );
 
   const byMyChar = new Map<number, { succ: number; opp: number }>();
-  const byOppChar = new Map<number, { succ: number; opp: number }>();
+  const byOppChar = new Map<number, { sum: number; count: number }>();
 
   for (const { summary, yourPort, oppPort } of allResolved) {
     if (summary.stageId !== DREAM_LAND_STAGE_ID) continue; // recovery/edge guard are Dream Land-only (§4.2 of aggregateFilteredGames)
@@ -708,9 +733,9 @@ export function computeCharacterBaselines(
     rc.opp += stats.recoverySituations;
     byMyChar.set(yourP.characterId, rc);
 
-    const ec = byOppChar.get(oppP.characterId) ?? { succ: 0, opp: 0 };
-    ec.succ += stats.edgeGuardSuccesses;
-    ec.opp += stats.edgeGuardSituations;
+    const ec = byOppChar.get(oppP.characterId) ?? { sum: 0, count: 0 };
+    ec.sum += stats.edgeGuardEffectivenessSum;
+    ec.count += stats.edgeGuardEffectivenessCount;
     byOppChar.set(oppP.characterId, ec);
   }
 
@@ -722,11 +747,12 @@ export function computeCharacterBaselines(
     );
   }
 
-  const edgeGuardByOppCharacter = new Map<number, ShrunkRate>();
-  for (const [charId, { succ, opp }] of byOppChar) {
+  const edgeGuardByOppCharacter = new Map<number, ShrunkAverage>();
+  for (const [charId, { sum, count }] of byOppChar) {
+    const avg = count > 0 ? sum / count : null;
     edgeGuardByOppCharacter.set(
       charId,
-      shrinkRate(succ, opp, globalEdgeGuard.raw),
+      shrinkAverage(avg, count, globalEdgeGuard.raw),
     );
   }
 
@@ -742,9 +768,9 @@ export interface BaselineDeltas {
   /** Filtered raw recovery% minus the shrunk baseline for the selected my-character (or global, if "all"). */
   recoveryDeltaPct: number | null;
   recoveryBaselinePct: number | null;
-  /** Filtered raw edge guard% minus the shrunk baseline for the selected opponent-character (or global, if "all"). */
-  edgeGuardDeltaPct: number | null;
-  edgeGuardBaselinePct: number | null;
+  /** Filtered raw edge guard effectiveness average minus the shrunk baseline for the selected opponent-character (or global, if "all"). */
+  edgeGuardEffectivenessDelta: number | null;
+  edgeGuardEffectivenessBaseline: number | null;
 }
 
 /**
@@ -761,7 +787,7 @@ export function computeBaselineDeltas(
     (myCharacterId !== "all"
       ? baselines.recoveryByMyCharacter.get(myCharacterId)?.shrunk
       : undefined) ?? baselines.globalRecovery.shrunk;
-  const edgeGuardBaselinePct =
+  const edgeGuardEffectivenessBaseline =
     (oppCharacterId !== "all"
       ? baselines.edgeGuardByOppCharacter.get(oppCharacterId)?.shrunk
       : undefined) ?? baselines.globalEdgeGuard.shrunk;
@@ -774,10 +800,14 @@ export function computeBaselineDeltas(
         ? round1(filteredRates.recoveryPct - recoveryBaselinePct)
         : null,
     recoveryBaselinePct: recoveryBaselinePct ?? null,
-    edgeGuardDeltaPct:
-      filteredRates.edgeGuardPct !== null && edgeGuardBaselinePct !== null
-        ? round1(filteredRates.edgeGuardPct - edgeGuardBaselinePct)
+    edgeGuardEffectivenessDelta:
+      filteredRates.edgeGuardEffectivenessAvg !== null &&
+      edgeGuardEffectivenessBaseline !== null
+        ? round1(
+            filteredRates.edgeGuardEffectivenessAvg -
+              edgeGuardEffectivenessBaseline,
+          )
         : null,
-    edgeGuardBaselinePct: edgeGuardBaselinePct ?? null,
+    edgeGuardEffectivenessBaseline: edgeGuardEffectivenessBaseline ?? null,
   };
 }

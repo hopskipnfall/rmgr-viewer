@@ -1,6 +1,7 @@
 import { t } from "../i18n.js";
 import { characterName, getCharacterGroup } from "../lookups.js";
 import type { CharacterBreakdownRow } from "../data/aggregate.js";
+import { edgeGuardEffectivenessGrade } from "../classifiedSituations.js";
 
 export class BreakdownTable {
   private container: HTMLElement;
@@ -21,6 +22,12 @@ export class BreakdownTable {
       if (pct === null || total === 0) return "—";
       const isLowN = total < 10;
       return `${Math.round(pct)}%${isLowN ? ' <span class="table-low-n" title="Low sample size">⚠</span>' : ""}`;
+    };
+
+    const fmtGrade = (avg: number | null, count: number): string => {
+      if (avg === null || count === 0) return "—";
+      const isLowN = count < 10;
+      return `${edgeGuardEffectivenessGrade(avg)}${isLowN ? ' <span class="table-low-n" title="Low sample size">⚠</span>' : ""}`;
     };
 
     const fmtHits = (hits: number | null, stocks: number): string => {
@@ -72,7 +79,7 @@ export class BreakdownTable {
                   <td class="col-games">${row.games}</td>
                   <td class="col-wl">${row.wins}-${row.losses}</td>
                   <td class="col-stat">${fmtPct(r.recoveryPct, r.recoveryTotal)}</td>
-                  <td class="col-stat">${fmtPct(r.edgeGuardPct, r.edgeGuardTotal)}</td>
+                  <td class="col-stat">${fmtGrade(r.edgeGuardEffectivenessAvg, r.edgeGuardEffectivenessCount)}</td>
                   <td class="col-stat">${fmtPct(r.ledgeGetupPct, r.ledgeGetupTotal)}</td>
                   <td class="col-stat">${fmtPct(r.ledgeTrapPct, r.ledgeTrapTotal)}</td>
                   <td class="col-stat">${fmtPct(r.angelAvoidPct, r.angelAvoidTotal)}</td>

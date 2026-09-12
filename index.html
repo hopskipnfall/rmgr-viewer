@@ -2642,6 +2642,32 @@
       .qa-overlay-exit-btn[hidden] {
         display: none !important;
       }
+      #fpsDisplay {
+        position: absolute;
+        top: 12px;
+        left: 14px;
+        z-index: 20;
+        pointer-events: none;
+        background: rgba(18, 20, 26, 0.82);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: #38bdf8;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+        user-select: none;
+        transition: left 0.15s ease;
+      }
+      #fpsDisplay[hidden] {
+        display: none !important;
+      }
+      #expandLeftSidebarBtn:not([hidden]) ~ #fpsDisplay {
+        left: 96px;
+      }
       #stageOverlay {
         position: absolute;
         bottom: 12px;
@@ -2649,9 +2675,12 @@
         pointer-events: none;
         display: flex;
         flex-direction: column;
+        justify-content: flex-end;
         gap: 6px;
         z-index: 10;
         max-width: 440px;
+        max-height: calc(100% - 50px);
+        overflow: hidden;
       }
       #stageOverlay[hidden] {
         display: none !important;
@@ -2659,6 +2688,7 @@
       #stageOverlayList {
         display: flex;
         flex-direction: column;
+        justify-content: flex-end;
         gap: 4px;
       }
       .overlay-entry {
@@ -2680,11 +2710,27 @@
         overflow: hidden;
         text-overflow: ellipsis;
         opacity: 0.85;
+        transition:
+          opacity 0.1s ease,
+          border-color 0.1s ease,
+          box-shadow 0.1s ease;
       }
       .overlay-entry.is-current {
         opacity: 1;
         background: rgba(26, 30, 42, 0.92);
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      }
+      .overlay-entry.is-incoming {
+        background: rgba(24, 34, 52, 0.94);
+        border-color: rgba(
+          56,
+          189,
+          248,
+          calc(0.1 + var(--highlight-ratio, 1) * 0.6)
+        );
+        box-shadow:
+          0 0 16px rgba(56, 189, 248, calc(var(--highlight-ratio, 1) * 0.6)),
+          0 4px 16px rgba(0, 0, 0, 0.5);
       }
       .overlay-entry.kind-success {
         border-left-color: #60a5fa;
@@ -3392,6 +3438,27 @@
         color: #fca5a5;
         background: rgba(239, 68, 68, 0.12);
       }
+      .situation-bracket.category-hopeless {
+        color: #8b8f9c;
+        background: rgba(139, 143, 156, 0.12);
+      }
+      .situation-bracket.category-free {
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.12);
+      }
+      .situation-bracket.category-contestable {
+        color: #fbbf24;
+        background: rgba(251, 191, 36, 0.14);
+      }
+      .situation-bracket.category-unclassified {
+        color: var(--text-dim);
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .situation-bracket.category-flag {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.14);
+        cursor: help;
+      }
       .situation-empty {
         padding: 10px 12px;
         font-size: 12px;
@@ -3724,9 +3791,20 @@
       }
       .situation-row.neutral-interaction-row {
         display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 3px;
+        padding: 6px 10px;
+      }
+      .neutral-interaction-top {
+        display: flex;
         align-items: center;
         gap: 10px;
-        padding: 6px 10px;
+      }
+      .neutral-result-line {
+        padding-left: 60px;
+        font-size: 11px;
+        color: var(--text-dim);
       }
       .neutral-time-col {
         display: flex;
@@ -3898,6 +3976,42 @@
       }
       #logFilterPanel[hidden] {
         display: none !important;
+      }
+      .debug-toggles-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .debug-toggle-btn {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--panel-border);
+        background: #22252f;
+        color: var(--text-dim);
+        cursor: pointer;
+        transition:
+          background 0.12s,
+          border-color 0.12s,
+          color 0.12s;
+        user-select: none;
+      }
+      .debug-toggle-btn:hover {
+        background: #2c3040;
+        color: var(--text);
+        border-color: #3b4050;
+      }
+      .debug-toggle-btn.active {
+        background: rgba(59, 130, 246, 0.2);
+        border-color: #3b82f6;
+        color: #93c5fd;
+        font-weight: 600;
+      }
+      .debug-divider {
+        height: 1px;
+        background: var(--panel-border);
+        margin: 2px 0;
       }
       .log-filter-chips {
         display: flex;
@@ -5105,6 +5219,7 @@
           >
             <span id="expandRightSidebarLabel">Stats</span> ◀
           </button>
+          <div id="fpsDisplay" class="fps-display" hidden>0.0 FPS</div>
           <div id="stageOverlay">
             <div id="stageOverlayList"></div>
           </div>
@@ -5590,13 +5705,32 @@
               <div id="logFilterHeader">
                 <button
                   id="logFilterCollapseBtn"
-                  title="Collapse / expand Log Filters"
+                  title="Collapse / expand Debug"
                 >
                   <span class="collapse-icon">▼</span>
-                  <h2 id="logFilterHeaderTitle">Log Filters</h2>
+                  <h2 id="logFilterHeaderTitle">Debug</h2>
                 </button>
               </div>
               <div id="logFilterPanel">
+                <div class="debug-toggles-row">
+                  <button
+                    type="button"
+                    id="hudToggleBtn"
+                    class="debug-toggle-btn"
+                    title="Toggle on-screen event log"
+                  >
+                    Log
+                  </button>
+                  <button
+                    type="button"
+                    id="fpsToggleBtn"
+                    class="debug-toggle-btn"
+                    title="Toggle FPS display on replay"
+                  >
+                    FPS
+                  </button>
+                </div>
+                <div class="debug-divider"></div>
                 <div id="logFilterChips" class="log-filter-chips"></div>
               </div>
             </section>
@@ -5888,13 +6022,6 @@
           </button>
         </div>
       </div>
-      <button
-        id="hudToggleBtn"
-        class="hud-toggle-btn"
-        title="Toggle on-screen event log"
-      >
-        LOG
-      </button>
       <div id="scrubberContainer">
         <div
           id="scrubberBar"
