@@ -336,3 +336,249 @@ describe("computeKillCombos", () => {
     expect(combos.length).toBe(0);
   });
 });
+
+describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () => {
+  // Fox fixture confirmed by classify() to be "dead" regardless of any input (see
+  // classifiedSituations.test.ts's own use of this exact fixture/frame sequence, which this test
+  // mirrors) -- jumpsRemaining=0, action-state transition from hitstun into Fall while still
+  // outside the zone.
+  const DEAD_FIXTURE = { x: 20000, y: -5000, vx: 5, vy: -30 };
+  const CHAR_FOX = 1;
+  const CHAR_KIRBY = 8; // edge-guarder here -- only the RECOVERING port's character is ever
+  // passed to classify(), so this could be any character at all.
+  const ACTION_STATE_HITSTUN = 0x037;
+  const ACTION_STATE_FALL = 0x039;
+  const ACTION_STATE_DEAD = 0x000;
+  const ACTION_STATE_STAND = 0x00e;
+
+  interface RichPortState {
+    characterId: number;
+    state: number;
+    x: number;
+    y: number;
+    vx?: number;
+    vy?: number;
+    dmg?: number;
+    stocks?: number;
+    grounded?: boolean;
+    hitstun?: number;
+    comboHit?: number;
+  }
+
+  function makeRichFrame(
+    frameNumber: number,
+    p0: RichPortState,
+    p1: RichPortState,
+  ): Frame {
+    const post = (port: PortIndex, p: RichPortState) => ({
+      input: { frame: frameNumber, port, buttons: 0, stickX: 0, stickY: 0 },
+      state: {
+        frame: frameNumber,
+        port,
+        characterId: p.characterId,
+        actionStateId: p.state,
+        positionX: p.x,
+        positionY: p.y,
+        facingDirection: 1 as const,
+        velocityX: p.vx ?? 0,
+        velocityY: p.vy ?? 0,
+        damagePercent: p.dmg ?? 0,
+        stocksRemaining: p.stocks ?? 4,
+        jumpsRemaining: 0,
+        grounded: p.grounded ?? false,
+        hurtboxState: 0,
+        hitstunCounter: p.hitstun ?? 0,
+        actionFrameCounter: 0,
+        comboHitCount: p.comboHit ?? 0,
+      },
+    });
+    return {
+      frame: frameNumber,
+      ports: [
+        post(0 as PortIndex, p0),
+        post(1 as PortIndex, p1),
+      ] as unknown as Frame["ports"],
+    };
+  }
+
+  function makeRichMockReplay(frames: Frame[]): Replay {
+    return {
+      header: {
+        version: 5,
+        gameFamily: "smash64",
+        goodName: "Super Smash Bros. (U) (V1.0) [!]",
+        recorderSchemaVersion: 1,
+        recordedAtEpochMillis: 1724300000000,
+        uncompressedLength: 0,
+        compressedLength: 0,
+      },
+      matchStart: {
+        playerNames: ["edgeguarder", "recoverer", "", ""],
+        slotType: ["human", "human", "empty", "empty"],
+      },
+      matchSettings: {
+        stageId: DREAM_LAND_STAGE_ID,
+        gameType: 2,
+        stockCountSetting: 4,
+        timeLimitMinutes: 100,
+        damageRatio: 100,
+        itemFrequency: 0,
+        teamsEnabled: false,
+        handicapMode: "off",
+        characterId: [CHAR_KIRBY, CHAR_FOX, 0, 0],
+        costumeId: [0, 0, 0, 0],
+        teamColor: [0, 0, 0, 0],
+        portTeam: [0, 1, 0, 0],
+        portHandicap: [0, 0, 0, 0],
+        portCpuLevel: [0, 0, 0, 0],
+      },
+      frames,
+      matchEnd: { finalFrame: frames.at(-1)?.frame ?? 0, endReason: "normal" },
+      matchResult: { placements: [0, 1, -1, -1] },
+    };
+  }
+
+  it("credits a kill combo the instant the classifier confirms the position is hopeless, without waiting on this file's own landed/ledge/damage tracking", () => {
+    const frames: Frame[] = [
+      // f0: victim (port1, Fox) in hitstun at a fixture confirmed dead by classify(); combo hit
+      // count reaches 3.
+      makeRichFrame(
+        0,
+        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_FOX,
+          state: ACTION_STATE_HITSTUN,
+          x: DEAD_FIXTURE.x,
+          y: DEAD_FIXTURE.y,
+          vx: DEAD_FIXTURE.vx,
+          vy: DEAD_FIXTURE.vy,
+          hitstun: 5,
+          dmg: 50,
+          comboHit: 3,
+        },
+      ),
+      // f1: hitstun ends while still outside the zone -- both edgeGuard.ts's situation-entered
+      // trigger and this file's own "no longer isCombod" transition fire here, on the same frame.
+      makeRichFrame(
+        1,
+        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_FOX,
+          state: ACTION_STATE_FALL,
+          x: DEAD_FIXTURE.x,
+          y: DEAD_FIXTURE.y,
+          vx: DEAD_FIXTURE.vx,
+          vy: DEAD_FIXTURE.vy,
+          hitstun: 0,
+          dmg: 50,
+        },
+      ),
+      // f2: stock lost. The point of this test is that the kill is credited at f1, not f2 -- the
+      // shortcut doesn't wait for this frame at all.
+      makeRichFrame(
+        2,
+        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_FOX,
+          state: ACTION_STATE_DEAD,
+          x: DEAD_FIXTURE.x,
+          y: DEAD_FIXTURE.y - 500,
+          vx: DEAD_FIXTURE.vx,
+          vy: DEAD_FIXTURE.vy,
+          hitstun: 0,
+          dmg: 50,
+          stocks: 3,
+        },
+      ),
+    ];
+
+    const combos = computeKillCombos(makeRichMockReplay(frames));
+    expect(combos.length).toBe(1);
+    expect(combos[0]).toMatchObject({
+      attackerPort: 0,
+      victimPort: 1,
+      hitCount: 3,
+      startFrame: 0,
+      endFrameIndex: 2,
+    });
+  });
+
+  it("credits the kill even when the replay ends mid-fall with no literal death recorded -- edgeGuard.ts treats an unresolved situation at end-of-replay as a recovery-failure, and the classifier already knows the position was hopeless", () => {
+    const frames: Frame[] = [
+      makeRichFrame(
+        0,
+        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_FOX,
+          state: ACTION_STATE_HITSTUN,
+          x: DEAD_FIXTURE.x,
+          y: DEAD_FIXTURE.y,
+          vx: DEAD_FIXTURE.vx,
+          vy: DEAD_FIXTURE.vy,
+          hitstun: 5,
+          dmg: 50,
+          comboHit: 3,
+        },
+      ),
+      // f1: hitstun ends -- the replay simply stops here, still outside the zone, no landing/
+      // ledge/death ever recorded. This is exactly the real-world case of a match-ending combo
+      // where the recording cuts before the death animation plays out.
+      makeRichFrame(
+        1,
+        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_FOX,
+          state: ACTION_STATE_FALL,
+          x: DEAD_FIXTURE.x,
+          y: DEAD_FIXTURE.y,
+          vx: DEAD_FIXTURE.vx,
+          vy: DEAD_FIXTURE.vy,
+          hitstun: 0,
+          dmg: 50,
+        },
+      ),
+    ];
+
+    const combos = computeKillCombos(makeRichMockReplay(frames));
+    expect(combos.length).toBe(1);
+    expect(combos[0]).toMatchObject({ victimPort: 1, hitCount: 3 });
+  });
+
+  it("does NOT credit a kill for an unsupported character in the same truncated-replay scenario -- falls through to the existing pending-lethal tracking unchanged, which correctly stays unresolved", () => {
+    const CHAR_MARIO = 0; // unsupported by the recovery classifier
+    const frames: Frame[] = [
+      makeRichFrame(
+        0,
+        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_MARIO,
+          state: ACTION_STATE_HITSTUN,
+          x: DEAD_FIXTURE.x,
+          y: DEAD_FIXTURE.y,
+          vx: DEAD_FIXTURE.vx,
+          vy: DEAD_FIXTURE.vy,
+          hitstun: 5,
+          dmg: 50,
+          comboHit: 3,
+        },
+      ),
+      makeRichFrame(
+        1,
+        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_MARIO,
+          state: ACTION_STATE_FALL,
+          x: DEAD_FIXTURE.x,
+          y: DEAD_FIXTURE.y,
+          vx: DEAD_FIXTURE.vx,
+          vy: DEAD_FIXTURE.vy,
+          hitstun: 0,
+          dmg: 50,
+        },
+      ),
+    ];
+
+    const combos = computeKillCombos(makeRichMockReplay(frames));
+    expect(combos.length).toBe(0);
+  });
+});
