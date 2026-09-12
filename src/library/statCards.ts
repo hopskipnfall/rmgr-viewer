@@ -72,18 +72,17 @@ export class StatCards {
       if (showDeltas && delta !== null) {
         const sign = delta > 0 ? "▲" : delta < 0 ? "▼" : "";
         const absVal = Math.abs(delta);
-        const deltaClass =
-          isHitsRate
-            ? delta < 0
-              ? "delta-pos" // Fewer hits to take a stock is better
-              : delta > 0
-                ? "delta-neg"
-                : ""
+        const deltaClass = isHitsRate
+          ? delta < 0
+            ? "delta-pos" // Fewer hits to take a stock is better
             : delta > 0
-              ? "delta-pos"
-              : delta < 0
-                ? "delta-neg"
-                : "";
+              ? "delta-neg"
+              : ""
+          : delta > 0
+            ? "delta-pos"
+            : delta < 0
+              ? "delta-neg"
+              : "";
 
         deltaMarkup = `
           <span class="stat-card-delta ${deltaClass}">

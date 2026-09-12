@@ -582,7 +582,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     missedLedgeHogAsRecovering: "Ledge hog opportunity: escaped",
     missedLedgeHogAsGuarding: "Ledge hog opportunity: missed",
     possibleAccidentalSaveAsRecovering: "Accidental save: survived",
-    possibleAccidentalSaveAsGuarding: "Accidental save: your hit may have helped",
+    possibleAccidentalSaveAsGuarding:
+      "Accidental save: your hit may have helped",
 
     ledgeGetupEntered: "Ledge getup",
     ledgeTrapEntered: "Ledge trap",
@@ -1297,7 +1298,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
 
     recoveryContestableLabel: "復帰(拮抗状況のみ)",
     edgeGuardEffectivenessLabel: "復帰阻止の有効度",
-    edgeGuardEffectivenessSummary: (situations) => `${situations}件の崖狩りより`,
+    edgeGuardEffectivenessSummary: (situations) =>
+      `${situations}件の崖狩りより`,
     ledgeHogOpportunitiesLabel: "崖離し放置の機会",
     ledgeHogOpportunitiesMissedSummary: (missed) =>
       `確定で見逃し: ${missed}件 -- 復帰側が空いた崖を掴んで生還`,

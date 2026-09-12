@@ -421,7 +421,8 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
   }
   const isConfirmedHopeless = (port: PortIndex, frameIndex: number): boolean =>
     (deadSpansByPort.get(port) ?? []).some(
-      (s) => frameIndex >= s.verdictFrameIndex && frameIndex <= s.holdEndFrameIndex,
+      (s) =>
+        frameIndex >= s.verdictFrameIndex && frameIndex <= s.holdEndFrameIndex,
     );
 
   interface ActiveInteraction {
@@ -469,9 +470,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
     active: ActiveInteraction,
     attackerIsPortA: boolean,
   ): { preSituationHits: number; situationHits: number } {
-    const totalHits = attackerIsPortA
-      ? active.totalHitsA
-      : active.totalHitsB;
+    const totalHits = attackerIsPortA ? active.totalHitsA : active.totalHitsB;
     if (active.hitsBeforeSituation === undefined) {
       return { preSituationHits: totalHits, situationHits: 0 };
     }

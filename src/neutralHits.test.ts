@@ -1036,7 +1036,8 @@ describe("classifyNeutralOpening", () => {
       let p1State = 0x00a;
       if (inHit) p1State = 0x028;
       else if (isDead) p1State = 0x000;
-      else if (isOffstage) p1State = 0x01a; // Fall
+      else if (isOffstage)
+        p1State = 0x01a; // Fall
       else if (isOnLedge) p1State = 0x055; // CliffWait
 
       let damage = 0;
@@ -1162,9 +1163,10 @@ describe("classifyNeutralOpening", () => {
       const inHit = f >= 0 && f < 20;
       const dead = f >= 20 && f < 40;
 
-      let p1State = 0x00a;
+      let p1State: number;
       if (inHit) p1State = 0x028;
-      else if (dead) p1State = 0x039; // Fall, actionable
+      else if (dead)
+        p1State = 0x039; // Fall, actionable
       else p1State = 0x000; // DeadD
 
       frames.push({

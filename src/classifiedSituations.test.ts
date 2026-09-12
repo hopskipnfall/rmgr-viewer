@@ -781,9 +781,7 @@ describe("averageEdgeGuardEffectiveness", () => {
         resolutionKind: "recovery-success",
       }), // excluded -- a hopeless kill that resolved normally, nothing was tested
     ];
-    expect(averageEdgeGuardEffectiveness(situations, 0 as PortIndex)).toBe(
-      50,
-    );
+    expect(averageEdgeGuardEffectiveness(situations, 0 as PortIndex)).toBe(50);
   });
 
   it("only counts situations where the given port was the edge-guarder", () => {
@@ -798,9 +796,7 @@ describe("averageEdgeGuardEffectiveness", () => {
         damageDealtByGuarder: 0,
       }),
     ];
-    expect(averageEdgeGuardEffectiveness(situations, 0 as PortIndex)).toBe(
-      100,
-    );
+    expect(averageEdgeGuardEffectiveness(situations, 0 as PortIndex)).toBe(100);
     expect(averageEdgeGuardEffectiveness(situations, 1 as PortIndex)).toBe(0);
   });
 });

@@ -1031,7 +1031,10 @@ function pikaSimulateEndAndBeyond(
   vy0: number,
   firstZipAngle: number,
   usedSecondZip: boolean,
-  reAimCandidates: { angle: PikaAngle; magnitude: number }[] = PIKA_FULL_REAIM_GRID,
+  reAimCandidates: {
+    angle: PikaAngle;
+    magnitude: number;
+  }[] = PIKA_FULL_REAIM_GRID,
 ): { reachedLedge: boolean; reachedStage: boolean } {
   let vx = vx0 * PIKA.VEL_BAK_MUL;
   let vy = vy0 * PIKA.VEL_BAK_MUL;
@@ -1163,7 +1166,8 @@ function pikaSimulateEndAndBeyond(
     const prevY = y;
     // Falling (applyGravity keeps a non-positive vy non-positive) and already below the lowest
     // height any outcome check can fire from.
-    if (vy <= 0 && prevY < -PIKA.CLIFFCATCH_Y) return { reachedLedge, reachedStage };
+    if (vy <= 0 && prevY < -PIKA.CLIFFCATCH_Y)
+      return { reachedLedge, reachedStage };
     vy = applyGravity(vy, PIKA.GRAVITY, PIKA.TVEL_BASE);
     vx = applyFriction(vx, PIKA.AIR_FRICTION);
     x += vx;
@@ -1206,9 +1210,10 @@ function pikaSimulateEndAndBeyond(
 const PIKA_CANONICAL_DIAG_DEG = 45;
 const PIKA_CANONICAL_REAIM_DEG = 0;
 
-function pikaOutcomeToFlags(
-  outcome: Outcome,
-): { reachedLedge: boolean; reachedStage: boolean } {
+function pikaOutcomeToFlags(outcome: Outcome): {
+  reachedLedge: boolean;
+  reachedStage: boolean;
+} {
   return {
     reachedLedge: outcome === "ledge" || outcome === "both",
     reachedStage: outcome === "stage" || outcome === "both",
@@ -2397,8 +2402,8 @@ const FALCON_DIVE_DX: readonly number[] = [
   -5.6327, -7.7106, -7.1444, -6.5969, -6.0682, -5.5584, -5.0673, -4.595,
   -4.1415, -3.7067, -3.2908, -2.8936, -2.5153, -2.1557, -1.8149, -1.4929,
   -1.1897, -0.9053, -0.6397, -0.3928, -0.1648, 0.0445, 0.235, 0.4067, 0.5596,
-  0.6937, 0.809, 0.9055, 0.9833, 1.0422, 1.0824, 1.1038, 1.1064, 1.0902,
-  1.0552, 1.0014, 0.9288, 0.8375, 0.7274, 0.5984, 0.4507, 0.2842, 0.0,
+  0.6937, 0.809, 0.9055, 0.9833, 1.0422, 1.0824, 1.1038, 1.1064, 1.0902, 1.0552,
+  1.0014, 0.9288, 0.8375, 0.7274, 0.5984, 0.4507, 0.2842, 0.0,
 ];
 
 const FALCON_DIVE_DY: readonly number[] = [
@@ -2443,10 +2448,7 @@ function falconSimulateDiveAndBeyond(
     } else {
       const stickX = targetLr * STICK_TOWARD;
       if (Math.abs(stickX) >= 8) {
-        specialVelX = clampMagnitude(
-          specialVelX + stickX * diveAccel,
-          diveCap,
-        );
+        specialVelX = clampMagnitude(specialVelX + stickX * diveAccel, diveCap);
       }
       specialVelX = applyFriction(specialVelX, attrs.AIR_FRICTION);
     }
@@ -2654,10 +2656,10 @@ const KIRBY = {
 const KIRBY_FINAL_CUTTER_DY: readonly number[] = [
   -31.1111, -57.7778, -31.1111, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 60.0, 60.0, 80.0, 160.0, 139.68,
-  100.96, 65.12, 32.16, 2.08, -25.12, -49.44, -70.88, -89.44, -105.12,
-  -79.9067, -29.7143, -0.5131, 7.6968, -5.0845, -38.8571, -93.621, -98.0,
-  -46.0, -6.0, 22.0, 38.0, 42.0, 34.0, 14.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-  0.0, 0.0, 0.0, 0.0,
+  100.96, 65.12, 32.16, 2.08, -25.12, -49.44, -70.88, -89.44, -105.12, -79.9067,
+  -29.7143, -0.5131, 7.6968, -5.0845, -38.8571, -93.621, -98.0, -46.0, -6.0,
+  22.0, 38.0, 42.0, 34.0, 14.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  0.0, 0.0,
 ];
 
 /**

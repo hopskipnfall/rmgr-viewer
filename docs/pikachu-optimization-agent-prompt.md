@@ -19,6 +19,7 @@ This makes replay import/analysis slow, and it's overwhelmingly a Pikachu-specif
 ## Why Pikachu is slow (read the code yourself, this is a sketch not a spec)
 
 Pikachu's move (Quick Attack) is modeled as a nested exhaustive search, roughly:
+
 - an outer loop over activation delay (`PIKA.ACTIVATION_DELAY_STEP` = 5 frame steps),
 - times an aim grid for the first "zip" (`pikaAngleCandidates()` — 36 angle steps plus a "straight up" special case, so 37 angles — times `PIKA.MAGNITUDE_SAMPLES` — `[60, 70, 80]`, 3 magnitudes),
 - and for any candidate that doesn't resolve immediately, a **second** full re-aim grid of the same shape (`pikaFullReAimGrid()` / `pikaSimulateEndAndBeyond()`) simulating the character falling and being allowed to re-aim a second zip.
@@ -34,11 +35,13 @@ There's already one optimization in place: `fastRejectPikachuDead()` plus two pr
 ## Tools already built for you
 
 1. **`scripts/classifyLatencyProfile.ts`** — run with `npx tsx scripts/classifyLatencyProfile.ts --label "some description"`. Drives the real production entry point (`computeClassifiedSituations`, the same function the app calls when you import a replay) across every file in `replays/`, and records every single `classify()` call — character, every input (x/y/vx/vy/jumpsRemaining/actionStateId/facingDirection), the verdict, and duration — into a **versioned** SQLite database at `scripts/classify-latency-profile.sqlite`. It never drops old data: every invocation adds a new row to a `runs` table (with a label, git SHA, dirty-flag, and totals), so you can directly compare before/after any change:
+
    ```sql
    SELECT r.label, cc.character_name, AVG(cc.duration_ms) AS avg_ms, COUNT(*) AS n
    FROM classify_calls cc JOIN runs r ON r.id = cc.run_id
    GROUP BY r.id, cc.character_name ORDER BY cc.character_name, r.started_at;
    ```
+
    There's already a `"baseline"` run recorded (run #1) — the numbers above come from it. Query it (any sqlite3 client, or `node:sqlite`) before you touch any code, to build your own understanding of where the time actually goes: distribution of `x`/`y`/`vx`/`vy` on the slow calls, how verdict correlates with duration, whether slow calls cluster in a particular jumpsRemaining/action-state combination, etc.
 
 2. **`scripts/recoveryValidation.ts`** (`npx tsx scripts/recoveryValidation.ts`) — the correctness check against real data. For every real recovery situation in the corpus, it runs `classify()` at the entry frame and flags any case where the classifier said "cannot reach ledge/stage" but the player actually did (without a hit assisting them). Run this before you start (note the current wrong-count as your baseline — should be 1, a pre-existing unrelated Yoshi issue) and after every change. **The wrong-count must not increase.**
@@ -50,8 +53,9 @@ There's already one optimization in place: `fastRejectPikachuDead()` plus two pr
 ## What "avoid overfitting" means here
 
 Use the SQLite data to find **structural, general patterns** — not to hardcode special cases for the specific replay files in the corpus. Good examples of what you're looking for:
+
 - "Real Pikachu recoveries overwhelmingly arrive at (or near) terminal fall velocity, because that's what happens after falling for more than a couple seconds — so the search almost always runs at one specific `vy`. Is there a way to precompute/cache more of the search for that regime, the way the existing dead-boundary table does for the 'definitely dead' side?"
-- "Most of the slow calls resolve to a *survivable* verdict — is there a way to build an analogous fast-accept table/heuristic for 'definitely fine' the way `fastRejectPikachuDead` does for 'definitely dead', so the expensive search only has to run for the genuinely ambiguous middle?"
+- "Most of the slow calls resolve to a _survivable_ verdict — is there a way to build an analogous fast-accept table/heuristic for 'definitely fine' the way `fastRejectPikachuDead` does for 'definitely dead', so the expensive search only has to run for the genuinely ambiguous middle?"
 - "Within one call's nested grid search, is the loop order wasting time — e.g. always starting from angle index 0 regardless of which direction is actually promising given the character's position relative to the stage?"
 - "Is the same sub-computation (e.g. the windup phase, which doesn't depend on aim at all) being redundantly re-simulated across grid cells that don't need to differ there?"
 - "Do other already-solved characters (Falcon, Kirby, DK) get their speed from a closed-form/analytic shortcut instead of frame-stepping — could any part of Pikachu's per-frame simulation be replaced the same way?"
@@ -72,7 +76,7 @@ The SQLite data is for **understanding distributions and finding the shape of th
 
 ## A resource you may want
 
-There is another active Claude Code session on this machine named **"Game Expert"** (session id `local_37a9fba3-98c4-41f8-a44e-00ccd780a2a5`, working directory `/Users/ness/workspaces/smashremix`, a decompilation of this game's source) that has been deeply involved in building and validating every character model in this classifier, including Pikachu's. If you want to understand *why* Pikachu's real in-game move works the way it does at the source level — e.g. to find a genuinely faster equivalent formulation you can validate against the actual game logic, rather than just re-ordering the empirical search — you can reach it with `mcp__ccd_session_mgmt__send_message` (send_message/list_events/get_session tools). It has no memory of this specific task, so brief it fully if you use it, the same way this document briefs you. This is optional, not required.
+There is another active Claude Code session on this machine named **"Game Expert"** (session id `local_37a9fba3-98c4-41f8-a44e-00ccd780a2a5`, working directory `/Users/ness/workspaces/smashremix`, a decompilation of this game's source) that has been deeply involved in building and validating every character model in this classifier, including Pikachu's. If you want to understand _why_ Pikachu's real in-game move works the way it does at the source level — e.g. to find a genuinely faster equivalent formulation you can validate against the actual game logic, rather than just re-ordering the empirical search — you can reach it with `mcp__ccd_session_mgmt__send_message` (send_message/list_events/get_session tools). It has no memory of this specific task, so brief it fully if you use it, the same way this document briefs you. This is optional, not required.
 
 ## Constraints
 

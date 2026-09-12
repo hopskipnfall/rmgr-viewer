@@ -62,7 +62,10 @@ async function main() {
       totalSituations++;
       categoryCounts[situation.category] =
         (categoryCounts[situation.category] ?? 0) + 1;
-      if (situation.missedLedgeHogOpportunity || situation.possibleAccidentalSave) {
+      if (
+        situation.missedLedgeHogOpportunity ||
+        situation.possibleAccidentalSave
+      ) {
         rows.push({ file: fileLabel, situation });
       }
     }
@@ -71,16 +74,25 @@ async function main() {
   console.log("=== Category breakdown ===");
   console.log(`total situations: ${totalSituations}`);
   for (const [category, count] of Object.entries(categoryCounts)) {
-    const pct = totalSituations > 0 ? ((count / totalSituations) * 100).toFixed(1) : "0.0";
+    const pct =
+      totalSituations > 0
+        ? ((count / totalSituations) * 100).toFixed(1)
+        : "0.0";
     console.log(`  ${category}: ${count} (${pct}%)`);
   }
   const classified = totalSituations - (categoryCounts.unclassified ?? 0);
   const classifiedPct =
-    totalSituations > 0 ? ((classified / totalSituations) * 100).toFixed(1) : "0.0";
-  console.log(`classified: ${classified}/${totalSituations} (${classifiedPct}%)`);
+    totalSituations > 0
+      ? ((classified / totalSituations) * 100).toFixed(1)
+      : "0.0";
+  console.log(
+    `classified: ${classified}/${totalSituations} (${classifiedPct}%)`,
+  );
 
   const contestable = categoryCounts.contestable ?? 0;
-  const missedLedgeHogs = rows.filter((r) => r.situation.missedLedgeHogOpportunity);
+  const missedLedgeHogs = rows.filter(
+    (r) => r.situation.missedLedgeHogOpportunity,
+  );
   console.log(
     `\n=== Ledge-hog opportunities: ${missedLedgeHogs.length}/${contestable} contestable situations missed ===`,
   );
@@ -92,7 +104,9 @@ async function main() {
     );
   }
 
-  const accidentalSaves = rows.filter((r) => r.situation.possibleAccidentalSave);
+  const accidentalSaves = rows.filter(
+    (r) => r.situation.possibleAccidentalSave,
+  );
   console.log(`\n=== Possible accidental saves: ${accidentalSaves.length} ===`);
   for (const r of accidentalSaves) {
     const s = r.situation;

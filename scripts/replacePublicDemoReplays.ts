@@ -84,7 +84,9 @@ async function main() {
     );
   }
 
-  console.log(`Matched ${pairs.length}/${pairs.length} pairs cleanly. Writing...\n`);
+  console.log(
+    `Matched ${pairs.length}/${pairs.length} pairs cleanly. Writing...\n`,
+  );
 
   for (const { old: o, new: n } of pairs) {
     const serializable: SerializableReplay = {

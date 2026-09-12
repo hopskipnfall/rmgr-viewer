@@ -681,7 +681,8 @@ function shrinkAverage(
   if (parentAvg === null) {
     return { raw: avg, shrunk: avg, count };
   }
-  const shrunk = (avg * count + SHRINKAGE_K * parentAvg) / (count + SHRINKAGE_K);
+  const shrunk =
+    (avg * count + SHRINKAGE_K * parentAvg) / (count + SHRINKAGE_K);
   return { raw: avg, shrunk, count };
 }
 

@@ -844,7 +844,10 @@ describe("Kirby: Final Cutter", () => {
       for (let x = 2900; x <= 8000; x += 250) {
         const verdict = classify(CHAR_KIRBY, x, y, 0, 0, 1, 0x39, 1);
         if (verdict === "dead") sawDead = true;
-        else if (verdict === "reaches-stage" || verdict === "dead-if-ledge-occupied")
+        else if (
+          verdict === "reaches-stage" ||
+          verdict === "dead-if-ledge-occupied"
+        )
           sawReachable = true;
       }
       expect(sawReachable).toBe(true);
@@ -1028,37 +1031,40 @@ describe("JP region variants", () => {
     ["Link", CHAR_LINK, CHAR_LINK_JP],
     ["Captain Falcon", CHAR_FALCON, CHAR_FALCON_JP],
     ["Yoshi", CHAR_YOSHI, CHAR_YOSHI_JP],
-  ])("%s: JP produces at least one different verdict from US (real physics differences)", (_name, usId, jpId) => {
-    let sawDifference = false;
-    for (let i = 0; i < 500 && !sawDifference; i++) {
-      const x = randRange(-6000, 6000);
-      const y = randRange(-3000, 2000);
-      const vx = randRange(-45, 45);
-      const vy = randRange(-60, 90);
-      const jumpsRemaining = Math.random() < 0.5 ? 0 : 1;
-      const facingDirection = x <= 0 ? 1 : -1;
-      const us = classify(
-        usId,
-        x,
-        y,
-        vx,
-        vy,
-        jumpsRemaining,
-        0,
-        facingDirection,
-      );
-      const jp = classify(
-        jpId,
-        x,
-        y,
-        vx,
-        vy,
-        jumpsRemaining,
-        0,
-        facingDirection,
-      );
-      if (us !== jp) sawDifference = true;
-    }
-    expect(sawDifference).toBe(true);
-  });
+  ])(
+    "%s: JP produces at least one different verdict from US (real physics differences)",
+    (_name, usId, jpId) => {
+      let sawDifference = false;
+      for (let i = 0; i < 500 && !sawDifference; i++) {
+        const x = randRange(-6000, 6000);
+        const y = randRange(-3000, 2000);
+        const vx = randRange(-45, 45);
+        const vy = randRange(-60, 90);
+        const jumpsRemaining = Math.random() < 0.5 ? 0 : 1;
+        const facingDirection = x <= 0 ? 1 : -1;
+        const us = classify(
+          usId,
+          x,
+          y,
+          vx,
+          vy,
+          jumpsRemaining,
+          0,
+          facingDirection,
+        );
+        const jp = classify(
+          jpId,
+          x,
+          y,
+          vx,
+          vy,
+          jumpsRemaining,
+          0,
+          facingDirection,
+        );
+        if (us !== jp) sawDifference = true;
+      }
+      expect(sawDifference).toBe(true);
+    },
+  );
 });

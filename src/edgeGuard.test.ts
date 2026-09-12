@@ -125,7 +125,15 @@ describe("computeEdgeGuardEvents", () => {
       );
     }
     // f10: lands, grounded and actionable - hasTouchedGround latches true, streak starts.
-    frames.push(makeFrame(10, ONSTAGE, { state: 0x0e, x: 1400, y: 0, grounded: true, hitstun: 0 }));
+    frames.push(
+      makeFrame(10, ONSTAGE, {
+        state: 0x0e,
+        x: 1400,
+        y: 0,
+        grounded: true,
+        hitstun: 0,
+      }),
+    );
     // f11: grabbed (CaptureWait) almost immediately after landing - well under the 30-frame
     // safety window. Under the bug, the streak (still only 1 frame in) wouldn't yet have
     // resolved success on its own here, so this alone doesn't reproduce it -- the bug needs the
@@ -135,12 +143,24 @@ describe("computeEdgeGuardEvents", () => {
     // success right in the middle of the grab).
     for (let f = 11; f <= 40; f++) {
       frames.push(
-        makeFrame(f, ONSTAGE, { state: 0x0ac, x: 1400, y: 0, grounded: false, hitstun: 0 }),
+        makeFrame(f, ONSTAGE, {
+          state: 0x0ac,
+          x: 1400,
+          y: 0,
+          grounded: false,
+          hitstun: 0,
+        }),
       );
     }
     // f41: thrown (DamageThrown).
     frames.push(
-      makeFrame(41, ONSTAGE, { state: 0x0ba, x: 1400, y: 0, grounded: false, hitstun: 0 }),
+      makeFrame(41, ONSTAGE, {
+        state: 0x0ba,
+        x: 1400,
+        y: 0,
+        grounded: false,
+        hitstun: 0,
+      }),
     );
     // f42: dies (stock lost) - the real, final resolution.
     frames.push(
@@ -173,7 +193,6 @@ describe("computeEdgeGuardEvents", () => {
       edgeGuardingPort: 0,
     });
   });
-
 
   it("keeps a recovery situation open through a hit that lands right after a landing, instead of resolving it early", () => {
     const frames: Frame[] = [];

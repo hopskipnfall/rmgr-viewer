@@ -35,7 +35,10 @@ function fmtDelta(pp: number | null, baselinePct: number | null): string {
   return `${sign}${pp}pp <span class="neutral-score-delta-sub">${escapeHtml(tr.deltaVsBaseline(baselinePct))}</span>`;
 }
 
-function fmtScoreDelta(delta: number | null, baselineAvg: number | null): string {
+function fmtScoreDelta(
+  delta: number | null,
+  baselineAvg: number | null,
+): string {
   const tr = t();
   if (delta === null || baselineAvg === null) return tr.deltaNoData;
   const sign = delta > 0 ? "+" : "";

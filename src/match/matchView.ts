@@ -3521,7 +3521,9 @@ export class MatchViewController {
         situationHitsBadge.className = "neutral-badge-hits";
         situationHitsBadge.dataset.chip = "situation-hits";
         situationHitsBadge.dataset.startFrame = String(
-          e.ledgeTrapStartFrameIndex ?? e.edgeGuardStartFrameIndex ?? e.frameIndex,
+          e.ledgeTrapStartFrameIndex ??
+            e.edgeGuardStartFrameIndex ??
+            e.frameIndex,
         );
         situationHitsBadge.dataset.endFrame = String(
           e.lastHitFrameIndex ?? e.endFrameIndex ?? e.frameIndex + 60,

@@ -62,7 +62,10 @@ function parseLabelArg(): string | null {
 
 function tryGit(cmd: string): string | null {
   try {
-    return execSync(cmd, { cwd: import.meta.dirname, encoding: "utf-8" }).trim();
+    return execSync(cmd, {
+      cwd: import.meta.dirname,
+      encoding: "utf-8",
+    }).trim();
   } catch {
     return null;
   }
@@ -269,7 +272,9 @@ async function main() {
     );
   }
 
-  console.log("\n=== Per-character aggregate, this run (total time descending) ===");
+  console.log(
+    "\n=== Per-character aggregate, this run (total time descending) ===",
+  );
   const perChar = db
     .prepare(
       `SELECT character_name, COUNT(*) as n, SUM(duration_ms) as total_ms, AVG(duration_ms) as avg_ms, MAX(duration_ms) as max_ms
@@ -283,7 +288,9 @@ async function main() {
     );
   }
 
-  console.log("\n=== Slowest 10 files, this run (total time inside classify()) ===");
+  console.log(
+    "\n=== Slowest 10 files, this run (total time inside classify()) ===",
+  );
   const slowestFiles = db
     .prepare(
       `SELECT path, total_classify_calls, total_classify_duration_ms, file_process_duration_ms
@@ -304,8 +311,21 @@ async function main() {
     )
     .all(runId);
   if (priorRuns.length > 0) {
-    console.log("\n=== All runs recorded in this database (for version comparison) ===");
-    for (const row of [...priorRuns, { id: runId, label, git_sha: gitSha, started_at: "(this run)", total_classify_calls: grandTotalCalls, total_classify_duration_ms: grandTotalDurationMs, wall_clock_ms: wallClockMs }] as Record<string, unknown>[]) {
+    console.log(
+      "\n=== All runs recorded in this database (for version comparison) ===",
+    );
+    for (const row of [
+      ...priorRuns,
+      {
+        id: runId,
+        label,
+        git_sha: gitSha,
+        started_at: "(this run)",
+        total_classify_calls: grandTotalCalls,
+        total_classify_duration_ms: grandTotalDurationMs,
+        wall_clock_ms: wallClockMs,
+      },
+    ] as Record<string, unknown>[]) {
       console.log(
         `  run #${row.id}${row.label ? ` "${row.label}"` : ""} [${(row.git_sha as string | null)?.slice(0, 8) ?? "?"}] ${row.started_at}: ` +
           `${row.total_classify_calls} calls, ${((row.total_classify_duration_ms as number) / 1000).toFixed(2)}s total, ${((row.wall_clock_ms as number) / 1000).toFixed(2)}s wall-clock`,
@@ -314,7 +334,9 @@ async function main() {
   }
 
   db.close();
-  console.log(`\nWrote ${grandTotalCalls} call records to ${DB_PATH} (run #${runId})`);
+  console.log(
+    `\nWrote ${grandTotalCalls} call records to ${DB_PATH} (run #${runId})`,
+  );
 }
 
 main();

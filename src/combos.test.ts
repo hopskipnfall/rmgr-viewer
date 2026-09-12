@@ -444,7 +444,13 @@ describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () =
       // count reaches 3.
       makeRichFrame(
         0,
-        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_KIRBY,
+          state: ACTION_STATE_STAND,
+          x: 0,
+          y: 0,
+          grounded: true,
+        },
         {
           characterId: CHAR_FOX,
           state: ACTION_STATE_HITSTUN,
@@ -461,7 +467,13 @@ describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () =
       // trigger and this file's own "no longer isCombod" transition fire here, on the same frame.
       makeRichFrame(
         1,
-        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_KIRBY,
+          state: ACTION_STATE_STAND,
+          x: 0,
+          y: 0,
+          grounded: true,
+        },
         {
           characterId: CHAR_FOX,
           state: ACTION_STATE_FALL,
@@ -477,7 +489,13 @@ describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () =
       // shortcut doesn't wait for this frame at all.
       makeRichFrame(
         2,
-        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_KIRBY,
+          state: ACTION_STATE_STAND,
+          x: 0,
+          y: 0,
+          grounded: true,
+        },
         {
           characterId: CHAR_FOX,
           state: ACTION_STATE_DEAD,
@@ -507,7 +525,13 @@ describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () =
     const frames: Frame[] = [
       makeRichFrame(
         0,
-        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_KIRBY,
+          state: ACTION_STATE_STAND,
+          x: 0,
+          y: 0,
+          grounded: true,
+        },
         {
           characterId: CHAR_FOX,
           state: ACTION_STATE_HITSTUN,
@@ -525,7 +549,13 @@ describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () =
       // where the recording cuts before the death animation plays out.
       makeRichFrame(
         1,
-        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_KIRBY,
+          state: ACTION_STATE_STAND,
+          x: 0,
+          y: 0,
+          grounded: true,
+        },
         {
           characterId: CHAR_FOX,
           state: ACTION_STATE_FALL,
@@ -549,7 +579,13 @@ describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () =
     const frames: Frame[] = [
       makeRichFrame(
         0,
-        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_KIRBY,
+          state: ACTION_STATE_STAND,
+          x: 0,
+          y: 0,
+          grounded: true,
+        },
         {
           characterId: CHAR_MARIO,
           state: ACTION_STATE_HITSTUN,
@@ -564,7 +600,13 @@ describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () =
       ),
       makeRichFrame(
         1,
-        { characterId: CHAR_KIRBY, state: ACTION_STATE_STAND, x: 0, y: 0, grounded: true },
+        {
+          characterId: CHAR_KIRBY,
+          state: ACTION_STATE_STAND,
+          x: 0,
+          y: 0,
+          grounded: true,
+        },
         {
           characterId: CHAR_MARIO,
           state: ACTION_STATE_FALL,

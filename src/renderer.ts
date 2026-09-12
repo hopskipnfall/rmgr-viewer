@@ -11278,7 +11278,6 @@ export class StageRenderer {
         facingRight,
         color,
         pikaSpecial,
-        post.actionFrameCounter,
       );
     }
     if (foxSpecial) {
@@ -17281,7 +17280,6 @@ export class StageRenderer {
     facingRight: boolean,
     _color: string,
     specialType: PikachuSpecialType,
-    frameCounter: number,
   ): void {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;

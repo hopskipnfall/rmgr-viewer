@@ -19,10 +19,7 @@
  * implements (phase 1: the correlation layer + validation, no UI yet).
  */
 import type { PortIndex, Replay } from "@rmg-k/rmgr";
-import {
-  computeEdgeGuardEvents,
-  type EdgeGuardEvent,
-} from "./edgeGuard.js";
+import { computeEdgeGuardEvents, type EdgeGuardEvent } from "./edgeGuard.js";
 import { extractAllHitsWithDI } from "./di.js";
 import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
 import {
@@ -87,7 +84,9 @@ export interface ClassifiedSituation {
   readonly edgeGuarderWasHit: boolean;
 }
 
-function categoryForVerdict(verdict: RecoveryVerdict | null): SituationCategory {
+function categoryForVerdict(
+  verdict: RecoveryVerdict | null,
+): SituationCategory {
   switch (verdict) {
     case "dead":
       return "hopeless";
@@ -248,8 +247,11 @@ function computeClassifiedSituationsUncached(
     )
       continue;
 
-    const { recoveringPort, edgeGuardingPort, frameIndex: enteredFrameIndex } =
-      entered;
+    const {
+      recoveringPort,
+      edgeGuardingPort,
+      frameIndex: enteredFrameIndex,
+    } = entered;
     const resolutionFrameIndex = resolution.frameIndex;
 
     const entrySpan = findSpanInWindow(
@@ -377,8 +379,7 @@ export function hopelessEnteredFrameIndices(
 // ---------------------------------------------------------------------------
 
 export type ClassifiedSituationEventKind =
-  | "missed-ledge-hog"
-  | "possible-accidental-save";
+  "missed-ledge-hog" | "possible-accidental-save";
 
 export interface ClassifiedSituationEvent {
   /** Frame number (from `PostFrameUpdate.frame`), at the situation's resolution -- that's the
@@ -402,11 +403,12 @@ export function computeClassifiedSituationEvents(
 ): ClassifiedSituationEvent[] {
   const events: ClassifiedSituationEvent[] = [];
   for (const s of computeClassifiedSituations(replay)) {
-    const kind: ClassifiedSituationEventKind | null = s.missedLedgeHogOpportunity
-      ? "missed-ledge-hog"
-      : s.possibleAccidentalSave
-        ? "possible-accidental-save"
-        : null;
+    const kind: ClassifiedSituationEventKind | null =
+      s.missedLedgeHogOpportunity
+        ? "missed-ledge-hog"
+        : s.possibleAccidentalSave
+          ? "possible-accidental-save"
+          : null;
     if (kind === null) continue;
     const frame = replay.frames[s.resolutionFrameIndex]?.frame;
     if (frame === undefined) continue;
@@ -499,7 +501,8 @@ export function edgeGuardEffectivenessScore(
   // computeClassifiedSituations) -- so this is really just "was there a kill," spelled out
   // directly rather than relied on implicitly.
   const applyHitPenalty =
-    situation.edgeGuarderWasHit && situation.resolutionKind !== "recovery-failure";
+    situation.edgeGuarderWasHit &&
+    situation.resolutionKind !== "recovery-failure";
   return applyHitPenalty
     ? baseScore + EDGE_GUARD_EFFECTIVENESS_SCORE.HIT_BY_RECOVERING_PLAYER
     : baseScore;

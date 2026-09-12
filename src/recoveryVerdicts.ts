@@ -266,7 +266,10 @@ function computeRecoveryVerdictSpansUncached(replay: Replay): VerdictSpan[] {
         const justCrossedOutsideWhileActionable =
           !wasInHitstun &&
           !isOutsideZone(prevState.positionX, prevState.positionY);
-        if (!isInHitstun && (wasInHitstun || justCrossedOutsideWhileActionable)) {
+        if (
+          !isInHitstun &&
+          (wasInHitstun || justCrossedOutsideWhileActionable)
+        ) {
           const found = findFirstVerdictFrame(replay, port, i, true);
           if (found !== null) {
             const verdictState =
