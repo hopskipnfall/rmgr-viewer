@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
-import { computeKillCombos, COMBO_JUMP_LEAD_IN_FRAMES } from "./combos.js";
+import {
+  computeCombos,
+  computeKillCombos,
+  joinCombosAcrossGaps,
+  COMBO_JUMP_LEAD_IN_FRAMES,
+  type Combo,
+} from "./combos.js";
+import { computeComboClips, type ComboSearchCriteria } from "./playlist.js";
 import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 
 function makeMockReplay(frames: Frame[]): Replay {
@@ -337,6 +344,193 @@ describe("computeKillCombos", () => {
   });
 });
 
+/**
+ * A 3-hit true combo (frames 10-20) on port 1, the combo meter resets, then
+ * 25 frames later a separate 2-hit combo launches them into the blast zone.
+ */
+function droppedComboFrames(): Frame[] {
+  return [
+    makeFrame(
+      10,
+      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x36, x: 50, y: 0, dmg: 10, comboHit: 1, hitstun: 20 },
+    ),
+    makeFrame(
+      15,
+      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x36, x: 100, y: 0, dmg: 20, comboHit: 2, hitstun: 20 },
+    ),
+    makeFrame(
+      20,
+      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x36, x: 150, y: 0, dmg: 30, comboHit: 3, hitstun: 20 },
+    ),
+    makeFrame(
+      45,
+      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x36, x: 200, y: 0, dmg: 45, comboHit: 1, hitstun: 20 },
+    ),
+    makeFrame(
+      50,
+      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x34, x: 300, y: 0, dmg: 60, comboHit: 2, hitstun: 60 },
+    ),
+    makeFrame(
+      70,
+      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x00, x: 5000, y: 0, dmg: 60, stocks: 3 },
+    ),
+  ];
+}
+
+describe("computeCombos (every combo, with whether it killed)", () => {
+  it("reports a combo that didn't kill, ending on its last comboed frame", () => {
+    const frames: Frame[] = [
+      makeFrame(
+        10,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x36, x: 50, y: 0, dmg: 10, comboHit: 1, hitstun: 20 },
+      ),
+      makeFrame(
+        15,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x36, x: 100, y: 0, dmg: 20, comboHit: 2, hitstun: 20 },
+      ),
+      makeFrame(
+        20,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x36, x: 150, y: 0, dmg: 30, comboHit: 3, hitstun: 20 },
+      ),
+      // Out of hitstun, standing on stage: the combo is over and they're safe.
+      makeFrame(
+        40,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x0a, x: 150, y: 0, dmg: 30, grounded: true },
+      ),
+      makeFrame(
+        45,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x0a, x: 150, y: 0, dmg: 30, grounded: true },
+      ),
+    ];
+
+    const combos = computeCombos(makeMockReplay(frames));
+    expect(combos).toHaveLength(1);
+    expect(combos[0]).toMatchObject({
+      attackerPort: 0,
+      victimPort: 1,
+      hitCount: 3,
+      killed: false,
+      startFrame: 10,
+      endFrame: 20,
+      comboEndFrame: 20,
+      // First frame of the replay: no earlier frame to read pre-hit damage from.
+      startDamage: 10,
+      endDamage: 30,
+    });
+  });
+
+  it("splits a dropped combo into two true combos, crediting the kill to the second", () => {
+    const combos = computeCombos(makeMockReplay(droppedComboFrames()));
+    expect(
+      combos.map((c) => [c.startFrame, c.hitCount, c.killed, c.comboEndFrame]),
+    ).toEqual([
+      [10, 3, false, 20],
+      [45, 2, true, 70],
+    ]);
+  });
+
+  it("computeKillCombos still only credits 3+ hit combos that killed", () => {
+    expect(computeKillCombos(makeMockReplay(droppedComboFrames()))).toEqual([]);
+  });
+});
+
+describe("joinCombosAcrossGaps", () => {
+  it("joins combos whose meter reset for 0.5s or less into one", () => {
+    const joined = joinCombosAcrossGaps(
+      computeCombos(makeMockReplay(droppedComboFrames())),
+    );
+    expect(joined).toHaveLength(1);
+    expect(joined[0]).toMatchObject({
+      startFrame: 10,
+      hitCount: 5,
+      killed: true,
+      startDamage: 10,
+      endDamage: 60,
+    });
+  });
+
+  it("keeps combos separate when the gap is longer than 0.5s", () => {
+    const combos = computeCombos(makeMockReplay(droppedComboFrames()));
+    // The gap between the two is 25 frames (20 -> 45).
+    expect(joinCombosAcrossGaps(combos, 24)).toHaveLength(2);
+  });
+
+  it("keeps combos separate when the victim hit back in between", () => {
+    const a = computeCombos(makeMockReplay(droppedComboFrames()));
+    // A combo by port 1 on port 0 during the gap breaks the string.
+    const counter: Combo = {
+      ...a[0]!,
+      attackerPort: 1,
+      victimPort: 0,
+      startFrame: 30,
+      comboEndFrame: 35,
+      endFrame: 35,
+      hitCount: 1,
+      killed: false,
+    };
+    expect(joinCombosAcrossGaps([...a, counter])).toHaveLength(3);
+  });
+});
+
+describe("computeComboClips", () => {
+  const replay = makeMockReplay(droppedComboFrames());
+  const label = (c: Combo) => `${c.hitCount}${c.killed ? " KO" : ""}`;
+  const base: ComboSearchCriteria = {
+    attackerPort: null,
+    victimPort: null,
+    attackerCharacterId: null,
+    victimCharacterId: null,
+    minHits: 3,
+    killed: null,
+    allowGaps: false,
+  };
+  const clips = (criteria: Partial<ComboSearchCriteria>) =>
+    computeComboClips(replay, "g1", { ...base, ...criteria }, label).map(
+      (c) => c.label,
+    );
+
+  it("true combos only: the 3-hit string, which didn't kill", () => {
+    expect(clips({})).toEqual(["3"]);
+    expect(clips({ killed: true })).toEqual([]);
+    expect(clips({ killed: false })).toEqual(["3"]);
+  });
+
+  it("allowing short gaps: one 5-hit combo that killed", () => {
+    expect(clips({ allowGaps: true })).toEqual(["5 KO"]);
+    expect(clips({ allowGaps: true, minHits: 6 })).toEqual([]);
+    expect(clips({ allowGaps: true, killed: false })).toEqual([]);
+  });
+
+  it("filters by who did it and who it was done on, and their characters", () => {
+    expect(clips({ attackerPort: 0, victimPort: 1 })).toEqual(["3"]);
+    expect(clips({ attackerPort: 1 })).toEqual([]);
+    expect(clips({ attackerCharacterId: 1, victimCharacterId: 0 })).toEqual([
+      "3",
+    ]);
+    expect(clips({ victimCharacterId: 1 })).toEqual([]);
+  });
+
+  it("pads each clip by 1s either side, clamped to the replay", () => {
+    const [clip] = computeComboClips(replay, "g1", base, label);
+    expect(clip).toMatchObject({
+      gameId: "g1",
+      startFrameIndex: 0,
+      endFrameIndex: 5,
+    });
+  });
+});
+
 describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () => {
   // Fox fixture confirmed by classify() to be "dead" regardless of any input (see
   // classifiedSituations.test.ts's own use of this exact fixture/frame sequence, which this test
@@ -519,6 +713,54 @@ describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () =
       startFrame: 0,
       endFrameIndex: 2,
     });
+  });
+
+  it("does NOT credit a kill combo when the classifier says the victim could still get back, even if they then die", () => {
+    // Per the user: "a combo that ultimately converted to a kill, but the combo did not KO"
+    // (e.g. 260828205834-nue-Kurabba-29's combo at frame 4368). classify() rates a jumpless Fox
+    // here "reaches-stage" -- category "contestable".
+    const CONTESTABLE_FIXTURE = { x: -3000, y: 200, vx: 0, vy: -10 };
+    const guarder = {
+      characterId: CHAR_KIRBY,
+      state: ACTION_STATE_STAND,
+      x: 0,
+      y: 0,
+      grounded: true,
+    };
+    const frames: Frame[] = [
+      makeRichFrame(0, guarder, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_HITSTUN,
+        ...CONTESTABLE_FIXTURE,
+        hitstun: 5,
+        dmg: 50,
+        comboHit: 3,
+      }),
+      // Hitstun ends with the stage still reachable...
+      makeRichFrame(1, guarder, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_FALL,
+        ...CONTESTABLE_FIXTURE,
+        hitstun: 0,
+        dmg: 50,
+      }),
+      // ...but they die anyway, untouched.
+      makeRichFrame(2, guarder, {
+        characterId: CHAR_FOX,
+        state: ACTION_STATE_DEAD,
+        ...CONTESTABLE_FIXTURE,
+        y: CONTESTABLE_FIXTURE.y - 4000,
+        hitstun: 0,
+        dmg: 50,
+        stocks: 3,
+      }),
+    ];
+    const replay = makeRichMockReplay(frames);
+
+    expect(computeKillCombos(replay)).toEqual([]);
+    const combos = computeCombos(replay).filter((c) => c.hitCount >= 3);
+    expect(combos).toHaveLength(1);
+    expect(combos[0]).toMatchObject({ hitCount: 3, killed: false });
   });
 
   it("credits the kill even when the replay ends mid-fall with no literal death recorded -- edgeGuard.ts treats an unresolved situation at end-of-replay as a recovery-failure, and the classifier already knows the position was hopeless", () => {

@@ -84,6 +84,13 @@ export interface GameSummary {
    */
   isComplete: boolean;
   ports: GamePortSummary[];
+  /**
+   * Every named player in the lobby (the header's playerNames, in port
+   * order), including anyone sitting this game out - 3-4 player lobbies
+   * rotate who plays. Used to group a rotation night into one session.
+   * Undefined for summaries from before ANALYSIS_VERSION 2.
+   */
+  lobbyNames?: string[];
   statsByPort: Partial<Record<PortIndex, RawCounters>>;
   manualPerspectivePort?: PortIndex | null;
   fileRef: File | null;
@@ -224,7 +231,26 @@ function hashString(str: string): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-export function generateGameId(
+/**
+ * A game's identity: its recording timestamp plus its frame count. Both
+ * come from the recording itself, so the ID survives renaming or moving
+ * the file and editing player-name metadata. File-format versions are
+ * deliberately excluded - a fixed re-export of the same game should
+ * replace its cached entry, not appear as a second game (see
+ * docs/superpowers/specs/2026-09-15-persistent-library-design.md §1).
+ */
+export function gameIdFor(
+  recordedAtEpochMillis: number,
+  frameCount: number,
+): string {
+  return `g_${recordedAtEpochMillis.toString(36)}_${frameCount.toString(36)}`;
+}
+
+/**
+ * The pre-persistence, filename-based game ID. Only kept so data stored
+ * under old IDs (YouTube video links) can be migrated to `gameIdFor` IDs.
+ */
+export function legacyGameId(
   sourceName: string,
   recordedAtEpochMillis: number,
   stageId: number,
@@ -257,11 +283,22 @@ export type SerializedGameSummary = Pick<
   | "frameCount"
   | "isComplete"
   | "ports"
+  | "lobbyNames"
   | "statsByPort"
   | "isUnevenStockStart"
 > & {
   recordedAt: string;
 };
+
+/**
+ * Shape of `public/replays/demo-summaries.json`. `analysisVersion` records
+ * which ANALYSIS_VERSION produced `games`, which lets demoSummaries.test.ts
+ * use this file as the analysis-output snapshot.
+ */
+export interface DemoSummariesFile {
+  analysisVersion: number;
+  games: SerializedGameSummary[];
+}
 
 export function serializeGameSummary(
   summary: GameSummary,
@@ -274,6 +311,7 @@ export function serializeGameSummary(
     frameCount: summary.frameCount,
     isComplete: summary.isComplete,
     ports: summary.ports,
+    lobbyNames: summary.lobbyNames,
     statsByPort: summary.statsByPort,
     isUnevenStockStart: summary.isUnevenStockStart,
   };
@@ -290,6 +328,7 @@ export function deserializeGameSummary(
     frameCount: serialized.frameCount,
     isComplete: serialized.isComplete,
     ports: serialized.ports,
+    lobbyNames: serialized.lobbyNames,
     statsByPort: serialized.statsByPort,
     fileRef: null,
     isUnevenStockStart: serialized.isUnevenStockStart,
@@ -359,16 +398,9 @@ export function summarizeReplay(
   }
 
   const stageId = replay.matchSettings?.stageId ?? 0;
-  const id = generateGameId(
-    sourceName,
+  const id = gameIdFor(
     replay.header.recordedAtEpochMillis,
-    stageId,
     replay.frames.length,
-    ports.map((p) => ({
-      port: p.port,
-      characterId: p.characterId,
-      name: p.playerName,
-    })),
   );
 
   return {
@@ -379,6 +411,7 @@ export function summarizeReplay(
     frameCount: replay.frames.length,
     isComplete: true,
     ports,
+    lobbyNames: replay.matchStart.playerNames.filter((n) => n.length > 0),
     statsByPort,
     fileRef,
     isUnevenStockStart,

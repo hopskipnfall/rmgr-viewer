@@ -84,63 +84,53 @@ describe("detect12CharacterBattles", () => {
     expect(b.oppSummary?.remainingCharacters).toBe(0);
   });
 
-  it("detects multiple 12CB battles in the same session", () => {
-    const baseTime = new Date("2026-08-27T17:00:00Z");
-    const games: GameSummary[] = [];
-
-    // Battle 1 (3 games)
-    games.push(
+  /** A full 12CB: P0 (one character, carrying 3 stocks over) beats 12 fresh P1 characters in a row. */
+  const completeBattle = (prefix: string, start: Date, p0Char: number) =>
+    Array.from({ length: 12 }, (_, i) =>
       createGame({
-        id: "b1_g1",
-        time: new Date(baseTime.getTime()),
-        p0Char: 1,
-        p1Char: 2,
-        p0Start: 4,
-        p1Start: 4,
-        p0Final: 2,
-        p1Final: 0,
-      }),
-      createGame({
-        id: "b1_g2",
-        time: new Date(baseTime.getTime() + 3 * 60 * 1000),
-        p0Char: 1,
-        p1Char: 3,
-        p0Start: 2,
-        p1Start: 4,
-        p0Final: 1,
-        p1Final: 0,
-      }),
-    );
-
-    // Battle 2 (Fresh 4v4 start, 2 games)
-    const b2Time = new Date(baseTime.getTime() + 40 * 60 * 1000);
-    games.push(
-      createGame({
-        id: "b2_g1",
-        time: new Date(b2Time.getTime()),
-        p0Char: 4,
-        p1Char: 5,
-        p0Start: 4,
+        id: `${prefix}_g${i + 1}`,
+        time: new Date(start.getTime() + i * 3 * 60 * 1000),
+        p0Char,
+        p1Char: 10 + i,
+        p0Start: i === 0 ? 4 : 3,
         p1Start: 4,
         p0Final: 3,
         p1Final: 0,
       }),
-      createGame({
-        id: "b2_g2",
-        time: new Date(b2Time.getTime() + 3 * 60 * 1000),
-        p0Char: 4,
-        p1Char: 6,
-        p0Start: 3,
-        p1Start: 4,
-        p0Final: 2,
-        p1Final: 0,
-      }),
     );
+
+  it("detects multiple complete 12CB battles in the same session", () => {
+    const baseTime = new Date("2026-08-27T17:00:00Z");
+    // Battle 2 starts 40 minutes after battle 1's last game (a fresh 4v4 start).
+    const games = [
+      ...completeBattle("b1", baseTime, 1),
+      ...completeBattle(
+        "b2",
+        new Date(baseTime.getTime() + (33 + 40) * 60 * 1000),
+        4,
+      ),
+    ];
 
     const battles = detect12CharacterBattles(games, identity);
     expect(battles.length).toBe(2);
-    expect(battles[0]!.games.length).toBe(2);
-    expect(battles[1]!.games.length).toBe(2);
+    expect(battles[0]!.games.length).toBe(12);
+    expect(battles[1]!.games.length).toBe(12);
+  });
+
+  it("does not report a 12CB that wasn't played through to the end", () => {
+    // Two linked games with a stock carry-over look like a 12CB's opening,
+    // but nobody lost all 12 characters - not a 12CB (yet).
+    const baseTime = new Date("2026-08-27T17:00:00Z");
+    const games = completeBattle("partial", baseTime, 1).slice(0, 2);
+
+    expect(detect12CharacterBattles(games, identity)).toEqual([]);
+  });
+
+  it("does not report a 12CB that stopped one character short", () => {
+    const baseTime = new Date("2026-08-27T17:00:00Z");
+    const games = completeBattle("short", baseTime, 1).slice(0, 11);
+
+    expect(detect12CharacterBattles(games, identity)).toEqual([]);
   });
 
   it("returns empty array for regular matches without uneven start", () => {
@@ -205,13 +195,27 @@ describe("detect12CharacterBattles", () => {
         p0Final: 2,
         p1Final: 0, // Falcon eliminated
       }),
+      // Games 4-13: Fox (carrying 2 stocks) beats P1's remaining 10
+      // characters, so the battle is played through to the end.
+      ...[36, 37, 41, 42, 43, 44, 46, 48, 49, 50].map((p1Char, i) =>
+        createGame({
+          id: `g${i + 4}`,
+          time: new Date(baseTime.getTime() + (i + 3) * 3 * 60 * 1000),
+          p0Char: 41, // Fox (JP)
+          p1Char,
+          p0Start: 2,
+          p1Start: 4,
+          p0Final: 2,
+          p1Final: 0,
+        }),
+      ),
     ];
 
     // State at Game 1
     const state1 = compute12CbMatchState("g1", games, identity);
     expect(state1).not.toBeNull();
     expect(state1?.matchIndex).toBe(1);
-    expect(state1?.totalMatches).toBe(3);
+    expect(state1?.totalMatches).toBe(13);
     const [p0_1, p1_1] = state1!.players;
     expect(p0_1.remainingCharacterCount).toBe(12);
     expect(p0_1.activeCharacterKey).toBe("luigi");

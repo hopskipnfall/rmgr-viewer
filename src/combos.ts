@@ -30,6 +30,9 @@ const DEAD_OR_RESPAWNING_STATES = new Set([
 /** Frames before combo start to seek to when jumping to a combo (1.0 s). */
 export const COMBO_JUMP_LEAD_IN_FRAMES = 60;
 
+/** Longest combo-meter reset (0.5 s) joinCombosAcrossGaps still treats as one combo. */
+export const COMBO_GAP_MAX_FRAMES = 30;
+
 export interface KillCombo {
   readonly id: string;
   readonly comboIndex: number;
@@ -46,6 +49,15 @@ export interface KillCombo {
   readonly damageDealt: number;
 }
 
+/** Any combo, killing or not (computeCombos). */
+export interface Combo extends KillCombo {
+  /** Whether the combo took the stock - see computeCombos for exactly when that's credited. */
+  readonly killed: boolean;
+  /** The last frame the victim was still being comboed. Gaps between combos are measured from here. */
+  readonly comboEndFrame: number;
+  readonly comboEndFrameIndex: number;
+}
+
 interface ActiveComboTracker {
   attackerPort: PortIndex;
   victimPort: PortIndex;
@@ -55,6 +67,9 @@ interface ActiveComboTracker {
   maxComboHits: number;
   lastComboHitCount: number;
   stocksAtStart: number;
+  lastComboFrame: number;
+  lastComboFrameIndex: number;
+  lastComboDamage: number;
 }
 
 interface PendingLethalTracker {
@@ -66,6 +81,8 @@ interface PendingLethalTracker {
   lastComboDamage: number;
   maxComboHits: number;
   stocksAtStart: number;
+  comboEndFrame: number;
+  comboEndFrameIndex: number;
 }
 
 /**
@@ -86,15 +103,17 @@ interface PendingLethalTracker {
  */
 const HOPELESS_MATCH_FRAME_TOLERANCE = 5;
 
-function findHopelessKillSituation(
+/** The victim's classified recovery situation opening at (about) the frame a combo's hitstun
+ * ended, among those matching `matches`, or null. */
+function findSituationAtComboEnd(
   situations: readonly ClassifiedSituation[],
   victimPort: PortIndex,
   aroundFrameIndex: number,
+  matches: (situation: ClassifiedSituation) => boolean,
 ): ClassifiedSituation | null {
   for (const situation of situations) {
     if (situation.recoveringPort !== victimPort) continue;
-    if (situation.category !== "hopeless") continue;
-    if (situation.resolutionKind !== "recovery-failure") continue;
+    if (!matches(situation)) continue;
     if (
       Math.abs(situation.enteredFrameIndex - aroundFrameIndex) <=
       HOPELESS_MATCH_FRAME_TOLERANCE
@@ -105,6 +124,40 @@ function findHopelessKillSituation(
   return null;
 }
 
+function findHopelessKillSituation(
+  situations: readonly ClassifiedSituation[],
+  victimPort: PortIndex,
+  aroundFrameIndex: number,
+): ClassifiedSituation | null {
+  return findSituationAtComboEnd(
+    situations,
+    victimPort,
+    aroundFrameIndex,
+    (s) => s.category === "hopeless" && s.resolutionKind === "recovery-failure",
+  );
+}
+
+/**
+ * The classifier says the victim still had a real way back when the combo ended (category
+ * "contestable": the stage or the ledge was reachable). Per the user (2026-09-15): if they then
+ * die anyway, "it's a combo that ultimately converted to a kill, but the combo did not KO" -- it
+ * still counts as a successful edge-guard KO in classifiedSituations.ts, but not as a kill combo
+ * (e.g. 260828205834-nue-Kurabba-29 combo at frame 4368: Pikachu botched a recovery the
+ * classifier rated "reaches-stage", with no further pressure from Kirby).
+ */
+function findContestableSituation(
+  situations: readonly ClassifiedSituation[],
+  victimPort: PortIndex,
+  aroundFrameIndex: number,
+): ClassifiedSituation | null {
+  return findSituationAtComboEnd(
+    situations,
+    victimPort,
+    aroundFrameIndex,
+    (s) => s.category === "contestable",
+  );
+}
+
 /**
  * Extracts all "Kill Combos" from a match replay.
  *
@@ -112,7 +165,10 @@ function findHopelessKillSituation(
  * - A continuous combo sequence with at least 3 hits (`hitCount >= 3`) that EITHER:
  *   (a) Outright takes the opponent's stock during the combo / hitstun, OR
  *   (b) Ends offstage / in air and the opponent dies without ever landing on stage/platform,
- *       grabbing ledge, or taking further damage from any other exchange, OR
+ *       grabbing ledge, or taking further damage from any other exchange -- ONLY where the
+ *       recovery classifier has no opinion (unsupported character/stage). Where it rates the
+ *       position "contestable" (stage or ledge still reachable), the combo is NOT a kill combo
+ *       even if they die anyway (see findContestableSituation), OR
  *   (c) Ends with the recovery classifier confirming the resulting position was unrecoverable
  *       (category "hopeless") AND the victim did in fact die -- credited immediately rather than
  *       via (b)'s landed/ledge/damage tracking, which doesn't know about recovery physics and can
@@ -122,12 +178,163 @@ function findHopelessKillSituation(
  *       existing behavior is unchanged.
  */
 export function computeKillCombos(replay: Replay): KillCombo[] {
+  return scanCombos(replay, 3).filter((c) => c.killed);
+}
+
+/**
+ * Every true combo (continuous combo meter) with at least `minHits` hits, killing or not, in start
+ * order. `killed` follows exactly computeKillCombos' (a)/(b)/(c) rules; a combo that didn't kill
+ * ends on its last comboed frame (the victim then landed, grabbed the ledge, got hit by a separate
+ * exchange, or the combo meter reset). Used by the clip search, which also wants short strings so
+ * joinCombosAcrossGaps can join them.
+ */
+export function computeCombos(replay: Replay, minHits = 1): Combo[] {
+  return scanCombos(replay, minHits).sort(
+    (a, b) => a.startFrameIndex - b.startFrameIndex,
+  );
+}
+
+/**
+ * Joins each attacker's consecutive combos on the same victim when the combo meter reset for at
+ * most `maxGapFrames` (0.5 s by default) and the victim didn't combo the attacker back in between
+ * -- "combos" in the looser sense players use, where a dropped hit and a quick re-hit still count.
+ * Hit counts add up; the joined combo killed if its last part did.
+ */
+export function joinCombosAcrossGaps(
+  combos: readonly Combo[],
+  maxGapFrames: number = COMBO_GAP_MAX_FRAMES,
+): Combo[] {
+  const sorted = [...combos].sort((a, b) => a.startFrame - b.startFrame);
+  const joined: Combo[] = [];
+  const openIndexByVictim = new Map<PortIndex, number>();
+  const lastComboedAt = new Map<PortIndex, number>();
+
+  for (const combo of sorted) {
+    const openIndex = openIndexByVictim.get(combo.victimPort);
+    const prev = openIndex !== undefined ? joined[openIndex] : undefined;
+    const attackerComboedSince =
+      prev !== undefined &&
+      (lastComboedAt.get(combo.attackerPort) ?? -Infinity) > prev.comboEndFrame;
+    if (
+      prev !== undefined &&
+      openIndex !== undefined &&
+      prev.attackerPort === combo.attackerPort &&
+      !prev.killed &&
+      combo.startFrame - prev.comboEndFrame <= maxGapFrames &&
+      !attackerComboedSince
+    ) {
+      joined[openIndex] = {
+        ...prev,
+        endFrame: combo.endFrame,
+        endFrameIndex: combo.endFrameIndex,
+        comboEndFrame: combo.comboEndFrame,
+        comboEndFrameIndex: combo.comboEndFrameIndex,
+        hitCount: prev.hitCount + combo.hitCount,
+        endDamage: combo.endDamage,
+        damageDealt: Math.max(0, combo.endDamage - prev.startDamage),
+        killed: combo.killed,
+      };
+    } else {
+      openIndexByVictim.set(combo.victimPort, joined.length);
+      joined.push(combo);
+    }
+    lastComboedAt.set(combo.victimPort, combo.startFrame);
+  }
+  return joined;
+}
+
+type ComboStart = Pick<
+  ActiveComboTracker,
+  | "attackerPort"
+  | "victimPort"
+  | "startFrame"
+  | "startFrameIndex"
+  | "damageAtStart"
+  | "maxComboHits"
+>;
+
+/**
+ * The shared frame scan behind computeKillCombos and computeCombos. Kills are only tracked for
+ * combos of at least `minHits` hits (computeKillCombos passes 3), and are pushed in the order
+ * they're resolved, numbered 1, 2, 3... -- identical to the original kill-combo-only scan.
+ * Combos that didn't kill are extra entries (comboIndex 0) that never affect the kills.
+ */
+function scanCombos(replay: Replay, minHits: number): Combo[] {
   const seated = getSeatedPorts(replay);
   if (seated.length !== 2) return [];
 
   const [portA, portB] = seated as [PortIndex, PortIndex];
-  const combos: KillCombo[] = [];
+  const combos: Combo[] = [];
   let comboCount = 0;
+
+  const pushKill = (
+    t: ComboStart,
+    endFrame: number,
+    endFrameIndex: number,
+    endDamage: number,
+    comboEndFrame: number,
+    comboEndFrameIndex: number,
+  ): void => {
+    comboCount++;
+    combos.push({
+      id: `combo-${comboCount}-${t.startFrameIndex}`,
+      comboIndex: comboCount,
+      attackerPort: t.attackerPort,
+      victimPort: t.victimPort,
+      startFrame: t.startFrame,
+      startFrameIndex: t.startFrameIndex,
+      endFrame,
+      endFrameIndex,
+      jumpFrameIndex: Math.max(
+        0,
+        t.startFrameIndex - COMBO_JUMP_LEAD_IN_FRAMES,
+      ),
+      hitCount: t.maxComboHits,
+      startDamage: t.damageAtStart,
+      endDamage,
+      damageDealt: Math.max(0, endDamage - t.damageAtStart),
+      killed: true,
+      comboEndFrame,
+      comboEndFrameIndex,
+    });
+  };
+
+  const pushNonKill = (
+    t: ComboStart,
+    comboEndFrame: number,
+    comboEndFrameIndex: number,
+    endDamage: number,
+  ): void => {
+    combos.push({
+      id: `combo-nokill-${t.startFrameIndex}`,
+      comboIndex: 0,
+      attackerPort: t.attackerPort,
+      victimPort: t.victimPort,
+      startFrame: t.startFrame,
+      startFrameIndex: t.startFrameIndex,
+      endFrame: comboEndFrame,
+      endFrameIndex: comboEndFrameIndex,
+      jumpFrameIndex: Math.max(
+        0,
+        t.startFrameIndex - COMBO_JUMP_LEAD_IN_FRAMES,
+      ),
+      hitCount: t.maxComboHits,
+      startDamage: t.damageAtStart,
+      endDamage,
+      damageDealt: Math.max(0, endDamage - t.damageAtStart),
+      killed: false,
+      comboEndFrame,
+      comboEndFrameIndex,
+    });
+  };
+
+  const settlePending = (pending: PendingLethalTracker): void =>
+    pushNonKill(
+      pending,
+      pending.comboEndFrame,
+      pending.comboEndFrameIndex,
+      pending.lastComboDamage,
+    );
 
   const classifiedSituations = computeClassifiedSituations(replay);
 
@@ -159,28 +366,14 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
           victimPost.stocksRemaining < pending.stocksAtStart ||
           isDeadOrRespawn
         ) {
-          comboCount++;
-          combos.push({
-            id: `combo-${comboCount}-${pending.startFrameIndex}`,
-            comboIndex: comboCount,
-            attackerPort: pending.attackerPort,
-            victimPort: pending.victimPort,
-            startFrame: pending.startFrame,
-            startFrameIndex: pending.startFrameIndex,
-            endFrame: frameNumber,
-            endFrameIndex: i,
-            jumpFrameIndex: Math.max(
-              0,
-              pending.startFrameIndex - COMBO_JUMP_LEAD_IN_FRAMES,
-            ),
-            hitCount: pending.maxComboHits,
-            startDamage: pending.damageAtStart,
-            endDamage: pending.lastComboDamage,
-            damageDealt: Math.max(
-              0,
-              pending.lastComboDamage - pending.damageAtStart,
-            ),
-          });
+          pushKill(
+            pending,
+            frameNumber,
+            i,
+            pending.lastComboDamage,
+            pending.comboEndFrame,
+            pending.comboEndFrameIndex,
+          );
           pendingLethal[victimPort] = undefined;
           activeCombo[victimPort] = undefined;
           continue;
@@ -193,15 +386,14 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
         const inCapture = CAPTURE_STATES.has(victimPost.actionStateId);
 
         // Case (b): Landed safely on stage/platform
-        if (victimPost.grounded && !inHitstun && !inCapture) {
-          pendingLethal[victimPort] = undefined;
-        }
         // Case (c): Grabbed ledge
-        else if (LEDGE_GRAB_STATES.has(victimPost.actionStateId)) {
-          pendingLethal[victimPort] = undefined;
-        }
         // Case (d): Took additional damage from a separate exchange
-        else if (victimPost.damagePercent > pending.lastComboDamage) {
+        if (
+          (victimPost.grounded && !inHitstun && !inCapture) ||
+          LEDGE_GRAB_STATES.has(victimPost.actionStateId) ||
+          victimPost.damagePercent > pending.lastComboDamage
+        ) {
+          settlePending(pending);
           pendingLethal[victimPort] = undefined;
         }
       }
@@ -211,29 +403,15 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
 
       if (isDeadOrRespawn) {
         if (active) {
-          if (active.maxComboHits >= 3) {
-            comboCount++;
-            combos.push({
-              id: `combo-${comboCount}-${active.startFrameIndex}`,
-              comboIndex: comboCount,
-              attackerPort: active.attackerPort,
-              victimPort: active.victimPort,
-              startFrame: active.startFrame,
-              startFrameIndex: active.startFrameIndex,
-              endFrame: frameNumber,
-              endFrameIndex: i,
-              jumpFrameIndex: Math.max(
-                0,
-                active.startFrameIndex - COMBO_JUMP_LEAD_IN_FRAMES,
-              ),
-              hitCount: active.maxComboHits,
-              startDamage: active.damageAtStart,
-              endDamage: victimPost.damagePercent,
-              damageDealt: Math.max(
-                0,
-                victimPost.damagePercent - active.damageAtStart,
-              ),
-            });
+          if (active.maxComboHits >= minHits) {
+            pushKill(
+              active,
+              frameNumber,
+              i,
+              victimPost.damagePercent,
+              frameNumber,
+              i,
+            );
           }
           activeCombo[victimPort] = undefined;
         }
@@ -258,7 +436,21 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
 
         if (!active || comboDroppedAndRestarted) {
           // If previous combo dropped and new damage landed, any pending lethal tracking is cancelled
+          const stalePending = pendingLethal[victimPort];
+          if (stalePending) settlePending(stalePending);
           pendingLethal[victimPort] = undefined;
+          if (
+            comboDroppedAndRestarted &&
+            active &&
+            active.maxComboHits >= minHits
+          ) {
+            pushNonKill(
+              active,
+              active.lastComboFrame,
+              active.lastComboFrameIndex,
+              active.lastComboDamage,
+            );
+          }
 
           // Look at previous frame's damage if possible to capture pre-hit damage
           const prevPost =
@@ -276,38 +468,30 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
             maxComboHits: Math.max(1, comboHits),
             lastComboHitCount: comboHits,
             stocksAtStart: victimPost.stocksRemaining,
+            lastComboFrame: frameNumber,
+            lastComboFrameIndex: i,
+            lastComboDamage: victimPost.damagePercent,
           };
         } else {
           active.maxComboHits = Math.max(active.maxComboHits, comboHits);
           if (comboHits > 0) {
             active.lastComboHitCount = comboHits;
           }
+          active.lastComboFrame = frameNumber;
+          active.lastComboFrameIndex = i;
+          active.lastComboDamage = victimPost.damagePercent;
 
           // Check if stock was lost while directly in combo hitstun
           if (victimPost.stocksRemaining < active.stocksAtStart) {
-            if (active.maxComboHits >= 3) {
-              comboCount++;
-              combos.push({
-                id: `combo-${comboCount}-${active.startFrameIndex}`,
-                comboIndex: comboCount,
-                attackerPort: active.attackerPort,
-                victimPort: active.victimPort,
-                startFrame: active.startFrame,
-                startFrameIndex: active.startFrameIndex,
-                endFrame: frameNumber,
-                endFrameIndex: i,
-                jumpFrameIndex: Math.max(
-                  0,
-                  active.startFrameIndex - COMBO_JUMP_LEAD_IN_FRAMES,
-                ),
-                hitCount: active.maxComboHits,
-                startDamage: active.damageAtStart,
-                endDamage: victimPost.damagePercent,
-                damageDealt: Math.max(
-                  0,
-                  victimPost.damagePercent - active.damageAtStart,
-                ),
-              });
+            if (active.maxComboHits >= minHits) {
+              pushKill(
+                active,
+                frameNumber,
+                i,
+                victimPost.damagePercent,
+                frameNumber,
+                i,
+              );
             }
             activeCombo[victimPort] = undefined;
           }
@@ -315,7 +499,7 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
       } else {
         // Victim is no longer in hitstun/combo
         if (active) {
-          if (active.maxComboHits >= 3) {
+          if (active.maxComboHits >= minHits) {
             const hopelessSituation = findHopelessKillSituation(
               classifiedSituations,
               victimPort,
@@ -328,29 +512,29 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
                 ]?.state;
               const endDamage =
                 resolutionState?.damagePercent ?? victimPost.damagePercent;
-              comboCount++;
-              combos.push({
-                id: `combo-${comboCount}-${active.startFrameIndex}`,
-                comboIndex: comboCount,
-                attackerPort: active.attackerPort,
-                victimPort: active.victimPort,
-                startFrame: active.startFrame,
-                startFrameIndex: active.startFrameIndex,
-                endFrame:
-                  replay.frames[hopelessSituation.resolutionFrameIndex]
-                    ?.frame ?? frameNumber,
-                endFrameIndex: hopelessSituation.resolutionFrameIndex,
-                jumpFrameIndex: Math.max(
-                  0,
-                  active.startFrameIndex - COMBO_JUMP_LEAD_IN_FRAMES,
-                ),
-                hitCount: active.maxComboHits,
-                startDamage: active.damageAtStart,
+              pushKill(
+                active,
+                replay.frames[hopelessSituation.resolutionFrameIndex]?.frame ??
+                  frameNumber,
+                hopelessSituation.resolutionFrameIndex,
                 endDamage,
-                damageDealt: Math.max(0, endDamage - active.damageAtStart),
-              });
+                active.lastComboFrame,
+                active.lastComboFrameIndex,
+              );
+            } else if (
+              findContestableSituation(classifiedSituations, victimPort, i)
+            ) {
+              // The classifier says they could still get back: whatever happens next, this
+              // combo didn't KO (see findContestableSituation).
+              pushNonKill(
+                active,
+                active.lastComboFrame,
+                active.lastComboFrameIndex,
+                active.lastComboDamage,
+              );
             } else {
-              // Put into pending lethal tracking to see if they die without landing/ledge/damage
+              // No classifier opinion (unsupported character/stage): fall back to pending lethal
+              // tracking to see if they die without landing/ledge/damage
               pendingLethal[victimPort] = {
                 attackerPort: active.attackerPort,
                 victimPort: active.victimPort,
@@ -360,12 +544,29 @@ export function computeKillCombos(replay: Replay): KillCombo[] {
                 lastComboDamage: victimPost.damagePercent,
                 maxComboHits: active.maxComboHits,
                 stocksAtStart: active.stocksAtStart,
+                comboEndFrame: active.lastComboFrame,
+                comboEndFrameIndex: active.lastComboFrameIndex,
               };
             }
           }
           activeCombo[victimPort] = undefined;
         }
       }
+    }
+  }
+
+  // Replay over: whatever is still open never killed.
+  for (const port of [portA, portB]) {
+    const pending = pendingLethal[port];
+    if (pending) settlePending(pending);
+    const active = activeCombo[port];
+    if (active && active.maxComboHits >= minHits) {
+      pushNonKill(
+        active,
+        active.lastComboFrame,
+        active.lastComboFrameIndex,
+        active.lastComboDamage,
+      );
     }
   }
 

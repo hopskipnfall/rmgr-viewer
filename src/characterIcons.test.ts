@@ -41,11 +41,14 @@ describe("characterIconHtml", () => {
     expect(html).not.toContain("char-icon-jp-badge");
   });
 
-  it("adds a visible (JP) badge for Japanese-region variants, using the base fighter's icon", () => {
+  it("adds a visible flag badge for Japanese-region variants, using the base fighter's icon", () => {
     const html = characterIconHtml(0x2a); // Mario (JP)
     expect(html).toContain("mario.svg");
     expect(html).toContain("char-icon-jp-badge");
-    expect(html).toContain("(JP)");
+    expect(html).toContain("🇯🇵");
+    // The <img> alt/title uses the flag too, e.g. "Mario 🇯🇵" (not "Mario (JP)").
+    expect(html).toContain('title="Mario 🇯🇵"');
+    expect(html).not.toContain("(JP)");
   });
 
   it("falls back to the plain character name when there's no icon", () => {

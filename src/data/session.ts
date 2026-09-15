@@ -2,6 +2,7 @@ import type { PortIndex } from "@rmg-k/rmgr";
 import type { GameSummary } from "./gameSummary.js";
 import {
   type Identity,
+  matchesAlias,
   resolvePerspectivePort,
   resolveOpponentPort,
 } from "./identity.js";
@@ -34,6 +35,47 @@ export interface SessionGroup {
  */
 export const MAX_SESSION_GAP_SECONDS = 7200;
 
+/** Slack for recording start/end timestamps when checking that a game starts after the previous one ended. */
+const GAME_OVERLAP_TOLERANCE_MS = 2000;
+
+/**
+ * Everyone in the game's lobby, in port order: the header's full player
+ * list (which includes players sitting this game out), or - for summaries
+ * from before lobbyNames existed - just the two who played.
+ */
+function lobbyNamesOf(summary: GameSummary): string[] {
+  if (summary.lobbyNames && summary.lobbyNames.length > 0) {
+    return summary.lobbyNames;
+  }
+  return summary.ports.map((p) => p.playerName || `P${p.port + 1}`);
+}
+
+/** Same lobby = same set of player names, regardless of who played this particular game or on which port. */
+function lobbyKey(summary: GameSummary): string {
+  return [...new Set(lobbyNamesOf(summary).map((n) => n.toLowerCase()))]
+    .sort()
+    .join("|");
+}
+
+function gameEndMs(summary: GameSummary): number {
+  return summary.recordedAt.getTime() + (summary.frameCount / 60) * 1000;
+}
+
+/**
+ * The session's "vs" label: everyone in the lobby except you ("shidozzzz,
+ * zabuton" for a rotating lobby, a single name for an ordinary 1v1). When
+ * none of the lobby is you, falls back to the per-game opponent label.
+ */
+function sessionOpponentName(
+  firstGame: GameSummary,
+  identity: Identity,
+  fallback: string,
+): string {
+  const lobby = lobbyNamesOf(firstGame);
+  if (!lobby.some((n) => matchesAlias(n, identity))) return fallback;
+  return lobby.filter((n) => !matchesAlias(n, identity)).join(", ");
+}
+
 function getOpponentSignature(
   summary: GameSummary,
   identity: Identity,
@@ -64,7 +106,9 @@ function getOpponentSignature(
  * Groups an array of game summaries into logical play sessions.
  * Games are clustered if:
  * 1. They share the same linked YouTube video ID, OR
- * 2. They have matching opponent/participants AND the gap between consecutive games is <= MAX_SESSION_GAP_SECONDS.
+ * 2. They're from the same lobby (same set of player names - 3-4 player
+ *    lobbies rotate who plays 1v1), the next game starts after the previous
+ *    one ended, AND consecutive games start <= MAX_SESSION_GAP_SECONDS apart.
  */
 export function groupGamesIntoSessions(
   summaries: readonly GameSummary[],
@@ -100,19 +144,20 @@ export function groupGamesIntoSessions(
       Boolean(currVideo?.videoId) &&
       prevVideo?.videoId === currVideo?.videoId;
 
-    // Check temporal gap & opponent match
-    const prevSig = getOpponentSignature(prevGame, identity);
-    const currSig = getOpponentSignature(game, identity);
-    const sameOpponent =
-      prevSig.is2Player === currSig.is2Player &&
-      prevSig.opponentName.toLowerCase() === currSig.opponentName.toLowerCase();
-
+    // Same lobby (the same players, even if they rotate who plays), and
+    // this game starts after the previous one ended - within the gap limit.
+    const sameLobby = lobbyKey(prevGame) === lobbyKey(game);
+    const startsAfterPrevEnded =
+      game.recordedAt.getTime() >=
+      gameEndMs(prevGame) - GAME_OVERLAP_TOLERANCE_MS;
     const timeDeltaSec =
       (game.recordedAt.getTime() - prevGame.recordedAt.getTime()) / 1000;
-    const isWithinTimeGap =
-      timeDeltaSec >= 0 && timeDeltaSec <= MAX_SESSION_GAP_SECONDS;
+    const isWithinTimeGap = timeDeltaSec <= MAX_SESSION_GAP_SECONDS;
 
-    if (hasSharedVideo || (sameOpponent && isWithinTimeGap)) {
+    if (
+      hasSharedVideo ||
+      (sameLobby && startsAfterPrevEnded && isWithinTimeGap)
+    ) {
       currentCluster.push(game);
     } else {
       rawClusters.push(currentCluster);
@@ -194,7 +239,11 @@ export function groupGamesIntoSessions(
 
     return {
       id: `session_${firstGame.id}`,
-      opponentName: primaryOpponentName,
+      opponentName: sessionOpponentName(
+        firstGame,
+        identity,
+        primaryOpponentName,
+      ),
       opponentCharacterIds: Array.from(oppCharSet),
       yourCharacterIds: Array.from(yourCharSet),
       startTime,

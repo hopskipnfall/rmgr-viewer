@@ -1,5 +1,6 @@
 import type { PortIndex, Replay } from "@rmg-k/rmgr";
 import { computeEdgeGuardEvents, type EdgeGuardEvent } from "./edgeGuard.js";
+import { computeCombos, joinCombosAcrossGaps, type Combo } from "./combos.js";
 
 /** One clip in a cross-game playlist: a specific game, a frame range, and a label for the clip list UI. */
 export interface PlaylistClip {
@@ -141,4 +142,66 @@ export function computeEdgeGuardClips(
   }
 
   return clips;
+}
+
+/** The "combos" search type's filters - see search/searchView.ts for how these get resolved from the UI. */
+export interface ComboSearchCriteria {
+  /** Who did the combo, or null for either port. */
+  readonly attackerPort: PortIndex | null;
+  /** Who it was done on, or null for either port. */
+  readonly victimPort: PortIndex | null;
+  readonly attackerCharacterId: number | null;
+  readonly victimCharacterId: number | null;
+  /** Minimum hits (the search UI's floor is 3). */
+  readonly minHits: number;
+  /** true = only combos that killed, false = only ones that didn't, null = either. */
+  readonly killed: boolean | null;
+  /** Join combos whose meter reset for 0.5 s or less (joinCombosAcrossGaps) instead of true combos only. */
+  readonly allowGaps: boolean;
+}
+
+/**
+ * Clips covering every combo in `replay` matching `criteria`, from 1 s before
+ * the first hit to 1 s after it ended (clamped to the replay). "Killed" follows
+ * the kill-combo rules in combos.ts: the stock was taken during the combo, the
+ * victim died offstage without landing/grabbing ledge/being hit again, or the
+ * recovery classifier rated the position hopeless and they died.
+ */
+export function computeComboClips(
+  replay: Replay,
+  gameId: string,
+  criteria: ComboSearchCriteria,
+  label: (combo: Combo) => string,
+): PlaylistClip[] {
+  const trueCombos = computeCombos(replay);
+  const combos = criteria.allowGaps
+    ? joinCombosAcrossGaps(trueCombos)
+    : trueCombos;
+  const lastFrameIndex = replay.frames.length - 1;
+  const characterAt = (combo: Combo, port: PortIndex) =>
+    replay.frames[combo.startFrameIndex]?.ports[port]?.state?.characterId;
+
+  return combos
+    .filter(
+      (c) =>
+        c.hitCount >= criteria.minHits &&
+        (criteria.killed === null || c.killed === criteria.killed) &&
+        (criteria.attackerPort === null ||
+          c.attackerPort === criteria.attackerPort) &&
+        (criteria.victimPort === null ||
+          c.victimPort === criteria.victimPort) &&
+        (criteria.attackerCharacterId === null ||
+          characterAt(c, c.attackerPort) === criteria.attackerCharacterId) &&
+        (criteria.victimCharacterId === null ||
+          characterAt(c, c.victimPort) === criteria.victimCharacterId),
+    )
+    .map((c) => ({
+      gameId,
+      startFrameIndex: Math.max(0, c.startFrameIndex - PRE_ROLL_FRAMES),
+      endFrameIndex: Math.min(
+        lastFrameIndex,
+        c.endFrameIndex + POST_ROLL_FRAMES,
+      ),
+      label: label(c),
+    }));
 }

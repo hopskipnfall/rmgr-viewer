@@ -38,7 +38,11 @@ import {
   LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS,
 } from "./ledgeGrabRange.js";
 import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
-import { isHitstunState, computeEdgeGuardEvents } from "./edgeGuard.js";
+import {
+  isHitstunState,
+  computeEdgeGuardEvents,
+  recoveryZoneBoundary,
+} from "./edgeGuard.js";
 import {
   computeRecoveryVerdictFrames,
   type RecoveryVerdictFrame,
@@ -102,6 +106,8 @@ const HIDDEN_WEAPON_KINDS = new Set<number>([WPKind.SpinAttack]);
  * it's applied.
  */
 const MARKER_TUNING_PX_PER_WORLD_UNIT = 0.38;
+/** Samus's Charge Shot render scale at full charge: gfx_size 700 / 30 (RMGR_SPEC.md §5.3). */
+const CHARGE_SHOT_FULL_CHARGE_SCALE = 700 / 30;
 
 export interface BombExplosionEvent {
   startFrame: number;
@@ -1881,6 +1887,8 @@ export class StageRenderer {
   private hoveredQuickAttackIndex: number | null = null;
   private diEventsCache = new WeakMap<Replay, HitDIResult[]>();
   private backgroundTheme: BackgroundTheme = "grid";
+  /** Draw the edge-guard zone boundary (match view's "Zone" toggle). */
+  private showRecoveryZone = false;
   private bgBufferCanvas: HTMLCanvasElement | null = null;
   private bgBufferDirty = true;
 
@@ -2069,6 +2077,10 @@ export class StageRenderer {
     this.ctx = ctx;
   }
 
+  public setShowRecoveryZone(show: boolean): void {
+    this.showRecoveryZone = show;
+  }
+
   public setQuickAttackOverlay(paths: QuickAttackPath[] | null): void {
     this.quickAttackOverlayPaths = paths;
   }
@@ -2103,6 +2115,7 @@ export class StageRenderer {
     this.drawBackground(camera);
     this.drawBlastZone(camera, stageId);
     this.drawStage(camera, stageId, frameIndex);
+    if (this.showRecoveryZone) this.drawRecoveryZone(camera, stageId);
     this.drawWindZone(camera, stageId, frame, frameIndex);
 
     // If Quick Attack Overlay mode is active:
@@ -2201,6 +2214,56 @@ export class StageRenderer {
         }
       }
     }
+  }
+
+  /**
+   * The edge-guard zone (edgeGuard.ts isOutsideZone / recoveryZoneBoundary):
+   * a player past these lines who can act again counts as recovering, which
+   * opens an edge-guard situation. Per side: vertical below stage height, the
+   * slanted segment, vertical again above it; the offstage side is tinted out
+   * to the blast zone.
+   */
+  private drawRecoveryZone(camera: Camera, stageId: number | undefined): void {
+    const zone = recoveryZoneBoundary(stageId);
+    const blastZone = stageBlastZone(stageId);
+    if (!zone || !blastZone) return;
+
+    const { ctx } = this;
+    ctx.save();
+    for (const side of [1, -1] as const) {
+      const outerX = side === 1 ? blastZone.rightX : blastZone.leftX;
+      const boundary = [
+        camera.worldToScreen(side * zone.xAtLow, blastZone.bottomY),
+        camera.worldToScreen(side * zone.xAtLow, zone.yLow),
+        camera.worldToScreen(side * zone.xAtHigh, zone.yHigh),
+        camera.worldToScreen(side * zone.xAtHigh, blastZone.topY),
+      ];
+
+      // Tint the offstage side, from the boundary out to the blast zone.
+      ctx.beginPath();
+      boundary.forEach((p, i) =>
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y),
+      );
+      const outerTop = camera.worldToScreen(outerX, blastZone.topY);
+      const outerBottom = camera.worldToScreen(outerX, blastZone.bottomY);
+      ctx.lineTo(outerTop.x, outerTop.y);
+      ctx.lineTo(outerBottom.x, outerBottom.y);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(250, 204, 21, 0.08)";
+      ctx.fill();
+
+      // The boundary itself.
+      ctx.beginPath();
+      boundary.forEach((p, i) =>
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y),
+      );
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.9)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
   }
 
   /**
@@ -2369,6 +2432,7 @@ export class StageRenderer {
             isLuigi,
             dir,
             spinAngle,
+            item.scaleY,
           )
         : this.drawCustomItemShape(ctx, item.kind, x, y, item.frame);
       if (!drewCustomShape) {
@@ -2818,6 +2882,8 @@ export class StageRenderer {
     isLuigi = false,
     dir = 1,
     spinAngle = 0,
+    /** The object's recorded render scale (ItemUpdate.scaleY, recorder schema 2+); undefined for older replays. */
+    gameScale?: number,
   ): boolean {
     switch (kind) {
       case WPKind.Fireball: // Mario / Luigi Neutral-B fireball
@@ -2845,7 +2911,7 @@ export class StageRenderer {
         this.drawThunderTrailMarker(ctx, x, y, spinAngle);
         return true;
       case WPKind.ChargeShot: // Samus - pulsing electric plasma orb
-        this.drawChargeShotMarker(ctx, x, y, spinAngle);
+        this.drawChargeShotMarker(ctx, x, y, spinAngle, gameScale);
         return true;
       case WPKind.SamusBomb:
         this.drawSamusBombMarker(ctx, x, y, spinAngle);
@@ -3891,9 +3957,17 @@ export class StageRenderer {
     x: number,
     y: number,
     spinAngle = 0,
+    /** Recorded render scale (gfx_size / 30 for its charge level); undefined for replays from before it was recorded. */
+    gameScale?: number,
   ): void {
     ctx.save();
-    const csRadius = 24;
+    // Full charge (gfx_size 700 -> scale 23.33) draws at the original fixed
+    // 24px; lower charges shrink in proportion, as in the game (level 0 is
+    // ~21% of full). Older replays have no scale and keep the fixed size.
+    const csRadius =
+      gameScale === undefined
+        ? 24
+        : Math.max(6, (24 * gameScale) / CHARGE_SHOT_FULL_CHARGE_SCALE);
 
     // 1. Outer pulsating electric magenta/violet corona
     const pulse = 1 + 0.12 * Math.sin(spinAngle * 3);

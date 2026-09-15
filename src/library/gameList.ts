@@ -4,6 +4,7 @@ import { characterIconHtml } from "../characterIcons.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import {
   type Identity,
+  matchesAlias,
   resolvePerspectivePort,
   resolveOpponentPort,
 } from "../data/identity.js";
@@ -26,11 +27,85 @@ function formatDate(date: Date): string {
   return `${month} ${day} ${hours}:${mins}`;
 }
 
+/** Time of day only - rows inside a session get their date from the session header. */
+function formatTime(date: Date): string {
+  const hours = date.getHours().toString().padStart(2, "0");
+  const mins = date.getMinutes().toString().padStart(2, "0");
+  return `${hours}:${mins}`;
+}
+
+/**
+ * What every game in a session has in common. Shown once in the session
+ * header and left out of each (compact) row. A null field varies within
+ * the session, so rows show it.
+ */
+interface SessionContext {
+  stageId: number | null;
+  matchup: { yourChar: number; oppChar: number } | null;
+  opponentName: string | null;
+}
+
+function computeSessionContext(
+  games: readonly GameSummary[],
+  identity: Identity,
+): SessionContext {
+  const first = games[0];
+  const stageId =
+    first && games.every((g) => g.stageId === first.stageId)
+      ? first.stageId
+      : null;
+
+  const sides = games.map((g) => {
+    if (g.ports.length !== 2) return null;
+    const yourPort = resolvePerspectivePort(g, identity);
+    if (yourPort === null) return null;
+    const oppPort = resolveOpponentPort(g, yourPort);
+    const you = g.ports.find((p) => p.port === yourPort);
+    const opp = g.ports.find((p) => p.port === oppPort);
+    if (!you || !opp) return null;
+    return {
+      yourChar: you.characterId,
+      oppChar: opp.characterId,
+      oppName: opp.playerName || `P${opp.port + 1}`,
+    };
+  });
+
+  const s0 = sides[0];
+  if (!s0 || sides.some((s) => s === null)) {
+    return { stageId, matchup: null, opponentName: null };
+  }
+  const resolved = sides as NonNullable<(typeof sides)[number]>[];
+  const sameMatchup = resolved.every(
+    (s) => s.yourChar === s0.yourChar && s.oppChar === s0.oppChar,
+  );
+  const sameOpponent = resolved.every((s) => s.oppName === s0.oppName);
+  return {
+    stageId,
+    matchup: sameMatchup
+      ? { yourChar: s0.yourChar, oppChar: s0.oppChar }
+      : null,
+    opponentName: sameOpponent ? s0.oppName : null,
+  };
+}
+
+/** A game from a lobby you were in, but that you sat out (e.g. two others played while you watched). */
+function isWatchedGame(summary: GameSummary, identity: Identity): boolean {
+  if (identity.aliases.size === 0) return false;
+  if (summary.ports.some((p) => matchesAlias(p.playerName, identity))) {
+    return false;
+  }
+  return (summary.lobbyNames ?? []).some((n) => matchesAlias(n, identity));
+}
+
 export class GameList {
   private container: HTMLElement;
   private sortOrder: "newest" | "oldest" = "newest";
   private groupBySession = true;
-  private collapsedSessionIds = new Set<string>();
+  /**
+   * Sessions the user expanded (true) or collapsed (false) this page load.
+   * Any other session follows the default: only the most recent is open.
+   */
+  private sessionExpandedOverrides = new Map<string, boolean>();
 
   private onSortChanged: (sort: "newest" | "oldest") => void;
   private onSelectGame: (summary: GameSummary) => void;
@@ -87,9 +162,18 @@ export class GameList {
     if (sorted.length === 0) {
       rowsHtml = `<div class="game-list-empty">${escapeHtml(tr.noGamesMatched)}</div>`;
     } else if (this.groupBySession) {
+      const mostRecentId = sessions.reduce<SessionGroup | null>(
+        (latest, s) => (!latest || s.startTime > latest.startTime ? s : latest),
+        null,
+      )?.id;
       rowsHtml = sessions
         .map((session) =>
-          this.renderSessionGroup(session, identity, summaries.length === 1),
+          this.renderSessionGroup(
+            session,
+            identity,
+            summaries.length === 1,
+            session.id === mostRecentId,
+          ),
         )
         .join("");
     } else {
@@ -158,15 +242,10 @@ export class GameList {
         const sessionId = groupEl.dataset.sessionId;
         if (!sessionId) return;
 
-        if (this.collapsedSessionIds.has(sessionId)) {
-          this.collapsedSessionIds.delete(sessionId);
-          groupEl.classList.remove("collapsed");
-          header.setAttribute("aria-expanded", "true");
-        } else {
-          this.collapsedSessionIds.add(sessionId);
-          groupEl.classList.add("collapsed");
-          header.setAttribute("aria-expanded", "false");
-        }
+        const expand = groupEl.classList.contains("collapsed");
+        this.sessionExpandedOverrides.set(sessionId, expand);
+        groupEl.classList.toggle("collapsed", !expand);
+        header.setAttribute("aria-expanded", String(expand));
       });
     });
 
@@ -221,9 +300,13 @@ export class GameList {
     session: SessionGroup,
     identity: Identity,
     isSingleGame: boolean = false,
+    isMostRecent: boolean = false,
   ): string {
     const tr = t();
-    const isCollapsed = this.collapsedSessionIds.has(session.id);
+    const isCollapsed = !(
+      this.sessionExpandedOverrides.get(session.id) ?? isMostRecent
+    );
+    const context = computeSessionContext(session.games, identity);
     const dateStr = formatDate(session.startTime);
     const duration = formatDuration(session.totalDurationFrames);
 
@@ -308,6 +391,7 @@ export class GameList {
               identity,
               isSingleGame,
               tr.twelveCbMatchIndex(gIdx + 1, battleGames.length),
+              context,
             ),
           )
           .join("");
@@ -336,7 +420,9 @@ export class GameList {
       const standaloneGames = session.games.filter((g) => !cbGameIds.has(g.id));
       if (standaloneGames.length > 0) {
         const standaloneRowsHtml = standaloneGames
-          .map((g) => this.renderGameRow(g, identity, isSingleGame))
+          .map((g) =>
+            this.renderGameRow(g, identity, isSingleGame, "", context),
+          )
           .join("");
         sectionParts.push(standaloneRowsHtml);
       }
@@ -344,7 +430,7 @@ export class GameList {
       bodyHtml = sectionParts.join("");
     } else {
       bodyHtml = session.games
-        .map((g) => this.renderGameRow(g, identity, isSingleGame))
+        .map((g) => this.renderGameRow(g, identity, isSingleGame, "", context))
         .join("");
     }
 
@@ -358,6 +444,16 @@ export class GameList {
             </div>
             <span class="meta-dot">·</span>
             <span class="session-date">${escapeHtml(dateStr)}</span>
+            ${
+              context.matchup
+                ? `<span class="meta-dot">·</span><span class="session-matchup">${characterIconHtml(context.matchup.yourChar)}<span class="vs-label">vs</span>${characterIconHtml(context.matchup.oppChar)}</span>`
+                : ""
+            }
+            ${
+              context.stageId !== null
+                ? `<span class="meta-dot">·</span><span class="session-stage">${escapeHtml(stageName(context.stageId))}</span>`
+                : ""
+            }
           </div>
           <div class="session-header-right">
             <span class="session-stat-pill">${escapeHtml(tr.sessionGamesCount(session.games.length))}</span>
@@ -386,6 +482,8 @@ export class GameList {
     identity: Identity,
     isSingleGame: boolean = false,
     extraBadge: string = "",
+    /** Set when rendered inside a session: renders the compact one-line row. */
+    context: SessionContext | null = null,
   ): string {
     const tr = t();
     const is2Player = summary.ports.length === 2;
@@ -425,6 +523,44 @@ export class GameList {
 
     const yourPort = resolvePerspectivePort(summary, identity);
     const isAmbiguous = yourPort === null;
+
+    if (isAmbiguous && isWatchedGame(summary, identity)) {
+      // You sat this one out: show who played, dimmed, with no "which
+      // player are you?" chooser. Not counted in your stats (aggregate.ts
+      // already skips games you didn't play).
+      const [p0, p1] = summary.ports as [
+        (typeof summary.ports)[number],
+        (typeof summary.ports)[number],
+      ];
+      const entry = (p: typeof p0) =>
+        `<span class="player-entry"><strong class="player-name">${escapeHtml(p.playerName || `P${p.port + 1}`)}</strong> <span class="char-label">${characterIconHtml(p.characterId)}</span></span>`;
+      return `
+        <div class="game-row watched ${context ? "compact" : ""} ${pulseClass}" data-id="${summary.id}">
+          <div class="game-row-header">
+            <div class="game-row-meta">
+              <span class="game-date">${escapeHtml(context ? formatTime(summary.recordedAt) : dateStr)}</span>
+              <span class="meta-dot">·</span>
+              <span class="game-duration">${duration}</span>
+              ${!context || context.stageId === null ? `<span class="meta-dot">·</span><span class="game-stage">${escapeHtml(stage)}</span>` : ""}
+              ${extraBadge ? `<span class="meta-dot">·</span>${extraBadge}` : ""}
+              ${videoBadge ? `<span class="meta-dot">·</span>${videoBadge}` : ""}
+            </div>
+            <div class="game-row-main">
+              <div class="game-row-players">
+                ${entry(p0)}
+                <span class="vs-label">vs</span>
+                ${entry(p1)}
+              </div>
+              <span class="watched-badge" title="${escapeHtml(tr.gameWatchedTooltip)}">${escapeHtml(tr.gameWatched)}</span>
+            </div>
+            <div class="game-row-actions">
+              <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
+              <span class="drill-in-arrow">›</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
     if (isAmbiguous) {
       const port0 = summary.ports[0]!;
@@ -537,6 +673,77 @@ export class GameList {
     const unevenTag = summary.isUnevenStockStart
       ? `<span class="uneven-stocks-badge" title="${escapeHtml(tr.unevenStocksTooltip(yourP.startStocks ?? 4, oppP.startStocks ?? 4))}">${escapeHtml(tr.unevenStocksBadge)}</span>`
       : "";
+
+    if (context) {
+      // Compact session row: one line of time/length, result and stat
+      // chips. Stage, matchup and opponent appear only if they vary within
+      // the session (otherwise the session header shows them once).
+      const winnerClass = (won: boolean, lost: boolean) =>
+        won ? "winner" : lost ? "loser" : "";
+      const showOpponent = context.opponentName === null;
+      let playersHtml = "";
+      if (context.matchup === null) {
+        playersHtml = `
+          <div class="game-row-players">
+            <span class="player-entry ${winnerClass(yourWon, yourLost)}">
+              <strong class="char-name">${characterIconHtml(yourP.characterId)}</strong>
+            </span>
+            <span class="vs-label">vs</span>
+            <span class="player-entry ${winnerClass(oppWon, oppLost)}">
+              ${showOpponent ? `<strong class="player-name">${escapeHtml(oppName)}</strong>` : ""}
+              <span class="char-label">${characterIconHtml(oppP.characterId)}</span>
+            </span>
+          </div>`;
+      } else if (showOpponent) {
+        playersHtml = `
+          <div class="game-row-players">
+            <span class="player-entry ${winnerClass(oppWon, oppLost)}">
+              <strong class="player-name">${escapeHtml(oppName)}</strong>
+            </span>
+          </div>`;
+      }
+
+      const resultHtml =
+        yourWon || yourLost
+          ? `<span class="game-result ${yourWon ? "result-win" : "result-loss"}" title="${escapeHtml(tr.finalStocksDetail(winnerStocks))}">${escapeHtml(yourWon ? tr.gameResultWin(winnerStocks) : tr.gameResultLoss(winnerStocks))}</span>`
+          : "";
+
+      return `
+      <div class="game-row compact ${pulseClass} ${yourWon ? "row-won" : yourLost ? "row-lost" : ""}" data-id="${summary.id}">
+        <div class="game-row-header">
+          <div class="game-row-meta">
+            <span class="game-date">${escapeHtml(formatTime(summary.recordedAt))}</span>
+            <span class="meta-dot">·</span>
+            <span class="game-duration">${duration}</span>
+            ${context.stageId === null ? `<span class="meta-dot">·</span><span class="game-stage">${escapeHtml(stage)}</span>` : ""}
+            ${extraBadge ? `<span class="meta-dot">·</span>${extraBadge}` : ""}
+            ${videoBadge ? `<span class="meta-dot">·</span>${videoBadge}` : ""}
+            ${unevenTag ? `<span class="meta-dot">·</span>${unevenTag}` : ""}
+          </div>
+          <div class="game-row-main">
+            ${playersHtml}
+            ${resultHtml}
+            ${statChips.length > 0 ? `<div class="game-stat-chips">${statChips.join("")}</div>` : ""}
+          </div>
+          <div class="game-row-actions">
+            <button class="remove-game-btn" title="${escapeHtml(tr.removeGame)}">✕</button>
+            <span class="drill-in-arrow">›</span>
+          </div>
+        </div>
+        ${
+          comboChips.length > 0
+            ? `
+        <div class="game-row-body">
+          <div class="game-row-combos">
+            <span class="combos-lead-label">Kill Combos:</span>
+            <div class="game-stat-chips">${comboChips.join("")}</div>
+          </div>
+        </div>`
+            : ""
+        }
+      </div>
+    `;
+    }
 
     return `
       <div class="game-row ${pulseClass} ${yourWon ? "row-won" : yourLost ? "row-lost" : ""}" data-id="${summary.id}">

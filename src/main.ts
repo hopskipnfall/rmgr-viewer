@@ -1,7 +1,13 @@
 import { initLanguage, setLanguage, t, type Language } from "./i18n.js";
 import {
+  initTheme,
+  setThemePreference,
+  type ThemePreference,
+} from "./theme.js";
+import {
   navigateToLibrary,
   navigateToMatch,
+  navigateToMatchup,
   navigateToSearch,
   onRoute,
   type Route,
@@ -15,17 +21,34 @@ import {
 import {
   deserializeGameSummary,
   type GameSummary,
-  type SerializedGameSummary,
+  type DemoSummariesFile,
 } from "./data/gameSummary.js";
 import { DEMO_REPLAY_FILENAMES } from "./data/demoReplayFiles.js";
-import { importReplayFiles } from "./data/importer.js";
+import { importReplayFiles, type ImportProgress } from "./data/importer.js";
+import { clearLocalData } from "./data/clearLocalData.js";
+import {
+  MissingFileCancelledError,
+  promptForMissingFile,
+} from "./library/missingFilePrompt.js";
+import {
+  importIntoLibrary,
+  loadPersistedLibrary,
+  setManualPerspective,
+} from "./data/libraryPersistence.js";
+import {
+  openLibraryStore,
+  type LibraryStore,
+  type StoredGame,
+} from "./data/libraryStore.js";
 import { MatchViewController } from "./match/matchView.js";
 import { LibraryViewController } from "./library/libraryView.js";
+import { MatchupViewController } from "./matchup/matchupView.js";
 import { CharacterPreviewController } from "./preview/characterPreview.js";
 import {
   createDefaultIdentity,
   matchesAlias,
   resolvePerspectivePort,
+  saveIdentity,
 } from "./data/identity.js";
 import { computeOverallBaseline, type DerivedRates } from "./data/aggregate.js";
 import { groupGamesIntoSessions, type SessionGroup } from "./data/session.js";
@@ -34,6 +57,7 @@ import { SearchViewController } from "./search/searchView.js";
 import {
   hasVideoLink,
   loadVideoLink,
+  migrateVideoLink,
   propagateVideoLinkToSession,
   saveVideoLink,
   type VideoLinkData,
@@ -49,6 +73,7 @@ const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
 const previewViewEl = document.getElementById("previewView") as HTMLDivElement;
 const matchViewEl = document.getElementById("matchView") as HTMLDivElement;
 const searchViewEl = document.getElementById("searchView") as HTMLDivElement;
+const matchupViewEl = document.getElementById("matchupView") as HTMLDivElement;
 const matchFooterEl = document.getElementById("matchFooter") as HTMLElement;
 const modalContainerEl = document.getElementById(
   "modalContainer",
@@ -65,6 +90,16 @@ const twelveCbNextMatchBtn = document.getElementById(
 const importContainer = document.getElementById(
   "importContainer",
 ) as HTMLDivElement;
+const staleBannerEl = document.getElementById("staleBanner") as HTMLDivElement;
+const staleBannerText = document.getElementById(
+  "staleBannerText",
+) as HTMLSpanElement;
+const staleBannerBtn = document.getElementById(
+  "staleBannerBtn",
+) as HTMLButtonElement;
+const aboutClearDataBtn = document.getElementById(
+  "aboutClearDataBtn",
+) as HTMLButtonElement;
 const importBtn = document.getElementById("importBtn") as HTMLButtonElement;
 const importDropdownMenu = document.getElementById(
   "importDropdownMenu",
@@ -98,7 +133,8 @@ const appLoadingProgressBar = document.getElementById(
 const appLoadingText = document.getElementById(
   "appLoadingText",
 ) as HTMLDivElement;
-const langToggleEl = document.getElementById("langToggle") as HTMLDivElement;
+const themeSelect = document.getElementById("themeSelect") as HTMLSelectElement;
+const langSelect = document.getElementById("langSelect") as HTMLSelectElement;
 const appTitleBtn = document.getElementById("appTitleBtn") as HTMLButtonElement;
 const aboutModal = document.getElementById("aboutModal") as HTMLDivElement;
 const aboutModalTitle = document.getElementById(
@@ -187,6 +223,7 @@ let matchController: MatchViewController;
 let libraryController: LibraryViewController;
 let previewController: CharacterPreviewController;
 let searchController: SearchViewController;
+let matchupController: MatchupViewController;
 
 const DEMO_REPLAY_URLS = DEMO_REPLAY_FILENAMES.map(
   (filename) => `${import.meta.env.BASE_URL}replays/${filename}`,
@@ -207,6 +244,8 @@ function updateHeaderTranslations(): void {
   importFilesBtn.textContent = tr.importFiles;
   importFolderBtn.textContent = tr.importFolder;
   backToLibraryBtn.textContent = tr.backToLibrary;
+  renderStaleBanner();
+  aboutClearDataBtn.textContent = tr.clearLocalData;
   // About modal labels
   aboutModalTitle.textContent = tr.aboutTitle;
   aboutModalDesc.textContent = tr.aboutDescription;
@@ -230,18 +269,83 @@ function updateHeaderTranslations(): void {
   shortcutsHelp.textContent = tr.shortcutsHelp;
   shortcutsClose.textContent = tr.shortcutsClose;
   shortcutsModalFooterCloseBtn.textContent = tr.close;
+
+  // Update theme select options and accessibility label
+  if (themeSelect) {
+    themeSelect.setAttribute("aria-label", tr.themeSelectLabel);
+    const systemOpt = themeSelect.querySelector<HTMLOptionElement>(
+      'option[value="system"]',
+    );
+    if (systemOpt) systemOpt.textContent = `💻 ${tr.themeSystem}`;
+    const lightOpt = themeSelect.querySelector<HTMLOptionElement>(
+      'option[value="light"]',
+    );
+    if (lightOpt) lightOpt.textContent = `☀️ ${tr.themeLight}`;
+    const darkOpt = themeSelect.querySelector<HTMLOptionElement>(
+      'option[value="dark"]',
+    );
+    if (darkOpt) darkOpt.textContent = `🌙 ${tr.themeDark}`;
+  }
 }
 
 function applyLanguage(lang: Language): void {
   setLanguage(lang);
   updateHeaderTranslations();
-  for (const btn of langToggleEl.querySelectorAll<HTMLButtonElement>(
-    ".lang-btn",
-  )) {
-    btn.classList.toggle("active", btn.dataset.lang === lang);
+  if (langSelect.value !== lang) {
+    langSelect.value = lang;
   }
   libraryController?.updateTranslations();
   matchController?.updateStaticTranslations();
+  rerenderMatchupIfActive();
+}
+
+function rerenderMatchupIfActive(): void {
+  if (!currentMatchupRoute) return;
+  matchupController.render(
+    currentMatchupRoute.myChar,
+    currentMatchupRoute.oppChar,
+    libraryController.getSummaries(),
+    libraryController.getIdentity(),
+  );
+}
+
+/** IndexedDB-backed cache of every imported game's summary. Null when IndexedDB is unavailable. */
+let libraryStore: LibraryStore | null = null;
+/** Cached games from an older ANALYSIS_VERSION - kept out of the library until re-imported. */
+let staleEntries: StoredGame[] = [];
+
+/** Notified after every import completes (see promptForMissingFile). */
+const importFinishedListeners = new Set<() => void>();
+
+function renderStaleBanner(): void {
+  const count = staleEntries.length;
+  staleBannerEl.hidden = count === 0;
+  if (count === 0) return;
+  const tr = t();
+  staleBannerText.textContent = tr.staleBanner(count);
+  staleBannerBtn.textContent = tr.reimportFolder;
+}
+
+/**
+ * Adds freshly imported games to the library. A game already listed (e.g.
+ * loaded from the cache after a refresh) is updated in place instead - it
+ * gets its File for this session, plus any recomputed stats.
+ */
+function attachImportedSummaries(imported: GameSummary[]): void {
+  const added: GameSummary[] = [];
+  for (const summary of imported) {
+    const existing = libraryController.getSummaryById(summary.id);
+    if (existing && !existing.isBundledSample) {
+      Object.assign(existing, summary);
+    } else {
+      added.push(summary);
+    }
+  }
+  if (added.length > 0) {
+    libraryController.addSummaries(added);
+  } else {
+    libraryController.render();
+  }
 }
 
 async function handleImport(files: FileList | File[]): Promise<void> {
@@ -251,29 +355,62 @@ async function handleImport(files: FileList | File[]): Promise<void> {
   importProgressWrap.hidden = false;
   const tr = t();
 
+  const onProgress = (progress: ImportProgress): void => {
+    const pct =
+      progress.total > 0
+        ? Math.round((progress.loaded / progress.total) * 100)
+        : 0;
+    importProgressBar.style.setProperty("--progress-pct", `${pct}%`);
+    importProgressText.textContent = tr.importingProgress(
+      progress.loaded,
+      progress.total,
+    );
+  };
+
   try {
-    const result = await importReplayFiles(files, (progress) => {
-      const pct =
-        progress.total > 0
-          ? Math.round((progress.loaded / progress.total) * 100)
-          : 0;
-      importProgressBar.style.setProperty("--progress-pct", `${pct}%`);
-      importProgressText.textContent = tr.importingProgress(
-        progress.loaded,
-        progress.total,
+    let summaries: GameSummary[];
+    let errorCount: number;
+    let duplicateCount = 0;
+    if (libraryStore) {
+      const result = await importIntoLibrary(
+        libraryStore,
+        [...files],
+        onProgress,
       );
-    });
-
-    if (result.summaries.length > 0) {
-      libraryController.addSummaries(result.summaries);
+      for (const { id, legacyId } of result.newIds) {
+        migrateVideoLink(legacyId, id);
+      }
+      staleEntries = result.staleEntries;
+      summaries = result.summaries;
+      errorCount = result.errors.length;
+      duplicateCount = result.duplicateCount;
+    } else {
+      // No IndexedDB (e.g. a locked-down private window): session-only, as before.
+      const result = await importReplayFiles(files, onProgress);
+      summaries = result.games.map((g) => g.summary);
+      errorCount = result.errors.length;
     }
 
-    if (result.errors.length > 0) {
-      loadStatus.textContent = `Skipped ${result.errors.length} file(s) with errors.`;
+    attachImportedSummaries(summaries);
+    renderStaleBanner();
+
+    const messages: string[] = [];
+    if (errorCount > 0) {
+      messages.push(`Skipped ${errorCount} file(s) with errors.`);
     }
+    if (duplicateCount > 0) {
+      messages.push(tr.importDuplicatesSkipped(duplicateCount));
+    }
+    loadStatus.textContent = messages.join(" ");
   } catch (err) {
     loadStatus.textContent = `Import failed: ${(err as Error).message}`;
   } finally {
+    for (const listener of [...importFinishedListeners]) listener();
+    // A search only covers games loaded this session - refresh it so the
+    // newly imported games are included.
+    if (!searchViewEl.hidden) {
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
     setTimeout(() => {
       importProgressWrap.hidden = true;
     }, 1500);
@@ -281,6 +418,7 @@ async function handleImport(files: FileList | File[]): Promise<void> {
 }
 
 let currentMatchSummary: GameSummary | null = null;
+let currentMatchupRoute: { myChar: number; oppChar: number } | null = null;
 
 function computeMatchupBaselineForPort(
   summary: GameSummary,
@@ -321,7 +459,22 @@ async function loadReplayForSummary(
   } else if (summary.url) {
     return loadReplayFromUrl(summary.url);
   }
-  return loadReplayFromUrl(DEMO_REPLAY_URLS[0]!);
+  // Loaded from the persistent cache, but its file isn't imported this session.
+  // On a refresh of #/match/<id> this runs inside the first route, while the
+  // app loading screen is still up - drop it, or it would cover the prompt.
+  appLoadingScreen.hidden = true;
+  const loaded = await promptForMissingFile({
+    modalContainer: modalContainerEl,
+    summary,
+    pickFile: () => filePicker.click(),
+    pickFolder: () => folderPicker.click(),
+    onImportFinished: (listener) => {
+      importFinishedListeners.add(listener);
+      return () => importFinishedListeners.delete(listener);
+    },
+  });
+  if (!loaded || !summary.fileRef) throw new MissingFileCancelledError();
+  return loadReplayFromFile(summary.fileRef);
 }
 
 /** A playlist queued by e.g. the search view's "play this clip" action, consumed once handleRouteChange() finishes loading its starting clip's game. */
@@ -359,6 +512,11 @@ function handleShowFailedEdgeGuards(session: SessionGroup): void {
       firstGame.ports.find((p) => p.port === yourPort)?.playerName ?? null;
   }
   navigateToSearch({
+    type: "edgeGuards",
+    victimName: null,
+    minHits: null,
+    killed: null,
+    allowGaps: false,
     result: "failure",
     sessionId: session.id,
     playerName,
@@ -384,6 +542,7 @@ async function handleRouteChange(route: Route): Promise<void> {
   const myRouteGeneration = ++routeGeneration;
   if (route.view === "library") {
     currentMatchSummary = null;
+    currentMatchupRoute = null;
     // Show Library View
     matchController.deactivate();
     previewController?.deactivate();
@@ -391,6 +550,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchFooterEl.hidden = true;
     previewViewEl.hidden = true;
     searchViewEl.hidden = true;
+    matchupViewEl.hidden = true;
     backToLibraryBtn.hidden = true;
     importContainer.hidden = false;
 
@@ -398,18 +558,21 @@ async function handleRouteChange(route: Route): Promise<void> {
     libraryController.render();
   } else if (route.view === "preview") {
     currentMatchSummary = null;
+    currentMatchupRoute = null;
     // Show Character Preview View
     matchController.deactivate();
     matchViewEl.hidden = true;
     matchFooterEl.hidden = true;
     libraryViewEl.hidden = true;
     searchViewEl.hidden = true;
+    matchupViewEl.hidden = true;
     backToLibraryBtn.hidden = false;
     importContainer.hidden = true;
 
     previewController.activate();
   } else if (route.view === "search") {
     currentMatchSummary = null;
+    currentMatchupRoute = null;
     // Show Search View
     matchController.deactivate();
     previewController?.deactivate();
@@ -417,6 +580,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchFooterEl.hidden = true;
     previewViewEl.hidden = true;
     libraryViewEl.hidden = true;
+    matchupViewEl.hidden = true;
     backToLibraryBtn.hidden = false;
     importContainer.hidden = true;
 
@@ -426,6 +590,11 @@ async function handleRouteChange(route: Route): Promise<void> {
       libraryController.getIdentity(),
     );
     searchController.setCriteria({
+      type: route.type,
+      victimName: route.victimName,
+      minHits: route.minHits,
+      killed: route.killed,
+      allowGaps: route.allowGaps,
       result: route.result,
       sessionId: route.sessionId,
       playerName: route.playerName,
@@ -436,6 +605,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     });
   } else if (route.view === "match") {
     // Show Match View
+    currentMatchupRoute = null;
     const summary = libraryController.getSummaryById(route.id);
     if (!summary) {
       // Game not found (e.g. reload or invalid ID) — gracefully fallback to library (§6.1)
@@ -448,6 +618,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     previewViewEl.hidden = true;
     libraryViewEl.hidden = true;
     searchViewEl.hidden = true;
+    matchupViewEl.hidden = true;
     matchViewEl.hidden = false;
     matchFooterEl.hidden = false;
     backToLibraryBtn.hidden = false;
@@ -519,8 +690,34 @@ async function handleRouteChange(route: Route): Promise<void> {
         pendingPlaylistClips = null;
       }
     } catch (err) {
+      if (err instanceof MissingFileCancelledError) {
+        loadStatus.textContent = "";
+        navigateToLibrary();
+        return;
+      }
       loadStatus.textContent = `Failed to load match: ${(err as Error).message}`;
     }
+  } else if (route.view === "matchup") {
+    currentMatchSummary = null;
+    currentMatchupRoute = { myChar: route.myChar, oppChar: route.oppChar };
+    // Show Matchup View
+    matchController.deactivate();
+    previewController?.deactivate();
+    matchViewEl.hidden = true;
+    matchFooterEl.hidden = true;
+    previewViewEl.hidden = true;
+    libraryViewEl.hidden = true;
+    searchViewEl.hidden = true;
+    backToLibraryBtn.hidden = false;
+    importContainer.hidden = true;
+
+    matchupViewEl.hidden = false;
+    matchupController.render(
+      route.myChar,
+      route.oppChar,
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
   }
 }
 
@@ -536,12 +733,46 @@ async function init(): Promise<void> {
       matchController.setMatchupBaseline(baseline);
     }
   });
+  matchController.setOnViewMatchup((myChar, oppChar) => {
+    navigateToMatchup(myChar, oppChar);
+  });
 
   libraryController = new LibraryViewController(
     libraryViewEl,
     modalContainerEl,
     (selectedSummary) => {
       navigateToMatch(selectedSummary.id);
+    },
+    (session) => {
+      handleShowFailedEdgeGuards(session);
+    },
+    (myChar, oppChar) => {
+      navigateToMatchup(myChar, oppChar);
+    },
+  );
+
+  libraryController.setPersistenceHooks({
+    identity: (identity) => saveIdentity(identity),
+    perspective: (id, port) => {
+      if (libraryStore) void setManualPerspective(libraryStore, id, port);
+    },
+    remove: (id) => {
+      if (libraryStore) void libraryStore.delete(id);
+    },
+  });
+
+  matchupController = new MatchupViewController(
+    matchupViewEl,
+    (summary) => {
+      navigateToMatch(summary.id);
+    },
+    (summary, port) => {
+      libraryController.selectPlayerPerspective(summary, port);
+      rerenderMatchupIfActive();
+    },
+    (id) => {
+      libraryController.removeSummary(id);
+      rerenderMatchupIfActive();
     },
     (session) => {
       handleShowFailedEdgeGuards(session);
@@ -556,6 +787,7 @@ async function init(): Promise<void> {
     (clips, startIndex) => {
       playPlaylistClips(clips, startIndex);
     },
+    () => folderPicker.click(),
   );
 
   // 2. Wire Header controls
@@ -606,6 +838,18 @@ async function init(): Promise<void> {
     }
   });
 
+  staleBannerBtn.addEventListener("click", () => {
+    folderPicker.click();
+  });
+
+  aboutClearDataBtn.addEventListener("click", () => {
+    if (!window.confirm(t().clearLocalDataConfirm)) return;
+    void clearLocalData(libraryStore).finally(() => {
+      window.location.hash = "";
+      window.location.reload();
+    });
+  });
+
   // Drag and Drop support
   window.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -618,17 +862,23 @@ async function init(): Promise<void> {
     }
   });
 
-  // Language toggle
-  langToggleEl.addEventListener("click", (e) => {
-    const target = (e.target as HTMLElement).closest<HTMLButtonElement>(
-      ".lang-btn",
-    );
-    if (!target) return;
-    const lang = target.dataset.lang as Language | undefined;
+  // Language select dropdown
+  langSelect.addEventListener("change", () => {
+    const lang = langSelect.value as Language;
     if (lang === "en" || lang === "ja") {
       applyLanguage(lang);
     }
   });
+
+  // Theme select dropdown
+  if (themeSelect) {
+    themeSelect.addEventListener("change", () => {
+      const pref = themeSelect.value as ThemePreference;
+      if (pref === "system" || pref === "light" || pref === "dark") {
+        setThemePreference(pref);
+      }
+    });
+  }
 
   // About modal
   const openAboutModal = (): void => {
@@ -678,9 +928,14 @@ async function init(): Promise<void> {
     }
   });
 
-  // 3. Initialize Language (before the demo-seeding progress text below,
+  // 3. Initialize Theme & Language (before the demo-seeding progress text below,
   // and before the router's initial route can render anything, so both
-  // are localized from the very first frame)
+  // are localized and styled from the very first frame)
+  initTheme((_theme, pref) => {
+    if (themeSelect && themeSelect.value !== pref) {
+      themeSelect.value = pref;
+    }
+  });
   const initialLang = initLanguage();
   applyLanguage(initialLang);
 
@@ -690,35 +945,60 @@ async function init(): Promise<void> {
   // the full Replay is only fetched+parsed later, on demand, when the
   // user actually opens that game (see the "match" branch of
   // handleRouteChange, which already loads lazily from `summary.url`).
+  //
+  // 4a. ...unless this browser already has a saved library (IndexedDB),
+  // in which case that loads instead - no files needed until the user
+  // opens a game (see loadReplayForSummary).
+  let hasPersistedLibrary = false;
+  try {
+    libraryStore = await openLibraryStore();
+    const persisted = await loadPersistedLibrary(libraryStore);
+    staleEntries = persisted.staleEntries;
+    if (persisted.summaries.length > 0 || persisted.staleEntries.length > 0) {
+      hasPersistedLibrary = true;
+      libraryController.addSummaries(persisted.summaries);
+    }
+  } catch (err) {
+    console.warn(
+      "Persistent library unavailable; imports will only last this session:",
+      err,
+    );
+    libraryStore = null;
+  }
+  renderStaleBanner();
+
   const demoSummaries: GameSummary[] = [];
   appLoadingProgressBar.style.setProperty("--progress-pct", "50%");
   appLoadingText.textContent = t().loadingDemoReplays;
-  try {
-    const response = await fetch(DEMO_SUMMARIES_URL);
-    if (!response.ok) {
-      throw new Error(
-        `failed to fetch ${DEMO_SUMMARIES_URL}: ${response.status} ${response.statusText}`,
-      );
-    }
-    const serialized = (await response.json()) as SerializedGameSummary[];
-    for (const s of serialized) {
-      const summary = deserializeGameSummary(s);
-      const url = DEMO_REPLAY_URLS[DEMO_REPLAY_FILENAMES.indexOf(s.sourceName)];
-      if (!url) {
-        console.warn(
-          "No demo URL found for precomputed summary:",
-          s.sourceName,
+  if (!hasPersistedLibrary) {
+    try {
+      const response = await fetch(DEMO_SUMMARIES_URL);
+      if (!response.ok) {
+        throw new Error(
+          `failed to fetch ${DEMO_SUMMARIES_URL}: ${response.status} ${response.statusText}`,
         );
-        continue;
       }
-      summary.isBundledSample = true;
-      summary.url = url;
-      demoSummaries.push(summary);
+      const file = (await response.json()) as DemoSummariesFile;
+      for (const s of file.games) {
+        const summary = deserializeGameSummary(s);
+        const url =
+          DEMO_REPLAY_URLS[DEMO_REPLAY_FILENAMES.indexOf(s.sourceName)];
+        if (!url) {
+          console.warn(
+            "No demo URL found for precomputed summary:",
+            s.sourceName,
+          );
+          continue;
+        }
+        summary.isBundledSample = true;
+        summary.url = url;
+        demoSummaries.push(summary);
+      }
+    } catch (err) {
+      console.warn("Could not load precomputed demo summaries:", err);
+    } finally {
+      appLoadingProgressBar.style.setProperty("--progress-pct", "100%");
     }
-  } catch (err) {
-    console.warn("Could not load precomputed demo summaries:", err);
-  } finally {
-    appLoadingProgressBar.style.setProperty("--progress-pct", "100%");
   }
 
   if (demoSummaries.length > 0) {

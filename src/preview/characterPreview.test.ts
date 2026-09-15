@@ -116,15 +116,16 @@ describe("Character Preview Character Definitions", () => {
 
     // Bowser (0x34 / value="52")
     expect(htmlOutput).toContain('<option value="52"');
-    expect(htmlOutput).toContain("0x34 - Bowser (クッパ)");
+    // One name, in the UI language - not "Bowser (クッパ)".
+    expect(htmlOutput).toContain("0x34 - Bowser</option>");
 
     // Falco (0x1d / value="29")
     expect(htmlOutput).toContain('<option value="29"');
-    expect(htmlOutput).toContain("0x1d - Falco (ファルコ)");
+    expect(htmlOutput).toContain("0x1d - Falco</option>");
 
     // Ganondorf (0x1e / value="30")
     expect(htmlOutput).toContain('<option value="30"');
-    expect(htmlOutput).toContain("0x1e - Ganondorf (ガノンドロフ)");
+    expect(htmlOutput).toContain("0x1e - Ganondorf</option>");
   });
 
   it("renders the character successfully through StageRenderer during render()", () => {

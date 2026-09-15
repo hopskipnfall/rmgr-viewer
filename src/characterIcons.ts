@@ -77,7 +77,7 @@ export function characterIconUrl(characterId: number): string | undefined {
  * Icon markup for a character, meant to replace a plain text name in
  * compact UI (game list rows, dropdowns, etc.) - an `<img>` (alt/title set
  * to the full name, e.g. "Mario (JP)", for accessibility and hover) plus a
- * visible "(JP)" badge for Japanese-region variants, since the icon alone
+ * visible 🇯🇵 badge for Japanese-region variants, since the icon alone
  * can't otherwise distinguish "Mario" from "Mario (JP)".
  *
  * characterName()'s output is always one of a small fixed set of known
@@ -96,7 +96,7 @@ export function characterIconHtml(
   if (!url) return label;
 
   const jpBadge = isJPOriginal12(characterId)
-    ? `<span class="char-icon-jp-badge">(JP)</span>`
+    ? `<span class="char-icon-jp-badge" title="Japan version">🇯🇵</span>`
     : "";
   return `<img class="${className}" src="${url}" alt="${label}" title="${label}" />${jpBadge}`;
 }

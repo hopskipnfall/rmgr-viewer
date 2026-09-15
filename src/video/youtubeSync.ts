@@ -243,6 +243,19 @@ export function hasVideoLink(replayId: string): boolean {
   }
 }
 
+/**
+ * Moves a video link saved under an old game id to a new one - used once
+ * per game when game ids switched from filename-based to
+ * `gameIdFor(timestamp, frameCount)`. Never overwrites an existing link.
+ */
+export function migrateVideoLink(fromId: string, toId: string): void {
+  if (fromId === toId || hasVideoLink(toId)) return;
+  const link = loadVideoLink(fromId);
+  if (!link) return;
+  saveVideoLink(toId, link);
+  deleteVideoLink(fromId);
+}
+
 export interface SessionGameInfo {
   readonly id: string;
   readonly recordedAt: Date;

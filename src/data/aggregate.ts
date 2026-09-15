@@ -40,6 +40,16 @@ export interface DerivedRates {
   edgeGuardEffectivenessAvg: number | null;
   edgeGuardEffectivenessCount: number;
 
+  /**
+   * Plain edge guard conversion: of the opponent's recovery situations while
+   * this port was edge-guarding, the percentage that ended in a kill (i.e.
+   * the opponent's own recoverySituations/recoverySuccesses counters, read
+   * from the opposing port for the same games).
+   */
+  edgeGuardConversionPct: number | null;
+  edgeGuardConversionKills: number;
+  edgeGuardConversionTotal: number;
+
   ledgeGetupPct: number | null;
   ledgeGetupSuccesses: number;
   ledgeGetupTotal: number;
@@ -203,6 +213,8 @@ export function aggregateFilteredGames(
   let recoverySuccesses = 0;
   let edgeGuardEffectivenessSum = 0;
   let edgeGuardEffectivenessCount = 0;
+  let edgeGuardConversionKills = 0;
+  let edgeGuardConversionTotal = 0;
   let ledgeGetupSituations = 0;
   let ledgeGetupSuccesses = 0;
   let ledgeTrapSituations = 0;
@@ -250,6 +262,12 @@ export function aggregateFilteredGames(
       recoverySuccesses += stats.recoverySuccesses;
       edgeGuardEffectivenessSum += stats.edgeGuardEffectivenessSum;
       edgeGuardEffectivenessCount += stats.edgeGuardEffectivenessCount;
+      const oppStats = summary.statsByPort[oppPort as 0 | 1 | 2 | 3];
+      if (oppStats) {
+        edgeGuardConversionTotal += oppStats.recoverySituations;
+        edgeGuardConversionKills +=
+          oppStats.recoverySituations - oppStats.recoverySuccesses;
+      }
       ledgeGetupSituations += stats.ledgeGetupSituations;
       ledgeGetupSuccesses += stats.ledgeGetupSuccesses;
       ledgeTrapSituations += stats.ledgeTrapSituations;
@@ -299,6 +317,13 @@ export function aggregateFilteredGames(
         ? edgeGuardEffectivenessSum / edgeGuardEffectivenessCount
         : null,
     edgeGuardEffectivenessCount,
+
+    edgeGuardConversionPct: rate(
+      edgeGuardConversionKills,
+      edgeGuardConversionTotal,
+    ),
+    edgeGuardConversionKills,
+    edgeGuardConversionTotal,
 
     ledgeGetupPct: rate(ledgeGetupSuccesses, ledgeGetupSituations),
     ledgeGetupSuccesses,

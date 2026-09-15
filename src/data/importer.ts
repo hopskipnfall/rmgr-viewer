@@ -1,5 +1,6 @@
 import { parseReplay } from "@rmg-k/rmgr";
 import { summarizeReplay, type GameSummary } from "./gameSummary.js";
+import type { FileMeta } from "./importPlanner.js";
 import type { LoadedReplay } from "../replaySource.js";
 
 export interface ImportProgress {
@@ -13,9 +14,40 @@ export interface ImportError {
   error: string;
 }
 
+/** One parsed file: its summary (with `fileRef` set) plus what a persistent cache entry needs. */
+export interface ImportedGame {
+  summary: GameSummary;
+  /** SHA-256 hex of the file's bytes. */
+  contentHash: string;
+  /** `replay.header.version`. */
+  formatVersion: number;
+  recorderSchemaVersion: number;
+  meta: FileMeta;
+}
+
 export interface ImportResult {
-  summaries: GameSummary[];
+  games: ImportedGame[];
   errors: ImportError[];
+}
+
+export function fileMeta(file: File): FileMeta {
+  return {
+    sourcePath: file.webkitRelativePath || file.name,
+    size: file.size,
+    lastModified: file.lastModified,
+  };
+}
+
+export async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  // Replay bytes always come from File.arrayBuffer()/readFileSync, never a
+  // SharedArrayBuffer, which is all SubtleCrypto's BufferSource excludes.
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    bytes as Uint8Array<ArrayBuffer>,
+  );
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 /**
@@ -31,7 +63,7 @@ export async function importReplayFiles(
     f.name.toLowerCase().endsWith(".rmgr"),
   );
 
-  const summaries: GameSummary[] = [];
+  const games: ImportedGame[] = [];
   const errors: ImportError[] = [];
 
   const total = rmgrFiles.length;
@@ -48,16 +80,21 @@ export async function importReplayFiles(
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     try {
-      const buffer = await file.arrayBuffer();
-      const replay = await parseReplay(new Uint8Array(buffer));
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const replay = await parseReplay(bytes);
       const loaded: LoadedReplay = {
         replay,
         sourceName: file.name,
         recordedAt: new Date(replay.header.recordedAtEpochMillis),
       };
 
-      const summary = summarizeReplay(loaded, file);
-      summaries.push(summary);
+      games.push({
+        summary: summarizeReplay(loaded, file),
+        contentHash: await sha256Hex(bytes),
+        formatVersion: replay.header.version,
+        recorderSchemaVersion: replay.header.recorderSchemaVersion,
+        meta: fileMeta(file),
+      });
     } catch (err) {
       errors.push({
         fileName: file.name,
@@ -72,5 +109,5 @@ export async function importReplayFiles(
     currentFileName: "",
   });
 
-  return { summaries, errors };
+  return { games, errors };
 }

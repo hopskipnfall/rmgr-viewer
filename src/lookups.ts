@@ -67,13 +67,21 @@ export {
   type GoodName,
 };
 
+/**
+ * Display name for a character in the current UI language. rmgr-ts names
+ * the Japanese-version characters "Pikachu (JP)" / "ピカチュウ (JP)"; the app
+ * marks them with the 🇯🇵 flag instead, matching characterIconHtml's badge.
+ */
 export function characterName(
   id: number,
   lang?: Language,
   goodName?: string,
 ): string {
   const language = lang ?? getLanguage();
-  return getCharacterName(id, { goodName, lang: language });
+  return getCharacterName(id, { goodName, lang: language }).replace(
+    / \(JP\)$/,
+    " 🇯🇵",
+  );
 }
 
 export function stageName(

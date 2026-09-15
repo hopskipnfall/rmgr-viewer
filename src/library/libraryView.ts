@@ -6,7 +6,6 @@ import type { GameSummary } from "../data/gameSummary.js";
 import {
   type Identity,
   loadIdentity,
-  createDefaultIdentity,
   resolvePerspectivePort,
   resolveOpponentPort,
 } from "../data/identity.js";
@@ -25,6 +24,7 @@ import { detectMainCharacter } from "../data/mainCharacter.js";
 import { IdentityPanel } from "./identityPanel.js";
 import { StatCards } from "./statCards.js";
 import { BreakdownTable } from "./breakdownTable.js";
+import { MatchupPicker, computeMatchupRows } from "./matchupPicker.js";
 import { GameList } from "./gameList.js";
 import { NeutralScorePanel } from "./neutralScorePanel.js";
 import type { SessionGroup } from "../data/session.js";
@@ -88,6 +88,13 @@ function matchesFilters(
   return true;
 }
 
+/** Callbacks the library view uses to persist user choices (identity, perspective overrides, removals). */
+export interface LibraryPersistenceHooks {
+  identity(identity: Identity): void;
+  perspective(gameId: string, port: 0 | 1 | 2 | 3 | null): void;
+  remove(gameId: string): void;
+}
+
 export class LibraryViewController {
   private container: HTMLElement;
   private summaries: GameSummary[] = [];
@@ -102,25 +109,41 @@ export class LibraryViewController {
   private identityPanel: IdentityPanel;
   private statCards: StatCards;
   private breakdownTable: BreakdownTable;
+  private matchupPicker: MatchupPicker;
   private gameList: GameList;
   private neutralScorePanel: NeutralScorePanel;
 
   private mobileSidebarExpanded = false;
   private onSelectGameCallback: (summary: GameSummary) => void;
   private onShowFailedEdgeGuardsCallback: (session: SessionGroup) => void;
+  private onSelectMatchupCallback: (myChar: number, oppChar: number) => void;
 
   /** Effort filter (§3.4): when false, the Neutral Score panel excludes "below"/"unknown" tier opponents. */
   private includeExperimentation = false;
+
+  /** Where user choices get persisted (see main.ts). Unset = nothing is saved. */
+  private persistence: LibraryPersistenceHooks | null = null;
+
+  public setPersistenceHooks(hooks: LibraryPersistenceHooks): void {
+    this.persistence = hooks;
+  }
+
+  /** Demo mode's "George" identity is a stand-in and must never overwrite the user's saved one. */
+  private persistIdentity(): void {
+    if (!this.isDemoMode) this.persistence?.identity(this.identity);
+  }
 
   constructor(
     container: HTMLElement,
     modalContainer: HTMLElement,
     onSelectGame: (summary: GameSummary) => void,
     onShowFailedEdgeGuards: (session: SessionGroup) => void,
+    onSelectMatchup: (myChar: number, oppChar: number) => void,
   ) {
     this.container = container;
     this.onSelectGameCallback = onSelectGame;
     this.onShowFailedEdgeGuardsCallback = onShowFailedEdgeGuards;
+    this.onSelectMatchupCallback = onSelectMatchup;
     this.identity = loadIdentity();
 
     // Create sub-component mount points inside container
@@ -142,10 +165,18 @@ export class LibraryViewController {
       <div id="libraryMain" class="library-main">
         <div id="disclaimerBanner" class="disclaimer-banner"></div>
         <div id="libraryFilterBar" class="library-filter-bar"></div>
-        <div id="overallHeader" class="overall-header"></div>
-        <div id="neutralScoreWrap" class="neutral-score-wrap"></div>
-        <div id="statCardsWrap" class="stat-cards-wrap"></div>
-        <div id="breakdownWrap" class="breakdown-wrap"></div>
+        <!-- Collapsed by default; built once here (sub-components re-render
+             inside), so an opened section stays open across re-renders. -->
+        <details id="overallStatsDetails" class="library-collapsible">
+          <summary id="overallHeader" class="overall-header"></summary>
+          <div id="neutralScoreWrap" class="neutral-score-wrap"></div>
+          <div id="statCardsWrap" class="stat-cards-wrap"></div>
+          <div id="breakdownWrap" class="breakdown-wrap"></div>
+        </details>
+        <details id="matchupPickerDetails" class="library-collapsible">
+          <summary class="breakdown-section-header"><h3 id="matchupPickerTitle"></h3></summary>
+          <div id="matchupPickerWrap" class="breakdown-wrap"></div>
+        </details>
         <div id="gameListWrap" class="game-list-wrap"></div>
       </div>
     `;
@@ -182,6 +213,9 @@ export class LibraryViewController {
     const breakdownWrap = this.container.querySelector(
       "#breakdownWrap",
     ) as HTMLElement;
+    const matchupPickerWrap = this.container.querySelector(
+      "#matchupPickerWrap",
+    ) as HTMLElement;
     const gameListWrap = this.container.querySelector(
       "#gameListWrap",
     ) as HTMLElement;
@@ -196,12 +230,17 @@ export class LibraryViewController {
       () => this.summaries,
       (newIdentity) => {
         this.identity = newIdentity;
+        this.persistIdentity();
         this.render();
       },
     );
 
     this.statCards = new StatCards(statCardsWrap);
     this.breakdownTable = new BreakdownTable(breakdownWrap);
+    this.matchupPicker = new MatchupPicker(
+      matchupPickerWrap,
+      (myChar, oppChar) => this.onSelectMatchupCallback(myChar, oppChar),
+    );
     this.neutralScorePanel = new NeutralScorePanel(neutralScoreWrap);
 
     this.gameList = new GameList(
@@ -249,7 +288,8 @@ export class LibraryViewController {
       this.summaries = this.summaries.filter((s) => !s.isBundledSample);
       if (this.isDemoMode) {
         this.isDemoMode = false;
-        this.identity = createDefaultIdentity("");
+        // Back to the user's own saved identity (empty if they never set one).
+        this.identity = loadIdentity();
         this.identityPanel.setIdentity(this.identity);
       }
     }
@@ -267,6 +307,7 @@ export class LibraryViewController {
 
   public removeSummary(id: string): void {
     this.summaries = this.summaries.filter((s) => s.id !== id);
+    this.persistence?.remove(id);
     this.render();
   }
 
@@ -314,11 +355,16 @@ export class LibraryViewController {
       }
       // Reset any manual overrides that match this name so exact alias match takes over
       for (const s of this.summaries) {
-        if (s.ports.some((p) => p.playerName.trim() === selectedName)) {
+        if (
+          s.manualPerspectivePort != null &&
+          s.ports.some((p) => p.playerName.trim() === selectedName)
+        ) {
           delete s.manualPerspectivePort;
+          this.persistence?.perspective(s.id, null);
         }
       }
       this.identityPanel.setIdentity(this.identity);
+      this.persistIdentity();
     } else {
       // Fallback for unnamed ports: toggle manual override
       if (summary.manualPerspectivePort === port) {
@@ -326,6 +372,10 @@ export class LibraryViewController {
       } else {
         summary.manualPerspectivePort = port;
       }
+      this.persistence?.perspective(
+        summary.id,
+        summary.manualPerspectivePort ?? null,
+      );
     }
     this.render();
   }
@@ -591,14 +641,30 @@ export class LibraryViewController {
     const breakdownWrapEl = this.container.querySelector(
       "#breakdownWrap",
     ) as HTMLElement;
+    const matchupPickerWrapEl = this.container.querySelector(
+      "#matchupPickerWrap",
+    ) as HTMLElement;
     const neutralScoreWrapEl = this.container.querySelector(
       "#neutralScoreWrap",
     ) as HTMLElement;
+
+    const overallStatsDetailsEl = this.container.querySelector<HTMLElement>(
+      "#overallStatsDetails",
+    );
+    const matchupPickerDetailsEl = this.container.querySelector<HTMLElement>(
+      "#matchupPickerDetails",
+    );
+    if (overallStatsDetailsEl)
+      overallStatsDetailsEl.hidden = !hasSufficientGames;
+    if (matchupPickerDetailsEl) {
+      matchupPickerDetailsEl.hidden = !hasSufficientGames;
+    }
 
     if (!hasSufficientGames) {
       if (overallHeaderEl) overallHeaderEl.hidden = true;
       if (statCardsWrapEl) statCardsWrapEl.hidden = true;
       if (breakdownWrapEl) breakdownWrapEl.hidden = true;
+      if (matchupPickerWrapEl) matchupPickerWrapEl.hidden = true;
       if (neutralScoreWrapEl) neutralScoreWrapEl.hidden = true;
     } else {
       if (overallHeaderEl) {
@@ -617,6 +683,7 @@ export class LibraryViewController {
       }
       if (statCardsWrapEl) statCardsWrapEl.hidden = false;
       if (breakdownWrapEl) breakdownWrapEl.hidden = false;
+      if (matchupPickerWrapEl) matchupPickerWrapEl.hidden = false;
       if (neutralScoreWrapEl) neutralScoreWrapEl.hidden = false;
 
       // 5. Stat Cards with comparative deltas when filtered
@@ -627,6 +694,35 @@ export class LibraryViewController {
         filteredResolvedGames,
       );
       this.breakdownTable.render(breakdownRows);
+
+      // 6a. Matchup picker (entry point into the per-matchup view). Uses
+      // allResolvedGames, not the filtered set, so it isn't affected by the
+      // sidebar's opponent/character dropdowns -- it's a standing index of
+      // every matchup the identity has actually played.
+      if (matchupPickerWrapEl) {
+        const matchupRows = computeMatchupRows(
+          allResolvedGames
+            .map(({ summary, yourPort, oppPort }) => {
+              const yourP = summary.ports.find((p) => p.port === yourPort);
+              const oppP = summary.ports.find((p) => p.port === oppPort);
+              return yourP && oppP
+                ? { yourCharId: yourP.characterId, oppCharId: oppP.characterId }
+                : null;
+            })
+            .filter(
+              (x): x is { yourCharId: number; oppCharId: number } => x !== null,
+            ),
+        );
+        this.matchupPicker.render(matchupRows);
+        const matchupTitleEl = this.container.querySelector(
+          "#matchupPickerTitle",
+        );
+        if (matchupTitleEl)
+          matchupTitleEl.textContent = tr.matchupsSectionTitle;
+        if (matchupPickerDetailsEl) {
+          matchupPickerDetailsEl.hidden = matchupRows.length === 0;
+        }
+      }
 
       // 6b. Neutral Score panel (§6) — the driving statistic, symmetric and
       // robust to the sandbagging problem. Defaults to Peer+Above opponents (§3.4).

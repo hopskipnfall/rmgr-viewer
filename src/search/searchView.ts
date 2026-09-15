@@ -4,12 +4,22 @@ import { characterName } from "../lookups.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import type { Identity } from "../data/identity.js";
 import { groupGamesIntoSessions, type SessionGroup } from "../data/session.js";
-import { computeEdgeGuardClips, type PlaylistClip } from "../playlist.js";
+import {
+  computeComboClips,
+  computeEdgeGuardClips,
+  type PlaylistClip,
+} from "../playlist.js";
 import type { LoadedReplay } from "../replaySource.js";
 import { navigateToSearch, type SearchRouteCriteria } from "../router.js";
 import { openStartingAreaModal } from "./startingAreaModal.js";
+import { clipVideoRanges } from "./ffmpegClips.js";
+import { openFfmpegModal } from "./ffmpegModal.js";
+import { loadVideoLink } from "../video/youtubeSync.js";
 
 const JUMP_COUNT_OPTIONS = [1, 2, 3, 4, 5];
+/** Combos search: a combo is at least 3 hits, so that's both the floor and the default. */
+const MIN_HITS_OPTIONS = [3, 4, 5, 6, 7, 8, 9, 10];
+const DEFAULT_MIN_HITS = 3;
 
 function formatDate(date: Date): string {
   const month = date.toLocaleString("en-US", { month: "short" });
@@ -45,6 +55,11 @@ export class SearchViewController {
   private summaries: GameSummary[] = [];
   private identity: Identity | null = null;
   private criteria: SearchRouteCriteria = {
+    type: "edgeGuards",
+    victimName: null,
+    minHits: null,
+    killed: null,
+    allowGaps: false,
     result: null,
     sessionId: null,
     playerName: null,
@@ -58,17 +73,22 @@ export class SearchViewController {
   private searching = false;
   /** Bumped on every new search so a slower, superseded search can tell it's stale and stop touching `this.results`. */
   private searchToken = 0;
+  /** Candidate games skipped by the last search because their replay file isn't loaded this session. */
+  private unloadedCount = 0;
+  private onReimportFolder: () => void;
 
   constructor(
     container: HTMLElement,
     modalContainer: HTMLElement,
     loadReplay: (summary: GameSummary) => Promise<LoadedReplay>,
     onPlayClips: (clips: PlaylistClip[], startIndex: number) => void,
+    onReimportFolder: () => void,
   ) {
     this.container = container;
     this.modalContainer = modalContainer;
     this.loadReplay = loadReplay;
     this.onPlayClips = onPlayClips;
+    this.onReimportFolder = onReimportFolder;
   }
 
   public setData(summaries: GameSummary[], identity: Identity): void {
@@ -126,6 +146,15 @@ export class SearchViewController {
             `<option value="${id}" ${selectedId === id ? "selected" : ""}>${escapeHtml(characterName(id))}</option>`,
         )
         .join("");
+    const playerOptions = (selectedName: string | null) =>
+      playerNames
+        .map(
+          (name) =>
+            `<option value="${escapeHtml(name)}" ${selectedName === name ? "selected" : ""}>${escapeHtml(name)}</option>`,
+        )
+        .join("");
+    const isCombos = this.criteria.type === "combos";
+    const minHits = this.criteria.minHits ?? DEFAULT_MIN_HITS;
 
     this.container.innerHTML = `
       <div class="search-view">
@@ -133,18 +162,23 @@ export class SearchViewController {
         <div class="search-filters">
           <label class="search-filter">
             <span>${escapeHtml(tr.searchTypeLabel)}</span>
-            <select id="searchTypeSelect" disabled>
-              <option>${escapeHtml(tr.searchTypeEdgeGuards)}</option>
+            <select id="searchTypeSelect">
+              <option value="edgeGuards" ${!isCombos ? "selected" : ""}>${escapeHtml(tr.searchTypeEdgeGuards)}</option>
+              <option value="combos" ${isCombos ? "selected" : ""}>${escapeHtml(tr.searchTypeCombos)}</option>
             </select>
           </label>
-          <label class="search-filter">
+          ${
+            isCombos
+              ? ""
+              : `<label class="search-filter">
             <span>${escapeHtml(tr.searchResultLabel)}</span>
             <select id="searchResultSelect">
               <option value="" ${!this.criteria.result ? "selected" : ""}>${escapeHtml(tr.searchResultAny)}</option>
               <option value="failure" ${this.criteria.result === "failure" ? "selected" : ""}>${escapeHtml(tr.searchResultFailure)}</option>
               <option value="success" ${this.criteria.result === "success" ? "selected" : ""}>${escapeHtml(tr.searchResultSuccess)}</option>
             </select>
-          </label>
+          </label>`
+          }
           <label class="search-filter">
             <span>${escapeHtml(tr.searchSessionLabel)}</span>
             <select id="searchSessionSelect">
@@ -158,32 +192,64 @@ export class SearchViewController {
             </select>
           </label>
           <label class="search-filter">
-            <span>${escapeHtml(tr.searchPlayerLabel)}</span>
+            <span>${escapeHtml(isCombos ? tr.searchComboByLabel : tr.searchPlayerLabel)}</span>
             <select id="searchPlayerSelect">
               <option value="" ${!this.criteria.playerName ? "selected" : ""}>${escapeHtml(tr.searchAnyPlayer)}</option>
-              ${playerNames
-                .map(
-                  (name) =>
-                    `<option value="${escapeHtml(name)}" ${this.criteria.playerName === name ? "selected" : ""}>${escapeHtml(name)}</option>`,
-                )
-                .join("")}
+              ${playerOptions(this.criteria.playerName)}
             </select>
           </label>
           <label class="search-filter">
-            <span>${escapeHtml(tr.searchPlayerCharacterLabel)}</span>
+            <span>${escapeHtml(isCombos ? tr.searchComboByCharacterLabel : tr.searchPlayerCharacterLabel)}</span>
             <select id="searchPlayerCharacterSelect">
               <option value="" ${this.criteria.playerCharacterId === null ? "selected" : ""}>${escapeHtml(tr.searchAnyCharacter)}</option>
               ${characterOptions(this.criteria.playerCharacterId)}
             </select>
           </label>
+          ${
+            isCombos
+              ? `<label class="search-filter">
+            <span>${escapeHtml(tr.searchComboOnLabel)}</span>
+            <select id="searchVictimSelect">
+              <option value="" ${!this.criteria.victimName ? "selected" : ""}>${escapeHtml(tr.searchAnyPlayer)}</option>
+              ${playerOptions(this.criteria.victimName)}
+            </select>
+          </label>`
+              : ""
+          }
           <label class="search-filter">
-            <span>${escapeHtml(tr.searchOpponentCharacterLabel)}</span>
+            <span>${escapeHtml(isCombos ? tr.searchComboOnCharacterLabel : tr.searchOpponentCharacterLabel)}</span>
             <select id="searchOpponentCharacterSelect">
               <option value="" ${this.criteria.opponentCharacterId === null ? "selected" : ""}>${escapeHtml(tr.searchAnyCharacter)}</option>
               ${characterOptions(this.criteria.opponentCharacterId)}
             </select>
           </label>
+          ${
+            isCombos
+              ? `<label class="search-filter">
+            <span>${escapeHtml(tr.searchMinHitsLabel)}</span>
+            <select id="searchMinHitsSelect">
+              ${MIN_HITS_OPTIONS.map(
+                (n) =>
+                  `<option value="${n}" ${minHits === n ? "selected" : ""}>${n}+</option>`,
+              ).join("")}
+            </select>
+          </label>
           <label class="search-filter">
+            <span>${escapeHtml(tr.searchKoLabel)}</span>
+            <select id="searchKoSelect">
+              <option value="" ${this.criteria.killed === null ? "selected" : ""}>${escapeHtml(tr.searchResultAny)}</option>
+              <option value="1" ${this.criteria.killed === true ? "selected" : ""}>${escapeHtml(tr.searchKoYes)}</option>
+              <option value="0" ${this.criteria.killed === false ? "selected" : ""}>${escapeHtml(tr.searchKoNo)}</option>
+            </select>
+          </label>
+          <label class="search-filter">
+            <span>${escapeHtml(tr.searchGapsLabel)}</span>
+            <select id="searchGapsSelect">
+              <option value="0" ${!this.criteria.allowGaps ? "selected" : ""}>${escapeHtml(tr.searchGapsTrueOnly)}</option>
+              <option value="1" ${this.criteria.allowGaps ? "selected" : ""}>${escapeHtml(tr.searchGapsAllow)}</option>
+            </select>
+          </label>`
+              : `<label class="search-filter">
             <span>${escapeHtml(tr.searchJumpCountLabel)}</span>
             <select id="searchJumpCountSelect">
               <option value="" ${this.criteria.jumpCount === null ? "selected" : ""}>${escapeHtml(tr.searchAnyJumpCount)}</option>
@@ -198,62 +264,49 @@ export class SearchViewController {
             <button type="button" id="searchStartingAreaBtn" class="btn-secondary">
               ${this.criteria.startingAreaBox ? escapeHtml(tr.startingAreaSet) : escapeHtml(tr.startingAreaFilterBtn)}
             </button>
-          </label>
+          </label>`
+          }
         </div>
         <div id="searchStatus" class="search-status"></div>
         <div id="searchResultsList" class="search-results-list"></div>
       </div>
     `;
 
-    const resultSelect = this.container.querySelector(
-      "#searchResultSelect",
-    ) as HTMLSelectElement;
-    const sessionSelect = this.container.querySelector(
-      "#searchSessionSelect",
-    ) as HTMLSelectElement;
-    const playerSelect = this.container.querySelector(
-      "#searchPlayerSelect",
-    ) as HTMLSelectElement;
-    const playerCharSelect = this.container.querySelector(
-      "#searchPlayerCharacterSelect",
-    ) as HTMLSelectElement;
-    const opponentCharSelect = this.container.querySelector(
-      "#searchOpponentCharacterSelect",
-    ) as HTMLSelectElement;
-    const jumpCountSelect = this.container.querySelector(
-      "#searchJumpCountSelect",
-    ) as HTMLSelectElement;
+    // Only the current search type's filters are rendered; a missing one reads as "any".
+    const value = (id: string): string =>
+      this.container.querySelector<HTMLSelectElement>(`#${id}`)?.value ?? "";
+    const numberOrNull = (id: string): number | null =>
+      value(id) ? Number(value(id)) : null;
 
     // Every filter navigates to a new #/search URL rather than mutating
     // local state - the route change comes back through setCriteria()
     // (main.ts wires onRoute to that), which re-renders and re-searches.
     const onFilterChange = (): void => {
-      const value = resultSelect.value;
+      const result = value("searchResultSelect");
+      const ko = value("searchKoSelect");
       navigateToSearch({
-        result: value === "success" || value === "failure" ? value : null,
-        sessionId: sessionSelect.value || null,
-        playerName: playerSelect.value || null,
-        playerCharacterId: playerCharSelect.value
-          ? Number(playerCharSelect.value)
-          : null,
-        opponentCharacterId: opponentCharSelect.value
-          ? Number(opponentCharSelect.value)
-          : null,
-        jumpCount: jumpCountSelect.value ? Number(jumpCountSelect.value) : null,
+        type: value("searchTypeSelect") === "combos" ? "combos" : "edgeGuards",
+        result: result === "success" || result === "failure" ? result : null,
+        sessionId: value("searchSessionSelect") || null,
+        playerName: value("searchPlayerSelect") || null,
+        playerCharacterId: numberOrNull("searchPlayerCharacterSelect"),
+        opponentCharacterId: numberOrNull("searchOpponentCharacterSelect"),
+        jumpCount: numberOrNull("searchJumpCountSelect"),
         startingAreaBox: this.criteria.startingAreaBox,
+        victimName: value("searchVictimSelect") || null,
+        minHits: numberOrNull("searchMinHitsSelect"),
+        killed: ko === "1" ? true : ko === "0" ? false : null,
+        allowGaps: value("searchGapsSelect") === "1",
       });
     };
-    resultSelect.addEventListener("change", onFilterChange);
-    sessionSelect.addEventListener("change", onFilterChange);
-    playerSelect.addEventListener("change", onFilterChange);
-    playerCharSelect.addEventListener("change", onFilterChange);
-    opponentCharSelect.addEventListener("change", onFilterChange);
-    jumpCountSelect.addEventListener("change", onFilterChange);
+    this.container
+      .querySelectorAll<HTMLSelectElement>(".search-filters select")
+      .forEach((select) => select.addEventListener("change", onFilterChange));
 
-    const startingAreaBtn = this.container.querySelector(
+    const startingAreaBtn = this.container.querySelector<HTMLButtonElement>(
       "#searchStartingAreaBtn",
-    ) as HTMLButtonElement;
-    startingAreaBtn.addEventListener("click", () => {
+    );
+    startingAreaBtn?.addEventListener("click", () => {
       void openStartingAreaModal(
         this.modalContainer,
         this.criteria.startingAreaBox,
@@ -284,6 +337,38 @@ export class SearchViewController {
       this.results.length > 0
         ? tr.searchResultsCount(this.results.length)
         : tr.searchNoResults;
+    // Scoped to one session with a video: offer an ffmpeg command that cuts
+    // these clips out of a local copy of that video and joins them.
+    const session = this.criteria.sessionId
+      ? this.getSessions().find((s) => s.id === this.criteria.sessionId)
+      : undefined;
+    if (session?.videoId && this.results.length > 0) {
+      const { ranges, skipped } = clipVideoRanges(
+        this.results,
+        session.videoId,
+        loadVideoLink,
+      );
+      if (ranges.length > 0) {
+        const videoId = session.videoId;
+        const createBtn = document.createElement("button");
+        createBtn.className = "btn-secondary";
+        createBtn.textContent = tr.searchCopyFfmpeg;
+        createBtn.addEventListener("click", () =>
+          openFfmpegModal(this.modalContainer, { ranges, skipped, videoId }),
+        );
+        statusEl.append(" ", createBtn);
+      }
+    }
+    if (this.unloadedCount > 0) {
+      const note = document.createElement("span");
+      note.className = "search-unloaded-note";
+      note.textContent = tr.searchUnloadedGames(this.unloadedCount);
+      const reimportBtn = document.createElement("button");
+      reimportBtn.className = "btn-secondary";
+      reimportBtn.textContent = tr.reimportFolder;
+      reimportBtn.addEventListener("click", () => this.onReimportFolder());
+      statusEl.append(" ", note, " ", reimportBtn);
+    }
 
     listEl.innerHTML = this.results
       .map((clip, i) => {
@@ -313,34 +398,68 @@ export class SearchViewController {
     this.searching = true;
     this.renderResultsList();
 
-    const games = this.getCandidateGames();
+    // Search reads each game's raw replay, which after a page refresh only
+    // exists for games re-imported this session (the persistent library
+    // caches summaries, not frames). Skip the rest - and say so in
+    // renderResultsList rather than silently searching a subset.
+    const tr = t();
+    const isCombos = this.criteria.type === "combos";
+    // Named players (who did it / who it was done on) must be in the game.
+    const names = [
+      this.criteria.playerName,
+      isCombos ? this.criteria.victimName : null,
+    ].filter((n): n is string => n !== null);
+    const isLoaded = (g: GameSummary) => g.fileRef !== null || !!g.url;
+    const candidates = this.getCandidateGames().filter((g) =>
+      names.every((name) => g.ports.some((p) => p.playerName === name)),
+    );
+    const games = candidates.filter(isLoaded);
+    this.unloadedCount = candidates.length - games.length;
     const results: PlaylistClip[] = [];
     for (const summary of games) {
-      let port: PortIndex | null = null;
-      if (this.criteria.playerName) {
-        const found = summary.ports.find(
-          (p) => p.playerName === this.criteria.playerName,
-        );
-        if (!found) continue; // this game doesn't feature that player at all
-        port = found.port;
-      }
+      const portOf = (name: string | null): PortIndex | null =>
+        name === null
+          ? null
+          : (summary.ports.find((p) => p.playerName === name)?.port ?? null);
+      const port = portOf(this.criteria.playerName);
       try {
         const loaded = await this.loadReplay(summary);
         if (token !== this.searchToken) return; // a newer search superseded this one
         results.push(
-          ...computeEdgeGuardClips(
-            loaded.replay,
-            summary.id,
-            formatDate(summary.recordedAt),
-            {
-              result: this.criteria.result,
-              port,
-              playerCharacterId: this.criteria.playerCharacterId,
-              opponentCharacterId: this.criteria.opponentCharacterId,
-              jumpCount: this.criteria.jumpCount,
-              startingAreaBox: this.criteria.startingAreaBox,
-            },
-          ),
+          ...(isCombos
+            ? computeComboClips(
+                loaded.replay,
+                summary.id,
+                {
+                  attackerPort: port,
+                  victimPort: portOf(this.criteria.victimName),
+                  attackerCharacterId: this.criteria.playerCharacterId,
+                  victimCharacterId: this.criteria.opponentCharacterId,
+                  minHits: this.criteria.minHits ?? DEFAULT_MIN_HITS,
+                  killed: this.criteria.killed,
+                  allowGaps: this.criteria.allowGaps,
+                },
+                (c) =>
+                  tr.comboClipLabel(
+                    c.hitCount,
+                    c.startDamage,
+                    c.endDamage,
+                    c.killed,
+                  ),
+              )
+            : computeEdgeGuardClips(
+                loaded.replay,
+                summary.id,
+                formatDate(summary.recordedAt),
+                {
+                  result: this.criteria.result,
+                  port,
+                  playerCharacterId: this.criteria.playerCharacterId,
+                  opponentCharacterId: this.criteria.opponentCharacterId,
+                  jumpCount: this.criteria.jumpCount,
+                  startingAreaBox: this.criteria.startingAreaBox,
+                },
+              )),
         );
       } catch {
         // Skip a game that fails to load rather than aborting the whole search.
