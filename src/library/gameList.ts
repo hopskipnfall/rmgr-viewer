@@ -97,6 +97,17 @@ function isWatchedGame(summary: GameSummary, identity: Identity): boolean {
   return (summary.lobbyNames ?? []).some((n) => matchesAlias(n, identity));
 }
 
+/**
+ * Games inside a session always read in play order, earliest first, whatever
+ * the list's sort order is - the sort orders the *sessions*. Matches how
+ * games within a 12-character battle are already listed.
+ */
+function chronological(games: readonly GameSummary[]): GameSummary[] {
+  return [...games].sort(
+    (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime(),
+  );
+}
+
 export class GameList {
   private container: HTMLElement;
   private sortOrder: "newest" | "oldest" = "newest";
@@ -249,19 +260,13 @@ export class GameList {
       });
     });
 
-    // Failed-edge-guards playlist buttons, one per session group
-    const failedEdgeGuardsBtns = this.container.querySelectorAll<HTMLElement>(
-      ".session-failed-edgeguards-btn",
-    );
-    failedEdgeGuardsBtns.forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const groupEl = btn.closest<HTMLElement>(".session-group");
-        const sessionId = groupEl?.dataset.sessionId;
-        const session = sessions.find((s) => s.id === sessionId);
-        if (session) this.onShowFailedEdgeGuards(session);
+    // Session-details links: the header row toggles expand/collapse, so the
+    // link must not also toggle it on its way out.
+    this.container
+      .querySelectorAll<HTMLElement>(".session-details-link")
+      .forEach((link) => {
+        link.addEventListener("click", (e) => e.stopPropagation());
       });
-    });
 
     // Attach row click, inline button, and remove button event listeners
     const rows = this.container.querySelectorAll<HTMLElement>(".game-row");
@@ -417,7 +422,9 @@ export class GameList {
       }
 
       // Standalone games not in a 12CB (if any)
-      const standaloneGames = session.games.filter((g) => !cbGameIds.has(g.id));
+      const standaloneGames = chronological(
+        session.games.filter((g) => !cbGameIds.has(g.id)),
+      );
       if (standaloneGames.length > 0) {
         const standaloneRowsHtml = standaloneGames
           .map((g) =>
@@ -429,7 +436,7 @@ export class GameList {
 
       bodyHtml = sectionParts.join("");
     } else {
-      bodyHtml = session.games
+      bodyHtml = chronological(session.games)
         .map((g) => this.renderGameRow(g, identity, isSingleGame, "", context))
         .join("");
     }
@@ -438,7 +445,7 @@ export class GameList {
       <div class="session-group${isCollapsed ? " collapsed" : ""}" data-session-id="${escapeHtml(session.id)}">
         <div class="session-header" role="button" tabindex="0" aria-expanded="${!isCollapsed}">
           <div class="session-header-left">
-            <span class="session-chevron">▾</span>
+            <span class="session-chevron">▼</span>
             <div class="session-title">
               ${escapeHtml(sessionTitle)}
             </div>
@@ -461,13 +468,11 @@ export class GameList {
             ${twelveCbPill}
             <span class="session-duration">⏱ ${duration}</span>
             ${videoBadge}
-            <button
-              type="button"
-              class="session-failed-edgeguards-btn"
-              title="${escapeHtml(tr.showFailedEdgeGuardsTitle)}"
+            <a
+              class="session-details-link"
+              href="#/session/${encodeURIComponent(session.id)}"
+              >${escapeHtml(tr.viewSession)} →</a
             >
-              🛟 ${escapeHtml(tr.showFailedEdgeGuardsBtn)}
-            </button>
           </div>
         </div>
         <div class="session-body">

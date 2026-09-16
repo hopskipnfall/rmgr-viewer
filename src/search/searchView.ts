@@ -13,6 +13,7 @@ import type { LoadedReplay } from "../replaySource.js";
 import { navigateToSearch, type SearchRouteCriteria } from "../router.js";
 import { openStartingAreaModal } from "./startingAreaModal.js";
 import { clipVideoRanges } from "./ffmpegClips.js";
+import { searchCache, searchCacheKey } from "./searchCache.js";
 import { openFfmpegModal } from "./ffmpegModal.js";
 import { loadVideoLink } from "../video/youtubeSync.js";
 
@@ -71,6 +72,8 @@ export class SearchViewController {
 
   private results: PlaylistClip[] = [];
   private searching = false;
+  /** Games searched so far / to search, for the progress bar. */
+  private progress: { done: number; total: number } = { done: 0, total: 0 };
   /** Bumped on every new search so a slower, superseded search can tell it's stale and stop touching `this.results`. */
   private searchToken = 0;
   /** Candidate games skipped by the last search because their replay file isn't loaded this session. */
@@ -329,8 +332,15 @@ export class SearchViewController {
     if (!listEl || !statusEl) return;
 
     if (this.searching) {
-      statusEl.textContent = tr.searchInProgress;
-      listEl.innerHTML = "";
+      const { done, total } = this.progress;
+      statusEl.textContent =
+        total > 0 ? tr.searchProgress(done, total) : tr.searchInProgress;
+      listEl.innerHTML =
+        total > 0
+          ? `<div class="search-progress"><div class="search-progress-bar" style="width:${Math.round(
+              (done / total) * 100,
+            )}%"></div></div>`
+          : "";
       return;
     }
     statusEl.textContent =
@@ -415,7 +425,25 @@ export class SearchViewController {
     );
     const games = candidates.filter(isLoaded);
     this.unloadedCount = candidates.length - games.length;
+
+    // Re-running the same search over the same games (a back-navigation, a
+    // filter toggled and toggled back) shouldn't re-read every replay.
+    const cacheKey = searchCacheKey(
+      this.criteria,
+      games.map((g) => g.id),
+    );
+    const cached = searchCache.get(cacheKey);
+    if (cached) {
+      this.results = [...cached.results];
+      this.unloadedCount = cached.unloadedCount;
+      this.searching = false;
+      this.renderResultsList();
+      return;
+    }
+
     const results: PlaylistClip[] = [];
+    this.progress = { done: 0, total: games.length };
+    this.renderResultsList();
     for (const summary of games) {
       const portOf = (name: string | null): PortIndex | null =>
         name === null
@@ -464,9 +492,12 @@ export class SearchViewController {
       } catch {
         // Skip a game that fails to load rather than aborting the whole search.
       }
+      this.progress = { done: this.progress.done + 1, total: games.length };
+      this.renderResultsList();
     }
 
-    if (token !== this.searchToken) return;
+    if (token !== this.searchToken) return; // superseded: don't cache a partial run
+    searchCache.set(cacheKey, { results, unloadedCount: this.unloadedCount });
     this.results = results;
     this.searching = false;
     this.renderResultsList();

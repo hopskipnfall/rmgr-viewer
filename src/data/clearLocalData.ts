@@ -1,3 +1,4 @@
+import { searchCache } from "../search/searchCache.js";
 import type { LibraryStore } from "./libraryStore.js";
 
 /**
@@ -27,4 +28,7 @@ export async function clearLocalData(
     }
   }
   for (const key of keys) storage.removeItem(key);
+
+  // Cached search results were computed from the library we just wiped.
+  searchCache.clear();
 }

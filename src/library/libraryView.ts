@@ -1,5 +1,5 @@
 import { t } from "../i18n.js";
-import { characterName, CHARACTER_NAMES_JA } from "../lookups.js";
+import { characterName } from "../lookups.js";
 import { CustomDropdown } from "../ui/customDropdown.js";
 import { characterIconUrl } from "../characterIcons.js";
 import type { GameSummary } from "../data/gameSummary.js";
@@ -149,6 +149,24 @@ export class LibraryViewController {
     // Create sub-component mount points inside container
     this.container.innerHTML = `
       <div id="librarySidebar" class="library-sidebar">
+        <div class="library-import-zone">
+          <div class="import-container" id="importContainer">
+            <button id="importBtn" class="btn-primary library-import-btn">+ Import replays</button>
+            <div id="importDropdownMenu" class="dropdown-menu library-import-dropdown" hidden>
+              <button id="importFilesBtn">Select files (.rmgr)</button>
+              <button id="importFolderBtn">Select folder</button>
+            </div>
+          </div>
+          <div id="libImportProgressWrap" class="import-progress-wrap" hidden>
+            <div class="import-progress-bar" id="libImportProgressBar"></div>
+            <span id="libImportProgressText"></span>
+          </div>
+          <span id="libLoadStatus" class="lib-load-status"></span>
+          <div id="libStaleBanner" class="stale-banner" hidden>
+            <span id="libStaleBannerText"></span>
+            <button id="libStaleBannerBtn"></button>
+          </div>
+        </div>
         <button id="mobileSidebarToggle" class="mobile-sidebar-toggle" aria-expanded="false">
           <div class="mobile-toggle-left">
             <span class="mobile-toggle-icon">👤</span>
@@ -383,11 +401,24 @@ export class LibraryViewController {
   public updateTranslations(): void {
     this.identityPanel.render();
     this.render();
+    this.updateImportZoneTranslations();
+  }
+
+  private updateImportZoneTranslations(): void {
+    const tr = t();
+    const importBtn =
+      this.container.querySelector<HTMLButtonElement>("#importBtn");
+    const importFilesBtn =
+      this.container.querySelector<HTMLButtonElement>("#importFilesBtn");
+    const importFolderBtn =
+      this.container.querySelector<HTMLButtonElement>("#importFolderBtn");
+    if (importBtn) importBtn.textContent = `+ ${tr.importReplays}`;
+    if (importFilesBtn) importFilesBtn.textContent = tr.importFiles;
+    if (importFolderBtn) importFolderBtn.textContent = tr.importFolder;
   }
 
   public render(): void {
     const tr = t();
-
     // 0. Disclaimer banner
     const disclaimerBanner = this.container.querySelector(
       "#disclaimerBanner",
@@ -562,8 +593,6 @@ export class LibraryViewController {
           CustomDropdown.fromSelect(myCharSelect, {
             getIconUrl: (val) =>
               val === "all" ? undefined : characterIconUrl(Number(val)),
-            getSublabel: (val) =>
-              val === "all" ? undefined : CHARACTER_NAMES_JA[Number(val)],
             searchable: myChars.length > 5,
             onChange: (val) => {
               this.filters.yourCharacterId =
@@ -590,8 +619,6 @@ export class LibraryViewController {
           CustomDropdown.fromSelect(oppCharSelect, {
             getIconUrl: (val) =>
               val === "all" ? undefined : characterIconUrl(Number(val)),
-            getSublabel: (val) =>
-              val === "all" ? undefined : CHARACTER_NAMES_JA[Number(val)],
             searchable: oppChars.length > 5,
             onChange: (val) => {
               this.filters.oppCharacterId = val === "all" ? "all" : Number(val);

@@ -19,6 +19,7 @@ import {
   pickPreferred,
 } from "./importPlanner.js";
 import type { LibraryStore, StoredGame } from "./libraryStore.js";
+import { searchCache } from "../search/searchCache.js";
 
 /**
  * Glue between the IndexedDB cache (libraryStore.ts), the pure import
@@ -162,6 +163,9 @@ export async function importIntoLibrary(
   const staleEntries = existing.filter(
     (e) => isStale(e) && !writtenIds.has(e.id),
   );
+
+  // The game set a cached search ran over just changed.
+  searchCache.clear();
 
   return { summaries, staleEntries, errors, duplicateCount, newIds };
 }

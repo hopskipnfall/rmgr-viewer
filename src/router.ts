@@ -26,6 +26,7 @@ export type Route =
   | { view: "library" }
   | { view: "match"; id: string }
   | { view: "preview" }
+  | { view: "session"; id: string }
   | { view: "matchup"; myChar: number; oppChar: number }
   | ({ view: "search" } & SearchRouteCriteria);
 
@@ -55,6 +56,10 @@ export function parseRoute(hash: string): Route {
   }
   if (clean === "preview" || clean.startsWith("preview") || clean === "debug") {
     return { view: "preview" };
+  }
+  if (clean.startsWith("session/")) {
+    const id = decodeURIComponent(clean.slice("session/".length));
+    if (id) return { view: "session", id };
   }
   if (clean.startsWith("matchup/")) {
     const parts = clean.slice("matchup/".length).split("/");
@@ -100,6 +105,10 @@ export function navigateToMatch(id: string): void {
 
 export function navigateToPreview(): void {
   window.location.hash = "#/preview";
+}
+
+export function navigateToSession(id: string): void {
+  window.location.hash = `#/session/${encodeURIComponent(id)}`;
 }
 
 export function navigateToMatchup(myChar: number, oppChar: number): void {

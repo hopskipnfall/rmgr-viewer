@@ -14,6 +14,25 @@ export interface Translations {
   failedToLoad: (name: string, error: string) => string;
   themeToggleDark: string;
   themeToggleLight: string;
+  navLibrary: string;
+  navSearch: string;
+  sessionGameCounter: (index: number, total: number) => string;
+  previousGame: string;
+  nextGame: string;
+  sessionNotFound: string;
+  sessionGames: (count: number) => string;
+  sessionGamesHeading: string;
+  sessionVideos: string;
+  sessionQuickSearches: string;
+  quickSearchFailedEdgeGuards: string;
+  quickSearchCombos: string;
+  quickSearchKillCombos: string;
+  viewSession: string;
+  exportProject: string;
+  importProject: string;
+  exportProjectDone: (games: number) => string;
+  importProjectDone: (imported: number, recomputed: number) => string;
+  importProjectInvalid: string;
   themeSelectLabel: string;
   themeSystem: string;
   themeLight: string;
@@ -296,7 +315,6 @@ export interface Translations {
   aboutDescription: string;
   authorLabel: string;
   authorName: string;
-  twitterLabel: string;
   githubLabel: string;
   tobloSfxLabel: string;
   close: string;
@@ -531,6 +549,7 @@ export interface Translations {
   startingAreaModalSubtitle: string;
   startingAreaModalClear: string;
   searchInProgress: string;
+  searchProgress: (done: number, total: number) => string;
   searchResultsCount: (count: number) => string;
   searchNoResults: string;
   sessionSoloGame: string;
@@ -583,6 +602,28 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     failedToLoad: (name, err) => `Failed to load ${name}: ${err}`,
     themeToggleDark: "Dark mode",
     themeToggleLight: "Light mode",
+    navLibrary: "Library",
+    navSearch: "Search",
+    sessionGameCounter: (index, total) => `Game ${index} of ${total}`,
+    previousGame: "Previous game",
+    nextGame: "Next game",
+    sessionNotFound: "That session isn't in your library.",
+    sessionGames: (count) => (count === 1 ? "1 game" : `${count} games`),
+    sessionGamesHeading: "Games",
+    sessionVideos: "Video",
+    sessionQuickSearches: "Quick searches",
+    quickSearchFailedEdgeGuards: "Failed Edge Guards",
+    quickSearchCombos: "Combos",
+    quickSearchKillCombos: "Kill Combos",
+    viewSession: "Session details",
+    exportProject: "Export project",
+    importProject: "Import project",
+    exportProjectDone: (games) => `Exported ${games} games.`,
+    importProjectDone: (imported, recomputed) =>
+      recomputed > 0
+        ? `Imported ${imported} games; ${recomputed} need re-analysis.`
+        : `Imported ${imported} games.`,
+    importProjectInvalid: "That file isn't an rmgr-viewer project file.",
     themeSelectLabel: "Theme",
     themeSystem: "System",
     themeLight: "Light",
@@ -885,7 +926,6 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       "Real-time visual playback and analytics viewer for Super Smash Bros. 64 (.rmgr) replay files.",
     authorLabel: "Author",
     authorName: "nue",
-    twitterLabel: "Twitter / X",
     githubLabel: "GitHub Repository",
     tobloSfxLabel: "Toblo sfx",
     close: "Close",
@@ -1087,7 +1127,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     searchTypeEdgeGuards: "Edge Guards",
     searchTypeCombos: "Combos",
     searchCopyFfmpeg: "Create video with ffmpeg",
-    ffmpegModalTitle: "Create a highlight video",
+    ffmpegModalTitle: "Create a clip video",
     ffmpegModalExplain: (count) =>
       `Builds a command that cuts these ${count} clip${count === 1 ? "" : "s"} out of this session's video - frame-accurately, using each game's video sync - and joins them into clips.mp4. Run it in a terminal, in the folder with the video.`,
     ffmpegModalUseYtDlp: "Download the video with yt-dlp first",
@@ -1133,6 +1173,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       "Click and drag to draw the area where the recovery starts. Also matches the mirrored area on the other side of the stage.",
     startingAreaModalClear: "Clear",
     searchInProgress: "Searching…",
+    searchProgress: (done, total) => `Searching… ${done} / ${total} games`,
     searchResultsCount: (count: number) =>
       count === 1 ? "1 clip found" : `${count} clips found`,
     searchNoResults: "No clips match these filters.",
@@ -1186,6 +1227,29 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     failedToLoad: (name, err) => `${name} の読み込みに失敗しました: ${err}`,
     themeToggleDark: "ダークモード",
     themeToggleLight: "ライトモード",
+    navLibrary: "ライブラリ",
+    navSearch: "検索",
+    sessionGameCounter: (index, total) => `${total} 試合中 ${index} 試合目`,
+    previousGame: "前の試合",
+    nextGame: "次の試合",
+    sessionNotFound: "そのセッションはライブラリにありません。",
+    sessionGames: (count) => `${count} 試合`,
+    sessionGamesHeading: "試合",
+    sessionVideos: "動画",
+    sessionQuickSearches: "クイック検索",
+    quickSearchFailedEdgeGuards: "失敗した復帰阻止",
+    quickSearchCombos: "コンボ",
+    quickSearchKillCombos: "撃墜コンボ",
+    viewSession: "セッション詳細",
+    exportProject: "プロジェクトを書き出す",
+    importProject: "プロジェクトを読み込む",
+    exportProjectDone: (games) => `${games} 試合を書き出しました。`,
+    importProjectDone: (imported, recomputed) =>
+      recomputed > 0
+        ? `${imported} 試合を読み込みました（${recomputed} 件は再解析が必要）。`
+        : `${imported} 試合を読み込みました。`,
+    importProjectInvalid:
+      "このファイルは rmgr-viewer のプロジェクトファイルではありません。",
     themeSelectLabel: "テーマ",
     themeSystem: "システム",
     themeLight: "ライト",
@@ -1474,7 +1538,6 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       "ニンテンドウオールスター! 大乱闘スマッシュブラザーズ（スマブラ64）の .rmgr リプレイファイル用リアルタイム再生・分析ビューアーです。",
     authorLabel: "作者",
     authorName: "鵺",
-    twitterLabel: "Twitter / X",
     githubLabel: "GitHub リポジトリ",
     tobloSfxLabel: "Toblo sfx",
     close: "閉じる",
@@ -1670,7 +1733,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     searchTypeEdgeGuards: "崖狩り",
     searchTypeCombos: "コンボ",
     searchCopyFfmpeg: "ffmpegで動画を作成",
-    ffmpegModalTitle: "ハイライト動画を作成",
+    ffmpegModalTitle: "クリップ動画を作成",
     ffmpegModalExplain: (count) =>
       `このセッションの動画から${count}件のクリップを（各試合の動画同期を使ってフレーム単位で正確に）切り出し、clips.mp4 に結合するコマンドを作成します。動画のあるフォルダでターミナルから実行してください。`,
     ffmpegModalUseYtDlp: "先に yt-dlp で動画をダウンロードする",
@@ -1716,6 +1779,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       "ドラッグして復帰が始まる範囲を描いてください。反対側も自動的に対象になります。",
     startingAreaModalClear: "クリア",
     searchInProgress: "検索中…",
+    searchProgress: (done, total) => `検索中… ${done} / ${total} 試合`,
     searchResultsCount: (count: number) =>
       `${count} 件のクリップが見つかりました`,
     searchNoResults: "条件に一致するクリップはありません。",

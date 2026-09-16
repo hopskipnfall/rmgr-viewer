@@ -29,6 +29,7 @@ import {
   extractAllQuickAttackPaths,
 } from "../renderer.js";
 import { characterSize } from "../characterSizes.js";
+import { sessionNeighbors } from "../data/sessionNavigation.js";
 import { characterIconUrl } from "../characterIcons.js";
 import { ActionStateId, characterName } from "../lookups.js";
 import {
@@ -151,7 +152,8 @@ export class MatchViewController {
   private stageCanvas: HTMLCanvasElement;
   private stageWrap: HTMLDivElement;
   private playersEl: HTMLDivElement;
-  private loadStatus: HTMLSpanElement;
+  /** Null while the library sidebar (which owns this element) isn't mounted. */
+  private loadStatus: HTMLSpanElement | null;
   private stepBackBtn: HTMLButtonElement;
   private playPauseBtn: HTMLButtonElement;
   private stepForwardBtn: HTMLButtonElement;
@@ -174,6 +176,10 @@ export class MatchViewController {
   private twelveCbPlayersContainerEl: HTMLDivElement;
   private twelveCbPrevMatchBtn: HTMLButtonElement;
   private twelveCbNextMatchBtn: HTMLButtonElement;
+  private sessionNavWidget: HTMLElement | null = null;
+  private sessionPrevGameBtn: HTMLButtonElement | null = null;
+  private sessionNextGameBtn: HTMLButtonElement | null = null;
+  private sessionNavLabel: HTMLAnchorElement | null = null;
   private twelveCbPrevMatchLabel: HTMLSpanElement;
   private twelveCbNextMatchLabel: HTMLSpanElement;
   private twelveCbCollapsed = false;
@@ -375,7 +381,9 @@ export class MatchViewController {
     this.stageCanvas = document.getElementById("stage") as HTMLCanvasElement;
     this.stageWrap = document.getElementById("stageWrap") as HTMLDivElement;
     this.playersEl = document.getElementById("players") as HTMLDivElement;
-    this.loadStatus = document.getElementById("loadStatus") as HTMLSpanElement;
+    this.loadStatus = document.getElementById(
+      "loadStatus",
+    ) as HTMLSpanElement | null;
     this.stepBackBtn = document.getElementById("stepBack") as HTMLButtonElement;
     this.playPauseBtn = document.getElementById(
       "playPause",
@@ -469,6 +477,16 @@ export class MatchViewController {
     this.twelveCbNextMatchBtn = document.getElementById(
       "twelveCbNextMatchBtn",
     ) as HTMLButtonElement;
+    this.sessionNavWidget = document.getElementById("sessionNavWidget");
+    this.sessionPrevGameBtn = document.getElementById(
+      "sessionPrevGameBtn",
+    ) as HTMLButtonElement | null;
+    this.sessionNextGameBtn = document.getElementById(
+      "sessionNextGameBtn",
+    ) as HTMLButtonElement | null;
+    this.sessionNavLabel = document.getElementById(
+      "sessionNavLabel",
+    ) as HTMLAnchorElement | null;
     this.twelveCbPrevMatchLabel = document.getElementById(
       "twelveCbPrevMatchLabel",
     ) as HTMLSpanElement;
@@ -1014,6 +1032,28 @@ export class MatchViewController {
       if (this.currentReplay) {
         this.renderNeutralHeatmapPanel(this.currentReplay);
       }
+    });
+
+    // Re-render the heatmap and stage scenery whenever the theme changes so the
+    // stage/platform outlines and day/night scenery switch immediately.
+    const themeObserver = new MutationObserver(() => {
+      this.stageRenderer.invalidateBackground();
+      if (this.currentReplay) {
+        if (!this.neutralHeatmapSection.hidden) {
+          this.renderNeutralHeatmapPanel(this.currentReplay);
+        }
+        if (this.lastFrame && !(this.playback?.isPlaying ?? false)) {
+          this.renderFrame(
+            this.lastFrame,
+            this.playback?.currentIndex ?? 0,
+            true,
+          );
+        }
+      }
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
     });
 
     this.recoveryCollapseBtn.addEventListener("click", () => {
@@ -1572,6 +1612,8 @@ export class MatchViewController {
 
   public updateStaticTranslations(): void {
     const tr = t();
+    // Rebuilds "Game 3 of 9" and the prev/next titles in the new language.
+    this.renderSessionNav();
     if (!this.matchupLinkWrap.hidden) {
       this.matchupLinkBtn.textContent = tr.matchupViewLinkLabel;
     }
@@ -3900,9 +3942,58 @@ export class MatchViewController {
     }
   }
 
+  /**
+   * Session-order prev/next. Independent of the 12-character-battle buttons:
+   * during a battle both are shown, one stepping within the battle and one
+   * within the whole session.
+   */
+  private renderSessionNav(): void {
+    if (!this.sessionNavWidget) return;
+    const tr = t();
+    const nav =
+      this.currentReplayId && this.identity
+        ? sessionNeighbors(
+            this.currentReplayId,
+            this.sessionSummaries,
+            this.identity,
+          )
+        : null;
+    if (!nav) {
+      this.sessionNavWidget.hidden = true;
+      return;
+    }
+    this.sessionNavWidget.hidden = false;
+    if (this.sessionNavLabel) {
+      this.sessionNavLabel.textContent = tr.sessionGameCounter(
+        nav.index + 1,
+        nav.total,
+      );
+      this.sessionNavLabel.href = `#/session/${encodeURIComponent(nav.sessionId)}`;
+    }
+    if (this.sessionPrevGameBtn) {
+      this.sessionPrevGameBtn.title = tr.previousGame;
+      this.sessionPrevGameBtn.disabled = nav.previousGameId === null;
+      if (nav.previousGameId) {
+        this.sessionPrevGameBtn.dataset.gameId = nav.previousGameId;
+      } else {
+        delete this.sessionPrevGameBtn.dataset.gameId;
+      }
+    }
+    if (this.sessionNextGameBtn) {
+      this.sessionNextGameBtn.title = tr.nextGame;
+      this.sessionNextGameBtn.disabled = nav.nextGameId === null;
+      if (nav.nextGameId) {
+        this.sessionNextGameBtn.dataset.gameId = nav.nextGameId;
+      } else {
+        delete this.sessionNextGameBtn.dataset.gameId;
+      }
+    }
+  }
+
   private render12CbMatchWidget(): void {
     const tr = t();
     const lang = getLanguage();
+    this.renderSessionNav();
     if (this.twelveCbWidgetHeaderTitle) {
       this.twelveCbWidgetHeaderTitle.textContent =
         tr.twelveCharacterBattleTitle;
@@ -4794,7 +4885,7 @@ export class MatchViewController {
     this.renderLogFilterWidget();
     this.renderReplayInfo(loaded);
     this.buildEventLog();
-    this.loadStatus.textContent = "";
+    if (this.loadStatus) this.loadStatus.textContent = "";
 
     const replayId = this.getReplayIdentifier(replay, loaded);
     this.youtubeSync.setReplay(replayId);
