@@ -1,3 +1,4 @@
+import { File as NodeFile } from "node:buffer";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +7,9 @@ import { parseReplay } from "@rmg-k/rmgr";
 import { DEMO_REPLAY_FILENAMES } from "./demoReplayFiles.js";
 import { gameIdFor } from "./gameSummary.js";
 import { fileMeta, importReplayFiles, sha256Hex } from "./importer.js";
+
+// `File` is only a global from Node 20 on, and CI still runs 18.
+const FileCtor = (globalThis.File ?? NodeFile) as unknown as typeof File;
 
 const replaysDir = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -16,7 +20,7 @@ const bytes = new Uint8Array(readFileSync(resolve(replaysDir, name)));
 
 describe("importReplayFiles", () => {
   it("returns each game's summary plus the metadata a cache entry needs", async () => {
-    const file = new File([bytes], name, { lastModified: 1234 });
+    const file = new FileCtor([bytes], name, { lastModified: 1234 });
     const replay = await parseReplay(bytes);
 
     const { games, errors } = await importReplayFiles([file]);
@@ -42,14 +46,14 @@ describe("importReplayFiles", () => {
   });
 
   it("reports a file that fails to parse instead of returning it", async () => {
-    const junk = new File([new Uint8Array([1, 2, 3])], "junk.rmgr");
+    const junk = new FileCtor([new Uint8Array([1, 2, 3])], "junk.rmgr");
     const { games, errors } = await importReplayFiles([junk]);
     expect(games).toEqual([]);
     expect(errors.map((e) => e.fileName)).toEqual(["junk.rmgr"]);
   });
 
   it("ignores files that aren't .rmgr", async () => {
-    const txt = new File(["hello"], "notes.txt");
+    const txt = new FileCtor(["hello"], "notes.txt");
     const { games, errors } = await importReplayFiles([txt]);
     expect(games).toEqual([]);
     expect(errors).toEqual([]);
@@ -58,7 +62,7 @@ describe("importReplayFiles", () => {
 
 describe("fileMeta", () => {
   it("prefers the folder-relative path when the file came from a folder pick", () => {
-    const file = new File([bytes], name, { lastModified: 5 });
+    const file = new FileCtor([bytes], name, { lastModified: 5 });
     Object.defineProperty(file, "webkitRelativePath", {
       value: `nue replays/${name}`,
     });
@@ -66,6 +70,6 @@ describe("fileMeta", () => {
   });
 
   it("falls back to the bare filename", () => {
-    expect(fileMeta(new File([bytes], name)).sourcePath).toBe(name);
+    expect(fileMeta(new FileCtor([bytes], name)).sourcePath).toBe(name);
   });
 });

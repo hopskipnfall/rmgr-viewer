@@ -1,3 +1,4 @@
+import { File as NodeFile } from "node:buffer";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,9 @@ import {
   setManualPerspective,
 } from "./libraryPersistence.js";
 
+// `File` is only a global from Node 20 on, and CI still runs 18.
+const FileCtor = (globalThis.File ?? NodeFile) as unknown as typeof File;
+
 const replaysDir = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../public/replays",
@@ -24,7 +28,8 @@ const BYTES = NAMES.map(
 
 function demoFiles(rename: (name: string) => string = (n) => n): File[] {
   return NAMES.map(
-    (name, i) => new File([BYTES[i]!], rename(name), { lastModified: 1000 }),
+    (name, i) =>
+      new FileCtor([BYTES[i]!], rename(name), { lastModified: 1000 }),
   );
 }
 
@@ -118,7 +123,7 @@ describe("importIntoLibrary + loadPersistedLibrary", () => {
   it("collapses duplicate copies of one game in the same import", async () => {
     const store = await freshStore();
     const [first] = demoFiles();
-    const copy = new File([BYTES[0]!], `copy-${NAMES[0]}`, {
+    const copy = new FileCtor([BYTES[0]!], `copy-${NAMES[0]}`, {
       lastModified: 1000,
     });
 
@@ -130,7 +135,7 @@ describe("importIntoLibrary + loadPersistedLibrary", () => {
 
   it("never stores a file that fails to parse", async () => {
     const store = await freshStore();
-    const junk = new File([new Uint8Array([1, 2, 3])], "junk.rmgr");
+    const junk = new FileCtor([new Uint8Array([1, 2, 3])], "junk.rmgr");
     const result = await importIntoLibrary(store, [junk]);
     expect(result.errors.map((e) => e.fileName)).toEqual(["junk.rmgr"]);
     expect(await store.getAll()).toEqual([]);
