@@ -130,9 +130,17 @@ export function renderNeutralHeatmap(
   const toCanvasY = (y: number) =>
     canvas.height - ((y - bottomY) / worldHeight) * canvas.height;
 
+  // Use a stroke color that contrasts with the background in both light and dark.
+  const isLight =
+    typeof document !== "undefined" &&
+    document.documentElement.getAttribute("data-theme") === "light";
+  const strokeColor = isLight
+    ? "rgba(0, 0, 0, 0.55)"
+    : "rgba(255, 255, 255, 0.35)";
+
   const slopes = stageSlopes(stageId);
   if (slopes) {
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 2;
     for (const slope of [slopes.leftSlope, slopes.rightSlope]) {
       ctx.beginPath();
@@ -152,7 +160,7 @@ export function renderNeutralHeatmap(
 
   const platforms = stageGeometry(stageId);
   if (platforms) {
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 2;
     for (const platform of platforms) {
       const y = toCanvasY(platform.y);
