@@ -2,6 +2,7 @@ import {
   ITKind,
   ItemLinkId,
   WPKind,
+  CHARACTER_NAMES,
   getItemKindName,
   getSeatedPorts,
   HazardFlag,
@@ -107,7 +108,23 @@ const HIDDEN_WEAPON_KINDS = new Set<number>([WPKind.SpinAttack]);
  */
 const MARKER_TUNING_PX_PER_WORLD_UNIT = 0.38;
 /** Samus's Charge Shot render scale at full charge: gfx_size 700 / 30 (RMGR_SPEC.md §5.3). */
-const CHARGE_SHOT_FULL_CHARGE_SCALE = 700 / 30;
+export const CHARGE_SHOT_FULL_CHARGE_SCALE = 700 / 30;
+
+/**
+ * Samus's Charge Shot radius in world units at full charge (scale 700 / 30 = 23.33).
+ * Calibrated so a full charge shot has a radius of 130 world units (diameter = 260
+ * world units, matching Samus's 256 world-unit height), with lower charges scaled
+ * proportionally down to level 0 (~56 world units diameter).
+ */
+export const CHARGE_SHOT_FULL_CHARGE_RADIUS_WORLD = 130;
+
+/**
+ * Charge Shot render scale values for charge levels 0-7, verified across all
+ * recorder schema-2 replays: 5.00, 7.67, 9.33, 11.33, 13.67, 16.33, 20.00, 23.33.
+ */
+export const CHARGE_SHOT_LEVEL_SCALES: readonly number[] = [
+  5.0, 7.67, 9.33, 11.33, 13.67, 16.33, 20.0, 23.33,
+];
 
 export interface BombExplosionEvent {
   startFrame: number;
@@ -888,11 +905,26 @@ export function getDKSpecialType(
   ) {
     return "hand_slap";
   }
-  // Neutral-B: Giant Punch
-  if (actionStateId === 0x0eb) {
+  // Neutral-B: Giant Punch windup (0x0de startup, 0x0df/0x0e0 grounded windup,
+  // 0x0e1 aerial windup, 0x0eb).
+  if (
+    actionStateId === 0x0de ||
+    actionStateId === 0x0df ||
+    actionStateId === 0x0e0 ||
+    actionStateId === 0x0e1 ||
+    actionStateId === 0x0eb
+  ) {
     return "giant_punch_windup";
   }
-  if (actionStateId === 0x0ec) {
+  // Neutral-B: Giant Punch punch execution / swing (0x0e2 grounded startup,
+  // 0x0e3 grounded punch, 0x0e4 aerial punch startup, 0x0e5 aerial punch, 0x0ec full execution).
+  if (
+    actionStateId === 0x0e2 ||
+    actionStateId === 0x0e3 ||
+    actionStateId === 0x0e4 ||
+    actionStateId === 0x0e5 ||
+    actionStateId === 0x0ec
+  ) {
     return "giant_punch";
   }
   return null;
@@ -980,11 +1012,7 @@ export function getMarioSpecialType(
 }
 
 export type SamusSpecialType =
-  | "charge_shot_startup"
-  | "charge_shot"
-  | "charge_shot_fire"
-  | "screw_attack"
-  | "bomb";
+  "charge_shot_startup" | "charge_shot" | "charge_shot_fire" | "screw_attack";
 
 export function getSamusSpecialType(
   characterId: number,
@@ -1022,15 +1050,17 @@ export function getSamusSpecialType(
   ) {
     return "screw_attack";
   }
-  // Down-B: Bomb. 0x0e6 confirmed empirically to belong here (previously
-  // misclassified as Screw Attack above).
+  // Down-B: Bomb (0x0e6, 0x0e8, 0x0e9, 0x0ea). No synthetic bomb drawn for
+  // this anymore - the recorded Weapon object (WPKind.SamusBomb, drawn by
+  // drawItemObjects() in renderer.ts) is Samus's real bomb now, so drawing
+  // a second, fake one here would visually double up.
   if (
     actionStateId === 0x0e6 ||
     actionStateId === 0x0e8 ||
     actionStateId === 0x0e9 ||
     actionStateId === 0x0ea
   ) {
-    return "bomb";
+    return null;
   }
   return null;
 }
@@ -1651,6 +1681,16 @@ export function isLuigiCharacter(characterId: number): boolean {
 }
 
 export function isDonkeyKongCharacter(characterId: number): boolean {
+  const name = CHARACTER_NAMES[characterId];
+  if (
+    name &&
+    (name === "Donkey Kong" ||
+      name.startsWith("Donkey Kong ") ||
+      name === "DK" ||
+      name.startsWith("DK "))
+  ) {
+    return true;
+  }
   return (
     characterId === 0x02 || // Donkey Kong
     characterId === 0x10 || // Polygon DK
@@ -1660,6 +1700,8 @@ export function isDonkeyKongCharacter(characterId: number): boolean {
 }
 
 export function isSamusCharacter(characterId: number): boolean {
+  const name = CHARACTER_NAMES[characterId];
+  if (name && (name === "Samus" || name.startsWith("Samus "))) return true;
   return (
     characterId === 0x03 || // Samus
     characterId === 0x11 || // Polygon Samus
@@ -1667,6 +1709,22 @@ export function isSamusCharacter(characterId: number): boolean {
     characterId === 0x24 || // Samus (JP)
     characterId === 0x33 || // Samus (EU)
     characterId === 0x57 // Polygon Dark Samus
+  );
+}
+
+export function isDKCharging(actionStateId: number): boolean {
+  return (
+    (actionStateId >= 0x0de && actionStateId <= 0x0e1) ||
+    actionStateId === 0x0eb
+  );
+}
+
+export function isSamusCharging(actionStateId: number): boolean {
+  return (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0de ||
+    actionStateId === 0x0df
   );
 }
 
@@ -2430,6 +2488,9 @@ export class StageRenderer {
       ) {
         continue;
       }
+      if (this.isChargingOrb(item, frame)) {
+        continue;
+      }
 
       const { x, y } = camera.worldToScreen(item.positionX, item.positionY);
       const isWeapon = item.linkId === ItemLinkId.Weapon;
@@ -2483,9 +2544,9 @@ export class StageRenderer {
               item.kind === ITKind.BobOmb ||
               item.kind === ITKind.RTTFBomb)) ||
           (isWeapon && item.kind === WPKind.SamusBomb);
+        const isChargeShot = isWeapon && item.kind === WPKind.ChargeShot;
         const isLargeObject = isWeapon
           ? item.kind === WPKind.Boomerang ||
-            item.kind === WPKind.ChargeShot ||
             item.kind === WPKind.Fireball ||
             item.kind === WPKind.PKFire ||
             item.kind === WPKind.ThunderJoltAir ||
@@ -2502,6 +2563,15 @@ export class StageRenderer {
             item.kind === ITKind.Bumper ||
             item.kind === ITKind.StageBumper;
 
+        const chargeShotOffset = isChargeShot
+          ? camera.worldLengthToScreen(
+              ((CHARGE_SHOT_FULL_CHARGE_RADIUS_WORLD *
+                (item.scaleY ?? CHARGE_SHOT_FULL_CHARGE_SCALE)) /
+                CHARGE_SHOT_FULL_CHARGE_SCALE) *
+                1.45,
+            ) + 14
+          : 0;
+
         const baseOffset = isThunderBolt
           ? 96
           : isVeryTall
@@ -2511,10 +2581,9 @@ export class StageRenderer {
               : isLargeObject
                 ? 34
                 : 24;
-        const labelOffset = Math.max(
-          baseOffset,
-          (baseOffset - 2) * markerScale,
-        );
+        const labelOffset = isChargeShot
+          ? Math.max(34, chargeShotOffset)
+          : Math.max(baseOffset, (baseOffset - 2) * markerScale);
 
         const baseName = getItemKindName(item.linkId, item.kind);
         const hexId = `0x${item.kind.toString(16)}`;
@@ -2867,6 +2936,49 @@ export class StageRenderer {
     }
 
     return { isLuigi, dir };
+  }
+
+  /**
+   * Distinguishes Samus's charging orb from a fired Charge Shot projectile.
+   * While Samus charges Neutral-B, the game spawns a graphic entity with the same
+   * weapon kind (WPKind.ChargeShot) that stays on top of Samus and grows with her
+   * stored charge (StateFrame.characterSpecific). When fired, the shot spawns at
+   * its final size (matching the charge held one frame earlier, as firing zeroes
+   * charge on the frame the shot appears) and travels across the stage.
+   *
+   * Schema 1 replays lack scale and characterSpecific and fall back to returning false.
+   */
+  private isChargingOrb(item: ItemUpdate, frame?: Frame): boolean {
+    if (item.kind !== WPKind.ChargeShot) return false;
+    if (item.scaleX === undefined && item.scaleY === undefined) return false;
+    if (!frame || !frame.ports) return false;
+
+    const itemScale = item.scaleY ?? item.scaleX ?? 0;
+
+    for (const portData of Object.values(frame.ports)) {
+      const state = portData?.state;
+      if (!state || !isSamusCharacter(state.characterId)) continue;
+      if (state.characterSpecific === undefined) continue;
+
+      // Samus must be actively charging Neutral-B
+      if (!isSamusCharging(state.actionStateId)) continue;
+
+      // Must stay on top of Samus (within ~600 world units)
+      const dx = item.positionX - state.positionX;
+      const dy = item.positionY - state.positionY;
+      if (dx * dx + dy * dy > 600 * 600) continue;
+
+      // The charging orb's scale matches Samus's current charge level
+      const expectedScale = CHARGE_SHOT_LEVEL_SCALES[state.characterSpecific];
+      if (
+        expectedScale !== undefined &&
+        Math.abs(itemScale - expectedScale) < 0.25
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /** Generic fallback marker for any Item/Weapon kind without a custom shape - a colored diamond. */
@@ -3974,7 +4086,8 @@ export class StageRenderer {
 
   /**
    * Samus's Charge Shot visual (WPKind.ChargeShot):
-   * - Proportional ~24px electric plasma sphere with rotating energy arcs
+   * - Electric plasma sphere with rotating energy arcs, sized in real world units
+   *   calibrated against fighter height (~145 world units diameter at full charge)
    * - Deep magenta/violet 3D sphere gradient core
    * - White-hot pulsating nucleus
    * - Electric discharge spikes radiating outward
@@ -3988,13 +4101,21 @@ export class StageRenderer {
     gameScale?: number,
   ): void {
     ctx.save();
-    // Full charge (gfx_size 700 -> scale 23.33) draws at the original fixed
-    // 24px; lower charges shrink in proportion, as in the game (level 0 is
-    // ~21% of full). Older replays have no scale and keep the fixed size.
-    const csRadius =
+    // Real world-unit radius converted through camera zoom. The surrounding item
+    // code (drawItemObjects) applies markerScale = camera.worldLengthToScreen(1) /
+    // MARKER_TUNING_PX_PER_WORLD_UNIT to ctx. To match camera.worldLengthToScreen(worldRadius)
+    // on screen without applying zoom twice:
+    //   csRadius = worldRadius * MARKER_TUNING_PX_PER_WORLD_UNIT
+    // Full charge (scale 23.33) uses CHARGE_SHOT_FULL_CHARGE_RADIUS_WORLD (130 world units,
+    // 260 world units diameter); lower charges shrink in proportion to the recorded
+    // scale (levels 0-7: 5.00 to 23.33). Replays from recorder schema 1 have undefined scale
+    // and fall back to full charge.
+    const worldRadius =
       gameScale === undefined
-        ? 24
-        : Math.max(6, (24 * gameScale) / CHARGE_SHOT_FULL_CHARGE_SCALE);
+        ? CHARGE_SHOT_FULL_CHARGE_RADIUS_WORLD
+        : (CHARGE_SHOT_FULL_CHARGE_RADIUS_WORLD * gameScale) /
+          CHARGE_SHOT_FULL_CHARGE_SCALE;
+    const csRadius = Math.max(2, worldRadius * MARKER_TUNING_PX_PER_WORLD_UNIT);
 
     // 1. Outer pulsating electric magenta/violet corona
     const pulse = 1 + 0.12 * Math.sin(spinAngle * 3);
@@ -4034,7 +4155,14 @@ export class StageRenderer {
     ctx.stroke();
 
     // 3. Spherical 3D plasma body
-    const grad = ctx.createRadialGradient(x - 6, y - 6, 3, x, y, csRadius);
+    const grad = ctx.createRadialGradient(
+      x - csRadius * 0.25,
+      y - csRadius * 0.25,
+      Math.max(1, csRadius * 0.12),
+      x,
+      y,
+      csRadius,
+    );
     grad.addColorStop(0.0, "#ffffff");
     grad.addColorStop(0.2, "#f472b6");
     grad.addColorStop(0.55, "#c026d3");
@@ -12041,6 +12169,7 @@ export class StageRenderer {
       hitstunCounter?: number;
       stocksRemaining: number;
       jumpsRemaining: number;
+      characterSpecific?: number;
     },
     perspectivePort?: PortIndex | null,
     replay?: Replay | null,
@@ -13053,6 +13182,7 @@ export class StageRenderer {
         color,
         dkSpecial,
         post.actionFrameCounter,
+        post.characterSpecific,
       );
     }
     if (nessSpecial) {
@@ -13082,6 +13212,7 @@ export class StageRenderer {
     }
     if (samusSpecial) {
       this.drawSamusSpecial(
+        camera,
         x,
         centerY,
         halfWidth,
@@ -13090,6 +13221,7 @@ export class StageRenderer {
         color,
         samusSpecial,
         post.actionFrameCounter,
+        post.characterSpecific,
       );
     }
     if (linkSpecial) {
@@ -13332,6 +13464,201 @@ export class StageRenderer {
         }
       }
     }
+
+    // Battery-style charge meter for Samus and DK (recorder schema 2+)
+    this.drawChargeMeter(
+      x,
+      centerY,
+      halfWidth,
+      heightPx,
+      facingRight,
+      post,
+      port,
+      replay,
+      frameIndex,
+      isPaused,
+    );
+  }
+
+  /**
+   * Renders a battery-style charge meter beside Samus (8 discrete stages, levels 0-7)
+   * and Donkey Kong (11 discrete stages, windup levels 0-10) using recorder schema-2
+   * StateFrame.characterSpecific data.
+   *
+   * Gated strictly to Samus and DK across regions (Kirby stores copied ability in the
+   * same field, and other characters store arbitrary garbage).
+   *
+   * Fades out once charging stops, reappears at full opacity while paused, and displays
+   * a rainbow effect at full charge as it disappears.
+   */
+  private drawChargeMeter(
+    x: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    facingRight: boolean,
+    post: {
+      characterId: number;
+      actionStateId: number;
+      characterSpecific?: number;
+    },
+    port: PortIndex,
+    replay?: Replay | null,
+    frameIndex?: number,
+    isPaused?: boolean,
+  ): void {
+    const isSamus = isSamusCharacter(post.characterId);
+    const isDK = isDonkeyKongCharacter(post.characterId);
+    if (!isSamus && !isDK) return;
+
+    // Schema 1 fallback: characterSpecific is undefined, do not draw an empty UI
+    const charge = post.characterSpecific;
+    if (charge === undefined) return;
+
+    const totalStages = isSamus ? 8 : 11;
+    const maxCharge = isSamus ? 7 : 10;
+    const isCharging = isSamus
+      ? isSamusCharging(post.actionStateId)
+      : isDKCharging(post.actionStateId);
+
+    const CHARGE_METER_FADE_FRAMES = 45;
+    let alpha = 0;
+
+    if (isPaused) {
+      // Reappear at full opacity when playback is paused if charging or holding a charge
+      if (isCharging || charge > 0) {
+        alpha = 1.0;
+      }
+    } else if (isCharging) {
+      alpha = 1.0;
+    } else if (charge > 0) {
+      // Fade out once charging stops
+      let framesSinceCharging = Infinity;
+      if (replay && frameIndex !== undefined) {
+        const startScan = Math.max(0, frameIndex - CHARGE_METER_FADE_FRAMES);
+        for (let i = frameIndex - 1; i >= startScan; i--) {
+          const priorState = replay.frames[i]?.ports[port]?.state;
+          if (priorState) {
+            const wasCharging = isSamus
+              ? isSamusCharging(priorState.actionStateId)
+              : isDKCharging(priorState.actionStateId);
+            if (wasCharging) {
+              framesSinceCharging = frameIndex - i;
+              break;
+            }
+          }
+        }
+      }
+      if (framesSinceCharging < CHARGE_METER_FADE_FRAMES) {
+        alpha = 1 - framesSinceCharging / CHARGE_METER_FADE_FRAMES;
+      }
+    }
+
+    if (alpha <= 0) return;
+
+    const { ctx } = this;
+    const isFullCharge = charge >= maxCharge;
+    const filledStages = Math.min(totalStages, charge + 1);
+
+    const dir = facingRight ? -1 : 1;
+    const meterX = x + dir * (halfWidth + 9);
+    const meterY = centerY;
+    const meterW = 7;
+    const meterH = Math.max(34, Math.min(48, heightPx * 0.72));
+    const stageH = meterH / totalStages;
+
+    const isLight = this.isLightMode();
+    const batteryX = meterX - meterW / 2;
+    const batteryY = meterY - meterH / 2;
+    const borderRadius = 2;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // 1. Top terminal nub
+    const nubW = 3;
+    const nubH = 2;
+    const nubX = meterX - nubW / 2;
+    const nubY = batteryY - nubH;
+    ctx.fillStyle = isLight
+      ? "rgba(15, 23, 42, 0.7)"
+      : "rgba(255, 255, 255, 0.7)";
+    ctx.fillRect(nubX, nubY, nubW, nubH);
+
+    // 2. Battery background casing
+    ctx.beginPath();
+    ctx.roundRect(batteryX, batteryY, meterW, meterH, borderRadius);
+    ctx.fillStyle = isLight
+      ? "rgba(241, 245, 249, 0.9)"
+      : "rgba(15, 23, 42, 0.85)";
+    ctx.fill();
+
+    // 3. Discrete stages from bottom to top
+    for (let s = 0; s < totalStages; s++) {
+      const segY = batteryY + meterH - (s + 1) * stageH;
+      const segH = stageH;
+
+      if (s < filledStages) {
+        if (isFullCharge) {
+          // Rainbow effect at full charge
+          const animOffset = (frameIndex ?? 0) * 6;
+          const hue = ((s / totalStages) * 320 + animOffset) % 360;
+          ctx.fillStyle = `hsl(${hue}, 95%, 58%)`;
+          ctx.shadowColor = `hsl(${hue}, 95%, 65%)`;
+          ctx.shadowBlur = 6;
+        } else {
+          const frac = s / totalStages;
+          if (frac < 0.35) {
+            ctx.fillStyle = isSamus ? "#38bdf8" : "#22c55e";
+          } else if (frac < 0.7) {
+            ctx.fillStyle = "#eab308";
+          } else {
+            ctx.fillStyle = "#f97316";
+          }
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillRect(batteryX + 1, segY + 0.5, meterW - 2, segH - 1);
+      } else {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = isLight
+          ? "rgba(15, 23, 42, 0.08)"
+          : "rgba(255, 255, 255, 0.08)";
+        ctx.fillRect(batteryX + 1, segY + 0.5, meterW - 2, segH - 1);
+      }
+    }
+
+    ctx.shadowBlur = 0;
+
+    // 4. Divider lines between discrete stages
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = isLight ? "rgba(15, 23, 42, 0.6)" : "rgba(0, 0, 0, 0.75)";
+    for (let s = 1; s < totalStages; s++) {
+      const divY = Math.round(batteryY + s * stageH);
+      ctx.beginPath();
+      ctx.moveTo(batteryX + 0.5, divY);
+      ctx.lineTo(batteryX + meterW - 0.5, divY);
+      ctx.stroke();
+    }
+
+    // 5. Battery outer border
+    ctx.beginPath();
+    ctx.roundRect(batteryX, batteryY, meterW, meterH, borderRadius);
+    if (isFullCharge) {
+      const animOffset = (frameIndex ?? 0) * 6;
+      ctx.strokeStyle = `hsl(${animOffset % 360}, 90%, 65%)`;
+      ctx.lineWidth = 1.4;
+      ctx.shadowColor = `hsl(${animOffset % 360}, 90%, 65%)`;
+      ctx.shadowBlur = 8;
+    } else {
+      ctx.strokeStyle = isLight
+        ? "rgba(15, 23, 42, 0.75)"
+        : "rgba(255, 255, 255, 0.75)";
+      ctx.lineWidth = 1;
+      ctx.shadowBlur = 0;
+    }
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   /**
@@ -19338,9 +19665,14 @@ export class StageRenderer {
    * Visualizes Samus's signature special moves:
    * - Charge Shot (Neutral-B): Electric plasma charging sphere at cannon tip.
    * - Screw Attack (Up-B): Multihit somersaulting electric cyclone shield.
-   * - Bomb (Down-B): Morph Ball with dropped ticking energy bomb.
+   *
+   * Bomb (Down-B) used to have a synthetic dropped bomb animation here too,
+   * but that's gone now that the real recorded Weapon object
+   * (WPKind.SamusBomb) gets its own marker in drawItemObjects() - keeping
+   * both would just show two bombs at once.
    */
   private drawSamusSpecial(
+    camera: Camera,
     x: number,
     centerY: number,
     halfWidth: number,
@@ -19349,6 +19681,7 @@ export class StageRenderer {
     _color: string,
     specialType: SamusSpecialType,
     frameCounter: number,
+    characterSpecific?: number,
   ): void {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
@@ -19356,41 +19689,23 @@ export class StageRenderer {
     const cannonY = centerY - heightPx * 0.05;
 
     if (specialType === "charge_shot") {
+      // Use the exact same Charge Shot plasma orb animation as the fired weapon,
+      // sized to her stored charge level (0-7, or smoothly growing in schema 1).
+      const chargeLevel =
+        characterSpecific !== undefined
+          ? Math.min(7, Math.max(0, characterSpecific))
+          : Math.min(7, Math.floor(frameCounter / 16));
+      const gameScale = CHARGE_SHOT_LEVEL_SCALES[chargeLevel];
+      const spinAngle = frameCounter * 0.45;
+
+      const markerScale =
+        camera.worldLengthToScreen(1) / MARKER_TUNING_PX_PER_WORLD_UNIT;
+
       ctx.save();
-      // Pulsating electric energy plasma ball
-      const pulse = 1 + 0.2 * Math.sin(frameCounter * 0.4);
-      const radius = Math.max(8, halfWidth * 0.65) * pulse;
-
-      // 1. Outer electric aura
-      ctx.beginPath();
-      ctx.arc(cannonX, cannonY, radius * 1.4, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(14, 165, 233, 0.35)";
-      ctx.shadowColor = "#0284c7";
-      ctx.shadowBlur = 14;
-      ctx.fill();
-
-      // 2. Cyan plasma core
-      ctx.beginPath();
-      ctx.arc(cannonX, cannonY, radius, 0, Math.PI * 2);
-      ctx.fillStyle = "#38bdf8";
-      ctx.fill();
-
-      // 3. Bright white spark core
-      ctx.beginPath();
-      ctx.arc(cannonX, cannonY, radius * 0.45, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-
-      // 4. Orbiting energy arcs
-      ctx.lineWidth = 1.6;
-      ctx.strokeStyle = "#e0f2fe";
-      for (let i = 0; i < 3; i++) {
-        const ang = (i * Math.PI * 2) / 3 + frameCounter * 0.25;
-        ctx.beginPath();
-        ctx.arc(cannonX, cannonY, radius * 1.1, ang, ang + 0.8);
-        ctx.stroke();
-      }
-
+      ctx.translate(cannonX, cannonY);
+      ctx.scale(markerScale, markerScale);
+      ctx.translate(-cannonX, -cannonY);
+      this.drawChargeShotMarker(ctx, cannonX, cannonY, spinAngle, gameScale);
       ctx.restore();
       return;
     }
@@ -19414,8 +19729,8 @@ export class StageRenderer {
 
       ctx.beginPath();
       ctx.arc(cannonTipX, cannonY, 3 * extend, 0, Math.PI * 2);
-      ctx.fillStyle = "#e0f2fe";
-      ctx.shadowColor = "#38bdf8";
+      ctx.fillStyle = "#fdf4ff";
+      ctx.shadowColor = "#c026d3";
       ctx.shadowBlur = 6;
       ctx.fill();
 
@@ -19430,9 +19745,9 @@ export class StageRenderer {
       const boltX = cannonX + dir * travel * halfWidth * 3;
       const boltLen = Math.max(10, halfWidth * 1.1);
 
-      ctx.strokeStyle = "#38bdf8";
+      ctx.strokeStyle = "#f472b6";
       ctx.lineWidth = 4;
-      ctx.shadowColor = "#0284c7";
+      ctx.shadowColor = "#c026d3";
       ctx.shadowBlur = 12;
       ctx.beginPath();
       ctx.moveTo(boltX - dir * boltLen, cannonY);
@@ -19484,43 +19799,6 @@ export class StageRenderer {
       ctx.arc(x, centerY, 5, 0, Math.PI * 2);
       ctx.fillStyle = "#ffffff";
       ctx.fill();
-
-      ctx.restore();
-      return;
-    }
-
-    if (specialType === "bomb") {
-      ctx.save();
-      const bombX = x - dir * (halfWidth * 0.3);
-      const bombY = centerY + heightPx * 0.35;
-      const bombR = Math.max(4, halfWidth * 0.28);
-
-      // Dropped Morph Ball energy bomb
-      ctx.beginPath();
-      ctx.arc(bombX, bombY, bombR, 0, Math.PI * 2);
-      ctx.fillStyle = "#0284c7";
-      ctx.shadowColor = "#38bdf8";
-      ctx.shadowBlur = 10;
-      ctx.fill();
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      // Blinking yellow core
-      ctx.beginPath();
-      ctx.arc(bombX, bombY, bombR * 0.4, 0, Math.PI * 2);
-      ctx.fillStyle = frameCounter % 4 < 2 ? "#facc15" : "#ffffff";
-      ctx.fill();
-
-      // Expanding pulse ring
-      const ringProg = (frameCounter % 12) / 12;
-      ctx.beginPath();
-      ctx.arc(bombX, bombY, bombR + ringProg * 14, 0, Math.PI * 2);
-      ctx.strokeStyle = resolveColor("#38bdf8", false, (1 - ringProg) * 0.7);
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([3, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
 
       ctx.restore();
       return;
@@ -20207,6 +20485,7 @@ export class StageRenderer {
     _color: string,
     specialType: DKSpecialType,
     frameCounter: number,
+    characterSpecific?: number,
   ): void {
     const { ctx } = this;
     const dir = facingRight ? 1 : -1;
@@ -20326,26 +20605,330 @@ export class StageRenderer {
 
     if (specialType === "giant_punch_windup") {
       ctx.save();
-      // Charged fist windup
-      const pulse = 1 + 0.25 * Math.sin(frameCounter * 0.3);
-      const fistX = x - dir * (halfWidth * 0.6);
-      const fistFill = isMountainTheme
-        ? "rgba(236, 72, 153, 0.45)"
-        : isAutumnTheme
-          ? "rgba(249, 115, 22, 0.45)"
-          : "rgba(251, 191, 36, 0.4)";
-      const fistGlow = isMountainTheme
-        ? "#f43f5e"
-        : isAutumnTheme
-          ? "#ea580c"
-          : "#f59e0b";
+      // Neutral-B: Giant Punch rotating arm windup
+      // Shoulder pivot joint positioned on DK's upper back
+      const shoulderX = x - dir * (halfWidth * 0.25);
+      const shoulderY = centerY - heightPx * 0.12;
+
+      ctx.translate(shoulderX, shoulderY);
+      if (dir < 0) {
+        ctx.scale(-1, 1);
+      }
+
+      // Backward windmill arm rotation
+      const spinSpeed = 0.45;
+      const rotAngle = -frameCounter * spinSpeed;
+      // Scaled up significantly to match DK's gorilla proportions
+      const armRadius = Math.max(34, halfWidth * 1.55);
+      const armRadiusY = armRadius * 0.86;
+
+      const fistX = Math.cos(rotAngle) * armRadius;
+      const fistY = Math.sin(rotAngle) * armRadiusY;
+
+      const isFullCharge =
+        characterSpecific !== undefined && characterSpecific >= 10;
+
+      // 1. Circular wind trail swoosh arc behind the rotating fist
+      const trailArc = Math.PI * 1.15;
       ctx.beginPath();
-      ctx.arc(fistX, centerY, 9 * pulse, 0, Math.PI * 2);
-      ctx.fillStyle = fistFill;
-      ctx.shadowColor = fistGlow;
-      ctx.shadowBlur = 8;
+      ctx.ellipse(
+        0,
+        0,
+        armRadius,
+        armRadiusY,
+        0,
+        rotAngle,
+        rotAngle + trailArc,
+      );
+      const trailStroke = isFullCharge
+        ? `hsl(${(frameCounter * 8) % 360}, 95%, 65%)`
+        : isMountainTheme
+          ? "rgba(236, 72, 153, 0.65)"
+          : isAutumnTheme
+            ? "rgba(249, 115, 22, 0.65)"
+            : "rgba(251, 191, 36, 0.7)";
+      ctx.strokeStyle = trailStroke;
+      ctx.lineWidth = Math.max(4.5, halfWidth * 0.18);
+      ctx.shadowColor = isFullCharge
+        ? `hsl(${(frameCounter * 8) % 360}, 95%, 65%)`
+        : isMountainTheme
+          ? "#f43f5e"
+          : isAutumnTheme
+            ? "#ea580c"
+            : "#f59e0b";
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // 2. Thick gorilla arm linking shoulder to fist
+      const armThickness = Math.max(13, halfWidth * 0.42);
+      const armFur = isMountainTheme
+        ? "#4f46e5"
+        : isAutumnTheme
+          ? "#451a03"
+          : "#78350f";
+      const armHighlight = isMountainTheme
+        ? "#818cf8"
+        : isAutumnTheme
+          ? "#78350f"
+          : "#92400e";
+
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(fistX, fistY);
+      ctx.strokeStyle = armFur;
+      ctx.lineWidth = armThickness;
+      ctx.lineCap = "round";
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+
+      // Muscular bicep highlight on arm
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(fistX * 0.75, fistY * 0.75);
+      ctx.strokeStyle = armHighlight;
+      ctx.lineWidth = armThickness * 0.35;
+      ctx.stroke();
+
+      // 3. Clenched gorilla fist (fur knuckle mass with peach palm)
+      const fistRadius = Math.max(18, halfWidth * 0.55);
+      const fistFur = isMountainTheme
+        ? "#6366f1"
+        : isAutumnTheme
+          ? "#5c2406"
+          : "#92400e";
+      const fistSkin = isMountainTheme
+        ? "#fdf4ff"
+        : isAutumnTheme
+          ? "#fde68a"
+          : "#fed7aa";
+
+      ctx.beginPath();
+      ctx.arc(fistX, fistY, fistRadius, 0, Math.PI * 2);
+      ctx.fillStyle = fistFur;
+      if (isFullCharge) {
+        ctx.shadowColor = `hsl(${(frameCounter * 8) % 360}, 95%, 65%)`;
+        ctx.shadowBlur = 14;
+      } else {
+        ctx.shadowColor = isMountainTheme ? "#ec4899" : "#f59e0b";
+        ctx.shadowBlur = 8;
+      }
       ctx.fill();
+
+      // Tan skin palm/knuckle center
+      ctx.beginPath();
+      ctx.arc(fistX, fistY, fistRadius * 0.62, 0, Math.PI * 2);
+      ctx.fillStyle = fistSkin;
+      ctx.shadowBlur = 0;
+      ctx.fill();
+
+      // Knuckle definition bumps on the rotating fist
+      const fistAngle = rotAngle + Math.PI * 0.5;
+      for (let k = -1.5; k <= 1.5; k += 1) {
+        const kAngle = fistAngle + k * 0.45;
+        const kx = fistX + Math.cos(kAngle) * (fistRadius * 0.85);
+        const ky = fistY + Math.sin(kAngle) * (fistRadius * 0.85);
+        ctx.beginPath();
+        ctx.arc(kx, ky, fistRadius * 0.26, 0, Math.PI * 2);
+        ctx.fillStyle = fistSkin;
+        ctx.fill();
+        ctx.strokeStyle = fistFur;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+
       ctx.restore();
+      return;
+    }
+
+    if (specialType === "giant_punch") {
+      ctx.save();
+      // Neutral-B: Giant Punch punch execution / forward haymaker release
+      const charge = Math.min(10, Math.max(0, characterSpecific ?? 0));
+      const isFullCharge = charge >= 10;
+      const chargeRatio = charge / 10;
+
+      // Shoulder joint
+      const shoulderX = x - dir * (halfWidth * 0.2);
+      const shoulderY = centerY - heightPx * 0.08;
+
+      ctx.translate(shoulderX, shoulderY);
+      if (dir < 0) {
+        ctx.scale(-1, 1);
+      }
+
+      // Punch reach extends forward with charge and frame progression
+      const baseReach = halfWidth * 1.5;
+      const chargeBonus = halfWidth * (0.3 + chargeRatio * 0.6);
+      const thrustProgress = Math.min(
+        1.0,
+        0.6 + Math.min(frameCounter, 8) * 0.05,
+      );
+      const punchDist = (baseReach + chargeBonus) * thrustProgress;
+      const punchY = heightPx * 0.02;
+
+      const fistRadius =
+        Math.max(20, halfWidth * 0.65) * (1 + chargeRatio * 0.22);
+      const armThickness = Math.max(14, halfWidth * 0.44);
+
+      // Fur & skin colors matching DK theme
+      const armFur = isMountainTheme
+        ? "#4f46e5"
+        : isAutumnTheme
+          ? "#451a03"
+          : "#78350f";
+      const armHighlight = isMountainTheme
+        ? "#818cf8"
+        : isAutumnTheme
+          ? "#78350f"
+          : "#92400e";
+      const fistFur = isMountainTheme
+        ? "#6366f1"
+        : isAutumnTheme
+          ? "#5c2406"
+          : "#92400e";
+      const fistSkin = isMountainTheme
+        ? "#fdf4ff"
+        : isAutumnTheme
+          ? "#fde68a"
+          : "#fed7aa";
+
+      const primaryGlow = isFullCharge
+        ? `hsl(${(frameCounter * 12) % 360}, 95%, 65%)`
+        : isMountainTheme
+          ? "#ec4899"
+          : isAutumnTheme
+            ? "#ea580c"
+            : "#f59e0b";
+      const secondaryGlow = isFullCharge
+        ? `hsl(${(frameCounter * 12 + 60) % 360}, 95%, 70%)`
+        : isMountainTheme
+          ? "#f43f5e"
+          : isAutumnTheme
+            ? "#f97316"
+            : "#fbbf24";
+
+      // 1. Kinetic speed streaks trailing behind the thrusting fist
+      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+      const streakOffsets = [-armThickness * 0.6, 0, armThickness * 0.6];
+      for (let i = 0; i < streakOffsets.length; i++) {
+        const offset = streakOffsets[i] ?? 0;
+        const offY = punchY + offset;
+        const len = punchDist * (0.45 + (i % 2) * 0.25);
+        ctx.beginPath();
+        ctx.moveTo(punchDist * 0.7 - len, offY);
+        ctx.lineTo(punchDist * 0.85, offY);
+        ctx.stroke();
+      }
+
+      // 2. Thick muscular gorilla arm
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(punchDist, punchY);
+      ctx.strokeStyle = armFur;
+      ctx.lineWidth = armThickness;
+      ctx.lineCap = "round";
+      ctx.shadowColor = primaryGlow;
+      ctx.shadowBlur = isFullCharge ? 14 : 6;
+      ctx.stroke();
+
+      // Arm muscle highlight core
+      ctx.beginPath();
+      ctx.moveTo(armThickness * 0.2, -1);
+      ctx.lineTo(punchDist - fistRadius * 0.4, punchY - 1);
+      ctx.strokeStyle = armHighlight;
+      ctx.lineWidth = armThickness * 0.35;
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+
+      // 3. Giant Clenched Fist
+      // Fur backing
+      ctx.beginPath();
+      ctx.arc(punchDist, punchY, fistRadius, 0, Math.PI * 2);
+      ctx.fillStyle = fistFur;
+      ctx.shadowColor = primaryGlow;
+      ctx.shadowBlur = isFullCharge ? 18 : 10;
+      ctx.fill();
+
+      // Tan skin palm/knuckle plate
+      ctx.beginPath();
+      ctx.arc(
+        punchDist + fistRadius * 0.15,
+        punchY,
+        fistRadius * 0.65,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = fistSkin;
+      ctx.shadowBlur = 0;
+      ctx.fill();
+
+      // Clenched knuckles along the forward face of the fist
+      const knuckleCount = 4;
+      const knuckleSpan = fistRadius * 1.3;
+      const knuckleR = fistRadius * 0.28;
+      for (let k = 0; k < knuckleCount; k++) {
+        const ky =
+          punchY - knuckleSpan * 0.5 + (k / (knuckleCount - 1)) * knuckleSpan;
+        const kx = punchDist + fistRadius * 0.8;
+        ctx.beginPath();
+        ctx.arc(kx, ky, knuckleR, 0, Math.PI * 2);
+        ctx.fillStyle = fistSkin;
+        ctx.fill();
+        ctx.strokeStyle = fistFur;
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+      }
+
+      // 4. Conical impact shockwaves radiating forward
+      const shockwaveCount = isFullCharge ? 3 : 2;
+      for (let s = 1; s <= shockwaveCount; s++) {
+        const swDist = punchDist + fistRadius + s * (12 + chargeRatio * 8);
+        const swRadiusX = (6 + s * 4) * (1 + chargeRatio * 0.4);
+        const swRadiusY = fistRadius * (1.1 + s * 0.45);
+        ctx.beginPath();
+        ctx.ellipse(
+          swDist,
+          punchY,
+          swRadiusX,
+          swRadiusY,
+          0,
+          -Math.PI * 0.42,
+          Math.PI * 0.42,
+        );
+        ctx.strokeStyle = s === 1 ? primaryGlow : secondaryGlow;
+        ctx.lineWidth = Math.max(2.4, 4 - s * 0.8 + chargeRatio * 1.5);
+        ctx.shadowColor = primaryGlow;
+        ctx.shadowBlur = 10 + s * 4;
+        ctx.stroke();
+      }
+
+      // 5. Full-charge or high-charge explosive starburst impact flash
+      if (charge >= 5) {
+        const burstX = punchDist + fistRadius * 1.05;
+        const burstY = punchY;
+        const starR = fistRadius * (0.7 + chargeRatio * 0.6);
+        ctx.save();
+        ctx.translate(burstX, burstY);
+        ctx.beginPath();
+        for (let p = 0; p < 8; p++) {
+          const angle = (p * Math.PI) / 4 + frameCounter * 0.2;
+          const r = p % 2 === 0 ? starR : starR * 0.35;
+          const px = Math.cos(angle) * r;
+          const py = Math.sin(angle) * r;
+          if (p === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = isFullCharge ? "#ffffff" : secondaryGlow;
+        ctx.shadowColor = primaryGlow;
+        ctx.shadowBlur = 12;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.restore();
+      return;
     }
   }
 
