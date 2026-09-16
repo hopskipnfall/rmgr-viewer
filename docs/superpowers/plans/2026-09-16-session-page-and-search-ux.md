@@ -26,6 +26,7 @@
 ## File Structure
 
 **Create:**
+
 - `src/search/searchCache.ts` — LRU cache of search results, keyed by criteria + game set + analysis version.
 - `src/search/searchCache.test.ts`
 - `src/data/sessionNavigation.ts` — previous/next game within a session.
@@ -37,6 +38,7 @@
 - `src/session/sessionView.test.ts`
 
 **Modify:**
+
 - `src/router.ts` — add the `session` route.
 - `index.html` — header nav, session view container, search progress bar, library export/import buttons.
 - `src/main.ts` — route dispatch and controller wiring for the session view.
@@ -50,11 +52,13 @@
 ### Task 1: Global header nav with a Search link
 
 **Files:**
+
 - Modify: `index.html` (header block, around line 5904)
 - Modify: `src/i18n.ts`
 - Modify: `src/main.ts` (wiring, near the other header control listeners)
 
 **Interfaces:**
+
 - Consumes: `searchHash()` from `src/router.ts` (existing).
 - Produces: nothing other tasks depend on.
 
@@ -63,8 +67,8 @@
 In `src/i18n.ts`, add to the `Translations` interface (near `themeToggleDark`):
 
 ```ts
-  navLibrary: string;
-  navSearch: string;
+navLibrary: string;
+navSearch: string;
 ```
 
 In the `en` object:
@@ -86,12 +90,10 @@ In the `ja` object:
 In `index.html`, inside `<div class="header-controls">` and BEFORE the `theme-select-wrap` div, insert:
 
 ```html
-        <nav class="header-nav">
-          <a id="navLibraryLink" class="header-nav-link" href="#/">Library</a>
-          <a id="navSearchLink" class="header-nav-link" href="#/search"
-            >Search</a
-          >
-        </nav>
+<nav class="header-nav">
+  <a id="navLibraryLink" class="header-nav-link" href="#/">Library</a>
+  <a id="navSearchLink" class="header-nav-link" href="#/search">Search</a>
+</nav>
 ```
 
 - [ ] **Step 3: Style the nav**
@@ -99,25 +101,25 @@ In `index.html`, inside `<div class="header-controls">` and BEFORE the `theme-se
 In `index.html`'s `<style>` block, next to the existing `.header-controls` rule:
 
 ```css
-      .header-nav {
-        display: flex;
-        gap: 4px;
-      }
-      .header-nav-link {
-        padding: 4px 10px;
-        border-radius: 6px;
-        color: var(--text-secondary);
-        text-decoration: none;
-        font-size: 13px;
-      }
-      .header-nav-link:hover {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-      }
-      .header-nav-link[aria-current="page"] {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-      }
+.header-nav {
+  display: flex;
+  gap: 4px;
+}
+.header-nav-link {
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+}
+.header-nav-link:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.header-nav-link[aria-current="page"] {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
 ```
 
 (If those exact CSS variable names don't exist, copy the ones used by the adjacent `.header-select` rule.)
@@ -127,35 +129,35 @@ In `index.html`'s `<style>` block, next to the existing `.header-controls` rule:
 In `src/main.ts`, find where other header controls get their text on language change (search for `langSelect` and the function that applies `t()` to header elements) and add, in that same function:
 
 ```ts
-  const navLibraryLink = document.getElementById("navLibraryLink");
-  const navSearchLink = document.getElementById("navSearchLink");
-  if (navLibraryLink) navLibraryLink.textContent = t().navLibrary;
-  if (navSearchLink) navSearchLink.textContent = t().navSearch;
+const navLibraryLink = document.getElementById("navLibraryLink");
+const navSearchLink = document.getElementById("navSearchLink");
+if (navLibraryLink) navLibraryLink.textContent = t().navLibrary;
+if (navSearchLink) navSearchLink.textContent = t().navSearch;
 ```
 
 In `handleRouteChange` (line ~560), at the top of the function after `const myRouteGeneration = ++routeGeneration;`:
 
 ```ts
-  // Highlight whichever nav entry matches the route being shown.
-  document
-    .getElementById("navLibraryLink")
-    ?.toggleAttribute("aria-current", route.view === "library");
-  document
-    .getElementById("navSearchLink")
-    ?.toggleAttribute("aria-current", route.view === "search");
+// Highlight whichever nav entry matches the route being shown.
+document
+  .getElementById("navLibraryLink")
+  ?.toggleAttribute("aria-current", route.view === "library");
+document
+  .getElementById("navSearchLink")
+  ?.toggleAttribute("aria-current", route.view === "search");
 ```
 
 Note `toggleAttribute` sets the value to the empty string; the CSS above matches `[aria-current="page"]`, so instead set it explicitly:
 
 ```ts
-  const setCurrent = (id: string, current: boolean): void => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (current) el.setAttribute("aria-current", "page");
-    else el.removeAttribute("aria-current");
-  };
-  setCurrent("navLibraryLink", route.view === "library");
-  setCurrent("navSearchLink", route.view === "search");
+const setCurrent = (id: string, current: boolean): void => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (current) el.setAttribute("aria-current", "page");
+  else el.removeAttribute("aria-current");
+};
+setCurrent("navLibraryLink", route.view === "library");
+setCurrent("navSearchLink", route.view === "search");
 ```
 
 Use only this second version.
@@ -174,11 +176,13 @@ Do not commit. Report: "Task 1 done: header nav with Library/Search links, EN+JA
 ### Task 2: Search result cache
 
 **Files:**
+
 - Create: `src/search/searchCache.ts`
 - Create: `src/search/searchCache.test.ts`
 - Modify: `src/search/searchView.ts` (`runSearch`, around line 396)
 
 **Interfaces:**
+
 - Consumes: `SearchRouteCriteria` (`src/router.ts`), `PlaylistClip` (`src/playlist.ts`), `ANALYSIS_VERSION` (`src/data/analysisVersion.ts`).
 - Produces: `SearchCache` class with `get(key)`, `set(key, value)`, `clear()`, and `searchCacheKey(criteria, gameIds)`; a module-level `searchCache` singleton.
 
@@ -208,7 +212,10 @@ const criteria: SearchRouteCriteria = {
 };
 
 const value = (n: number) => ({
-  results: Array.from({ length: n }, (_, i) => ({ id: i }) as unknown as PlaylistClip),
+  results: Array.from(
+    { length: n },
+    (_, i) => ({ id: i }) as unknown as PlaylistClip,
+  ),
   unloadedCount: 0,
 });
 
@@ -353,33 +360,33 @@ import { searchCache, searchCacheKey } from "./searchCache.js";
 In `runSearch`, after `const games = candidates.filter(isLoaded);` and the `this.unloadedCount = ...` line, insert:
 
 ```ts
-    const cacheKey = searchCacheKey(
-      this.criteria,
-      games.map((g) => g.id),
-    );
-    const cached = searchCache.get(cacheKey);
-    if (cached) {
-      this.results = [...cached.results];
-      this.unloadedCount = cached.unloadedCount;
-      this.searching = false;
-      this.renderResultsList();
-      return;
-    }
+const cacheKey = searchCacheKey(
+  this.criteria,
+  games.map((g) => g.id),
+);
+const cached = searchCache.get(cacheKey);
+if (cached) {
+  this.results = [...cached.results];
+  this.unloadedCount = cached.unloadedCount;
+  this.searching = false;
+  this.renderResultsList();
+  return;
+}
 ```
 
 At the end of `runSearch`, replace:
 
 ```ts
-    if (token !== this.searchToken) return;
-    this.results = results;
+if (token !== this.searchToken) return;
+this.results = results;
 ```
 
 with:
 
 ```ts
-    if (token !== this.searchToken) return; // superseded: don't cache a partial run
-    searchCache.set(cacheKey, { results, unloadedCount: this.unloadedCount });
-    this.results = results;
+if (token !== this.searchToken) return; // superseded: don't cache a partial run
+searchCache.set(cacheKey, { results, unloadedCount: this.unloadedCount });
+this.results = results;
 ```
 
 - [ ] **Step 6: Clear the cache when the library changes**
@@ -391,13 +398,13 @@ import { searchCache } from "../search/searchCache.js";
 ```
 
 ```ts
-  searchCache.clear();
+searchCache.clear();
 ```
 
 In `src/data/libraryPersistence.ts`, inside `importIntoLibrary`, after the writes are persisted and before returning its result:
 
 ```ts
-  searchCache.clear();
+searchCache.clear();
 ```
 
 with the matching import:
@@ -420,11 +427,13 @@ Do not commit. Report: "Task 2 done: search cache with LRU eviction, cleared on 
 ### Task 3: Search progress bar
 
 **Files:**
+
 - Modify: `src/search/searchView.ts` (`runSearch` and `renderResultsList`)
 - Modify: `src/i18n.ts`
 - Modify: `index.html` (CSS only)
 
 **Interfaces:**
+
 - Consumes: Task 2's cache (a cached hit must render with no progress bar).
 - Produces: nothing other tasks depend on.
 
@@ -433,7 +442,7 @@ Do not commit. Report: "Task 2 done: search cache with LRU eviction, cleared on 
 `Translations` interface (next to `searchInProgress`):
 
 ```ts
-  searchProgress: (done: number, total: number) => string;
+searchProgress: (done: number, total: number) => string;
 ```
 
 `en`:
@@ -462,15 +471,15 @@ In `SearchViewController`, next to `private searching = false;`:
 In `runSearch`, immediately before `for (const summary of games) {`:
 
 ```ts
-    this.progress = { done: 0, total: games.length };
-    this.renderResultsList();
+this.progress = { done: 0, total: games.length };
+this.renderResultsList();
 ```
 
 At the very end of the `for` loop body (after the `try`/`catch` block closes, still inside the loop):
 
 ```ts
-      this.progress = { done: this.progress.done + 1, total: games.length };
-      this.renderResultsList();
+this.progress = { done: this.progress.done + 1, total: games.length };
+this.renderResultsList();
 ```
 
 - [ ] **Step 4: Render the bar**
@@ -478,28 +487,28 @@ At the very end of the `for` loop body (after the `try`/`catch` block closes, st
 In `renderResultsList`, replace this existing block:
 
 ```ts
-    if (this.searching) {
-      statusEl.textContent = tr.searchInProgress;
-      listEl.innerHTML = "";
-      return;
-    }
+if (this.searching) {
+  statusEl.textContent = tr.searchInProgress;
+  listEl.innerHTML = "";
+  return;
+}
 ```
 
 with:
 
 ```ts
-    if (this.searching) {
-      const { done, total } = this.progress;
-      statusEl.textContent =
-        total > 0 ? tr.searchProgress(done, total) : tr.searchInProgress;
-      listEl.innerHTML =
-        total > 0
-          ? `<div class="search-progress"><div class="search-progress-bar" style="width:${Math.round(
-              (done / total) * 100,
-            )}%"></div></div>`
-          : "";
-      return;
-    }
+if (this.searching) {
+  const { done, total } = this.progress;
+  statusEl.textContent =
+    total > 0 ? tr.searchProgress(done, total) : tr.searchInProgress;
+  listEl.innerHTML =
+    total > 0
+      ? `<div class="search-progress"><div class="search-progress-bar" style="width:${Math.round(
+          (done / total) * 100,
+        )}%"></div></div>`
+      : "";
+  return;
+}
 ```
 
 - [ ] **Step 5: Style the bar**
@@ -507,18 +516,18 @@ with:
 In `index.html`'s `<style>` block, next to the other `.search-*` rules:
 
 ```css
-      .search-progress {
-        height: 6px;
-        border-radius: 3px;
-        background: var(--bg-tertiary);
-        overflow: hidden;
-        margin: 8px 0;
-      }
-      .search-progress-bar {
-        height: 100%;
-        background: var(--accent);
-        transition: width 120ms linear;
-      }
+.search-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+  margin: 8px 0;
+}
+.search-progress-bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
 ```
 
 (If `--accent` doesn't exist, use whichever accent variable the existing buttons use.)
@@ -537,6 +546,7 @@ Do not commit. Report: "Task 3 done: search progress bar, EN+JA."
 ### Task 4: Session prev/next in the match sidebar
 
 **Files:**
+
 - Create: `src/data/sessionNavigation.ts`
 - Create: `src/data/sessionNavigation.test.ts`
 - Modify: `index.html` (sidebar markup near the 12CB widget)
@@ -544,6 +554,7 @@ Do not commit. Report: "Task 3 done: search progress bar, EN+JA."
 - Modify: `src/i18n.ts`
 
 **Interfaces:**
+
 - Consumes: `groupGamesIntoSessions` (`src/data/session.ts`), `GameSummary`, `Identity`.
 - Produces: `sessionNeighbors(gameId, summaries, identity): SessionNeighbors | null` where `SessionNeighbors = { sessionId: string; index: number; total: number; previousGameId: string | null; nextGameId: string | null }`.
 
@@ -668,9 +679,9 @@ Expected: PASS (4 tests).
 `Translations` interface:
 
 ```ts
-  sessionGameCounter: (index: number, total: number) => string;
-  previousGame: string;
-  nextGame: string;
+sessionGameCounter: (index: number, total: number) => string;
+previousGame: string;
+nextGame: string;
 ```
 
 `en`:
@@ -694,41 +705,35 @@ Expected: PASS (4 tests).
 In `index.html`, immediately before the 12-character-battle widget element in the match sidebar (search for `twelveCbMatchWidget`), insert:
 
 ```html
-          <div id="sessionNavWidget" class="session-nav-widget" hidden>
-            <button
-              id="sessionPrevGameBtn"
-              class="btn-secondary session-nav-btn"
-            >
-              ◀
-            </button>
-            <a id="sessionNavLabel" class="session-nav-label" href="#/"></a>
-            <button
-              id="sessionNextGameBtn"
-              class="btn-secondary session-nav-btn"
-            >
-              ▶
-            </button>
-          </div>
+<div id="sessionNavWidget" class="session-nav-widget" hidden>
+  <button id="sessionPrevGameBtn" class="btn-secondary session-nav-btn">
+    ◀
+  </button>
+  <a id="sessionNavLabel" class="session-nav-label" href="#/"></a>
+  <button id="sessionNextGameBtn" class="btn-secondary session-nav-btn">
+    ▶
+  </button>
+</div>
 ```
 
 With CSS in the same file:
 
 ```css
-      .session-nav-widget {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        justify-content: space-between;
-        margin-bottom: 8px;
-      }
-      .session-nav-label {
-        font-size: 12px;
-        color: var(--text-secondary);
-        text-decoration: none;
-      }
-      .session-nav-label:hover {
-        text-decoration: underline;
-      }
+.session-nav-widget {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.session-nav-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.session-nav-label:hover {
+  text-decoration: underline;
+}
 ```
 
 - [ ] **Step 7: Wire the control**
@@ -751,24 +756,24 @@ Add fields next to the existing `twelveCbPrevMatchBtn` field declarations:
 Where the 12CB buttons are looked up and given click handlers, add the same for these, navigating with the existing helper:
 
 ```ts
-    this.sessionNavWidget = document.getElementById("sessionNavWidget");
-    this.sessionPrevGameBtn = document.getElementById(
-      "sessionPrevGameBtn",
-    ) as HTMLButtonElement | null;
-    this.sessionNextGameBtn = document.getElementById(
-      "sessionNextGameBtn",
-    ) as HTMLButtonElement | null;
-    this.sessionNavLabel = document.getElementById(
-      "sessionNavLabel",
-    ) as HTMLAnchorElement | null;
-    this.sessionPrevGameBtn?.addEventListener("click", () => {
-      const id = this.sessionPrevGameBtn?.dataset.gameId;
-      if (id) navigateToMatch(id);
-    });
-    this.sessionNextGameBtn?.addEventListener("click", () => {
-      const id = this.sessionNextGameBtn?.dataset.gameId;
-      if (id) navigateToMatch(id);
-    });
+this.sessionNavWidget = document.getElementById("sessionNavWidget");
+this.sessionPrevGameBtn = document.getElementById(
+  "sessionPrevGameBtn",
+) as HTMLButtonElement | null;
+this.sessionNextGameBtn = document.getElementById(
+  "sessionNextGameBtn",
+) as HTMLButtonElement | null;
+this.sessionNavLabel = document.getElementById(
+  "sessionNavLabel",
+) as HTMLAnchorElement | null;
+this.sessionPrevGameBtn?.addEventListener("click", () => {
+  const id = this.sessionPrevGameBtn?.dataset.gameId;
+  if (id) navigateToMatch(id);
+});
+this.sessionNextGameBtn?.addEventListener("click", () => {
+  const id = this.sessionNextGameBtn?.dataset.gameId;
+  if (id) navigateToMatch(id);
+});
 ```
 
 (`navigateToMatch` is already imported by this file for the 12CB buttons; if not, import it from `../router.js`.)
@@ -776,7 +781,7 @@ Where the 12CB buttons are looked up and given click handlers, add the same for 
 In the same method that calls `compute12CbMatchState` (line ~3924), after the 12CB handling, add:
 
 ```ts
-    this.renderSessionNav();
+this.renderSessionNav();
 ```
 
 And add the method itself, next to the 12CB rendering methods:
@@ -849,6 +854,7 @@ Do not commit. Report: "Task 4 done: session prev/next in the match sidebar."
 ### Task 5: Project export and import
 
 **Files:**
+
 - Create: `src/data/projectFile.ts`
 - Create: `src/data/projectFile.test.ts`
 - Modify: `src/library/libraryView.ts` (buttons next to Clear local data)
@@ -856,6 +862,7 @@ Do not commit. Report: "Task 4 done: session prev/next in the match sidebar."
 - Modify: `src/i18n.ts`
 
 **Interfaces:**
+
 - Consumes: `LibraryStore`/`StoredGame` (`src/data/libraryStore.ts`), `Identity`/`loadIdentity`/`saveIdentity` (`src/data/identity.ts`), `VideoLinkData`/`loadVideoLink`/`saveVideoLink` (`src/video/youtubeSync.ts`), `isStale`/`ANALYSIS_VERSION` (`src/data/analysisVersion.ts`).
 - Produces: `buildProjectFile(games, identity, videoLinks): ProjectFile`, `serializeProjectFile(file): Blob`, `parseProjectFile(text): ProjectFile` (throws `ProjectFileError`), `mergeProjectFile(file, store): Promise<ImportProjectResult>` where `ImportProjectResult = { imported: number; skippedStale: number }`.
 
@@ -876,7 +883,10 @@ import { createDefaultIdentity } from "./identity.js";
 import type { StoredGame } from "./libraryStore.js";
 import type { LibraryStore } from "./libraryStore.js";
 
-function storedGame(id: string, analysisVersion = ANALYSIS_VERSION): StoredGame {
+function storedGame(
+  id: string,
+  analysisVersion = ANALYSIS_VERSION,
+): StoredGame {
   return {
     id,
     contentHash: `hash-${id}`,
@@ -935,8 +945,9 @@ describe("project file round trip", () => {
       createDefaultIdentity(),
       {},
     );
-    expect(parseProjectFile(JSON.stringify(built)).games[0]
-      ?.manualPerspectivePort).toBe(1);
+    expect(
+      parseProjectFile(JSON.stringify(built)).games[0]?.manualPerspectivePort,
+    ).toBe(1);
   });
 
   it("rejects a file that isn't a project file", () => {
@@ -978,7 +989,11 @@ describe("mergeProjectFile", () => {
 
   it("merges rather than replacing the existing library", async () => {
     const store = fakeStore([storedGame("existing")]);
-    const file = buildProjectFile([storedGame("new")], createDefaultIdentity(), {});
+    const file = buildProjectFile(
+      [storedGame("new")],
+      createDefaultIdentity(),
+      {},
+    );
     await mergeProjectFile(file, store);
 
     expect(store.rows.map((r) => r.id).sort()).toEqual(["existing", "new"]);
@@ -1112,11 +1127,11 @@ Expected: PASS (6 tests).
 `Translations` interface (next to the clear-local-data keys):
 
 ```ts
-  exportProject: string;
-  importProject: string;
-  exportProjectDone: (games: number) => string;
-  importProjectDone: (imported: number, recomputed: number) => string;
-  importProjectInvalid: string;
+exportProject: string;
+importProject: string;
+exportProjectDone: (games: number) => string;
+importProjectDone: (imported: number, recomputed: number) => string;
+importProjectInvalid: string;
 ```
 
 `en`:
@@ -1151,19 +1166,15 @@ Expected: PASS (6 tests).
 In `index.html`, next to the Clear local data button (search for the element id used by `clearLocalData` wiring):
 
 ```html
-        <button id="exportProjectBtn" class="btn-secondary">
-          Export project
-        </button>
-        <button id="importProjectBtn" class="btn-secondary">
-          Import project
-        </button>
-        <input
-          id="importProjectInput"
-          type="file"
-          accept="application/json,.json"
-          hidden
-        />
-        <span id="projectFileStatus" class="project-file-status"></span>
+<button id="exportProjectBtn" class="btn-secondary">Export project</button>
+<button id="importProjectBtn" class="btn-secondary">Import project</button>
+<input
+  id="importProjectInput"
+  type="file"
+  accept="application/json,.json"
+  hidden
+/>
+<span id="projectFileStatus" class="project-file-status"></span>
 ```
 
 - [ ] **Step 7: Wire them in the library view**
@@ -1184,71 +1195,70 @@ import { loadVideoLink } from "../video/youtubeSync.js";
 Where the Clear local data button is wired, add:
 
 ```ts
-    const exportBtn = this.container.querySelector<HTMLButtonElement>(
-      "#exportProjectBtn",
-    );
-    const importBtn = this.container.querySelector<HTMLButtonElement>(
-      "#importProjectBtn",
-    );
-    const importInput =
-      this.container.querySelector<HTMLInputElement>("#importProjectInput");
-    const statusEl =
-      this.container.querySelector<HTMLElement>("#projectFileStatus");
+const exportBtn =
+  this.container.querySelector<HTMLButtonElement>("#exportProjectBtn");
+const importBtn =
+  this.container.querySelector<HTMLButtonElement>("#importProjectBtn");
+const importInput = this.container.querySelector<HTMLInputElement>(
+  "#importProjectInput",
+);
+const statusEl =
+  this.container.querySelector<HTMLElement>("#projectFileStatus");
 
-    exportBtn?.addEventListener("click", () => {
-      void (async () => {
-        const rows = await this.store.getAll();
-        const videoLinks: Record<string, VideoLinkData> = {};
-        for (const row of rows) {
-          const link = loadVideoLink(row.id);
-          if (link) videoLinks[row.id] = link;
-        }
-        const blob = serializeProjectFile(
-          buildProjectFile(rows, this.identity, videoLinks),
+exportBtn?.addEventListener("click", () => {
+  void (async () => {
+    const rows = await this.store.getAll();
+    const videoLinks: Record<string, VideoLinkData> = {};
+    for (const row of rows) {
+      const link = loadVideoLink(row.id);
+      if (link) videoLinks[row.id] = link;
+    }
+    const blob = serializeProjectFile(
+      buildProjectFile(rows, this.identity, videoLinks),
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rmgr-viewer-project-${new Date()
+      .toISOString()
+      .slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    if (statusEl) statusEl.textContent = t().exportProjectDone(rows.length);
+  })();
+});
+
+importBtn?.addEventListener("click", () => importInput?.click());
+importInput?.addEventListener("change", () => {
+  void (async () => {
+    const file = importInput.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = parseProjectFile(await file.text());
+      const result = await mergeProjectFile(parsed, this.store);
+      saveIdentity(parsed.identity);
+      for (const [id, link] of Object.entries(parsed.videoLinks)) {
+        saveVideoLink(id, link);
+      }
+      if (statusEl) {
+        statusEl.textContent = t().importProjectDone(
+          result.imported,
+          result.skippedStale,
         );
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `rmgr-viewer-project-${new Date()
-          .toISOString()
-          .slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        if (statusEl) statusEl.textContent = t().exportProjectDone(rows.length);
-      })();
-    });
-
-    importBtn?.addEventListener("click", () => importInput?.click());
-    importInput?.addEventListener("change", () => {
-      void (async () => {
-        const file = importInput.files?.[0];
-        if (!file) return;
-        try {
-          const parsed = parseProjectFile(await file.text());
-          const result = await mergeProjectFile(parsed, this.store);
-          saveIdentity(parsed.identity);
-          for (const [id, link] of Object.entries(parsed.videoLinks)) {
-            saveVideoLink(id, link);
-          }
-          if (statusEl) {
-            statusEl.textContent = t().importProjectDone(
-              result.imported,
-              result.skippedStale,
-            );
-          }
-          await this.reloadFromStore();
-        } catch (err) {
-          if (statusEl) {
-            statusEl.textContent =
-              err instanceof ProjectFileError
-                ? t().importProjectInvalid
-                : String(err);
-          }
-        } finally {
-          importInput.value = "";
-        }
-      })();
-    });
+      }
+      await this.reloadFromStore();
+    } catch (err) {
+      if (statusEl) {
+        statusEl.textContent =
+          err instanceof ProjectFileError
+            ? t().importProjectInvalid
+            : String(err);
+      }
+    } finally {
+      importInput.value = "";
+    }
+  })();
+});
 ```
 
 Import `saveIdentity` from `../data/identity.js`, `saveVideoLink` and the `VideoLinkData` type from `../video/youtubeSync.js`.
@@ -1269,10 +1279,12 @@ Do not commit. Report: "Task 5 done: project export/import, EN+JA."
 ### Task 6: Extract the stat panels into a shared module
 
 **Files:**
+
 - Create: `src/stats/statsPanels.ts`
 - Modify: `src/library/libraryView.ts` (the stats rendering around lines 655-780)
 
 **Interfaces:**
+
 - Consumes: `DerivedRates`, `RateDeltas`, `GroupedCharacterBreakdown` (`src/data/aggregate.ts`).
 - Produces: `renderStatCards(container: HTMLElement, input: StatCardsInput)` and `renderBreakdown(container: HTMLElement, breakdown: readonly GroupedCharacterBreakdown[])`, both pure DOM writers taking an explicit container. `StatCardsInput = { rates: DerivedRates; deltas: RateDeltas | null }`.
 
@@ -1328,15 +1340,15 @@ Keep the moved code byte-identical where possible. Where it referenced `this.con
 In `libraryView.ts`, replace the moved blocks with calls:
 
 ```ts
-    if (statCardsWrapEl) {
-      renderStatCards(statCardsWrapEl, {
-        rates: filteredRates,
-        deltas,
-      });
-    }
-    if (breakdownWrapEl) {
-      renderBreakdown(breakdownWrapEl, breakdown);
-    }
+if (statCardsWrapEl) {
+  renderStatCards(statCardsWrapEl, {
+    rates: filteredRates,
+    deltas,
+  });
+}
+if (breakdownWrapEl) {
+  renderBreakdown(breakdownWrapEl, breakdown);
+}
 ```
 
 Keep every surrounding concern (the `hasSufficientGames` hidden/shown logic, the collapsible `<details>` handling, the matchup picker) in `libraryView.ts` — only the panel-body rendering moves.
@@ -1360,6 +1372,7 @@ Do not commit. Report: "Task 6 done: stat panels extracted, library behavior unc
 ### Task 7: Session page
 
 **Files:**
+
 - Create: `src/session/sessionView.ts`
 - Create: `src/session/sessionView.test.ts`
 - Modify: `src/router.ts`
@@ -1369,6 +1382,7 @@ Do not commit. Report: "Task 6 done: stat panels extracted, library behavior unc
 - Modify: `src/i18n.ts`
 
 **Interfaces:**
+
 - Consumes: Task 6's `renderStatCards`/`renderBreakdown`; `groupGamesIntoSessions`; `aggregateFilteredGames`, `computeRateDeltas`, `computeGroupedOpponentCharacterBreakdown` (`src/data/aggregate.ts`); `searchHash` (`src/router.ts`).
 - Produces: `SessionViewController` with `setData(summaries, identity)`, `setSessionId(id)`, `render()`; `navigateToSession(id)` and the `{ view: "session"; id: string }` route.
 
@@ -1420,10 +1434,10 @@ export type Route =
 In `parseRoute`, before the `matchup/` branch:
 
 ```ts
-  if (clean.startsWith("session/")) {
-    const id = decodeURIComponent(clean.slice("session/".length));
-    if (id) return { view: "session", id };
-  }
+if (clean.startsWith("session/")) {
+  const id = decodeURIComponent(clean.slice("session/".length));
+  if (id) return { view: "session", id };
+}
 ```
 
 And next to the other navigate helpers:
@@ -1468,7 +1482,10 @@ const EMPTY_CRITERIA: SearchRouteCriteria = {
 };
 
 export interface QuickSearchLink {
-  readonly labelKey: "quickSearchFailedEdgeGuards" | "quickSearchCombos" | "quickSearchKillCombos";
+  readonly labelKey:
+    | "quickSearchFailedEdgeGuards"
+    | "quickSearchCombos"
+    | "quickSearchKillCombos";
   readonly href: string;
 }
 
@@ -1578,7 +1595,8 @@ export class SessionViewController {
       </section>
     `;
 
-    const cardsEl = this.container.querySelector<HTMLElement>("#sessionStatCards");
+    const cardsEl =
+      this.container.querySelector<HTMLElement>("#sessionStatCards");
     if (cardsEl) renderStatCards(cardsEl, { rates: sessionRates, deltas });
     const breakdownEl =
       this.container.querySelector<HTMLElement>("#sessionBreakdown");
@@ -1596,7 +1614,8 @@ export class SessionViewController {
         .join(" ");
     }
 
-    const videosEl = this.container.querySelector<HTMLElement>("#sessionVideos");
+    const videosEl =
+      this.container.querySelector<HTMLElement>("#sessionVideos");
     if (videosEl) {
       videosEl.innerHTML = session.videoId
         ? `<h3>${tr.sessionVideos}</h3><a href="https://www.youtube.com/watch?v=${encodeURIComponent(
@@ -1605,7 +1624,8 @@ export class SessionViewController {
         : "";
     }
 
-    const listEl = this.container.querySelector<HTMLElement>("#sessionGameList");
+    const listEl =
+      this.container.querySelector<HTMLElement>("#sessionGameList");
     if (listEl) {
       listEl.innerHTML = session.games
         .map(
@@ -1655,16 +1675,16 @@ Expected: PASS (2 tests).
 `Translations` interface:
 
 ```ts
-  sessionNotFound: string;
-  sessionRecord: (wins: number, losses: number) => string;
-  sessionGames: (count: number) => string;
-  sessionGamesHeading: string;
-  sessionVideos: string;
-  sessionQuickSearches: string;
-  quickSearchFailedEdgeGuards: string;
-  quickSearchCombos: string;
-  quickSearchKillCombos: string;
-  viewSession: string;
+sessionNotFound: string;
+sessionRecord: (wins: number, losses: number) => string;
+sessionGames: (count: number) => string;
+sessionGamesHeading: string;
+sessionVideos: string;
+sessionQuickSearches: string;
+quickSearchFailedEdgeGuards: string;
+quickSearchCombos: string;
+quickSearchKillCombos: string;
+viewSession: string;
 ```
 
 `en`:
@@ -1702,7 +1722,7 @@ Expected: PASS (2 tests).
 In `index.html`, next to `<div id="searchView" ...>`:
 
 ```html
-    <div id="sessionView" class="view" hidden></div>
+<div id="sessionView" class="view" hidden></div>
 ```
 
 In `src/main.ts`, next to the other controller declarations and construction (line ~794):
@@ -1712,10 +1732,10 @@ let sessionController: SessionViewController;
 ```
 
 ```ts
-  sessionController = new SessionViewController(
-    document.getElementById("sessionView") as HTMLElement,
-    (gameId) => navigateToMatch(gameId),
-  );
+sessionController = new SessionViewController(
+  document.getElementById("sessionView") as HTMLElement,
+  (gameId) => navigateToMatch(gameId),
+);
 ```
 
 Add a `sessionViewEl` lookup alongside `searchViewEl`, hide it in every other branch of `handleRouteChange` (the same way `searchViewEl.hidden = true;` appears in each), and add the new branch after the `search` branch:
@@ -1747,9 +1767,9 @@ Add a `sessionViewEl` lookup alongside `searchViewEl`, hide it in every other br
 In `src/library/libraryView.ts`, where a session row's header is built, add a link (keeping the existing expand/collapse behavior intact — the link must not toggle the row):
 
 ```ts
-      `<a class="session-details-link" href="#/session/${encodeURIComponent(
-        session.id,
-      )}" onclick="event.stopPropagation()">${t().viewSession}</a>`;
+`<a class="session-details-link" href="#/session/${encodeURIComponent(
+  session.id,
+)}" onclick="event.stopPropagation()">${t().viewSession}</a>`;
 ```
 
 Prefer an `addEventListener("click", (e) => e.stopPropagation())` on the rendered anchor over the inline `onclick` if the surrounding code builds rows with `addEventListener`.

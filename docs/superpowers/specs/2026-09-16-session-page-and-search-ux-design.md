@@ -31,12 +31,12 @@ stores that already exist.
 ```ts
 interface ProjectFile {
   kind: "rmgr-viewer-project";
-  fileVersion: 1;            // this file format
-  analysisVersion: number;   // ANALYSIS_VERSION at export time
-  exportedAt: string;        // ISO 8601
-  games: StoredGame[];       // the IndexedDB library rows, as stored
-  identity: Identity;        // localStorage (identity.ts)
-  videoLinks: Record<string, VideoLinkData>;  // localStorage, per replay id
+  fileVersion: 1; // this file format
+  analysisVersion: number; // ANALYSIS_VERSION at export time
+  exportedAt: string; // ISO 8601
+  games: StoredGame[]; // the IndexedDB library rows, as stored
+  identity: Identity; // localStorage (identity.ts)
+  videoLinks: Record<string, VideoLinkData>; // localStorage, per replay id
 }
 ```
 
@@ -110,7 +110,7 @@ New `src/data/sessionNavigation.ts`:
 ```ts
 interface SessionNeighbors {
   sessionId: string;
-  index: number;      // 0-based position within the session
+  index: number; // 0-based position within the session
   total: number;
   previousGameId: string | null;
   nextGameId: string | null;
@@ -119,7 +119,7 @@ function sessionNeighbors(
   gameId: string,
   summaries: readonly GameSummary[],
   identity: Identity,
-): SessionNeighbors | null;   // null when the game isn't in any session
+): SessionNeighbors | null; // null when the game isn't in any session
 ```
 
 Built on `groupGamesIntoSessions`, mirroring `compute12CbMatchState`'s
