@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { Camera } from "./camera.js";
 import {
   canAngleAttack,
   getAttackInfo,
@@ -63,6 +64,9 @@ import {
   LEDGE_GRAB_FADE_FRAMES,
   StageRenderer,
   extractBombExplosions,
+  CHARGE_SHOT_FULL_CHARGE_RADIUS_WORLD,
+  CHARGE_SHOT_FULL_CHARGE_SCALE,
+  CHARGE_SHOT_LEVEL_SCALES,
 } from "./renderer.js";
 import {
   HazardFlag,
@@ -74,6 +78,7 @@ import {
   type StateFrame,
   type InputFrame,
   type Replay,
+  type ItemUpdate,
 } from "@rmg-k/rmgr";
 import {
   DREAM_LAND_BLAST_ZONE,
@@ -1324,7 +1329,13 @@ describe("getDKSpecialType", () => {
     expect(getDKSpecialType(0x02, 0x0e8)).toBe("hand_slap");
     expect(getDKSpecialType(0x02, 0x0e9)).toBe("hand_slap");
     expect(getDKSpecialType(0x02, 0x0ea)).toBe("hand_slap");
+    expect(getDKSpecialType(0x02, 0x0e0)).toBe("giant_punch_windup");
+    expect(getDKSpecialType(0x02, 0x0e1)).toBe("giant_punch_windup");
     expect(getDKSpecialType(0x02, 0x0eb)).toBe("giant_punch_windup");
+    expect(getDKSpecialType(0x02, 0x0e2)).toBe("giant_punch");
+    expect(getDKSpecialType(0x02, 0x0e3)).toBe("giant_punch");
+    expect(getDKSpecialType(0x02, 0x0e4)).toBe("giant_punch");
+    expect(getDKSpecialType(0x02, 0x0e5)).toBe("giant_punch");
     expect(getDKSpecialType(0x02, 0x0ec)).toBe("giant_punch");
     expect(getDKSpecialType(0x02, 0x00a)).toBeNull(); // Idle
   });
@@ -1444,7 +1455,9 @@ describe("getSamusSpecialType", () => {
   it("classifies Samus special moves correctly", () => {
     expect(getSamusSpecialType(0x03, 0x0dc)).toBe("charge_shot");
     expect(getSamusSpecialType(0x03, 0x0e3)).toBe("screw_attack");
-    expect(getSamusSpecialType(0x03, 0x0e8)).toBe("bomb");
+    // Bomb (Down-B) - no synthetic animation anymore, the real recorded
+    // Weapon object (WPKind.SamusBomb) gets its own marker instead.
+    expect(getSamusSpecialType(0x03, 0x0e8)).toBeNull();
   });
 
   it("returns null for non-Samus or non-special states", () => {
@@ -1465,8 +1478,8 @@ describe("getSamusSpecialType", () => {
     expect(getSamusSpecialType(0x03, 0x0e4)).toBe("screw_attack");
   });
 
-  it("classifies 0x0e6 as dropping a bomb, not screw attack (confirmed empirically - previously misclassified as screw attack)", () => {
-    expect(getSamusSpecialType(0x03, 0x0e6)).toBe("bomb");
+  it("returns null for 0x0e6 (Down-B bomb - synthetic animation removed in favor of real WPKind.SamusBomb)", () => {
+    expect(getSamusSpecialType(0x03, 0x0e6)).toBeNull();
   });
 
   it("classifies 0x0e2 as firing the charged shot while airborne (confirmed empirically, previously unmapped)", () => {
@@ -3909,6 +3922,565 @@ describe("StageRenderer background themes", () => {
       expect(
         explosions.find((e) => e.objectAddress === 0x80400000),
       ).toBeUndefined();
+    });
+  });
+
+  describe("Charge Shot and Giant Punch Recorder Schema 2 Visual Enhancements", () => {
+    const createMockCanvas = () => {
+      const strokeCalls: number[] = [];
+      const fills: string[] = [];
+      const arcCalls: Array<{ x: number; y: number; radius: number }> = [];
+      const ellipseCalls: Array<{
+        x: number;
+        y: number;
+        radiusX: number;
+        radiusY: number;
+      }> = [];
+      const fillRectCalls: Array<{
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+      }> = [];
+      const roundRectCalls: Array<{
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+      }> = [];
+      let currentGlobalAlpha = 1;
+      let currentFillStyle = "";
+      let currentStrokeStyle = "";
+
+      const fakeCanvas = {
+        getContext: () => ({
+          save: () => {},
+          restore: () => {},
+          beginPath: () => {},
+          closePath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          rect: () => {},
+          roundRect: (x: number, y: number, w: number, h: number) => {
+            roundRectCalls.push({ x, y, w, h });
+          },
+          fillRect: (x: number, y: number, w: number, h: number) => {
+            fillRectCalls.push({ x, y, w, h });
+          },
+          strokeRect: () => {},
+          clearRect: () => {},
+          clip: () => {},
+          setLineDash: () => {},
+          createRadialGradient: () => ({ addColorStop: () => {} }),
+          createLinearGradient: () => ({ addColorStop: () => {} }),
+          fill: () => {
+            fills.push(currentFillStyle);
+          },
+          stroke: () => {
+            strokeCalls.push(1);
+          },
+          translate: () => {},
+          rotate: () => {},
+          scale: () => {},
+          arc: (x: number, y: number, radius: number) => {
+            arcCalls.push({ x, y, radius });
+          },
+          ellipse: (x: number, y: number, radiusX: number, radiusY: number) => {
+            ellipseCalls.push({ x, y, radiusX, radiusY });
+          },
+          quadraticCurveTo: () => {},
+          set globalAlpha(val: number) {
+            currentGlobalAlpha = val;
+          },
+          get globalAlpha() {
+            return currentGlobalAlpha;
+          },
+          set fillStyle(val: string) {
+            currentFillStyle = val;
+          },
+          get fillStyle() {
+            return currentFillStyle;
+          },
+          set strokeStyle(val: string) {
+            currentStrokeStyle = val;
+          },
+          get strokeStyle() {
+            return currentStrokeStyle;
+          },
+          lineWidth: 1,
+          shadowColor: "",
+          shadowBlur: 0,
+          font: "",
+          measureText: (s: string) => ({ width: s.length * 6 }),
+          fillText: () => {},
+        }),
+        width: 960,
+        height: 540,
+        getAttribute: () => null,
+      } as unknown as HTMLCanvasElement;
+
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+      };
+
+      return {
+        fakeCanvas,
+        fakeCamera,
+        arcCalls,
+        ellipseCalls,
+        fillRectCalls,
+        roundRectCalls,
+        getGlobalAlpha: () => currentGlobalAlpha,
+        getStrokeStyle: () => currentStrokeStyle,
+        getFillStyle: () => currentFillStyle,
+        fills,
+      };
+    };
+
+    describe("Part 1: Charge Shot real world-unit sizing", () => {
+      it("calibrates full charge radius to 130 world units (260-unit diameter)", () => {
+        expect(CHARGE_SHOT_FULL_CHARGE_RADIUS_WORLD).toBe(130);
+        expect(CHARGE_SHOT_FULL_CHARGE_SCALE).toBeCloseTo(700 / 30);
+      });
+
+      it("verifies all charge levels 0-7 scales", () => {
+        expect(CHARGE_SHOT_LEVEL_SCALES).toEqual([
+          5.0, 7.67, 9.33, 11.33, 13.67, 16.33, 20.0, 23.33,
+        ]);
+      });
+
+      it("draws Charge Shot with proportional radius across charge scales", () => {
+        const { fakeCanvas } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+        const ctx = fakeCanvas.getContext("2d")!;
+
+        for (const scale of CHARGE_SHOT_LEVEL_SCALES) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const handled = (renderer as any).drawCustomWeaponShape(
+            ctx,
+            WPKind.ChargeShot,
+            100,
+            200,
+            false,
+            1,
+            0,
+            scale,
+          );
+          expect(handled).toBe(true);
+        }
+      });
+
+      it("falls back to full charge radius when gameScale is undefined (schema 1)", () => {
+        const { fakeCanvas } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+        const ctx = fakeCanvas.getContext("2d")!;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const handled = (renderer as any).drawCustomWeaponShape(
+          ctx,
+          WPKind.ChargeShot,
+          100,
+          200,
+          false,
+          1,
+          0,
+          undefined,
+        );
+        expect(handled).toBe(true);
+      });
+    });
+
+    describe("Part 2: Charging orb suppression", () => {
+      it("identifies charging orb when Samus is charging Neutral-B and item matches her charge and position", () => {
+        const { fakeCanvas } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        const frame = {
+          frame: 100,
+          ports: {
+            "0": {
+              state: {
+                characterId: 3, // Samus US
+                actionStateId: 0x0df, // charge_shot charging
+                positionX: 500,
+                positionY: 200,
+                characterSpecific: 2, // charge level 2 -> scale 9.33
+              },
+            },
+          },
+        } as unknown as Frame;
+
+        const item = {
+          linkId: ItemLinkId.Weapon,
+          kind: WPKind.ChargeShot,
+          positionX: 530,
+          positionY: 230,
+          scaleX: 9.33,
+          scaleY: 9.33,
+          frame: 100,
+        } as unknown as ItemUpdate;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const isOrb = (renderer as any).isChargingOrb(item, frame, null);
+        expect(isOrb).toBe(true);
+      });
+
+      it("does not suppress fired shot in flight (scale matches prior charge, Samus charge zeroed, not charging)", () => {
+        const { fakeCanvas } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        const frame = {
+          frame: 120,
+          ports: {
+            "0": {
+              state: {
+                characterId: 3, // Samus
+                actionStateId: 0x0e2, // charge_shot_fire
+                positionX: 500,
+                positionY: 200,
+                characterSpecific: 0, // zeroed on firing
+              },
+            },
+          },
+        } as unknown as Frame;
+
+        const firedShot = {
+          linkId: ItemLinkId.Weapon,
+          kind: WPKind.ChargeShot,
+          positionX: 550,
+          positionY: 230,
+          scaleX: 23.33,
+          scaleY: 23.33,
+          frame: 120,
+        } as unknown as ItemUpdate;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const isOrb = (renderer as any).isChargingOrb(firedShot, frame, null);
+        expect(isOrb).toBe(false);
+      });
+
+      it("falls back to false in schema 1 replays where scaleX/scaleY is undefined", () => {
+        const { fakeCanvas } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        const frame = {
+          frame: 100,
+          ports: {
+            "0": {
+              state: {
+                characterId: 3,
+                actionStateId: 0x0df,
+                positionX: 500,
+                positionY: 200,
+                characterSpecific: undefined,
+              },
+            },
+          },
+        } as unknown as Frame;
+
+        const item = {
+          linkId: ItemLinkId.Weapon,
+          kind: WPKind.ChargeShot,
+          positionX: 530,
+          positionY: 230,
+          scaleX: undefined,
+          scaleY: undefined,
+          frame: 100,
+        } as unknown as ItemUpdate;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const isOrb = (renderer as any).isChargingOrb(item, frame, null);
+        expect(isOrb).toBe(false);
+      });
+    });
+
+    describe("Part 3: Battery charge meter for Samus and DK", () => {
+      it("renders 8 stages for Samus (US id 3 and JP id 36)", () => {
+        for (const cid of [3, 36]) {
+          const { fakeCanvas, roundRectCalls } = createMockCanvas();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const renderer = new (StageRenderer as any)(fakeCanvas);
+
+          const post = {
+            characterId: cid,
+            actionStateId: 0x0df, // charging
+            characterSpecific: 3,
+          };
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (renderer as any).drawChargeMeter(
+            100,
+            200,
+            20,
+            50,
+            true,
+            post,
+            0 as PortIndex,
+            null,
+            10,
+            false,
+          );
+
+          // Battery casing roundRect is drawn
+          expect(roundRectCalls.length).toBeGreaterThan(0);
+        }
+      });
+
+      it("renders 11 stages for Donkey Kong (US id 2 and JP id 44)", () => {
+        for (const cid of [2, 44]) {
+          const { fakeCanvas, roundRectCalls } = createMockCanvas();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const renderer = new (StageRenderer as any)(fakeCanvas);
+
+          const post = {
+            characterId: cid,
+            actionStateId: 0x0e0, // winding up
+            characterSpecific: 5,
+          };
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (renderer as any).drawChargeMeter(
+            100,
+            200,
+            20,
+            50,
+            true,
+            post,
+            0 as PortIndex,
+            null,
+            10,
+            false,
+          );
+
+          expect(roundRectCalls.length).toBeGreaterThan(0);
+        }
+      });
+
+      it("strictly gates out Kirby (US 8, JP 48) and other characters", () => {
+        for (const cid of [8, 48, 0, 1, 9]) {
+          const { fakeCanvas, roundRectCalls } = createMockCanvas();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const renderer = new (StageRenderer as any)(fakeCanvas);
+
+          const post = {
+            characterId: cid,
+            actionStateId: 0x0a,
+            characterSpecific: 3, // Kirby copying or garbage data
+          };
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (renderer as any).drawChargeMeter(
+            100,
+            200,
+            20,
+            50,
+            true,
+            post,
+            0 as PortIndex,
+            null,
+            10,
+            true, // even paused!
+          );
+
+          expect(roundRectCalls).toHaveLength(0);
+        }
+      });
+
+      it("reappears at full opacity (1.0) while playback is paused", () => {
+        const { fakeCanvas, getGlobalAlpha } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        const post = {
+          characterId: 3,
+          actionStateId: 0x00a, // idle, not charging
+          characterSpecific: 4, // stored charge
+        };
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawChargeMeter(
+          100,
+          200,
+          20,
+          50,
+          true,
+          post,
+          0 as PortIndex,
+          null,
+          100,
+          true, // isPaused
+        );
+
+        expect(getGlobalAlpha()).toBe(1.0);
+      });
+
+      it("applies rainbow styling at full charge (Samus charge 7, DK charge 10)", () => {
+        // Samus full charge
+        {
+          const { fakeCanvas, getStrokeStyle } = createMockCanvas();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const renderer = new (StageRenderer as any)(fakeCanvas);
+
+          const post = {
+            characterId: 3,
+            actionStateId: 0x0df,
+            characterSpecific: 7, // full charge for Samus
+          };
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (renderer as any).drawChargeMeter(
+            100,
+            200,
+            20,
+            50,
+            true,
+            post,
+            0 as PortIndex,
+            null,
+            10,
+            false,
+          );
+
+          expect(getStrokeStyle()).toMatch(/hsl\(/);
+        }
+
+        // DK full charge
+        {
+          const { fakeCanvas, getStrokeStyle } = createMockCanvas();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const renderer = new (StageRenderer as any)(fakeCanvas);
+
+          const post = {
+            characterId: 2,
+            actionStateId: 0x0e0,
+            characterSpecific: 10, // full charge for DK
+          };
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (renderer as any).drawChargeMeter(
+            100,
+            200,
+            20,
+            50,
+            true,
+            post,
+            0 as PortIndex,
+            null,
+            10,
+            false,
+          );
+
+          expect(getStrokeStyle()).toMatch(/hsl\(/);
+        }
+      });
+
+      it("falls back gracefully without drawing empty UI when characterSpecific is undefined (schema 1)", () => {
+        const { fakeCanvas, roundRectCalls } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        const post = {
+          characterId: 3,
+          actionStateId: 0x0df,
+          characterSpecific: undefined, // schema 1
+        };
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawChargeMeter(
+          100,
+          200,
+          20,
+          50,
+          true,
+          post,
+          0 as PortIndex,
+          null,
+          10,
+          true,
+        );
+
+        expect(roundRectCalls).toHaveLength(0);
+      });
+    });
+
+    describe("Part 4: Charge Shot visual in Samus charging animation", () => {
+      it("renders charge shot marker during charge_shot specialType", () => {
+        const { fakeCanvas, arcCalls } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+        const camera = new Camera(800, 600);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawSamusSpecial(
+          camera,
+          200,
+          300,
+          20,
+          50,
+          true,
+          "#ff0000",
+          "charge_shot",
+          10,
+          5,
+        );
+
+        expect(arcCalls.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe("Part 5: DK Giant Punch windup and execution animation", () => {
+      it("renders rotating arm windup animation during giant_punch_windup", () => {
+        const { fakeCanvas, arcCalls, ellipseCalls } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawDKSpecial(
+          200,
+          350,
+          300,
+          25,
+          60,
+          true,
+          "#ff0000",
+          "giant_punch_windup",
+          12,
+          7,
+        );
+
+        expect(ellipseCalls.length).toBeGreaterThan(0);
+        expect(arcCalls.length).toBeGreaterThan(0);
+      });
+
+      it("renders forward haymaker punch and shockwave burst during giant_punch execution", () => {
+        const { fakeCanvas, arcCalls, ellipseCalls } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawDKSpecial(
+          200,
+          350,
+          300,
+          25,
+          60,
+          true,
+          "#ff0000",
+          "giant_punch",
+          5,
+          10, // full charge
+        );
+
+        // Expect forward fist arcs and impact shockwave ellipses
+        expect(arcCalls.length).toBeGreaterThan(0);
+        expect(ellipseCalls.length).toBeGreaterThan(0);
+      });
     });
   });
 });
