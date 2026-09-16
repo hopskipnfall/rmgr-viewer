@@ -111,7 +111,8 @@ function referenceEvaluatePhase(
   cliffcatchX: number,
   cliffcatchY: number,
   nMax: number,
-  deathY = -6000.0,
+  // Dream Land's real bottom blast zone (stageGeometry.ts DREAM_LAND_BLAST_ZONE).
+  deathY = -3500.0,
 ): {
   outcome: ReturnType<typeof outcomeThisFrame>;
   end: readonly [number, number, number, number] | null;
@@ -425,7 +426,7 @@ describe("closed-form primitives: boundary/exact-integer cases", () => {
   // untested by the phase fuzz suite (whose y0 range never approaches deathY).
   it("evaluatePhase: y0 at/below the death threshold dies immediately", () => {
     const mismatches: string[] = [];
-    for (const y0 of [-6000.0, -6000.0001, -5999.9999, -7000.0]) {
+    for (const y0 of [-3500.0, -3500.0001, -3499.9999, -4500.0]) {
       for (const vy0 of [-50.0, 0.0, 30.0]) {
         const { outcome, died } = evaluatePhase(
           0.0,
@@ -440,7 +441,7 @@ describe("closed-form primitives: boundary/exact-integer cases", () => {
           600.0,
           90,
         );
-        const expectedDiedImmediately = y0 < -6000.0;
+        const expectedDiedImmediately = y0 < -3500.0;
         if (expectedDiedImmediately && !(outcome === null && died)) {
           mismatches.push(
             `y0=${y0} vy0=${vy0}: outcome=${outcome} died=${died}`,
@@ -512,16 +513,18 @@ describe("facing direction", () => {
   const FALL_STATE = 0x1a; // Fall -- clears Yoshi's JumpAerialF/B gate
 
   it("Link: facing away downgrades dead-if-ledge-occupied to dead, but leaves reaches-stage and dead untouched", () => {
-    // x=-4500, facingDirection=1 means facing right (toward the stage from the left side).
-    expect(classify(CHAR_LINK, -4500, -2500, 0, -30, 0, 0, 1)).toBe(
+    // x=-3500, facingDirection=1 means facing right (toward the stage from the left side).
+    // (Positions re-picked when Spin Attack's full-gravity switch moved from frame 45 to 12:
+    // the old ones assumed a rise roughly twice the real move's.)
+    expect(classify(CHAR_LINK, -3500, -1500, 0, -30, 0, 0, 1)).toBe(
       "dead-if-ledge-occupied",
     );
-    expect(classify(CHAR_LINK, -4500, -2500, 0, -30, 0, 0, -1)).toBe("dead");
+    expect(classify(CHAR_LINK, -3500, -1500, 0, -30, 0, 0, -1)).toBe("dead");
 
-    expect(classify(CHAR_LINK, -3500, -1500, 0, -30, 0, 0, 1)).toBe(
+    expect(classify(CHAR_LINK, -3000, -750, 0, -30, 0, 0, 1)).toBe(
       "reaches-stage",
     );
-    expect(classify(CHAR_LINK, -3500, -1500, 0, -30, 0, 0, -1)).toBe(
+    expect(classify(CHAR_LINK, -3000, -750, 0, -30, 0, 0, -1)).toBe(
       "reaches-stage",
     );
 
@@ -745,6 +748,26 @@ describe("Captain Falcon: Falcon Dive", () => {
         verdict === "dead-if-ledge-occupied" || verdict === "reaches-stage",
       ).toBe(true);
     }
+  });
+
+  it("real far-out recoveries that used Falcon Punch's release burst are recoverable", () => {
+    // Both real players double-jumped, whiffed an aerial Falcon Punch for its ~65 units/frame
+    // burst, then Falcon Dove to the ledge -- which plain fall-then-dive can't reach in time.
+    // 260823171117-Wario-Player-6 @7261 (US Falcon):
+    expect(
+      classify(CHAR_FALCON, 6686.6, 58.2, -3.0, -66.0, 1, 0x39, 1),
+    ).not.toBe("dead");
+    // 260913004423-shidozzzz-zabuton-nue-61 @1115 (JP Falcon, 0x28):
+    expect(classify(0x28, 7972.5, 1321.0, -3.0, -60.0, 1, 0x39, 1)).not.toBe(
+      "dead",
+    );
+  });
+
+  it("the Falcon Punch branch is modeled only after a double jump", () => {
+    // Same spot as the Wario-Player-6 case, jump already used: out of reach.
+    expect(classify(CHAR_FALCON, 6686.6, 58.2, -3.0, -66.0, 0, 0x39, 1)).toBe(
+      "dead",
+    );
   });
 
   it("is monotonic and not trivially always-true/always-false along an x sweep", () => {

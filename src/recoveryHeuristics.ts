@@ -12,6 +12,8 @@
  * SUPPORTED_CHARACTERS' own doc comment for the full character list. Dream Land only.
  */
 
+import { DREAM_LAND_BLAST_ZONE } from "./stageGeometry.js";
+
 // ---------------------------------------------------------------------------
 // Shared Dream Land geometry/physics helpers (dreamland_common.py, ported 1:1)
 // ---------------------------------------------------------------------------
@@ -190,7 +192,12 @@ export function outcomeThisFrame(
 
 const STICK_TOWARD = 80;
 const MAX_HELPLESS_FRAMES = 400;
-const DEATH_Y = -6000;
+/**
+ * A simulated character below this height has died: Dream Land's real bottom blast zone. Was
+ * -6000, which gave every simulated recovery ~2500 units of fall that don't exist in the game
+ * (all 737 bottom-blast-zone deaths in the reference corpus happened between y = -3322 and -3500).
+ */
+const DEATH_Y = DREAM_LAND_BLAST_ZONE.bottomY;
 
 // ---------------------------------------------------------------------------
 // Closed-form replacements for the per-frame simulation primitives above
@@ -555,7 +562,11 @@ const LINK = {
   SPINATTACK_AIR_VEL_Y: 69.0,
   SPINATTACK_GRAVITY_MUL: 0.23,
   SPINATTACK_AIR_DRIFT_MUL: 0.5,
-  SPINATTACK_GRAVITY_SWITCH_FRAME: 45,
+  // ftLinkSpecialAirHiProcPhysics switches to full gravity once the motion script's SetFlag1
+  // fires: animation frame 12 of dLinkMainMotion_UpSpecial (224_LinkMainMotion.c). Was 45 --
+  // the script's WaitAsync(N) arguments are ABSOLUTE animation frames, not deltas, and summing
+  // them gives 45. Confirmed against 120 real JP Link Spin Attacks (low gravity ends ~frame 10).
+  SPINATTACK_GRAVITY_SWITCH_FRAME: 12,
   SPINATTACK_DURATION_FRAMES: 161,
   FALLSPECIAL_DRIFT: 0.6,
   MAX_DELAY_FRAMES: 90,
@@ -2499,6 +2510,142 @@ function falconSimulateDiveAndBeyond(
   return null;
 }
 
+/**
+ * Aerial Falcon Punch as a repositioning tool (relay from the Game Expert session, 2026-09-15;
+ * ftcaptainspecialn.c, 235_CaptainMainMotion.c's dCaptainMainMotion_FalconPunchAir,
+ * ftcaptainstatus.h). Real players get back from far out by double-jumping, whiffing an aerial
+ * Falcon Punch purely for its release burst (~65 units/frame, over twice normal air speed), then
+ * Falcon Diving -- both corpus cases the plain delay-then-dive search rated "dead" did exactly this
+ * (260823171117-Wario-Player-6 @7261, 260913004423-shidozzzz-zabuton-nue-61 @1115). Timeline in
+ * frames from entering SpecialAirN, identical US/JP (cross-checked against both replays):
+ * - 0-39, charge: ordinary gravity; vx only decays by AIR_FRICTION (no stick drift).
+ * - 40, release: vel = (lr * 65, 0) at neutral stick -- boost angle 0, the best for reach.
+ * - 40-54: vel *= 0.92 every frame, no gravity at all.
+ * - 55-88: ordinary gravity + air drift, same as plain falling.
+ * - 89: the animation ends into FallAerial. ProcInterrupt is NULL, so nothing (Dive included)
+ *   can cancel the move before then.
+ * The move's ProcMap only checks floor landing -- no cliff catch -- so only a stage landing counts
+ * during it. Modeled only as jump -> punch -> dive (the order both real cases used).
+ */
+const FALCON_PUNCH = {
+  CHARGE_FRAMES: 40,
+  VEL_BASE: 65,
+  VEL_MUL: 0.92,
+  DECAY_END_FRAME: 55,
+  TOTAL_FRAMES: 89,
+};
+
+/** Frames after the double jump to start the punch, searched coarsely -- both real cases punched
+ * 1-4 frames after jumping. */
+const FALCON_PUNCH_AFTER_JUMP_DELAYS = [0, 4, 8, 12, 16, 20];
+
+interface FalconState {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
+
+/** `frames` of ordinary Fall-state physics (gravity + standard clampAirVelX drift toward the
+ * target), stopping early on a ledge grab/landing or death. */
+function falconFreefall(
+  start: FalconState,
+  frames: number,
+  targetLr: 1 | -1,
+  attrs: typeof FALCON,
+): { outcome: Outcome; died: boolean; end: FalconState } {
+  let { x, y, vx, vy } = start;
+  for (let frame = 0; frame < frames; frame++) {
+    const prevX = x;
+    const prevY = y;
+    vy = applyGravity(vy, attrs.GRAVITY, attrs.TVEL_BASE);
+    vx = clampAirVelX(
+      vx,
+      targetLr * STICK_TOWARD,
+      attrs.AIR_ACCEL,
+      attrs.AIR_SPEED_MAX_X,
+    );
+    x += vx;
+    y += vy;
+    const outcome = outcomeThisFrame(
+      prevX,
+      prevY,
+      x,
+      y,
+      attrs.CLIFFCATCH_X,
+      attrs.CLIFFCATCH_Y,
+    );
+    if (outcome) return { outcome, died: false, end: { x, y, vx, vy } };
+    if (y < DEATH_Y)
+      return { outcome: null, died: true, end: { x, y, vx, vy } };
+  }
+  return { outcome: null, died: false, end: { x, y, vx, vy } };
+}
+
+/** The original Falcon search from `start`: fall for 0..MAX_DELAY_FRAMES frames (ordinary
+ * Fall-state physics, NOT the dive's own multiplied constants -- the drift-velocity reset only
+ * happens AT activation, see this section's header comment), then Falcon Dive. */
+function falconDelayThenDive(
+  start: FalconState,
+  targetLr: 1 | -1,
+  attrs: typeof FALCON,
+): { ledge: boolean; stage: boolean } {
+  let ledge = false;
+  let stage = false;
+  for (let delay = 0; delay <= attrs.MAX_DELAY_FRAMES; delay++) {
+    if (ledge && stage) break;
+    const fall = falconFreefall(start, delay, targetLr, attrs);
+    if (fall.died) continue;
+    const outcome =
+      fall.outcome ??
+      falconSimulateDiveAndBeyond(fall.end.x, fall.end.y, targetLr, attrs);
+    if (outcome === "ledge" || outcome === "both") ledge = true;
+    if (outcome === "stage" || outcome === "both") stage = true;
+  }
+  return { ledge, stage };
+}
+
+/** One aerial Falcon Punch from `start` (see FALCON_PUNCH). `landed` = touched down on the stage
+ * during the move; otherwise `end` is the state as it ends into FallAerial at frame 89. */
+function falconSimulatePunch(
+  start: FalconState,
+  targetLr: 1 | -1,
+  attrs: typeof FALCON,
+): { landed: boolean; died: boolean; end: FalconState } {
+  let { x, y, vx, vy } = start;
+  for (let frame = 0; frame < FALCON_PUNCH.TOTAL_FRAMES; frame++) {
+    const prevX = x;
+    const prevY = y;
+    if (frame < FALCON_PUNCH.CHARGE_FRAMES) {
+      vy = applyGravity(vy, attrs.GRAVITY, attrs.TVEL_BASE);
+      vx = applyFriction(vx, attrs.AIR_FRICTION);
+    } else if (frame < FALCON_PUNCH.DECAY_END_FRAME) {
+      if (frame === FALCON_PUNCH.CHARGE_FRAMES) {
+        vx = targetLr * FALCON_PUNCH.VEL_BASE;
+        vy = 0;
+      }
+      vx *= FALCON_PUNCH.VEL_MUL;
+      vy *= FALCON_PUNCH.VEL_MUL;
+    } else {
+      vy = applyGravity(vy, attrs.GRAVITY, attrs.TVEL_BASE);
+      vx = clampAirVelX(
+        vx,
+        targetLr * STICK_TOWARD,
+        attrs.AIR_ACCEL,
+        attrs.AIR_SPEED_MAX_X,
+      );
+    }
+    x += vx;
+    y += vy;
+    if (checkLandsOnMainFloor(prevX, prevY, x, y)) {
+      return { landed: true, died: false, end: { x, y, vx, vy } };
+    }
+    if (y < DEATH_Y)
+      return { landed: false, died: true, end: { x, y, vx, vy } };
+  }
+  return { landed: false, died: false, end: { x, y, vx, vy } };
+}
+
 function falconRecoveryOutcomes(
   x0: number,
   y0: number,
@@ -2509,69 +2656,54 @@ function falconRecoveryOutcomes(
 ): RecoveryOutcomes {
   let reachedLedge = false;
   let reachedStage = false;
+  const record = (r: { ledge: boolean; stage: boolean }): void => {
+    reachedLedge ||= r.ledge;
+    reachedStage ||= r.stage;
+  };
   for (const targetLr of [1, -1] as const) {
     if (reachedLedge && reachedStage) break;
-    let jumpVx0: number, jumpVy0: number;
-    if (jumpsRemaining === 1) {
-      jumpVx0 = targetLr * STICK_TOWARD * attrs.JUMPAERIAL_VEL_X;
-      jumpVy0 =
-        (80 * attrs.JUMP_HEIGHT_MUL + attrs.JUMP_HEIGHT_BASE) *
-        attrs.JUMPAERIAL_HEIGHT;
-    } else {
-      jumpVx0 = vx0;
-      jumpVy0 = vy0;
-    }
-    for (let delay = 0; delay <= attrs.MAX_DELAY_FRAMES; delay++) {
+    const afterJump: FalconState =
+      jumpsRemaining === 1
+        ? {
+            x: x0,
+            y: y0,
+            vx: targetLr * STICK_TOWARD * attrs.JUMPAERIAL_VEL_X,
+            vy:
+              (80 * attrs.JUMP_HEIGHT_MUL + attrs.JUMP_HEIGHT_BASE) *
+              attrs.JUMPAERIAL_HEIGHT,
+          }
+        : { x: x0, y: y0, vx: vx0, vy: vy0 };
+
+    // (a) Fall, then Falcon Dive.
+    record(falconDelayThenDive(afterJump, targetLr, attrs));
+
+    // (b) Jump -> Falcon Punch for its release burst -> fall, then Falcon Dive.
+    if (jumpsRemaining !== 1) continue;
+    for (const punchDelay of FALCON_PUNCH_AFTER_JUMP_DELAYS) {
       if (reachedLedge && reachedStage) break;
-      // Pre-activation freefall: ordinary Fall-state physics (gravity + standard clampAirVelX
-      // drift), NOT the dive's own multiplied constants -- the drift-velocity reset only happens
-      // AT activation (see this section's header comment).
-      let x = x0;
-      let y = y0;
-      let vx = jumpVx0;
-      let vy = jumpVy0;
-      let died = false;
-      let preActivationOutcome: Outcome = null;
-      for (let frame = 0; frame < delay; frame++) {
-        const prevX = x;
-        const prevY = y;
-        vy = applyGravity(vy, attrs.GRAVITY, attrs.TVEL_BASE);
-        vx = clampAirVelX(
-          vx,
-          targetLr * STICK_TOWARD,
-          attrs.AIR_ACCEL,
-          attrs.AIR_SPEED_MAX_X,
-        );
-        x += vx;
-        y += vy;
-        const outcome = outcomeThisFrame(
-          prevX,
-          prevY,
-          x,
-          y,
-          attrs.CLIFFCATCH_X,
-          attrs.CLIFFCATCH_Y,
-        );
-        if (outcome) {
-          preActivationOutcome = outcome;
-          break;
-        }
-        if (y < DEATH_Y) {
-          died = true;
-          break;
-        }
-      }
-      if (died) continue;
-      if (preActivationOutcome) {
-        if (preActivationOutcome === "ledge" || preActivationOutcome === "both")
-          reachedLedge = true;
-        if (preActivationOutcome === "stage" || preActivationOutcome === "both")
-          reachedStage = true;
+      const beforePunch = falconFreefall(
+        afterJump,
+        punchDelay,
+        targetLr,
+        attrs,
+      );
+      if (beforePunch.died) continue;
+      if (beforePunch.outcome) {
+        record({
+          ledge:
+            beforePunch.outcome === "ledge" || beforePunch.outcome === "both",
+          stage:
+            beforePunch.outcome === "stage" || beforePunch.outcome === "both",
+        });
         continue;
       }
-      const outcome = falconSimulateDiveAndBeyond(x, y, targetLr, attrs);
-      if (outcome === "ledge" || outcome === "both") reachedLedge = true;
-      if (outcome === "stage" || outcome === "both") reachedStage = true;
+      const punch = falconSimulatePunch(beforePunch.end, targetLr, attrs);
+      if (punch.died) continue;
+      if (punch.landed) {
+        record({ ledge: true, stage: true });
+        continue;
+      }
+      record(falconDelayThenDive(punch.end, targetLr, attrs));
     }
   }
   return { canReachLedge: reachedLedge, canReachStage: reachedStage };
@@ -3156,7 +3288,8 @@ function classifyImpl(
       );
     case CHAR_FALCON:
     case CHAR_FALCON_JP:
-      // Delay + jump search, no angle/magnitude search (see the section header above for why).
+      // Delay + jump search, no angle/magnitude search (see the section header above for why),
+      // plus jump -> Falcon Punch -> Dive when the jump is still available (see FALCON_PUNCH).
       // Facing-independent -- confirmed against source, see section header.
       if (jumpsRemaining > 1) return null;
       return toRecoveryVerdict(

@@ -39,7 +39,10 @@ const MAX_12CB_GAP_SECONDS = 1800;
 export const STANDARD_12CB_ROSTER_SIZE = 12;
 
 /**
- * Detects and parses 12 Character Battle (12CB) sets from a chronological sequence of games.
+ * Detects and parses 12 Character Battle (12CB) sets from a chronological
+ * sequence of games. Only complete battles are returned - ones where a
+ * player lost all 12 characters. Unfinished runs of linked games are
+ * treated as ordinary games.
  */
 export function detect12CharacterBattles(
   games: readonly GameSummary[],
@@ -225,6 +228,10 @@ function processCluster(
   const isComplete =
     p0Eliminations >= STANDARD_12CB_ROSTER_SIZE ||
     p1Eliminations >= STANDARD_12CB_ROSTER_SIZE;
+  // Only a battle played through to the end (someone lost all 12
+  // characters) counts. A few linked games with a stock carry-over look
+  // exactly like a 12CB's opening, but aren't one unless finished.
+  if (!isComplete) return;
 
   const yourSummary: TwelveCharacterBattlePlayerSummary | null =
     yourPort !== null

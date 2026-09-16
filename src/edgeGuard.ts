@@ -30,6 +30,26 @@ export function isOutsideZone(x: number, y: number): boolean {
   return Math.abs(x) > xThresholdAtY(y);
 }
 
+/**
+ * The zone boundary's right-hand side in world units (mirror x for the left),
+ * for drawing it - the same numbers isOutsideZone uses. null off Dream Land,
+ * where no edge-guard situations are computed.
+ */
+export function recoveryZoneBoundary(stageId: number | undefined): {
+  xAtLow: number;
+  yLow: number;
+  xAtHigh: number;
+  yHigh: number;
+} | null {
+  if (stageId !== DREAM_LAND_STAGE_ID) return null;
+  return {
+    xAtLow: ZONE_X_AT_Y_LO,
+    yLow: ZONE_Y_LO,
+    xAtHigh: ZONE_X_AT_Y_HI,
+    yHigh: ZONE_Y_HI,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Ledge action-state IDs (CliffCatch / CliffWait / CliffQuick / CliffSlow)
 // ---------------------------------------------------------------------------

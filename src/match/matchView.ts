@@ -29,6 +29,7 @@ import {
   extractAllQuickAttackPaths,
 } from "../renderer.js";
 import { characterSize } from "../characterSizes.js";
+import { sessionNeighbors } from "../data/sessionNavigation.js";
 import { characterIconUrl } from "../characterIcons.js";
 import { ActionStateId, characterName } from "../lookups.js";
 import {
@@ -151,7 +152,8 @@ export class MatchViewController {
   private stageCanvas: HTMLCanvasElement;
   private stageWrap: HTMLDivElement;
   private playersEl: HTMLDivElement;
-  private loadStatus: HTMLSpanElement;
+  /** Null while the library sidebar (which owns this element) isn't mounted. */
+  private loadStatus: HTMLSpanElement | null;
   private stepBackBtn: HTMLButtonElement;
   private playPauseBtn: HTMLButtonElement;
   private stepForwardBtn: HTMLButtonElement;
@@ -174,11 +176,18 @@ export class MatchViewController {
   private twelveCbPlayersContainerEl: HTMLDivElement;
   private twelveCbPrevMatchBtn: HTMLButtonElement;
   private twelveCbNextMatchBtn: HTMLButtonElement;
+  private sessionNavWidget: HTMLElement | null = null;
+  private sessionPrevGameBtn: HTMLButtonElement | null = null;
+  private sessionNextGameBtn: HTMLButtonElement | null = null;
+  private sessionNavLabel: HTMLAnchorElement | null = null;
   private twelveCbPrevMatchLabel: HTMLSpanElement;
   private twelveCbNextMatchLabel: HTMLSpanElement;
   private twelveCbCollapsed = false;
   private identity: Identity | null = null;
   private matchStatsHeaderTitle: HTMLHeadingElement;
+  private matchupLinkWrap: HTMLDivElement;
+  private matchupLinkBtn: HTMLButtonElement;
+  private onViewMatchupCb?: (myChar: number, oppChar: number) => void;
   private perspectiveToggleEl: HTMLDivElement;
   private statsCollapseBtn: HTMLButtonElement;
   private statsPanel: HTMLDivElement;
@@ -208,6 +217,9 @@ export class MatchViewController {
   private qaOverlayExitBtn: HTMLButtonElement;
   private hudToggleBtn: HTMLButtonElement;
   private fpsToggleBtn: HTMLButtonElement;
+  private zoneToggleBtn: HTMLButtonElement;
+  /** Draw the edge-guard zone boundary on the stage ("Zone" toggle). */
+  private zoneOverlayEnabled = false;
   private fpsDisplay: HTMLDivElement;
   private recoveryWidget: HTMLElement;
   private recoveryCollapseBtn: HTMLButtonElement;
@@ -369,7 +381,9 @@ export class MatchViewController {
     this.stageCanvas = document.getElementById("stage") as HTMLCanvasElement;
     this.stageWrap = document.getElementById("stageWrap") as HTMLDivElement;
     this.playersEl = document.getElementById("players") as HTMLDivElement;
-    this.loadStatus = document.getElementById("loadStatus") as HTMLSpanElement;
+    this.loadStatus = document.getElementById(
+      "loadStatus",
+    ) as HTMLSpanElement | null;
     this.stepBackBtn = document.getElementById("stepBack") as HTMLButtonElement;
     this.playPauseBtn = document.getElementById(
       "playPause",
@@ -463,6 +477,16 @@ export class MatchViewController {
     this.twelveCbNextMatchBtn = document.getElementById(
       "twelveCbNextMatchBtn",
     ) as HTMLButtonElement;
+    this.sessionNavWidget = document.getElementById("sessionNavWidget");
+    this.sessionPrevGameBtn = document.getElementById(
+      "sessionPrevGameBtn",
+    ) as HTMLButtonElement | null;
+    this.sessionNextGameBtn = document.getElementById(
+      "sessionNextGameBtn",
+    ) as HTMLButtonElement | null;
+    this.sessionNavLabel = document.getElementById(
+      "sessionNavLabel",
+    ) as HTMLAnchorElement | null;
     this.twelveCbPrevMatchLabel = document.getElementById(
       "twelveCbPrevMatchLabel",
     ) as HTMLSpanElement;
@@ -481,6 +505,12 @@ export class MatchViewController {
     this.matchStatsHeaderTitle = document.querySelector(
       "#matchStatsHeader h2",
     ) as HTMLHeadingElement;
+    this.matchupLinkWrap = document.getElementById(
+      "matchupLinkWrap",
+    ) as HTMLDivElement;
+    this.matchupLinkBtn = document.getElementById(
+      "matchupLinkBtn",
+    ) as HTMLButtonElement;
     this.perspectiveToggleEl = document.getElementById(
       "perspectiveToggle",
     ) as HTMLDivElement;
@@ -562,6 +592,9 @@ export class MatchViewController {
     ) as HTMLButtonElement;
     this.fpsToggleBtn = document.getElementById(
       "fpsToggleBtn",
+    ) as HTMLButtonElement;
+    this.zoneToggleBtn = document.getElementById(
+      "zoneToggleBtn",
     ) as HTMLButtonElement;
     this.fpsDisplay = document.getElementById("fpsDisplay") as HTMLDivElement;
 
@@ -1001,6 +1034,28 @@ export class MatchViewController {
       }
     });
 
+    // Re-render the heatmap and stage scenery whenever the theme changes so the
+    // stage/platform outlines and day/night scenery switch immediately.
+    const themeObserver = new MutationObserver(() => {
+      this.stageRenderer.invalidateBackground();
+      if (this.currentReplay) {
+        if (!this.neutralHeatmapSection.hidden) {
+          this.renderNeutralHeatmapPanel(this.currentReplay);
+        }
+        if (this.lastFrame && !(this.playback?.isPlaying ?? false)) {
+          this.renderFrame(
+            this.lastFrame,
+            this.playback?.currentIndex ?? 0,
+            true,
+          );
+        }
+      }
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
     this.recoveryCollapseBtn.addEventListener("click", () => {
       this.recoveryCollapsed = !this.recoveryCollapsed;
       this.recoveryList.hidden = this.recoveryCollapsed;
@@ -1114,6 +1169,36 @@ export class MatchViewController {
         this.startFpsTracking();
       } else {
         this.stopFpsTracking();
+      }
+    });
+
+    try {
+      this.zoneOverlayEnabled =
+        localStorage.getItem("rmgr-viewer-zone") === "true";
+    } catch {
+      this.zoneOverlayEnabled = false;
+    }
+    this.zoneToggleBtn.classList.toggle("active", this.zoneOverlayEnabled);
+    this.stageRenderer.setShowRecoveryZone(this.zoneOverlayEnabled);
+    this.zoneToggleBtn.addEventListener("click", () => {
+      this.zoneOverlayEnabled = !this.zoneOverlayEnabled;
+      this.zoneToggleBtn.classList.toggle("active", this.zoneOverlayEnabled);
+      this.stageRenderer.setShowRecoveryZone(this.zoneOverlayEnabled);
+      try {
+        localStorage.setItem(
+          "rmgr-viewer-zone",
+          String(this.zoneOverlayEnabled),
+        );
+      } catch {
+        // Ignore localStorage write error
+      }
+      // Redraw now, so it shows even while paused.
+      if (this.lastFrame && this.currentReplay) {
+        this.renderFrame(
+          this.lastFrame,
+          this.playback?.currentIndex ?? 0,
+          true,
+        );
       }
     });
 
@@ -1527,6 +1612,11 @@ export class MatchViewController {
 
   public updateStaticTranslations(): void {
     const tr = t();
+    // Rebuilds "Game 3 of 9" and the prev/next titles in the new language.
+    this.renderSessionNav();
+    if (!this.matchupLinkWrap.hidden) {
+      this.matchupLinkBtn.textContent = tr.matchupViewLinkLabel;
+    }
     if (this.twelveCbWidgetHeaderTitle) {
       this.twelveCbWidgetHeaderTitle.textContent =
         tr.twelveCharacterBattleTitle;
@@ -1626,6 +1716,10 @@ export class MatchViewController {
     if (this.fpsToggleBtn) {
       this.fpsToggleBtn.textContent = tr.fpsToggle;
       this.fpsToggleBtn.title = tr.fpsToggleTitle;
+    }
+    if (this.zoneToggleBtn) {
+      this.zoneToggleBtn.textContent = tr.zoneToggle;
+      this.zoneToggleBtn.title = tr.zoneToggleTitle;
     }
     if (this.logFilterHeaderTitle) {
       this.logFilterHeaderTitle.textContent = tr.logFiltersTitle;
@@ -2475,8 +2569,9 @@ export class MatchViewController {
           ? Math.max(0, (LOG_DURATION_FRAMES - ageFrames) / EXIT_FADE_FRAMES)
           : 1;
 
-      const baseOpacity = 0.85 + 0.15 * highlightRatio;
-      const finalOpacity = baseOpacity * exitFadeRatio;
+      // Maintain full 100% opacity for high contrast while message is active,
+      // only fading out smoothly during the final EXIT_FADE_FRAMES before disappearing.
+      const finalOpacity = exitFadeRatio;
 
       const entry = document.createElement("div");
       entry.className = `overlay-entry kind-${kind}${isLatest ? " is-current" : ""}${isIncoming ? " is-incoming" : ""}`;
@@ -2624,6 +2719,31 @@ export class MatchViewController {
     this.scrubberPreviewTooltip.hidden = true;
   }
 
+  /**
+   * "See all games in this matchup" link in the Match Stats panel. Exact
+   * character IDs only (no JP/NA pooling, per docs/product/README.md).
+   */
+  private renderMatchupLink(replay: Replay, perspectivePort: PortIndex): void {
+    const tr = t();
+    const seated = getSeatedPorts(replay);
+    const opponentPort = seated.find((p) => p !== perspectivePort);
+    if (opponentPort === undefined || !this.onViewMatchupCb) {
+      this.matchupLinkWrap.hidden = true;
+      return;
+    }
+    const myChar = replay.matchSettings?.characterId[perspectivePort] ?? -1;
+    const oppChar = replay.matchSettings?.characterId[opponentPort] ?? -1;
+    if (myChar < 0 || oppChar < 0) {
+      this.matchupLinkWrap.hidden = true;
+      return;
+    }
+    this.matchupLinkWrap.hidden = false;
+    this.matchupLinkBtn.textContent = tr.matchupViewLinkLabel;
+    this.matchupLinkBtn.onclick = () => {
+      this.onViewMatchupCb?.(myChar, oppChar);
+    };
+  }
+
   private renderStatsPanel(replay: Replay): void {
     this.statsPanel.innerHTML = "";
     const tr = t();
@@ -2653,12 +2773,15 @@ export class MatchViewController {
       this.edgeGuardWidget.hidden = true;
       this.ledgeGetupWidget.hidden = true;
       this.ledgeTrapWidget.hidden = true;
+      this.matchupLinkWrap.hidden = true;
       this.renderNeutralHitsPanel(replay);
       this.renderCombosPanel(replay);
       this.renderDIPanel(replay);
       this.renderCharacterMetaPanel(replay);
       return;
     }
+
+    this.renderMatchupLink(replay, this.perspectivePort);
 
     // Situations the recovery classifier confirmed were unsurvivable at entry are excluded from
     // Recovery% entirely -- see edgeGuard.ts's computeEdgeGuardStats doc comment and
@@ -3819,9 +3942,58 @@ export class MatchViewController {
     }
   }
 
+  /**
+   * Session-order prev/next. Independent of the 12-character-battle buttons:
+   * during a battle both are shown, one stepping within the battle and one
+   * within the whole session.
+   */
+  private renderSessionNav(): void {
+    if (!this.sessionNavWidget) return;
+    const tr = t();
+    const nav =
+      this.currentReplayId && this.identity
+        ? sessionNeighbors(
+            this.currentReplayId,
+            this.sessionSummaries,
+            this.identity,
+          )
+        : null;
+    if (!nav) {
+      this.sessionNavWidget.hidden = true;
+      return;
+    }
+    this.sessionNavWidget.hidden = false;
+    if (this.sessionNavLabel) {
+      this.sessionNavLabel.textContent = tr.sessionGameCounter(
+        nav.index + 1,
+        nav.total,
+      );
+      this.sessionNavLabel.href = `#/session/${encodeURIComponent(nav.sessionId)}`;
+    }
+    if (this.sessionPrevGameBtn) {
+      this.sessionPrevGameBtn.title = tr.previousGame;
+      this.sessionPrevGameBtn.disabled = nav.previousGameId === null;
+      if (nav.previousGameId) {
+        this.sessionPrevGameBtn.dataset.gameId = nav.previousGameId;
+      } else {
+        delete this.sessionPrevGameBtn.dataset.gameId;
+      }
+    }
+    if (this.sessionNextGameBtn) {
+      this.sessionNextGameBtn.title = tr.nextGame;
+      this.sessionNextGameBtn.disabled = nav.nextGameId === null;
+      if (nav.nextGameId) {
+        this.sessionNextGameBtn.dataset.gameId = nav.nextGameId;
+      } else {
+        delete this.sessionNextGameBtn.dataset.gameId;
+      }
+    }
+  }
+
   private render12CbMatchWidget(): void {
     const tr = t();
     const lang = getLanguage();
+    this.renderSessionNav();
     if (this.twelveCbWidgetHeaderTitle) {
       this.twelveCbWidgetHeaderTitle.textContent =
         tr.twelveCharacterBattleTitle;
@@ -4713,7 +4885,7 @@ export class MatchViewController {
     this.renderLogFilterWidget();
     this.renderReplayInfo(loaded);
     this.buildEventLog();
-    this.loadStatus.textContent = "";
+    if (this.loadStatus) this.loadStatus.textContent = "";
 
     const replayId = this.getReplayIdentifier(replay, loaded);
     this.youtubeSync.setReplay(replayId);
@@ -4835,6 +5007,10 @@ export class MatchViewController {
 
   public setOnPerspectiveChanged(cb: (port: PortIndex) => void): void {
     this.onPerspectiveChangedCb = cb;
+  }
+
+  public setOnViewMatchup(cb: (myChar: number, oppChar: number) => void): void {
+    this.onViewMatchupCb = cb;
   }
 
   public setMatchupBaseline(baseline: DerivedRates | null): void {

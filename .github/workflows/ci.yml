@@ -10,7 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+        # Node 18 dropped: no global crypto or File (both landed in Node 20),
+        # which the importer uses to hash and read replay files. Node 18 has
+        # been end-of-life since April 2025.
+        node-version: [20, 22]
     steps:
       - uses: actions/checkout@v4
         with:

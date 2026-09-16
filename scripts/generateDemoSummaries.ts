@@ -16,15 +16,17 @@
  * is added, removed, or replaced (also update `DEMO_REPLAY_FILENAMES` in
  * `src/data/demoReplayFiles.ts` if the set of files changes).
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseReplay } from "@rmg-k/rmgr";
 import {
   serializeGameSummary,
   summarizeReplay,
+  type DemoSummariesFile,
   type SerializedGameSummary,
 } from "../src/data/gameSummary.js";
+import { ANALYSIS_VERSION } from "../src/data/analysisVersion.js";
 import type { LoadedReplay } from "../src/replaySource.js";
 import { DEMO_REPLAY_FILENAMES } from "../src/data/demoReplayFiles.js";
 
@@ -57,7 +59,29 @@ async function main(): Promise<void> {
     console.log(`Summarized ${filename}`);
   }
 
-  writeFileSync(outPath, JSON.stringify(results, null, 2) + "\n");
+  // This file is also the analysis-output snapshot (demoSummaries.test.ts).
+  // Refuse to silently change its contents under the same ANALYSIS_VERSION -
+  // users' cached summaries would never be marked stale. A pre-versioning
+  // file (a bare array) counts as version 0.
+  if (existsSync(outPath)) {
+    const previous = JSON.parse(readFileSync(outPath, "utf8")) as
+      DemoSummariesFile | SerializedGameSummary[];
+    const old: DemoSummariesFile = Array.isArray(previous)
+      ? { analysisVersion: 0, games: previous }
+      : previous;
+    const changed = JSON.stringify(old.games) !== JSON.stringify(results);
+    if (changed && old.analysisVersion === ANALYSIS_VERSION) {
+      throw new Error(
+        "Analysis output changed - bump ANALYSIS_VERSION in src/data/analysisVersion.ts, then re-run.",
+      );
+    }
+  }
+
+  const out: DemoSummariesFile = {
+    analysisVersion: ANALYSIS_VERSION,
+    games: results,
+  };
+  writeFileSync(outPath, JSON.stringify(out, null, 2) + "\n");
   console.log(`\nWrote ${results.length} summaries to ${outPath}`);
 }
 

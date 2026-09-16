@@ -12,6 +12,31 @@ export interface Translations {
   complete: string;
   incomplete: string;
   failedToLoad: (name: string, error: string) => string;
+  themeToggleDark: string;
+  themeToggleLight: string;
+  navLibrary: string;
+  navSearch: string;
+  sessionGameCounter: (index: number, total: number) => string;
+  previousGame: string;
+  nextGame: string;
+  sessionNotFound: string;
+  sessionGames: (count: number) => string;
+  sessionGamesHeading: string;
+  sessionVideos: string;
+  sessionQuickSearches: string;
+  quickSearchFailedEdgeGuards: string;
+  quickSearchCombos: string;
+  quickSearchKillCombos: string;
+  viewSession: string;
+  exportProject: string;
+  importProject: string;
+  exportProjectDone: (games: number) => string;
+  importProjectDone: (imported: number, recomputed: number) => string;
+  importProjectInvalid: string;
+  themeSelectLabel: string;
+  themeSystem: string;
+  themeLight: string;
+  themeDark: string;
 
   // Player panel
   damage: string;
@@ -75,6 +100,8 @@ export interface Translations {
   logFiltersTitle: string;
   fpsToggle: string;
   fpsToggleTitle: string;
+  zoneToggle: string;
+  zoneToggleTitle: string;
   logFilterRecovery: string;
   logFilterLedge: string;
   logFilterAngel: string;
@@ -164,6 +191,17 @@ export interface Translations {
   importReplays: string;
   importFiles: string;
   importFolder: string;
+  staleBanner: (count: number) => string;
+  reimportFolder: string;
+  importDuplicatesSkipped: (count: number) => string;
+  missingFileTitle: string;
+  missingFileBody: (path: string) => string;
+  importThisFile: string;
+  missingFileNoMatch: (path: string) => string;
+  missingFileCancelled: string;
+  searchUnloadedGames: (count: number) => string;
+  clearLocalData: string;
+  clearLocalDataConfirm: string;
   importingProgress: (loaded: number, total: number) => string;
   loadingDemoReplays: string;
   backToLibrary: string;
@@ -194,6 +232,31 @@ export interface Translations {
   ledgeTCol: string;
   angelCol: string;
   nhPerStockCol: string;
+  matchupsSectionTitle: string;
+  matchupCol: string;
+  matchupVs: string;
+  matchupGamesWord: string;
+  matchupStatsSectionTitle: string;
+  matchupGamesSectionTitle: string;
+  matchupExcludedGames: (count: number) => string;
+  matchupEdgeGuardEffectivenessLabel: string;
+  matchupEdgeGuardConversionLabel: string;
+  matchupOpeningShareLabel: string;
+  matchupDamagePerOpeningLabel: string;
+  matchupKillConversionLabel: string;
+  matchupDateCol: string;
+  matchupOpponentCol: string;
+  matchupResultCol: string;
+  matchupTierCol: string;
+  matchupResultWin: string;
+  matchupResultLoss: string;
+  matchupTierAbove: string;
+  matchupTierPeer: string;
+  matchupTierBelow: string;
+  matchupTierUnknown: string;
+  matchupSituationsCount: (count: number) => string;
+  matchupPerStock: (hits: number, stocks: number) => string;
+  matchupViewLinkLabel: string;
   gamesListHeader: (count: number) => string;
   sessionsListHeader: (count: number) => string;
   sortNewestFirst: string;
@@ -252,7 +315,6 @@ export interface Translations {
   aboutDescription: string;
   authorLabel: string;
   authorName: string;
-  twitterLabel: string;
   githubLabel: string;
   tobloSfxLabel: string;
   close: string;
@@ -385,6 +447,10 @@ export interface Translations {
   replayInfoSizeLabel: string;
   replayInfoUncompressedSize: (uncompressed: string) => string;
   finalStocksDetail: (stocks: number) => string;
+  gameResultWin: (winnerStocks: number) => string;
+  gameResultLoss: (winnerStocks: number) => string;
+  gameWatched: string;
+  gameWatchedTooltip: string;
 
   // YouTube Video Sync
   youtubeVideoTitle: string;
@@ -435,6 +501,34 @@ export interface Translations {
   searchTitle: string;
   searchTypeLabel: string;
   searchTypeEdgeGuards: string;
+  searchTypeCombos: string;
+  searchCopyFfmpeg: string;
+  ffmpegModalTitle: string;
+  ffmpegModalExplain: (clipCount: number) => string;
+  ffmpegModalUseYtDlp: string;
+  ffmpegModalYtDlpNote: string;
+  ffmpegModalCommandLabel: string;
+  ffmpegModalCopyManual: string;
+  searchCopied: string;
+  searchFfmpegFileLabel: string;
+  searchFfmpegSkipped: (count: number) => string;
+  searchComboByLabel: string;
+  searchComboByCharacterLabel: string;
+  searchComboOnLabel: string;
+  searchComboOnCharacterLabel: string;
+  searchMinHitsLabel: string;
+  searchKoLabel: string;
+  searchKoYes: string;
+  searchKoNo: string;
+  searchGapsLabel: string;
+  searchGapsTrueOnly: string;
+  searchGapsAllow: string;
+  comboClipLabel: (
+    hits: number,
+    startDamage: number,
+    endDamage: number,
+    killed: boolean,
+  ) => string;
   searchResultLabel: string;
   searchResultAny: string;
   searchResultSuccess: string;
@@ -455,6 +549,7 @@ export interface Translations {
   startingAreaModalSubtitle: string;
   startingAreaModalClear: string;
   searchInProgress: string;
+  searchProgress: (done: number, total: number) => string;
   searchResultsCount: (count: number) => string;
   searchNoResults: string;
   sessionSoloGame: string;
@@ -505,6 +600,34 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     complete: "complete",
     incomplete: "incomplete recording",
     failedToLoad: (name, err) => `Failed to load ${name}: ${err}`,
+    themeToggleDark: "Dark mode",
+    themeToggleLight: "Light mode",
+    navLibrary: "Library",
+    navSearch: "Search",
+    sessionGameCounter: (index, total) => `Game ${index} of ${total}`,
+    previousGame: "Previous game",
+    nextGame: "Next game",
+    sessionNotFound: "That session isn't in your library.",
+    sessionGames: (count) => (count === 1 ? "1 game" : `${count} games`),
+    sessionGamesHeading: "Games",
+    sessionVideos: "Video",
+    sessionQuickSearches: "Quick searches",
+    quickSearchFailedEdgeGuards: "Failed Edge Guards",
+    quickSearchCombos: "Combos",
+    quickSearchKillCombos: "Kill Combos",
+    viewSession: "Session details",
+    exportProject: "Export project",
+    importProject: "Import project",
+    exportProjectDone: (games) => `Exported ${games} games.`,
+    importProjectDone: (imported, recomputed) =>
+      recomputed > 0
+        ? `Imported ${imported} games; ${recomputed} need re-analysis.`
+        : `Imported ${imported} games.`,
+    importProjectInvalid: "That file isn't an rmgr-viewer project file.",
+    themeSelectLabel: "Theme",
+    themeSystem: "System",
+    themeLight: "Light",
+    themeDark: "Dark",
 
     damage: "Damage:",
     stocks: "Stocks:",
@@ -560,6 +683,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFiltersTitle: "Debug",
     fpsToggle: "FPS",
     fpsToggleTitle: "Toggle FPS display on replay",
+    zoneToggle: "Zone",
+    zoneToggleTitle:
+      "Show the edge-guard zone: a player past the dashed line who can act again counts as recovering",
     logFilterRecovery: "Recovery",
     logFilterLedge: "Ledge",
     logFilterAngel: "Angel",
@@ -662,6 +788,23 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     importReplays: "Import replays",
     importFiles: "Select files (.rmgr)",
     importFolder: "Select folder",
+    staleBanner: (count) =>
+      `${count} game${count === 1 ? " was" : "s were"} analyzed with an older version and need${count === 1 ? "s" : ""} re-import.`,
+    reimportFolder: "Re-import folder",
+    importDuplicatesSkipped: (count) =>
+      `Skipped ${count} duplicate cop${count === 1 ? "y" : "ies"} of the same game.`,
+    missingFileTitle: "Replay not loaded",
+    missingFileBody: (path) =>
+      `This replay isn't loaded in this session: ${path}`,
+    importThisFile: "Import this file",
+    missingFileNoMatch: (path) =>
+      `That file isn't ${path}. Choose the matching replay.`,
+    missingFileCancelled: "Replay not loaded.",
+    searchUnloadedGames: (count) =>
+      `${count} game${count === 1 ? " isn't" : "s aren't"} loaded this session and ${count === 1 ? "was" : "were"} not searched.`,
+    clearLocalData: "Clear local data",
+    clearLocalDataConfirm:
+      "Delete everything this app has saved in this browser: the imported game library, your identity, video links and preferences? Your replay files are not affected. This can't be undone.",
     importingProgress: (l, tot) => `Importing replays (${l}/${tot})...`,
     loadingDemoReplays: "Loading demo replays...",
     backToLibrary: "← Library",
@@ -693,6 +836,34 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     ledgeTCol: "LedgeT.",
     angelCol: "Angel",
     nhPerStockCol: "NH/St",
+    matchupsSectionTitle: "MATCHUPS",
+    matchupCol: "Matchup",
+    matchupVs: "vs",
+    matchupGamesWord: "games",
+    matchupStatsSectionTitle: "STATS",
+    matchupGamesSectionTitle: "GAMES",
+    matchupExcludedGames: (count) =>
+      `${count} excluded (non-Dream Land or unsupported)`,
+    matchupEdgeGuardEffectivenessLabel: "Edge Guard Effectiveness",
+    matchupEdgeGuardConversionLabel: "Edge Guard Conversion",
+    matchupOpeningShareLabel: "Neutral Opening Share",
+    matchupDamagePerOpeningLabel: "Damage per Opening",
+    matchupKillConversionLabel: "Kill Conversion",
+    matchupDateCol: "Date",
+    matchupOpponentCol: "Opponent",
+    matchupResultCol: "Result",
+    matchupTierCol: "Tier",
+    matchupResultWin: "Win",
+    matchupResultLoss: "Loss",
+    matchupTierAbove: "Above",
+    matchupTierPeer: "Peer",
+    matchupTierBelow: "Below",
+    matchupTierUnknown: "Unknown",
+    matchupSituationsCount: (count) =>
+      `${count} ${count === 1 ? "situation" : "situations"}`,
+    matchupPerStock: (hits, stocks) =>
+      `${hits.toFixed(1)} per stock (${stocks} stocks)`,
+    matchupViewLinkLabel: "See all games in this matchup",
     gamesListHeader: (c) => `GAMES (${c})`,
     sessionsListHeader: (c) => `SESSIONS (${c})`,
     sortNewestFirst: "newest first",
@@ -755,7 +926,6 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       "Real-time visual playback and analytics viewer for Super Smash Bros. 64 (.rmgr) replay files.",
     authorLabel: "Author",
     authorName: "nue",
-    twitterLabel: "Twitter / X",
     githubLabel: "GitHub Repository",
     tobloSfxLabel: "Toblo sfx",
     close: "Close",
@@ -889,6 +1059,11 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoSizeLabel: "Size",
     replayInfoUncompressedSize: (u) => `${u} uncompressed`,
     finalStocksDetail: (stocks) => `Stocks Remaining: ${stocks}`,
+    gameResultWin: (stocks) => `W · ${stocks} left`,
+    gameResultLoss: (stocks) => `L · ${stocks} left`,
+    gameWatched: "Watched",
+    gameWatchedTooltip:
+      "You were in this lobby but didn't play this game. Not counted in your stats.",
 
     // YouTube Video Sync
     youtubeVideoTitle: "YouTube Video",
@@ -950,6 +1125,33 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     searchTitle: "Search Clips",
     searchTypeLabel: "Type",
     searchTypeEdgeGuards: "Edge Guards",
+    searchTypeCombos: "Combos",
+    searchCopyFfmpeg: "Create video with ffmpeg",
+    ffmpegModalTitle: "Create a clip video",
+    ffmpegModalExplain: (count) =>
+      `Builds a command that cuts these ${count} clip${count === 1 ? "" : "s"} out of this session's video - frame-accurately, using each game's video sync - and joins them into clips.mp4. Run it in a terminal, in the folder with the video.`,
+    ffmpegModalUseYtDlp: "Download the video with yt-dlp first",
+    ffmpegModalYtDlpNote:
+      "Needs yt-dlp installed. The video is downloaded into the same folder before cutting.",
+    ffmpegModalCommandLabel: "Command (click to copy)",
+    ffmpegModalCopyManual: "Selected - press ⌘C / Ctrl+C to copy",
+    searchCopied: "Copied!",
+    searchFfmpegFileLabel: "Video file name",
+    searchFfmpegSkipped: (count) =>
+      `${count} clip${count === 1 ? " isn't" : "s aren't"} linked to this video and ${count === 1 ? "was" : "were"} left out.`,
+    searchComboByLabel: "Combo by",
+    searchComboByCharacterLabel: "Combo by character",
+    searchComboOnLabel: "Combo on",
+    searchComboOnCharacterLabel: "Combo on character",
+    searchMinHitsLabel: "Minimum hits",
+    searchKoLabel: "KO",
+    searchKoYes: "KO'd",
+    searchKoNo: "No KO",
+    searchGapsLabel: "Combo type",
+    searchGapsTrueOnly: "True combos only",
+    searchGapsAllow: "Allow ≤0.5s gaps",
+    comboClipLabel: (hits, startDamage, endDamage, killed) =>
+      `${hits} hits · ${Math.round(startDamage)}% → ${Math.round(endDamage)}%${killed ? " · KO" : ""}`,
     searchResultLabel: "Result",
     searchResultAny: "Any",
     searchResultSuccess: "Success (killed)",
@@ -971,6 +1173,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       "Click and drag to draw the area where the recovery starts. Also matches the mirrored area on the other side of the stage.",
     startingAreaModalClear: "Clear",
     searchInProgress: "Searching…",
+    searchProgress: (done, total) => `Searching… ${done} / ${total} games`,
     searchResultsCount: (count: number) =>
       count === 1 ? "1 clip found" : `${count} clips found`,
     searchNoResults: "No clips match these filters.",
@@ -1022,6 +1225,35 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     complete: "完全録画",
     incomplete: "不完全な録画",
     failedToLoad: (name, err) => `${name} の読み込みに失敗しました: ${err}`,
+    themeToggleDark: "ダークモード",
+    themeToggleLight: "ライトモード",
+    navLibrary: "ライブラリ",
+    navSearch: "検索",
+    sessionGameCounter: (index, total) => `${total} 試合中 ${index} 試合目`,
+    previousGame: "前の試合",
+    nextGame: "次の試合",
+    sessionNotFound: "そのセッションはライブラリにありません。",
+    sessionGames: (count) => `${count} 試合`,
+    sessionGamesHeading: "試合",
+    sessionVideos: "動画",
+    sessionQuickSearches: "クイック検索",
+    quickSearchFailedEdgeGuards: "失敗した復帰阻止",
+    quickSearchCombos: "コンボ",
+    quickSearchKillCombos: "撃墜コンボ",
+    viewSession: "セッション詳細",
+    exportProject: "プロジェクトを書き出す",
+    importProject: "プロジェクトを読み込む",
+    exportProjectDone: (games) => `${games} 試合を書き出しました。`,
+    importProjectDone: (imported, recomputed) =>
+      recomputed > 0
+        ? `${imported} 試合を読み込みました（${recomputed} 件は再解析が必要）。`
+        : `${imported} 試合を読み込みました。`,
+    importProjectInvalid:
+      "このファイルは rmgr-viewer のプロジェクトファイルではありません。",
+    themeSelectLabel: "テーマ",
+    themeSystem: "システム",
+    themeLight: "ライト",
+    themeDark: "ダーク",
 
     damage: "ダメージ:",
     stocks: "ストック:",
@@ -1077,6 +1309,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     logFiltersTitle: "デバッグ",
     fpsToggle: "FPS",
     fpsToggleTitle: "リプレイのFPS表示の切り替え",
+    zoneToggle: "ゾーン",
+    zoneToggleTitle:
+      "崖外判定ゾーンを表示：点線より外側で行動可能になったプレイヤーは復帰中とみなされます",
     logFilterRecovery: "復帰・阻止",
     logFilterLedge: "崖",
     logFilterAngel: "復活無敵",
@@ -1169,6 +1404,23 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     importReplays: "リプレイの読み込み",
     importFiles: "ファイルを選択 (.rmgr)",
     importFolder: "フォルダを選択",
+    staleBanner: (count) =>
+      `${count}件のゲームは古いバージョンで解析されています。再インポートしてください。`,
+    reimportFolder: "フォルダを再インポート",
+    importDuplicatesSkipped: (count) =>
+      `同じゲームの重複 ${count} 件をスキップしました。`,
+    missingFileTitle: "リプレイが読み込まれていません",
+    missingFileBody: (path) =>
+      `このリプレイは現在のセッションで読み込まれていません：${path}`,
+    importThisFile: "このファイルをインポート",
+    missingFileNoMatch: (path) =>
+      `${path} ではありません。対応するリプレイを選んでください。`,
+    missingFileCancelled: "リプレイが読み込まれていません。",
+    searchUnloadedGames: (count) =>
+      `${count}件のゲームは読み込まれていないため検索されませんでした。`,
+    clearLocalData: "ローカルデータを消去",
+    clearLocalDataConfirm:
+      "このブラウザに保存されたすべてのデータ（インポートしたゲームライブラリ、プレイヤー設定、動画リンク、表示設定）を削除しますか？リプレイファイル自体は削除されません。この操作は元に戻せません。",
     importingProgress: (l, tot) => `読み込み中 (${l}/${tot})...`,
     loadingDemoReplays: "デモリプレイを読み込み中...",
     backToLibrary: "← ライブラリに戻る",
@@ -1199,6 +1451,33 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     ledgeTCol: "崖狩り",
     angelCol: "無敵",
     nhPerStockCol: "ヒット/撃墜",
+    matchupsSectionTitle: "対戦カード",
+    matchupCol: "対戦カード",
+    matchupVs: "vs",
+    matchupGamesWord: "試合",
+    matchupStatsSectionTitle: "統計",
+    matchupGamesSectionTitle: "試合一覧",
+    matchupExcludedGames: (count) =>
+      `${count}件除外 (プププランド以外または非対応キャラ)`,
+    matchupEdgeGuardEffectivenessLabel: "復帰阻止の有効性",
+    matchupEdgeGuardConversionLabel: "復帰阻止の成功率",
+    matchupOpeningShareLabel: "起点獲得率",
+    matchupDamagePerOpeningLabel: "起点あたりのダメージ",
+    matchupKillConversionLabel: "撃墜への変換率",
+    matchupDateCol: "日付",
+    matchupOpponentCol: "相手",
+    matchupResultCol: "結果",
+    matchupTierCol: "強さ",
+    matchupResultWin: "勝ち",
+    matchupResultLoss: "負け",
+    matchupTierAbove: "格上",
+    matchupTierPeer: "互角",
+    matchupTierBelow: "格下",
+    matchupTierUnknown: "不明",
+    matchupSituationsCount: (count) => `${count}件`,
+    matchupPerStock: (hits, stocks) =>
+      `1ストックあたり${hits.toFixed(1)} (計${stocks}ストック)`,
+    matchupViewLinkLabel: "この対戦カードの試合をすべて見る",
     gamesListHeader: (c) => `試合一覧 (${c})`,
     sessionsListHeader: (c) => `セッション (${c})`,
     sortNewestFirst: "新しい順",
@@ -1259,7 +1538,6 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       "ニンテンドウオールスター! 大乱闘スマッシュブラザーズ（スマブラ64）の .rmgr リプレイファイル用リアルタイム再生・分析ビューアーです。",
     authorLabel: "作者",
     authorName: "鵺",
-    twitterLabel: "Twitter / X",
     githubLabel: "GitHub リポジトリ",
     tobloSfxLabel: "Toblo sfx",
     close: "閉じる",
@@ -1388,6 +1666,11 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoSizeLabel: "サイズ",
     replayInfoUncompressedSize: (u) => `解凍後: ${u}`,
     finalStocksDetail: (stocks) => `残ストック: ${stocks}`,
+    gameResultWin: (stocks) => `勝 · 残${stocks}`,
+    gameResultLoss: (stocks) => `敗 · 残${stocks}`,
+    gameWatched: "観戦",
+    gameWatchedTooltip:
+      "このロビーにいましたが、この試合には出ていません。統計には含まれません。",
 
     // YouTube Video Sync
     youtubeVideoTitle: "YouTube 動画",
@@ -1448,6 +1731,33 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     searchTitle: "クリップ検索",
     searchTypeLabel: "種類",
     searchTypeEdgeGuards: "崖狩り",
+    searchTypeCombos: "コンボ",
+    searchCopyFfmpeg: "ffmpegで動画を作成",
+    ffmpegModalTitle: "クリップ動画を作成",
+    ffmpegModalExplain: (count) =>
+      `このセッションの動画から${count}件のクリップを（各試合の動画同期を使ってフレーム単位で正確に）切り出し、clips.mp4 に結合するコマンドを作成します。動画のあるフォルダでターミナルから実行してください。`,
+    ffmpegModalUseYtDlp: "先に yt-dlp で動画をダウンロードする",
+    ffmpegModalYtDlpNote:
+      "yt-dlp が必要です。切り出しの前に、動画を同じフォルダにダウンロードします。",
+    ffmpegModalCommandLabel: "コマンド（クリックでコピー）",
+    ffmpegModalCopyManual: "選択しました — ⌘C / Ctrl+C でコピーしてください",
+    searchCopied: "コピーしました",
+    searchFfmpegFileLabel: "動画ファイル名",
+    searchFfmpegSkipped: (count) =>
+      `${count}件のクリップはこの動画にリンクされていないため除外されました。`,
+    searchComboByLabel: "コンボした人",
+    searchComboByCharacterLabel: "コンボしたキャラ",
+    searchComboOnLabel: "コンボされた人",
+    searchComboOnCharacterLabel: "コンボされたキャラ",
+    searchMinHitsLabel: "最小ヒット数",
+    searchKoLabel: "撃墜",
+    searchKoYes: "撃墜あり",
+    searchKoNo: "撃墜なし",
+    searchGapsLabel: "コンボの種類",
+    searchGapsTrueOnly: "真コンボのみ",
+    searchGapsAllow: "0.5秒以内の途切れを許可",
+    comboClipLabel: (hits, startDamage, endDamage, killed) =>
+      `${hits}ヒット · ${Math.round(startDamage)}% → ${Math.round(endDamage)}%${killed ? " · 撃墜" : ""}`,
     searchResultLabel: "結果",
     searchResultAny: "すべて",
     searchResultSuccess: "成功 (撃墜)",
@@ -1469,6 +1779,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       "ドラッグして復帰が始まる範囲を描いてください。反対側も自動的に対象になります。",
     startingAreaModalClear: "クリア",
     searchInProgress: "検索中…",
+    searchProgress: (done, total) => `検索中… ${done} / ${total} 試合`,
     searchResultsCount: (count: number) =>
       `${count} 件のクリップが見つかりました`,
     searchNoResults: "条件に一致するクリップはありません。",

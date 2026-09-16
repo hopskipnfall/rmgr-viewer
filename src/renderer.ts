@@ -38,7 +38,11 @@ import {
   LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS,
 } from "./ledgeGrabRange.js";
 import { LEDGE_ACTION_STATES } from "./ledgeTrap.js";
-import { isHitstunState, computeEdgeGuardEvents } from "./edgeGuard.js";
+import {
+  isHitstunState,
+  computeEdgeGuardEvents,
+  recoveryZoneBoundary,
+} from "./edgeGuard.js";
 import {
   computeRecoveryVerdictFrames,
   type RecoveryVerdictFrame,
@@ -102,6 +106,8 @@ const HIDDEN_WEAPON_KINDS = new Set<number>([WPKind.SpinAttack]);
  * it's applied.
  */
 const MARKER_TUNING_PX_PER_WORLD_UNIT = 0.38;
+/** Samus's Charge Shot render scale at full charge: gfx_size 700 / 30 (RMGR_SPEC.md §5.3). */
+const CHARGE_SHOT_FULL_CHARGE_SCALE = 700 / 30;
 
 export interface BombExplosionEvent {
   startFrame: number;
@@ -1881,8 +1887,12 @@ export class StageRenderer {
   private hoveredQuickAttackIndex: number | null = null;
   private diEventsCache = new WeakMap<Replay, HitDIResult[]>();
   private backgroundTheme: BackgroundTheme = "grid";
+  /** Draw the edge-guard zone boundary (match view's "Zone" toggle). */
+  private showRecoveryZone = false;
   private bgBufferCanvas: HTMLCanvasElement | null = null;
   private bgBufferDirty = true;
+  private bgBufferIsLight: boolean | null = null;
+  private appThemeOverride: "light" | "dark" | null = null;
 
   public setBackgroundTheme(theme: BackgroundTheme): void {
     if (this.backgroundTheme === theme) return;
@@ -1892,6 +1902,31 @@ export class StageRenderer {
 
   public getBackgroundTheme(): BackgroundTheme {
     return this.backgroundTheme;
+  }
+
+  public setAppTheme(theme: "light" | "dark" | null): void {
+    if (this.appThemeOverride === theme) return;
+    this.appThemeOverride = theme;
+    this.bgBufferDirty = true;
+  }
+
+  public invalidateBackground(): void {
+    this.bgBufferDirty = true;
+  }
+
+  public isLightMode(): boolean {
+    if (this.appThemeOverride !== null) {
+      return this.appThemeOverride === "light";
+    }
+    if (typeof document !== "undefined") {
+      const attr = document.documentElement.getAttribute("data-theme");
+      if (attr === "light") return true;
+      if (attr === "dark") return false;
+      if (typeof window !== "undefined" && window.matchMedia) {
+        return window.matchMedia("(prefers-color-scheme: light)").matches;
+      }
+    }
+    return false;
   }
 
   private getDIEvents(replay: Replay): HitDIResult[] {
@@ -2069,6 +2104,10 @@ export class StageRenderer {
     this.ctx = ctx;
   }
 
+  public setShowRecoveryZone(show: boolean): void {
+    this.showRecoveryZone = show;
+  }
+
   public setQuickAttackOverlay(paths: QuickAttackPath[] | null): void {
     this.quickAttackOverlayPaths = paths;
   }
@@ -2103,6 +2142,7 @@ export class StageRenderer {
     this.drawBackground(camera);
     this.drawBlastZone(camera, stageId);
     this.drawStage(camera, stageId, frameIndex);
+    if (this.showRecoveryZone) this.drawRecoveryZone(camera, stageId);
     this.drawWindZone(camera, stageId, frame, frameIndex);
 
     // If Quick Attack Overlay mode is active:
@@ -2201,6 +2241,56 @@ export class StageRenderer {
         }
       }
     }
+  }
+
+  /**
+   * The edge-guard zone (edgeGuard.ts isOutsideZone / recoveryZoneBoundary):
+   * a player past these lines who can act again counts as recovering, which
+   * opens an edge-guard situation. Per side: vertical below stage height, the
+   * slanted segment, vertical again above it; the offstage side is tinted out
+   * to the blast zone.
+   */
+  private drawRecoveryZone(camera: Camera, stageId: number | undefined): void {
+    const zone = recoveryZoneBoundary(stageId);
+    const blastZone = stageBlastZone(stageId);
+    if (!zone || !blastZone) return;
+
+    const { ctx } = this;
+    ctx.save();
+    for (const side of [1, -1] as const) {
+      const outerX = side === 1 ? blastZone.rightX : blastZone.leftX;
+      const boundary = [
+        camera.worldToScreen(side * zone.xAtLow, blastZone.bottomY),
+        camera.worldToScreen(side * zone.xAtLow, zone.yLow),
+        camera.worldToScreen(side * zone.xAtHigh, zone.yHigh),
+        camera.worldToScreen(side * zone.xAtHigh, blastZone.topY),
+      ];
+
+      // Tint the offstage side, from the boundary out to the blast zone.
+      ctx.beginPath();
+      boundary.forEach((p, i) =>
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y),
+      );
+      const outerTop = camera.worldToScreen(outerX, blastZone.topY);
+      const outerBottom = camera.worldToScreen(outerX, blastZone.bottomY);
+      ctx.lineTo(outerTop.x, outerTop.y);
+      ctx.lineTo(outerBottom.x, outerBottom.y);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(250, 204, 21, 0.08)";
+      ctx.fill();
+
+      // The boundary itself.
+      ctx.beginPath();
+      boundary.forEach((p, i) =>
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y),
+      );
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.9)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
   }
 
   /**
@@ -2369,6 +2459,7 @@ export class StageRenderer {
             isLuigi,
             dir,
             spinAngle,
+            item.scaleY,
           )
         : this.drawCustomItemShape(ctx, item.kind, x, y, item.frame);
       if (!drewCustomShape) {
@@ -2818,6 +2909,8 @@ export class StageRenderer {
     isLuigi = false,
     dir = 1,
     spinAngle = 0,
+    /** The object's recorded render scale (ItemUpdate.scaleY, recorder schema 2+); undefined for older replays. */
+    gameScale?: number,
   ): boolean {
     switch (kind) {
       case WPKind.Fireball: // Mario / Luigi Neutral-B fireball
@@ -2845,7 +2938,7 @@ export class StageRenderer {
         this.drawThunderTrailMarker(ctx, x, y, spinAngle);
         return true;
       case WPKind.ChargeShot: // Samus - pulsing electric plasma orb
-        this.drawChargeShotMarker(ctx, x, y, spinAngle);
+        this.drawChargeShotMarker(ctx, x, y, spinAngle, gameScale);
         return true;
       case WPKind.SamusBomb:
         this.drawSamusBombMarker(ctx, x, y, spinAngle);
@@ -3891,9 +3984,17 @@ export class StageRenderer {
     x: number,
     y: number,
     spinAngle = 0,
+    /** Recorded render scale (gfx_size / 30 for its charge level); undefined for replays from before it was recorded. */
+    gameScale?: number,
   ): void {
     ctx.save();
-    const csRadius = 24;
+    // Full charge (gfx_size 700 -> scale 23.33) draws at the original fixed
+    // 24px; lower charges shrink in proportion, as in the game (level 0 is
+    // ~21% of full). Older replays have no scale and keep the fixed size.
+    const csRadius =
+      gameScale === undefined
+        ? 24
+        : Math.max(6, (24 * gameScale) / CHARGE_SHOT_FULL_CHARGE_SCALE);
 
     // 1. Outer pulsating electric magenta/violet corona
     const pulse = 1 + 0.12 * Math.sin(spinAngle * 3);
@@ -5601,6 +5702,30 @@ export class StageRenderer {
 
   private drawGridBackground(): void {
     const { ctx, canvas } = this;
+    const isLight = this.isLightMode();
+
+    if (isLight) {
+      // Light blueprint / high-contrast technical grid
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.08)";
+      ctx.lineWidth = 1;
+      const gridStep = 40;
+      for (let x = 0; x < canvas.width; x += gridStep) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += gridStep) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+      return;
+    }
 
     ctx.fillStyle = "#12141c";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -5633,12 +5758,15 @@ export class StageRenderer {
     const bufW = w + margin * 2;
     const bufH = h + margin * 2;
 
+    const isLight = this.isLightMode();
+
     // Cache the pristine unblurred background into an offscreen canvas to guarantee maximum 60fps performance
     if (
       !this.bgBufferCanvas ||
       this.bgBufferCanvas.width !== bufW ||
       this.bgBufferCanvas.height !== bufH ||
-      this.bgBufferDirty
+      this.bgBufferDirty ||
+      this.bgBufferIsLight !== isLight
     ) {
       if (!this.bgBufferCanvas && typeof document !== "undefined") {
         this.bgBufferCanvas = document.createElement("canvas");
@@ -5651,6 +5779,7 @@ export class StageRenderer {
           this.renderMountainScenery(bCtx, bufW, bufH);
         }
       }
+      this.bgBufferIsLight = isLight;
       this.bgBufferDirty = false;
     }
 
@@ -5677,6 +5806,534 @@ export class StageRenderer {
   }
 
   private renderMountainScenery(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ): void {
+    if (this.isLightMode()) {
+      this.renderMountainSceneryDay(ctx, w, h);
+    } else {
+      this.renderMountainSceneryNight(ctx, w, h);
+    }
+  }
+
+  private renderMountainSceneryDay(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ): void {
+    ctx.save();
+
+    const baseAspect = 1.05;
+    const refW = h * baseAspect;
+    const offsetX = (w - refW) * 0.5;
+    const toX = (relX: number) => offsetX + relX * refW;
+
+    const drawPoly = (pts: [number, number][], fill: string) => {
+      const first = pts[0];
+      if (!first) return;
+      ctx.beginPath();
+      ctx.moveTo(first[0], first[1]);
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i];
+        if (pt) {
+          ctx.lineTo(pt[0], pt[1]);
+        }
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+
+    // 1. Radiant Alpine Morning Sky Gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+    skyGrad.addColorStop(0.0, "#0284c7"); // Clear deep alpine azure
+    skyGrad.addColorStop(0.25, "#38bdf8"); // Cerulean
+    skyGrad.addColorStop(0.55, "#7dd3fc"); // Bright morning blue
+    skyGrad.addColorStop(0.8, "#bae6fd"); // Luminous sky
+    skyGrad.addColorStop(1.0, "#f0f9ff"); // Soft horizon glow
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. Drifting Soft White Cumulus Clouds
+    const clouds: Array<{ points: [number, number][]; color: string }> = [
+      {
+        points: [
+          [Math.min(0, toX(-0.5)), h * 0.16],
+          [toX(0.2), h * 0.11],
+          [toX(0.5), h * 0.18],
+          [toX(0.85), h * 0.13],
+          [Math.max(w, toX(1.5)), h * 0.17],
+          [Math.max(w, toX(1.5)), h * 0.28],
+          [toX(0.7), h * 0.32],
+          [toX(0.35), h * 0.24],
+          [Math.min(0, toX(-0.5)), h * 0.3],
+        ],
+        color: "rgba(255, 255, 255, 0.55)",
+      },
+      {
+        points: [
+          [Math.min(0, toX(-0.5)), h * 0.28],
+          [toX(0.25), h * 0.22],
+          [toX(0.6), h * 0.3],
+          [Math.max(w, toX(1.5)), h * 0.24],
+          [Math.max(w, toX(1.5)), h * 0.38],
+          [toX(0.75), h * 0.42],
+          [toX(0.4), h * 0.34],
+          [Math.min(0, toX(-0.5)), h * 0.4],
+        ],
+        color: "rgba(255, 255, 255, 0.45)",
+      },
+      {
+        points: [
+          [toX(0.05), h * 0.35],
+          [toX(0.35), h * 0.3],
+          [toX(0.65), h * 0.36],
+          [toX(0.95), h * 0.32],
+          [toX(0.75), h * 0.45],
+          [toX(0.25), h * 0.44],
+        ],
+        color: "rgba(255, 255, 255, 0.32)",
+      },
+    ];
+    for (const cloud of clouds) {
+      drawPoly(cloud.points, cloud.color);
+    }
+
+    // 3. Radiant Alpine Morning Sun & Golden Halos
+    const sunX = toX(0.76);
+    const sunY = h * 0.2;
+    const sunR = Math.max(18, h * 0.065);
+
+    const haloGradients = [
+      { r: sunR * 3.8, color: "rgba(254, 240, 138, 0.12)" },
+      { r: sunR * 2.4, color: "rgba(253, 224, 71, 0.2)" },
+      { r: sunR * 1.5, color: "rgba(254, 249, 195, 0.35)" },
+      { r: sunR * 1.18, color: "rgba(255, 255, 255, 0.55)" },
+    ];
+    for (const halo of haloGradients) {
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, halo.r, 0, Math.PI * 2);
+      ctx.fillStyle = halo.color;
+      ctx.fill();
+    }
+
+    const sunGrad = ctx.createLinearGradient(
+      sunX - sunR,
+      sunY - sunR,
+      sunX + sunR,
+      sunY + sunR,
+    );
+    sunGrad.addColorStop(0.0, "#ffffff");
+    sunGrad.addColorStop(0.5, "#fffbeb");
+    sunGrad.addColorStop(1.0, "#fde047");
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+    ctx.fillStyle = sunGrad;
+    ctx.shadowColor = "#fef08a";
+    ctx.shadowBlur = 22;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Subtle sun shimmer ray glints
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.lineWidth = 1.5;
+    for (const angle of [0, Math.PI * 0.25, Math.PI * 0.5, Math.PI * 0.75]) {
+      ctx.beginPath();
+      ctx.moveTo(
+        sunX + Math.cos(angle) * (sunR * 1.3),
+        sunY + Math.sin(angle) * (sunR * 1.3),
+      );
+      ctx.lineTo(
+        sunX + Math.cos(angle) * (sunR * 2.2),
+        sunY + Math.sin(angle) * (sunR * 2.2),
+      );
+      ctx.moveTo(
+        sunX - Math.cos(angle) * (sunR * 1.3),
+        sunY - Math.sin(angle) * (sunR * 1.3),
+      );
+      ctx.lineTo(
+        sunX - Math.cos(angle) * (sunR * 2.2),
+        sunY - Math.sin(angle) * (sunR * 2.2),
+      );
+      ctx.stroke();
+    }
+
+    // 4. Far Mountain Silhouette Range (Layer 1: Sunlit Slate Blue)
+    const farRidgePoints: [number, number][] = [
+      [Math.min(0, toX(-0.8)), h * 0.78],
+      [Math.min(0, toX(-0.8)), h * 0.58],
+      [toX(-0.6), h * 0.48],
+      [toX(-0.4), h * 0.54],
+      [toX(-0.2), h * 0.46],
+      [toX(-0.05), h * 0.55],
+      [toX(0.06), h * 0.5],
+      [toX(0.15), h * 0.56],
+      [toX(0.24), h * 0.46],
+      [toX(0.35), h * 0.53],
+      [toX(0.48), h * 0.42],
+      [toX(0.58), h * 0.51],
+      [toX(0.68), h * 0.44],
+      [toX(0.79), h * 0.5],
+      [toX(0.9), h * 0.45],
+      [toX(1.05), h * 0.52],
+      [toX(1.22), h * 0.46],
+      [toX(1.4), h * 0.53],
+      [toX(1.6), h * 0.47],
+      [Math.max(w, toX(1.8)), h * 0.56],
+      [Math.max(w, toX(1.8)), h * 0.78],
+    ];
+    drawPoly(farRidgePoints, "#64748b");
+
+    const farFacets: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [toX(-0.6), h * 0.48],
+          [toX(-0.4), h * 0.54],
+          [toX(-0.5), h * 0.78],
+        ],
+        color: "#94a3b8",
+      },
+      {
+        pts: [
+          [toX(-0.2), h * 0.46],
+          [toX(-0.05), h * 0.55],
+          [toX(-0.12), h * 0.78],
+        ],
+        color: "#94a3b8",
+      },
+      {
+        pts: [
+          [toX(0.06), h * 0.5],
+          [toX(0.15), h * 0.56],
+          [toX(0.1), h * 0.78],
+        ],
+        color: "#475569",
+      },
+      {
+        pts: [
+          [toX(0.24), h * 0.46],
+          [toX(0.35), h * 0.53],
+          [toX(0.3), h * 0.78],
+        ],
+        color: "#94a3b8",
+      },
+      {
+        pts: [
+          [toX(0.48), h * 0.42],
+          [toX(0.58), h * 0.51],
+          [toX(0.52), h * 0.78],
+        ],
+        color: "#94a3b8",
+      },
+      {
+        pts: [
+          [toX(0.68), h * 0.44],
+          [toX(0.79), h * 0.5],
+          [toX(0.73), h * 0.78],
+        ],
+        color: "#cbd5e1",
+      },
+      {
+        pts: [
+          [toX(0.9), h * 0.45],
+          [toX(1.05), h * 0.52],
+          [toX(0.96), h * 0.78],
+        ],
+        color: "#cbd5e1",
+      },
+      {
+        pts: [
+          [toX(1.22), h * 0.46],
+          [toX(1.4), h * 0.53],
+          [toX(1.3), h * 0.78],
+        ],
+        color: "#94a3b8",
+      },
+      {
+        pts: [
+          [toX(1.6), h * 0.47],
+          [Math.max(w, toX(1.8)), h * 0.56],
+          [toX(1.7), h * 0.78],
+        ],
+        color: "#475569",
+      },
+    ];
+    for (const f of farFacets) drawPoly(f.pts, f.color);
+
+    // 5. Mid Mountain Range (Layer 2: Snow-Peaked Alpine Peaks)
+    interface MountainSpec {
+      apex: [number, number];
+      leftBase: [number, number];
+      rightBase: [number, number];
+      centerBase: [number, number];
+      snowLeftZig: [number, number];
+      snowMidZig: [number, number];
+      snowRightZig: [number, number];
+    }
+
+    const midMountains: MountainSpec[] = [
+      {
+        apex: [toX(-0.46), h * 0.42],
+        leftBase: [toX(-0.68), h * 0.88],
+        rightBase: [toX(-0.24), h * 0.88],
+        centerBase: [toX(-0.45), h * 0.88],
+        snowLeftZig: [toX(-0.55), h * 0.57],
+        snowMidZig: [toX(-0.45), h * 0.61],
+        snowRightZig: [toX(-0.37), h * 0.56],
+      },
+      {
+        apex: [toX(-0.24), h * 0.36],
+        leftBase: [toX(-0.44), h * 0.86],
+        rightBase: [toX(-0.02), h * 0.86],
+        centerBase: [toX(-0.22), h * 0.86],
+        snowLeftZig: [toX(-0.32), h * 0.52],
+        snowMidZig: [toX(-0.22), h * 0.56],
+        snowRightZig: [toX(-0.15), h * 0.51],
+      },
+      {
+        apex: [toX(0.16), h * 0.35],
+        leftBase: [toX(-0.06), h * 0.85],
+        rightBase: [toX(0.38), h * 0.85],
+        centerBase: [toX(0.18), h * 0.85],
+        snowLeftZig: [toX(0.08), h * 0.51],
+        snowMidZig: [toX(0.17), h * 0.55],
+        snowRightZig: [toX(0.24), h * 0.5],
+      },
+      {
+        apex: [toX(0.36), h * 0.42],
+        leftBase: [toX(0.18), h * 0.86],
+        rightBase: [toX(0.54), h * 0.86],
+        centerBase: [toX(0.37), h * 0.86],
+        snowLeftZig: [toX(0.29), h * 0.56],
+        snowMidZig: [toX(0.37), h * 0.59],
+        snowRightZig: [toX(0.43), h * 0.55],
+      },
+      {
+        apex: [toX(0.58), h * 0.3],
+        leftBase: [toX(0.38), h * 0.88],
+        rightBase: [toX(0.78), h * 0.88],
+        centerBase: [toX(0.59), h * 0.88],
+        snowLeftZig: [toX(0.49), h * 0.49],
+        snowMidZig: [toX(0.59), h * 0.53],
+        snowRightZig: [toX(0.67), h * 0.48],
+      },
+      {
+        apex: [toX(0.82), h * 0.38],
+        leftBase: [toX(0.64), h * 0.88],
+        rightBase: [toX(1.02), h * 0.88],
+        centerBase: [toX(0.83), h * 0.88],
+        snowLeftZig: [toX(0.73), h * 0.56],
+        snowMidZig: [toX(0.83), h * 0.6],
+        snowRightZig: [toX(0.91), h * 0.54],
+      },
+      {
+        apex: [toX(1.02), h * 0.44],
+        leftBase: [toX(0.84), h * 0.9],
+        rightBase: [toX(1.14), h * 0.9],
+        centerBase: [toX(1.02), h * 0.9],
+        snowLeftZig: [toX(0.95), h * 0.58],
+        snowMidZig: [toX(1.02), h * 0.62],
+        snowRightZig: [toX(1.07), h * 0.57],
+      },
+      {
+        apex: [toX(-0.02), h * 0.42],
+        leftBase: [toX(-0.16), h * 0.88],
+        rightBase: [toX(0.14), h * 0.88],
+        centerBase: [toX(-0.01), h * 0.88],
+        snowLeftZig: [toX(-0.08), h * 0.56],
+        snowMidZig: [toX(-0.01), h * 0.6],
+        snowRightZig: [toX(0.06), h * 0.55],
+      },
+      {
+        apex: [toX(1.24), h * 0.37],
+        leftBase: [toX(1.04), h * 0.88],
+        rightBase: [toX(1.44), h * 0.88],
+        centerBase: [toX(1.25), h * 0.88],
+        snowLeftZig: [toX(1.15), h * 0.52],
+        snowMidZig: [toX(1.25), h * 0.56],
+        snowRightZig: [toX(1.33), h * 0.51],
+      },
+      {
+        apex: [toX(1.46), h * 0.43],
+        leftBase: [toX(1.26), h * 0.9],
+        rightBase: [toX(1.68), h * 0.9],
+        centerBase: [toX(1.46), h * 0.9],
+        snowLeftZig: [toX(1.38), h * 0.58],
+        snowMidZig: [toX(1.46), h * 0.62],
+        snowRightZig: [toX(1.53), h * 0.57],
+      },
+    ];
+
+    for (const m of midMountains) {
+      // 1. Left shadow face (solid cool alpine rock)
+      drawPoly([m.apex, m.leftBase, m.centerBase], "#334155");
+      drawPoly(
+        [
+          m.apex,
+          [m.leftBase[0] * 0.4 + m.centerBase[0] * 0.6, m.leftBase[1]],
+          m.centerBase,
+        ],
+        "#475569",
+      );
+
+      // 2. Right sunlit face (sun-warmed granite)
+      drawPoly([m.apex, m.centerBase, m.rightBase], "#64748b");
+      drawPoly(
+        [
+          m.apex,
+          m.centerBase,
+          [m.centerBase[0] * 0.4 + m.rightBase[0] * 0.6, m.rightBase[1]],
+        ],
+        "#94a3b8",
+      );
+
+      // 3. Snow Cap (Shadow Side)
+      drawPoly([m.apex, m.snowLeftZig, m.snowMidZig], "#cbd5e1");
+      drawPoly(
+        [
+          m.apex,
+          [m.snowLeftZig[0] * 0.5 + m.snowMidZig[0] * 0.5, m.snowMidZig[1]],
+          m.snowMidZig,
+        ],
+        "#e2e8f0",
+      );
+
+      // 4. Snow Cap (Sunlit Side - Brilliant Pristine Alpine Snow)
+      drawPoly([m.apex, m.snowMidZig, m.snowRightZig], "#ffffff");
+      drawPoly(
+        [
+          m.apex,
+          m.snowMidZig,
+          [m.snowMidZig[0] * 0.4 + m.snowRightZig[0] * 0.6, m.snowRightZig[1]],
+        ],
+        "#f8fafc",
+      );
+    }
+
+    // 6. Near Mountain Foothills & Rolling Forest Ridges
+    const foothills: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.8)), h * 0.76],
+          [toX(-0.4), h * 0.72],
+          [toX(-0.1), h * 0.78],
+          [toX(-0.3), h],
+          [Math.min(0, toX(-0.8)), h],
+        ],
+        color: "#1e293b",
+      },
+      {
+        pts: [
+          [toX(-0.2), h * 0.77],
+          [toX(0.18), h * 0.7],
+          [toX(0.38), h * 0.78],
+          [toX(0.2), h],
+          [toX(-0.1), h],
+        ],
+        color: "#166534", // Alpine evergreen ridge
+      },
+      {
+        pts: [
+          [toX(0.28), h * 0.76],
+          [toX(0.58), h * 0.68],
+          [toX(0.85), h * 0.78],
+          [toX(0.68), h],
+          [toX(0.4), h],
+        ],
+        color: "#0f172a",
+      },
+      {
+        pts: [
+          [toX(0.72), h * 0.76],
+          [toX(1.05), h * 0.71],
+          [toX(1.35), h * 0.79],
+          [toX(1.15), h],
+          [toX(0.85), h],
+        ],
+        color: "#166534",
+      },
+      {
+        pts: [
+          [toX(1.18), h * 0.77],
+          [toX(1.5), h * 0.73],
+          [Math.max(w, toX(1.8)), h * 0.78],
+          [Math.max(w, toX(1.8)), h],
+          [toX(1.3), h],
+        ],
+        color: "#1e293b",
+      },
+    ];
+    for (const f of foothills) drawPoly(f.pts, f.color);
+
+    // 7. Alpine Coniferous Trees (Rich Forest Green)
+    const treeClusters: Array<[number, number, number]> = [
+      [-0.42, 0.72, 22],
+      [-0.39, 0.71, 28],
+      [-0.36, 0.72, 20],
+      [-0.18, 0.74, 18],
+      [-0.15, 0.73, 25],
+      [-0.12, 0.74, 19],
+      [0.12, 0.71, 16],
+      [0.15, 0.7, 24],
+      [0.17, 0.7, 20],
+      [0.19, 0.71, 15],
+      [0.44, 0.71, 20],
+      [0.46, 0.7, 26],
+      [0.48, 0.69, 22],
+      [0.5, 0.68, 28],
+      [0.52, 0.68, 24],
+      [0.54, 0.7, 18],
+      [0.78, 0.73, 20],
+      [0.8, 0.72, 26],
+      [0.82, 0.71, 22],
+      [0.84, 0.71, 27],
+      [0.86, 0.72, 21],
+      [0.88, 0.73, 16],
+      [1.15, 0.73, 19],
+      [1.18, 0.72, 25],
+      [1.21, 0.73, 18],
+      [1.38, 0.72, 22],
+      [1.41, 0.71, 27],
+      [1.44, 0.72, 20],
+    ];
+
+    for (const [tx, ty, th] of treeClusters) {
+      const px = toX(tx);
+      if (px < -30 || px > w + 30) continue;
+      const py = ty * h;
+      const tw = th * 0.45;
+      drawPoly(
+        [
+          [px, py - th],
+          [px - tw * 0.5, py - th * 0.6],
+          [px - tw * 0.25, py - th * 0.6],
+          [px - tw * 0.75, py - th * 0.25],
+          [px - tw * 0.4, py - th * 0.25],
+          [px - tw, py],
+          [px + tw, py],
+          [px + tw * 0.4, py - th * 0.25],
+          [px + tw * 0.75, py - th * 0.25],
+          [px + tw * 0.25, py - th * 0.6],
+          [px + tw * 0.5, py - th * 0.6],
+        ],
+        "#064e3b",
+      );
+    }
+
+    // 8. Soft Morning Valley Mist across full canvas
+    const mistGrad = ctx.createLinearGradient(0, h * 0.75, 0, h);
+    mistGrad.addColorStop(0.0, "rgba(224, 242, 254, 0.0)");
+    mistGrad.addColorStop(0.3, "rgba(186, 230, 253, 0.18)");
+    mistGrad.addColorStop(0.7, "rgba(224, 242, 254, 0.22)");
+    mistGrad.addColorStop(1.0, "rgba(241, 245, 249, 0.4)");
+    ctx.fillStyle = mistGrad;
+    ctx.fillRect(0, h * 0.75, w, h * 0.25);
+
+    ctx.restore();
+  }
+
+  private renderMountainSceneryNight(
     ctx: CanvasRenderingContext2D,
     w: number,
     h: number,
@@ -6294,12 +6951,15 @@ export class StageRenderer {
     const bufW = w + margin * 2;
     const bufH = h + margin * 2;
 
+    const isLight = this.isLightMode();
+
     // Cache the pristine unblurred background into an offscreen canvas to guarantee maximum 60fps performance
     if (
       !this.bgBufferCanvas ||
       this.bgBufferCanvas.width !== bufW ||
       this.bgBufferCanvas.height !== bufH ||
-      this.bgBufferDirty
+      this.bgBufferDirty ||
+      this.bgBufferIsLight !== isLight
     ) {
       if (!this.bgBufferCanvas && typeof document !== "undefined") {
         this.bgBufferCanvas = document.createElement("canvas");
@@ -6312,6 +6972,7 @@ export class StageRenderer {
           this.renderBeachScenery(bCtx, bufW, bufH);
         }
       }
+      this.bgBufferIsLight = isLight;
       this.bgBufferDirty = false;
     }
 
@@ -6336,6 +6997,519 @@ export class StageRenderer {
   }
 
   private renderBeachScenery(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ): void {
+    if (this.isLightMode()) {
+      this.renderBeachSceneryDay(ctx, w, h);
+    } else {
+      this.renderBeachSceneryNight(ctx, w, h);
+    }
+  }
+
+  private renderBeachSceneryDay(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ): void {
+    ctx.save();
+
+    const baseAspect = 1.05;
+    const refW = h * baseAspect;
+    const offsetX = (w - refW) * 0.5;
+    const toX = (relX: number) => offsetX + relX * refW;
+
+    const drawPoly = (pts: [number, number][], fill: string) => {
+      const first = pts[0];
+      if (!first) return;
+      ctx.beginPath();
+      ctx.moveTo(first[0], first[1]);
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i];
+        if (pt) {
+          ctx.lineTo(pt[0], pt[1]);
+        }
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+
+    // 1. Vibrant Tropical Sunny Day Sky Gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.58);
+    skyGrad.addColorStop(0.0, "#0284c7"); // Deep tropical azure
+    skyGrad.addColorStop(0.25, "#0ea5e9"); // Sky blue
+    skyGrad.addColorStop(0.5, "#38bdf8"); // Cerulean
+    skyGrad.addColorStop(0.75, "#7dd3fc"); // Sunny cyan
+    skyGrad.addColorStop(1.0, "#cffafe"); // Shimmering tropical horizon glow
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. High Tropical Midday Sun & Shimmering Rays
+    const sunX = toX(0.72);
+    const sunY = h * 0.32;
+    const sunR = refW * 0.075;
+
+    // Outer glow halo
+    const glowGrad = ctx.createRadialGradient(
+      sunX,
+      sunY,
+      sunR * 0.5,
+      sunX,
+      sunY,
+      refW * 0.35,
+    );
+    glowGrad.addColorStop(0.0, "rgba(254, 240, 138, 0.4)");
+    glowGrad.addColorStop(0.3, "rgba(253, 224, 71, 0.22)");
+    glowGrad.addColorStop(0.7, "rgba(254, 249, 195, 0.12)");
+    glowGrad.addColorStop(1.0, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, refW * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Brilliant golden sun disc
+    const sunDiscGrad = ctx.createRadialGradient(
+      sunX,
+      sunY,
+      0,
+      sunX,
+      sunY,
+      sunR,
+    );
+    sunDiscGrad.addColorStop(0.0, "#ffffff");
+    sunDiscGrad.addColorStop(0.4, "#fffbeb");
+    sunDiscGrad.addColorStop(0.85, "#fde047");
+    sunDiscGrad.addColorStop(1.0, "#f59e0b");
+    ctx.fillStyle = sunDiscGrad;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Radiant sun glints
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+    ctx.lineWidth = 1.6;
+    for (const angle of [0, Math.PI * 0.25, Math.PI * 0.5, Math.PI * 0.75]) {
+      ctx.beginPath();
+      ctx.moveTo(
+        sunX + Math.cos(angle) * (sunR * 1.3),
+        sunY + Math.sin(angle) * (sunR * 1.3),
+      );
+      ctx.lineTo(
+        sunX + Math.cos(angle) * (sunR * 2.3),
+        sunY + Math.sin(angle) * (sunR * 2.3),
+      );
+      ctx.moveTo(
+        sunX - Math.cos(angle) * (sunR * 1.3),
+        sunY - Math.sin(angle) * (sunR * 1.3),
+      );
+      ctx.lineTo(
+        sunX - Math.cos(angle) * (sunR * 2.3),
+        sunY - Math.sin(angle) * (sunR * 2.3),
+      );
+      ctx.stroke();
+    }
+
+    // 3. Puffy Soft White Trade-Wind Clouds
+    const tradeClouds: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.14],
+          [toX(0.2), h * 0.1],
+          [toX(0.45), h * 0.16],
+          [toX(0.8), h * 0.11],
+          [Math.max(w, toX(1.5)), h * 0.15],
+          [Math.max(w, toX(1.5)), h * 0.25],
+          [toX(0.65), h * 0.26],
+          [toX(0.3), h * 0.2],
+          [Math.min(0, toX(-0.5)), h * 0.26],
+        ],
+        color: "rgba(255, 255, 255, 0.65)",
+      },
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.24],
+          [toX(0.25), h * 0.19],
+          [toX(0.6), h * 0.26],
+          [Math.max(w, toX(1.5)), h * 0.22],
+          [Math.max(w, toX(1.5)), h * 0.33],
+          [toX(0.7), h * 0.36],
+          [toX(0.35), h * 0.3],
+          [Math.min(0, toX(-0.5)), h * 0.35],
+        ],
+        color: "rgba(255, 255, 255, 0.5)",
+      },
+      {
+        pts: [
+          [toX(0.38), h * 0.28],
+          [toX(0.58), h * 0.25],
+          [toX(0.82), h * 0.29],
+          [toX(0.78), h * 0.35],
+          [toX(0.52), h * 0.34],
+        ],
+        color: "rgba(255, 255, 255, 0.42)",
+      },
+    ];
+    for (const cloud of tradeClouds) {
+      drawPoly(cloud.pts, cloud.color);
+    }
+
+    // 4. Distant Tropical Volcanic Islands on Horizon (Lush Rainforest Greens)
+    drawPoly(
+      [
+        [Math.min(0, toX(-0.5)), h * 0.52],
+        [toX(0.04), h * 0.48],
+        [toX(0.14), h * 0.44],
+        [toX(0.22), h * 0.41], // Volcano peak
+        [toX(0.26), h * 0.43],
+        [toX(0.34), h * 0.46],
+        [toX(0.44), h * 0.49],
+        [toX(0.52), h * 0.52],
+        [Math.min(0, toX(-0.5)), h * 0.52],
+      ],
+      "#166534", // Lush tropical jungle green
+    );
+    drawPoly(
+      [
+        [toX(0.14), h * 0.44],
+        [toX(0.22), h * 0.41],
+        [toX(0.26), h * 0.43],
+        [toX(0.3), h * 0.48],
+        [toX(0.18), h * 0.5],
+      ],
+      "#22c55e", // Sunlit rainforest canopy highlight
+    );
+    drawPoly(
+      [
+        [toX(0.86), h * 0.52],
+        [toX(0.9), h * 0.47],
+        [toX(0.93), h * 0.46],
+        [toX(0.97), h * 0.52],
+      ],
+      "#15803d",
+    );
+    drawPoly(
+      [
+        [toX(0.9), h * 0.47],
+        [toX(0.93), h * 0.46],
+        [toX(0.95), h * 0.49],
+      ],
+      "#4ade80",
+    );
+
+    // 5. Layered Sparkling Turquoise Ocean Lagoon & Sun Reflection
+    const oceanGrad = ctx.createLinearGradient(0, h * 0.5, 0, h * 0.74);
+    oceanGrad.addColorStop(0.0, "#0369a1"); // Deep ocean azure at horizon
+    oceanGrad.addColorStop(0.2, "#0284c7"); // Ocean blue
+    oceanGrad.addColorStop(0.45, "#0891b2"); // Tropical teal
+    oceanGrad.addColorStop(0.7, "#06b6d4"); // Turquoise lagoon
+    oceanGrad.addColorStop(0.9, "#14b8a6"); // Bright aqua
+    oceanGrad.addColorStop(1.0, "#2dd4bf"); // Glistening shallow reef water
+    ctx.fillStyle = oceanGrad;
+    ctx.fillRect(0, h * 0.5, w, h * 0.24);
+
+    // Sun Reflection Path down the water
+    const reflGrad = ctx.createLinearGradient(0, h * 0.5, 0, h * 0.72);
+    reflGrad.addColorStop(0.0, "rgba(255, 255, 255, 0.65)");
+    reflGrad.addColorStop(0.35, "rgba(254, 240, 138, 0.45)");
+    reflGrad.addColorStop(0.75, "rgba(253, 224, 71, 0.25)");
+    reflGrad.addColorStop(1.0, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = reflGrad;
+    ctx.beginPath();
+    ctx.moveTo(sunX - refW * 0.04, h * 0.5);
+    ctx.lineTo(sunX + refW * 0.04, h * 0.5);
+    ctx.lineTo(sunX + refW * 0.18, h * 0.72);
+    ctx.lineTo(sunX - refW * 0.18, h * 0.72);
+    ctx.closePath();
+    ctx.fill();
+
+    // Stylized horizontal wave reflection bands
+    const waveBands: Array<{ y: number; wFactor: number; color: string }> = [
+      { y: h * 0.53, wFactor: 0.06, color: "rgba(255, 255, 255, 0.75)" },
+      { y: h * 0.56, wFactor: 0.09, color: "rgba(254, 240, 138, 0.6)" },
+      { y: h * 0.6, wFactor: 0.12, color: "rgba(255, 255, 255, 0.6)" },
+      { y: h * 0.64, wFactor: 0.16, color: "rgba(254, 249, 195, 0.5)" },
+      { y: h * 0.68, wFactor: 0.22, color: "rgba(255, 255, 255, 0.55)" },
+    ];
+    for (const wb of waveBands) {
+      ctx.fillStyle = wb.color;
+      ctx.beginPath();
+      ctx.ellipse(sunX, wb.y, refW * wb.wFactor, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Shallow aquamarine wave crests along shoreline
+    drawPoly(
+      [
+        [Math.min(0, toX(-0.5)), h * 0.69],
+        [toX(0.2), h * 0.68],
+        [toX(0.5), h * 0.7],
+        [toX(0.8), h * 0.68],
+        [Math.max(w, toX(1.5)), h * 0.71],
+        [Math.max(w, toX(1.5)), h * 0.76],
+        [toX(0.7), h * 0.76],
+        [toX(0.3), h * 0.74],
+        [Math.min(0, toX(-0.5)), h * 0.75],
+      ],
+      "rgba(45, 212, 191, 0.6)",
+    );
+
+    // White Surf Foam Line
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(Math.min(0, toX(-0.5)), h * 0.72);
+    ctx.bezierCurveTo(
+      toX(0.25),
+      h * 0.7,
+      toX(0.6),
+      h * 0.75,
+      toX(0.85),
+      h * 0.71,
+    );
+    ctx.lineTo(Math.max(w, toX(1.5)), h * 0.74);
+    ctx.stroke();
+
+    // 6. Sun-Drenched Golden Sandy Beach
+    const sandGrad = ctx.createLinearGradient(0, h * 0.72, 0, h);
+    sandGrad.addColorStop(0.0, "#f59e0b"); // Warm amber wet sand
+    sandGrad.addColorStop(0.2, "#fbbf24"); // Golden sand
+    sandGrad.addColorStop(0.5, "#fde047"); // Bright sunlit sand
+    sandGrad.addColorStop(0.8, "#fef08a"); // Highlighted dunes
+    sandGrad.addColorStop(1.0, "#fef9c3"); // Warm pale sand base
+    ctx.fillStyle = sandGrad;
+    ctx.beginPath();
+    ctx.moveTo(Math.min(0, toX(-0.5)), h * 0.72);
+    ctx.bezierCurveTo(
+      toX(0.25),
+      h * 0.7,
+      toX(0.6),
+      h * 0.75,
+      toX(0.85),
+      h * 0.71,
+    );
+    ctx.lineTo(Math.max(w, toX(1.5)), h * 0.74);
+    ctx.lineTo(Math.max(w, toX(1.5)), h);
+    ctx.lineTo(Math.min(0, toX(-0.5)), h);
+    ctx.closePath();
+    ctx.fill();
+
+    // Dune Shadow / Shading Facets
+    drawPoly(
+      [
+        [toX(0.15), h * 0.85],
+        [toX(0.4), h * 0.82],
+        [toX(0.65), h * 0.89],
+        [toX(0.35), h * 0.94],
+      ],
+      "rgba(217, 119, 6, 0.18)",
+    );
+    drawPoly(
+      [
+        [toX(0.6), h * 0.88],
+        [toX(0.9), h * 0.85],
+        [toX(1.1), h * 0.95],
+        [toX(0.75), h * 0.97],
+      ],
+      "rgba(217, 119, 6, 0.14)",
+    );
+
+    // 7. Tropical Coconut Palm Trees
+    const trunkStartX = toX(0.08);
+    const trunkStartY = h * 1.02;
+    const trunkCtrlX = toX(0.18);
+    const trunkCtrlY = h * 0.65;
+    const palmHeadX = toX(0.26);
+    const palmHeadY = h * 0.32;
+
+    ctx.strokeStyle = "#5c2b09"; // Warm wood
+    ctx.lineWidth = 14;
+    ctx.beginPath();
+    ctx.moveTo(trunkStartX, trunkStartY);
+    ctx.quadraticCurveTo(trunkCtrlX, trunkCtrlY, palmHeadX, palmHeadY);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#92400e";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(trunkStartX + 2, trunkStartY);
+    ctx.quadraticCurveTo(trunkCtrlX + 2, trunkCtrlY, palmHeadX + 1, palmHeadY);
+    ctx.stroke();
+
+    // Coconuts under crown
+    ctx.fillStyle = "#78350f";
+    ctx.beginPath();
+    ctx.arc(palmHeadX - 4, palmHeadY + 4, 6, 0, Math.PI * 2);
+    ctx.arc(palmHeadX + 5, palmHeadY + 5, 5.5, 0, Math.PI * 2);
+    ctx.arc(palmHeadX + 1, palmHeadY + 8, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    interface PalmFrond {
+      tipX: number;
+      tipY: number;
+      ctrlX: number;
+      ctrlY: number;
+      color: string;
+      w: number;
+    }
+
+    const fronds: PalmFrond[] = [
+      {
+        tipX: palmHeadX - refW * 0.18,
+        tipY: palmHeadY + h * 0.05,
+        ctrlX: palmHeadX - refW * 0.12,
+        ctrlY: palmHeadY - h * 0.08,
+        color: "#047857",
+        w: 18,
+      },
+      {
+        tipX: palmHeadX - refW * 0.22,
+        tipY: palmHeadY - h * 0.02,
+        ctrlX: palmHeadX - refW * 0.14,
+        ctrlY: palmHeadY - h * 0.14,
+        color: "#059669",
+        w: 16,
+      },
+      {
+        tipX: palmHeadX - refW * 0.08,
+        tipY: palmHeadY - h * 0.16,
+        ctrlX: palmHeadX - refW * 0.04,
+        ctrlY: palmHeadY - h * 0.18,
+        color: "#10b981",
+        w: 16,
+      },
+      {
+        tipX: palmHeadX + refW * 0.08,
+        tipY: palmHeadY - h * 0.15,
+        ctrlX: palmHeadX + refW * 0.05,
+        ctrlY: palmHeadY - h * 0.17,
+        color: "#34d399",
+        w: 15,
+      },
+      {
+        tipX: palmHeadX + refW * 0.2,
+        tipY: palmHeadY - h * 0.04,
+        ctrlX: palmHeadX + refW * 0.12,
+        ctrlY: palmHeadY - h * 0.12,
+        color: "#10b981",
+        w: 18,
+      },
+      {
+        tipX: palmHeadX + refW * 0.18,
+        tipY: palmHeadY + h * 0.07,
+        ctrlX: palmHeadX + refW * 0.11,
+        ctrlY: palmHeadY - h * 0.03,
+        color: "#059669",
+        w: 16,
+      },
+      {
+        tipX: palmHeadX + refW * 0.12,
+        tipY: palmHeadY + h * 0.14,
+        ctrlX: palmHeadX + refW * 0.06,
+        ctrlY: palmHeadY + h * 0.06,
+        color: "#047857",
+        w: 14,
+      },
+    ];
+
+    for (const fr of fronds) {
+      ctx.strokeStyle = fr.color;
+      ctx.lineWidth = fr.w;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(palmHeadX, palmHeadY);
+      ctx.quadraticCurveTo(fr.ctrlX, fr.ctrlY, fr.tipX, fr.tipY);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#6ee7b7";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(palmHeadX, palmHeadY);
+      ctx.quadraticCurveTo(fr.ctrlX, fr.ctrlY, fr.tipX, fr.tipY);
+      ctx.stroke();
+    }
+
+    // Right Overhanging Tropical Palm Crown
+    const rightHeadX = toX(0.98);
+    const rightHeadY = h * 0.12;
+    const rightFronds: PalmFrond[] = [
+      {
+        tipX: rightHeadX - refW * 0.24,
+        tipY: rightHeadY + h * 0.12,
+        ctrlX: rightHeadX - refW * 0.14,
+        ctrlY: rightHeadY + h * 0.02,
+        color: "#047857",
+        w: 18,
+      },
+      {
+        tipX: rightHeadX - refW * 0.28,
+        tipY: rightHeadY + h * 0.03,
+        ctrlX: rightHeadX - refW * 0.16,
+        ctrlY: rightHeadY - h * 0.06,
+        color: "#059669",
+        w: 16,
+      },
+      {
+        tipX: rightHeadX - refW * 0.18,
+        tipY: rightHeadY - h * 0.08,
+        ctrlX: rightHeadX - refW * 0.08,
+        ctrlY: rightHeadY - h * 0.12,
+        color: "#10b981",
+        w: 15,
+      },
+      {
+        tipX: rightHeadX - refW * 0.14,
+        tipY: rightHeadY + h * 0.2,
+        ctrlX: rightHeadX - refW * 0.06,
+        ctrlY: rightHeadY + h * 0.1,
+        color: "#059669",
+        w: 16,
+      },
+    ];
+    for (const fr of rightFronds) {
+      ctx.strokeStyle = fr.color;
+      ctx.lineWidth = fr.w;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(rightHeadX, rightHeadY);
+      ctx.quadraticCurveTo(fr.ctrlX, fr.ctrlY, fr.tipX, fr.tipY);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#6ee7b7";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rightHeadX, rightHeadY);
+      ctx.quadraticCurveTo(fr.ctrlX, fr.ctrlY, fr.tipX, fr.tipY);
+      ctx.stroke();
+    }
+
+    // 8. Tropical Seabirds soaring in clear blue sky
+    const birds: [number, number, number][] = [
+      [toX(0.52), h * 0.28, 7],
+      [toX(0.58), h * 0.24, 9],
+      [toX(0.64), h * 0.3, 6],
+    ];
+    ctx.strokeStyle = "rgba(14, 116, 144, 0.85)";
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = "round";
+    for (const [bx, by, bSize] of birds) {
+      ctx.beginPath();
+      ctx.moveTo(bx - bSize, by + bSize * 0.3);
+      ctx.quadraticCurveTo(bx - bSize * 0.4, by - bSize * 0.4, bx, by);
+      ctx.quadraticCurveTo(
+        bx + bSize * 0.4,
+        by - bSize * 0.4,
+        bx + bSize,
+        by + bSize * 0.3,
+      );
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  private renderBeachSceneryNight(
     ctx: CanvasRenderingContext2D,
     w: number,
     h: number,
@@ -6825,12 +7999,15 @@ export class StageRenderer {
     const bufW = w + margin * 2;
     const bufH = h + margin * 2;
 
+    const isLight = this.isLightMode();
+
     // Cache the pristine unblurred background into an offscreen canvas to guarantee maximum 60fps performance
     if (
       !this.bgBufferCanvas ||
       this.bgBufferCanvas.width !== bufW ||
       this.bgBufferCanvas.height !== bufH ||
-      this.bgBufferDirty
+      this.bgBufferDirty ||
+      this.bgBufferIsLight !== isLight
     ) {
       if (!this.bgBufferCanvas && typeof document !== "undefined") {
         this.bgBufferCanvas = document.createElement("canvas");
@@ -6843,6 +8020,7 @@ export class StageRenderer {
           this.renderAutumnScenery(bCtx, bufW, bufH);
         }
       }
+      this.bgBufferIsLight = isLight;
       this.bgBufferDirty = false;
     }
 
@@ -6866,6 +8044,456 @@ export class StageRenderer {
   }
 
   private renderAutumnScenery(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ): void {
+    if (this.isLightMode()) {
+      this.renderAutumnSceneryDay(ctx, w, h);
+    } else {
+      this.renderAutumnSceneryNight(ctx, w, h);
+    }
+  }
+
+  private renderAutumnSceneryDay(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+  ): void {
+    ctx.save();
+
+    const baseAspect = 1.05;
+    const refW = h * baseAspect;
+    const offsetX = (w - refW) * 0.5;
+    const toX = (relX: number) => offsetX + relX * refW;
+
+    const drawPoly = (pts: [number, number][], fill: string) => {
+      const first = pts[0];
+      if (!first) return;
+      ctx.beginPath();
+      ctx.moveTo(first[0], first[1]);
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i];
+        if (pt) {
+          ctx.lineTo(pt[0], pt[1]);
+        }
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+
+    // 1. Crisp Autumn Afternoon Sky Gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.65);
+    skyGrad.addColorStop(0.0, "#1e40af"); // Deep autumn blue
+    skyGrad.addColorStop(0.25, "#2563eb"); // Royal azure
+    skyGrad.addColorStop(0.5, "#60a5fa"); // Clear afternoon sky
+    skyGrad.addColorStop(0.72, "#93c5fd"); // Soft blue
+    skyGrad.addColorStop(0.88, "#fed7aa"); // Warm golden amber glow
+    skyGrad.addColorStop(1.0, "#fef3c7"); // Pale honey horizon glow
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. Warm Afternoon Sun & Golden Ambient Corona
+    const sunX = toX(0.32);
+    const sunY = h * 0.38;
+    const sunR = refW * 0.08;
+
+    const glowGrad = ctx.createRadialGradient(
+      sunX,
+      sunY,
+      sunR * 0.5,
+      sunX,
+      sunY,
+      refW * 0.35,
+    );
+    glowGrad.addColorStop(0.0, "rgba(254, 215, 170, 0.45)");
+    glowGrad.addColorStop(0.35, "rgba(251, 146, 60, 0.25)");
+    glowGrad.addColorStop(0.7, "rgba(254, 240, 138, 0.12)");
+    glowGrad.addColorStop(1.0, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, refW * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    const sunDiscGrad = ctx.createRadialGradient(
+      sunX,
+      sunY,
+      0,
+      sunX,
+      sunY,
+      sunR,
+    );
+    sunDiscGrad.addColorStop(0.0, "#ffffff");
+    sunDiscGrad.addColorStop(0.4, "#fffbeb");
+    sunDiscGrad.addColorStop(0.85, "#fde047");
+    sunDiscGrad.addColorStop(1.0, "#f59e0b");
+    ctx.fillStyle = sunDiscGrad;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. Soft Cirrus Sunset Clouds (Upper Sky)
+    const autumnClouds: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.14],
+          [toX(0.25), h * 0.1],
+          [toX(0.55), h * 0.16],
+          [toX(0.85), h * 0.11],
+          [Math.max(w, toX(1.5)), h * 0.15],
+          [Math.max(w, toX(1.5)), h * 0.23],
+          [toX(0.7), h * 0.25],
+          [toX(0.35), h * 0.18],
+          [Math.min(0, toX(-0.5)), h * 0.24],
+        ],
+        color: "rgba(255, 255, 255, 0.65)",
+      },
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.22],
+          [toX(0.3), h * 0.17],
+          [toX(0.65), h * 0.24],
+          [Math.max(w, toX(1.5)), h * 0.2],
+          [Math.max(w, toX(1.5)), h * 0.3],
+          [toX(0.75), h * 0.32],
+          [toX(0.4), h * 0.26],
+          [Math.min(0, toX(-0.5)), h * 0.3],
+        ],
+        color: "rgba(254, 215, 170, 0.45)",
+      },
+      {
+        pts: [
+          [toX(0.1), h * 0.29],
+          [toX(0.32), h * 0.26],
+          [toX(0.58), h * 0.31],
+          [toX(0.52), h * 0.37],
+          [toX(0.22), h * 0.35],
+        ],
+        color: "rgba(255, 255, 255, 0.4)",
+      },
+    ];
+    for (const cloud of autumnClouds) {
+      drawPoly(cloud.pts, cloud.color);
+    }
+
+    // 4. Distant Mountain Ridges & Shinto Shrine Pagoda
+    // Far misty mountain range
+    drawPoly(
+      [
+        [Math.min(0, toX(-0.5)), h * 0.52],
+        [toX(-0.1), h * 0.44],
+        [toX(0.12), h * 0.38],
+        [toX(0.28), h * 0.42],
+        [toX(0.45), h * 0.36],
+        [toX(0.62), h * 0.42],
+        [toX(0.78), h * 0.35],
+        [toX(0.95), h * 0.41],
+        [Math.max(w, toX(1.5)), h * 0.46],
+        [Math.max(w, toX(1.5)), h * 0.55],
+        [Math.min(0, toX(-0.5)), h * 0.55],
+      ],
+      "#64748b", // Soft misty blue-slate
+    );
+
+    // Mid mountain range
+    drawPoly(
+      [
+        [Math.min(0, toX(-0.5)), h * 0.56],
+        [toX(0.18), h * 0.46],
+        [toX(0.38), h * 0.42],
+        [toX(0.55), h * 0.47],
+        [toX(0.75), h * 0.39], // Ridge holding the pagoda
+        [toX(0.92), h * 0.45],
+        [Math.max(w, toX(1.5)), h * 0.48],
+        [Math.max(w, toX(1.5)), h * 0.6],
+        [Math.min(0, toX(-0.5)), h * 0.6],
+      ],
+      "#475569",
+    );
+
+    // Pagoda on right ridge
+    const pagX = toX(0.75);
+    const pagY = h * 0.39;
+    const pagW = refW * 0.045;
+
+    ctx.strokeStyle = "#451a03";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pagX, pagY - h * 0.045);
+    ctx.lineTo(pagX, pagY - h * 0.02);
+    ctx.stroke();
+
+    drawPoly(
+      [
+        [pagX, pagY - h * 0.022],
+        [pagX - pagW * 0.5, pagY - h * 0.015],
+        [pagX + pagW * 0.5, pagY - h * 0.015],
+      ],
+      "#451a03",
+    );
+    drawPoly(
+      [
+        [pagX, pagY - h * 0.015],
+        [pagX - pagW * 0.75, pagY - h * 0.007],
+        [pagX + pagW * 0.75, pagY - h * 0.007],
+      ],
+      "#451a03",
+    );
+    drawPoly(
+      [
+        [pagX, pagY - h * 0.007],
+        [pagX - pagW, pagY + h * 0.003],
+        [pagX - pagW * 0.7, pagY + h * 0.02],
+        [pagX + pagW * 0.7, pagY + h * 0.02],
+        [pagX + pagW, pagY + h * 0.003],
+      ],
+      "#451a03",
+    );
+    ctx.fillStyle = "rgba(245, 158, 11, 0.9)";
+    ctx.fillRect(pagX - 2.5, pagY - h * 0.002, 5, 4);
+
+    // Torii Gate
+    const toriiX = toX(0.45);
+    const toriiY = h * 0.44;
+    const toriiW = refW * 0.022;
+    const toriiH = h * 0.02;
+    ctx.strokeStyle = "#dc2626"; // Vermilion torii gate
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(toriiX - toriiW * 0.65, toriiY);
+    ctx.lineTo(toriiX + toriiW * 0.65, toriiY);
+    ctx.moveTo(toriiX - toriiW * 0.55, toriiY + 3);
+    ctx.lineTo(toriiX + toriiW * 0.55, toriiY + 3);
+    ctx.moveTo(toriiX - toriiW * 0.35, toriiY);
+    ctx.lineTo(toriiX - toriiW * 0.35, toriiY + toriiH);
+    ctx.moveTo(toriiX + toriiW * 0.35, toriiY);
+    ctx.lineTo(toriiX + toriiW * 0.35, toriiY + toriiH);
+    ctx.stroke();
+
+    // 5. Sparkling Autumn Valley River
+    const riverGrad = ctx.createLinearGradient(0, h * 0.48, 0, h * 0.7);
+    riverGrad.addColorStop(0.0, "#0284c7");
+    riverGrad.addColorStop(0.35, "#38bdf8");
+    riverGrad.addColorStop(0.7, "#7dd3fc");
+    riverGrad.addColorStop(1.0, "#bae6fd");
+    ctx.fillStyle = riverGrad;
+    ctx.fillRect(0, h * 0.48, w, h * 0.22);
+
+    // Warm Sun Reflection Beam on River
+    const reflGrad = ctx.createLinearGradient(0, h * 0.48, 0, h * 0.68);
+    reflGrad.addColorStop(0.0, "rgba(254, 240, 138, 0.5)");
+    reflGrad.addColorStop(0.4, "rgba(251, 146, 60, 0.3)");
+    reflGrad.addColorStop(0.8, "rgba(254, 215, 170, 0.15)");
+    reflGrad.addColorStop(1.0, "rgba(254, 215, 170, 0)");
+    ctx.fillStyle = reflGrad;
+    ctx.beginPath();
+    ctx.moveTo(sunX - refW * 0.03, h * 0.48);
+    ctx.lineTo(sunX + refW * 0.03, h * 0.48);
+    ctx.lineTo(sunX + refW * 0.14, h * 0.68);
+    ctx.lineTo(sunX - refW * 0.14, h * 0.68);
+    ctx.closePath();
+    ctx.fill();
+
+    // Shimmering river ripples
+    const ripples: Array<{ y: number; wFactor: number; color: string }> = [
+      { y: h * 0.51, wFactor: 0.05, color: "rgba(255, 255, 255, 0.65)" },
+      { y: h * 0.54, wFactor: 0.08, color: "rgba(254, 240, 138, 0.55)" },
+      { y: h * 0.58, wFactor: 0.11, color: "rgba(255, 255, 255, 0.5)" },
+      { y: h * 0.62, wFactor: 0.15, color: "rgba(254, 215, 170, 0.4)" },
+    ];
+    for (const rip of ripples) {
+      ctx.fillStyle = rip.color;
+      ctx.beginPath();
+      ctx.ellipse(sunX, rip.y, refW * rip.wFactor, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 6. Layered Rolling Forest Hills with Radiant Autumn Foliage
+    const autumnHillsBack: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.62],
+          [toX(0.1), h * 0.57],
+          [toX(0.28), h * 0.63],
+          [toX(0.48), h * 0.58],
+          [toX(0.68), h * 0.64],
+          [toX(0.88), h * 0.59],
+          [Math.max(w, toX(1.5)), h * 0.63],
+          [Math.max(w, toX(1.5)), h * 0.78],
+          [Math.min(0, toX(-0.5)), h * 0.78],
+        ],
+        color: "#b91c1c", // Rich crimson
+      },
+      {
+        pts: [
+          [toX(0.02), h * 0.61],
+          [toX(0.16), h * 0.56],
+          [toX(0.32), h * 0.62],
+          [toX(0.24), h * 0.72],
+          [toX(0.08), h * 0.72],
+        ],
+        color: "#dc2626", // Scarlet
+      },
+      {
+        pts: [
+          [toX(0.42), h * 0.62],
+          [toX(0.56), h * 0.57],
+          [toX(0.72), h * 0.63],
+          [toX(0.64), h * 0.73],
+          [toX(0.48), h * 0.73],
+        ],
+        color: "#ea580c", // Vibrant orange-amber
+      },
+    ];
+    for (const hill of autumnHillsBack) drawPoly(hill.pts, hill.color);
+
+    // Midground Autumn Canopy Hills (Warm Vermilion & Golden Amber)
+    const autumnHillsMid: Array<{ pts: [number, number][]; color: string }> = [
+      {
+        pts: [
+          [Math.min(0, toX(-0.5)), h * 0.71],
+          [toX(0.18), h * 0.66],
+          [toX(0.42), h * 0.72],
+          [toX(0.68), h * 0.67],
+          [toX(0.92), h * 0.73],
+          [Math.max(w, toX(1.5)), h * 0.69],
+          [Math.max(w, toX(1.5)), h * 0.86],
+          [Math.min(0, toX(-0.5)), h * 0.86],
+        ],
+        color: "#d97706", // Golden amber base
+      },
+      {
+        pts: [
+          [toX(0.12), h * 0.7],
+          [toX(0.26), h * 0.65],
+          [toX(0.38), h * 0.71],
+          [toX(0.32), h * 0.8],
+          [toX(0.18), h * 0.8],
+        ],
+        color: "#ef4444", // Bright vermilion canopy
+      },
+      {
+        pts: [
+          [toX(0.58), h * 0.7],
+          [toX(0.72), h * 0.65],
+          [toX(0.86), h * 0.72],
+          [toX(0.78), h * 0.82],
+          [toX(0.62), h * 0.82],
+        ],
+        color: "#f97316", // Brilliant orange canopy
+      },
+      {
+        pts: [
+          [toX(0.34), h * 0.73],
+          [toX(0.46), h * 0.68],
+          [toX(0.58), h * 0.74],
+          [toX(0.5), h * 0.82],
+          [toX(0.38), h * 0.82],
+        ],
+        color: "#f59e0b", // Gold canopy cluster
+      },
+    ];
+    for (const hill of autumnHillsMid) drawPoly(hill.pts, hill.color);
+
+    // Foreground Slope & Rich Autumn Earth
+    const earthGrad = ctx.createLinearGradient(0, h * 0.78, 0, h);
+    earthGrad.addColorStop(0.0, "#78350f"); // Warm loam
+    earthGrad.addColorStop(0.4, "#573010"); // Earth
+    earthGrad.addColorStop(0.8, "#381e09"); // Rich base
+    earthGrad.addColorStop(1.0, "#231104");
+    ctx.fillStyle = earthGrad;
+    ctx.beginPath();
+    ctx.moveTo(Math.min(0, toX(-0.5)), h * 0.8);
+    ctx.bezierCurveTo(
+      toX(0.25),
+      h * 0.78,
+      toX(0.6),
+      h * 0.82,
+      toX(0.85),
+      h * 0.79,
+    );
+    ctx.lineTo(Math.max(w, toX(1.5)), h * 0.82);
+    ctx.lineTo(Math.max(w, toX(1.5)), h);
+    ctx.lineTo(Math.min(0, toX(-0.5)), h);
+    ctx.closePath();
+    ctx.fill();
+
+    // 7. Foreground Japanese Maple Branches
+    ctx.strokeStyle = "#451a03";
+    ctx.lineWidth = 10;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(toX(-0.1), h * 0.05);
+    ctx.quadraticCurveTo(toX(0.12), h * 0.12, toX(0.25), h * 0.22);
+    ctx.stroke();
+
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(toX(0.08), h * 0.11);
+    ctx.quadraticCurveTo(toX(0.18), h * 0.06, toX(0.3), h * 0.12);
+    ctx.stroke();
+
+    // Left Leaf Clusters
+    const leftLeafClusters: Array<{
+      x: number;
+      y: number;
+      r: number;
+      color: string;
+    }> = [
+      { x: toX(0.25), y: h * 0.22, r: refW * 0.045, color: "#dc2626" },
+      { x: toX(0.28), y: h * 0.25, r: refW * 0.038, color: "#ea580c" },
+      { x: toX(0.2), y: h * 0.24, r: refW * 0.035, color: "#b91c1c" },
+      { x: toX(0.3), y: h * 0.12, r: refW * 0.042, color: "#ef4444" },
+      { x: toX(0.34), y: h * 0.15, r: refW * 0.034, color: "#f59e0b" },
+      { x: toX(0.15), y: h * 0.14, r: refW * 0.04, color: "#dc2626" },
+    ];
+    for (const lc of leftLeafClusters) {
+      ctx.fillStyle = lc.color;
+      ctx.beginPath();
+      ctx.arc(lc.x, lc.y, lc.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Right Maple Branch & Leaves
+    ctx.strokeStyle = "#451a03";
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(toX(1.1), h * 0.06);
+    ctx.quadraticCurveTo(toX(0.92), h * 0.14, toX(0.78), h * 0.24);
+    ctx.stroke();
+
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(toX(0.95), h * 0.12);
+    ctx.quadraticCurveTo(toX(0.85), h * 0.08, toX(0.72), h * 0.15);
+    ctx.stroke();
+
+    // Right Leaf Clusters
+    const rightLeafClusters: Array<{
+      x: number;
+      y: number;
+      r: number;
+      color: string;
+    }> = [
+      { x: toX(0.78), y: h * 0.24, r: refW * 0.045, color: "#ea580c" },
+      { x: toX(0.75), y: h * 0.27, r: refW * 0.036, color: "#dc2626" },
+      { x: toX(0.84), y: h * 0.25, r: refW * 0.034, color: "#f59e0b" },
+      { x: toX(0.72), y: h * 0.15, r: refW * 0.04, color: "#ef4444" },
+      { x: toX(0.68), y: h * 0.18, r: refW * 0.032, color: "#b91c1c" },
+      { x: toX(0.86), y: h * 0.13, r: refW * 0.038, color: "#ea580c" },
+    ];
+    for (const rc of rightLeafClusters) {
+      ctx.fillStyle = rc.color;
+      ctx.beginPath();
+      ctx.arc(rc.x, rc.y, rc.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  private renderAutumnSceneryNight(
     ctx: CanvasRenderingContext2D,
     w: number,
     h: number,
@@ -7444,22 +9072,47 @@ export class StageRenderer {
     const farEdgeScreenX = blowingRight ? boxX + boxWidth : boxX;
     const grad = ctx.createLinearGradient(whispyScreenX, 0, farEdgeScreenX, 0);
 
+    const isLight = this.isLightMode();
     if (theme === "autumn") {
-      grad.addColorStop(0, "rgba(245, 158, 11, 0.18)");
-      grad.addColorStop(0.5, "rgba(234, 88, 12, 0.08)");
+      grad.addColorStop(
+        0,
+        isLight ? "rgba(217, 119, 6, 0.25)" : "rgba(245, 158, 11, 0.18)",
+      );
+      grad.addColorStop(
+        0.5,
+        isLight ? "rgba(185, 28, 28, 0.12)" : "rgba(234, 88, 12, 0.08)",
+      );
       grad.addColorStop(1, "rgba(220, 38, 38, 0.01)");
     } else if (theme === "grid") {
-      grad.addColorStop(0, "rgba(56, 189, 248, 0.18)");
-      grad.addColorStop(0.5, "rgba(59, 130, 246, 0.08)");
+      grad.addColorStop(
+        0,
+        isLight ? "rgba(37, 99, 235, 0.25)" : "rgba(56, 189, 248, 0.18)",
+      );
+      grad.addColorStop(
+        0.5,
+        isLight ? "rgba(29, 78, 216, 0.12)" : "rgba(59, 130, 246, 0.08)",
+      );
       grad.addColorStop(1, "rgba(59, 130, 246, 0.01)");
     } else if (theme === "beach") {
-      grad.addColorStop(0, "rgba(20, 184, 166, 0.18)");
-      grad.addColorStop(0.5, "rgba(253, 224, 71, 0.08)");
+      grad.addColorStop(
+        0,
+        isLight ? "rgba(13, 148, 136, 0.25)" : "rgba(20, 184, 166, 0.18)",
+      );
+      grad.addColorStop(
+        0.5,
+        isLight ? "rgba(217, 119, 6, 0.12)" : "rgba(253, 224, 71, 0.08)",
+      );
       grad.addColorStop(1, "rgba(253, 224, 71, 0.01)");
     } else {
       // mountain
-      grad.addColorStop(0, "rgba(244, 114, 182, 0.16)");
-      grad.addColorStop(0.5, "rgba(216, 180, 254, 0.07)");
+      grad.addColorStop(
+        0,
+        isLight ? "rgba(219, 39, 119, 0.22)" : "rgba(244, 114, 182, 0.16)",
+      );
+      grad.addColorStop(
+        0.5,
+        isLight ? "rgba(147, 51, 234, 0.1)" : "rgba(216, 180, 254, 0.07)",
+      );
       grad.addColorStop(1, "rgba(168, 85, 247, 0.01)");
     }
 
@@ -7470,7 +9123,9 @@ export class StageRenderer {
     if (theme === "grid") {
       ctx.save();
       ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.strokeStyle = isLight
+        ? "rgba(37, 99, 235, 0.45)"
+        : "rgba(56, 189, 248, 0.35)";
       ctx.lineWidth = 1;
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
       ctx.restore();
@@ -7809,7 +9464,7 @@ export class StageRenderer {
     const baseScreen = camera.worldToScreen(baseWorld.x, baseWorld.y);
     const stoneRadiusPx = Math.max(5, camera.worldLengthToScreen(180));
 
-    // Weathered ancient midnight stone dais
+    // Weathered ancient stone dais
     ctx.beginPath();
     ctx.ellipse(
       baseScreen.x,
@@ -7820,7 +9475,7 @@ export class StageRenderer {
       0,
       Math.PI * 2,
     );
-    ctx.fillStyle = "#1e1b4b"; // Deep midnight indigo slate
+    ctx.fillStyle = this.isLightMode() ? "#64748b" : "#1e1b4b";
     ctx.fill();
 
     // Moonlit royal moss patches
@@ -9380,15 +11035,16 @@ export class StageRenderer {
     }
     ctx.closePath();
 
+    const isLight = this.isLightMode();
     if (this.backgroundTheme === "autumn") {
-      ctx.fillStyle = "#180b07";
+      ctx.fillStyle = isLight ? "#573010" : "#180b07";
     } else if (this.backgroundTheme === "grid") {
-      ctx.fillStyle = "#020617";
+      ctx.fillStyle = isLight ? "#e2e8f0" : "#020617";
     } else if (this.backgroundTheme === "beach") {
-      ctx.fillStyle = "#78350f";
+      ctx.fillStyle = isLight ? "#b45309" : "#78350f";
     } else {
-      // Mountain: Deep midnight stone
-      ctx.fillStyle = "#0c0a1a";
+      // Mountain
+      ctx.fillStyle = isLight ? "#334155" : "#0c0a1a";
     }
     ctx.fill();
 
@@ -9571,7 +11227,9 @@ export class StageRenderer {
       }
     } else if (this.backgroundTheme === "grid") {
       // Grid theme: Cyber wireframe hull with structural ribs & glowing vector nodes
-      ctx.strokeStyle = "rgba(29, 78, 216, 0.35)";
+      ctx.strokeStyle = isLight
+        ? "rgba(30, 58, 138, 0.45)"
+        : "rgba(29, 78, 216, 0.35)";
       ctx.lineWidth = 1.5;
       const strataY = [-250, -500, -750];
       for (const sy of strataY) {
@@ -9586,7 +11244,9 @@ export class StageRenderer {
         ctx.stroke();
       }
 
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.22)";
+      ctx.strokeStyle = isLight
+        ? "rgba(37, 99, 235, 0.35)"
+        : "rgba(56, 189, 248, 0.22)";
       ctx.lineWidth = 1.5;
       const ribsX = [-1600, -1200, -800, -400, 0, 400, 800, 1200, 1600];
       for (const rx of ribsX) {
@@ -9598,7 +11258,9 @@ export class StageRenderer {
         ctx.stroke();
       }
 
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.strokeStyle = isLight
+        ? "rgba(29, 78, 216, 0.45)"
+        : "rgba(56, 189, 248, 0.35)";
       ctx.lineWidth = 1.5;
       const braces = [
         [
@@ -9640,7 +11302,7 @@ export class StageRenderer {
         { x: -1972, y: -1072 },
         { x: 1972, y: -1072 },
       ];
-      ctx.fillStyle = "#38bdf8";
+      ctx.fillStyle = isLight ? "#1d4ed8" : "#38bdf8";
       for (const n of nodes) {
         const np = camera.worldToScreen(n.x, n.y);
         ctx.beginPath();
@@ -9986,22 +11648,38 @@ export class StageRenderer {
     let bottomBorderColor: string;
 
     if (this.backgroundTheme === "autumn") {
-      outerColor = "rgba(220, 38, 38, 0.65)";
-      coreColor = "#f59e0b";
-      bottomBorderColor = "rgba(180, 83, 9, 0.35)";
+      outerColor = isLight
+        ? "rgba(185, 28, 28, 0.75)"
+        : "rgba(220, 38, 38, 0.65)";
+      coreColor = isLight ? "#b45309" : "#f59e0b";
+      bottomBorderColor = isLight
+        ? "rgba(146, 64, 14, 0.45)"
+        : "rgba(180, 83, 9, 0.35)";
     } else if (this.backgroundTheme === "grid") {
-      outerColor = "rgba(29, 78, 216, 0.65)";
-      coreColor = "#93c5fd";
-      bottomBorderColor = "rgba(56, 189, 248, 0.3)";
+      outerColor = isLight
+        ? "rgba(30, 58, 138, 0.75)"
+        : "rgba(29, 78, 216, 0.65)";
+      coreColor = isLight ? "#2563eb" : "#93c5fd";
+      bottomBorderColor = isLight
+        ? "rgba(29, 78, 216, 0.4)"
+        : "rgba(56, 189, 248, 0.3)";
     } else if (this.backgroundTheme === "beach") {
-      outerColor = "rgba(249, 115, 22, 0.65)";
-      coreColor = "#14b8a6";
-      bottomBorderColor = "rgba(253, 224, 71, 0.3)";
+      outerColor = isLight
+        ? "rgba(194, 65, 12, 0.75)"
+        : "rgba(249, 115, 22, 0.65)";
+      coreColor = isLight ? "#0d9488" : "#14b8a6";
+      bottomBorderColor = isLight
+        ? "rgba(180, 83, 9, 0.4)"
+        : "rgba(253, 224, 71, 0.3)";
     } else {
       // Mountain
-      outerColor = "rgba(51, 75, 163, 0.65)";
-      coreColor = "#a855f7";
-      bottomBorderColor = "rgba(139, 202, 240, 0.3)";
+      outerColor = isLight
+        ? "rgba(30, 58, 138, 0.75)"
+        : "rgba(51, 75, 163, 0.65)";
+      coreColor = isLight ? "#7c3aed" : "#a855f7";
+      bottomBorderColor = isLight
+        ? "rgba(37, 99, 235, 0.4)"
+        : "rgba(139, 202, 240, 0.3)";
     }
 
     ctx.lineCap = "round";
@@ -10079,35 +11757,72 @@ export class StageRenderer {
       right.y,
     );
 
+    const isLight = this.isLightMode();
     let middleColor: string;
     if (this.backgroundTheme === "beach") {
-      // Warm golden edges with sunset orange center and vibrant turquoise core
-      outerGrad.addColorStop(0.0, "#fde047");
-      outerGrad.addColorStop(1 / 3, "#f97316");
-      outerGrad.addColorStop(2 / 3, "#f97316");
-      outerGrad.addColorStop(1.0, "#fde047");
-      middleColor = "#14b8a6";
+      if (isLight) {
+        // High-contrast warm amber & tangerine borders with deep ocean teal core
+        outerGrad.addColorStop(0.0, "#d97706");
+        outerGrad.addColorStop(1 / 3, "#ea580c");
+        outerGrad.addColorStop(2 / 3, "#ea580c");
+        outerGrad.addColorStop(1.0, "#d97706");
+        middleColor = "#0d9488";
+      } else {
+        // Warm golden edges with sunset orange center and vibrant turquoise core
+        outerGrad.addColorStop(0.0, "#fde047");
+        outerGrad.addColorStop(1 / 3, "#f97316");
+        outerGrad.addColorStop(2 / 3, "#f97316");
+        outerGrad.addColorStop(1.0, "#fde047");
+        middleColor = "#14b8a6";
+      }
     } else if (this.backgroundTheme === "autumn") {
-      // Polished dark lacquer wood with imperial vermilion and warm golden amber trim
-      outerGrad.addColorStop(0.0, "#fbbf24");
-      outerGrad.addColorStop(1 / 3, "#dc2626");
-      outerGrad.addColorStop(2 / 3, "#dc2626");
-      outerGrad.addColorStop(1.0, "#fbbf24");
-      middleColor = "#f59e0b";
+      if (isLight) {
+        // Rich amber & crimson borders with warm russet core
+        outerGrad.addColorStop(0.0, "#d97706");
+        outerGrad.addColorStop(1 / 3, "#b91c1c");
+        outerGrad.addColorStop(2 / 3, "#b91c1c");
+        outerGrad.addColorStop(1.0, "#d97706");
+        middleColor = "#b45309";
+      } else {
+        // Polished dark lacquer wood with imperial vermilion and warm golden amber trim
+        outerGrad.addColorStop(0.0, "#fbbf24");
+        outerGrad.addColorStop(1 / 3, "#dc2626");
+        outerGrad.addColorStop(2 / 3, "#dc2626");
+        outerGrad.addColorStop(1.0, "#fbbf24");
+        middleColor = "#f59e0b";
+      }
     } else if (this.backgroundTheme === "grid") {
-      // Classic clean tech cyan/blue palette
-      outerGrad.addColorStop(0.0, "#38bdf8");
-      outerGrad.addColorStop(1 / 3, "#1d4ed8");
-      outerGrad.addColorStop(2 / 3, "#1d4ed8");
-      outerGrad.addColorStop(1.0, "#38bdf8");
-      middleColor = "#93c5fd";
+      if (isLight) {
+        // Blueprint royal & navy blue palette for crisp daylight contrast
+        outerGrad.addColorStop(0.0, "#1d4ed8");
+        outerGrad.addColorStop(1 / 3, "#1e3a8a");
+        outerGrad.addColorStop(2 / 3, "#1e3a8a");
+        outerGrad.addColorStop(1.0, "#1d4ed8");
+        middleColor = "#2563eb";
+      } else {
+        // Classic clean tech cyan/blue palette
+        outerGrad.addColorStop(0.0, "#38bdf8");
+        outerGrad.addColorStop(1 / 3, "#1d4ed8");
+        outerGrad.addColorStop(2 / 3, "#1d4ed8");
+        outerGrad.addColorStop(1.0, "#38bdf8");
+        middleColor = "#93c5fd";
+      }
     } else {
-      // Mountain: Cyan-to-royal-blue-to-cyan outer lines with aurora purple center
-      outerGrad.addColorStop(0.0, "#8bcaf0");
-      outerGrad.addColorStop(1 / 3, "#334ba3");
-      outerGrad.addColorStop(2 / 3, "#334ba3");
-      outerGrad.addColorStop(1.0, "#8bcaf0");
-      middleColor = "#a855f7";
+      if (isLight) {
+        // Mountain: Deep azure-to-navy outer lines with royal violet center
+        outerGrad.addColorStop(0.0, "#0284c7");
+        outerGrad.addColorStop(1 / 3, "#1e3a8a");
+        outerGrad.addColorStop(2 / 3, "#1e3a8a");
+        outerGrad.addColorStop(1.0, "#0284c7");
+        middleColor = "#7c3aed";
+      } else {
+        // Mountain: Cyan-to-royal-blue-to-cyan outer lines with aurora purple center
+        outerGrad.addColorStop(0.0, "#8bcaf0");
+        outerGrad.addColorStop(1 / 3, "#334ba3");
+        outerGrad.addColorStop(2 / 3, "#334ba3");
+        outerGrad.addColorStop(1.0, "#8bcaf0");
+        middleColor = "#a855f7";
+      }
     }
 
     ctx.save();
@@ -10162,6 +11877,7 @@ export class StageRenderer {
     }
 
     const { ctx } = this;
+    const isLight = this.isLightMode();
     for (const ledge of ledges) {
       const alpha = alphaBySide.get(ledge.side);
       if (!alpha) continue;
@@ -10173,13 +11889,21 @@ export class StageRenderer {
       const inner = camera.worldToScreen(innerX, ledge.y);
 
       // Highlight harmonizing with the active theme palette
-      let ledgeColorRgba = `rgba(216, 180, 254, ${0.95 * alpha})`;
+      let ledgeColorRgba = isLight
+        ? `rgba(126, 34, 206, ${0.95 * alpha})`
+        : `rgba(216, 180, 254, ${0.95 * alpha})`;
       if (this.backgroundTheme === "beach") {
-        ledgeColorRgba = `rgba(253, 224, 71, ${0.95 * alpha})`;
+        ledgeColorRgba = isLight
+          ? `rgba(180, 83, 9, ${0.95 * alpha})`
+          : `rgba(253, 224, 71, ${0.95 * alpha})`;
       } else if (this.backgroundTheme === "autumn") {
-        ledgeColorRgba = `rgba(251, 191, 36, ${0.95 * alpha})`;
+        ledgeColorRgba = isLight
+          ? `rgba(185, 28, 28, ${0.95 * alpha})`
+          : `rgba(251, 191, 36, ${0.95 * alpha})`;
       } else if (this.backgroundTheme === "grid") {
-        ledgeColorRgba = `rgba(147, 197, 253, ${0.95 * alpha})`;
+        ledgeColorRgba = isLight
+          ? `rgba(29, 78, 216, ${0.95 * alpha})`
+          : `rgba(147, 197, 253, ${0.95 * alpha})`;
       }
       ctx.strokeStyle = ledgeColorRgba;
       ctx.lineWidth = 10;
@@ -10235,6 +11959,7 @@ export class StageRenderer {
     candidates: readonly LedgeGrabCandidate[],
   ): void {
     const { ctx } = this;
+    const isLight = this.isLightMode();
     // World units, not fixed screen pixels - so the dot shrinks/grows with
     // the camera the same way a character marker does, instead of looking
     // correctly-sized at only one specific zoom level (see
@@ -10243,13 +11968,13 @@ export class StageRenderer {
       LEDGE_GRAB_DOT_RADIUS_WORLD_UNITS,
     );
     const strokeWidthPx = Math.max(1, radiusPx * 0.25);
-    let dotFill = "#d8b4fe";
+    let dotFill = isLight ? "#7e22ce" : "#d8b4fe";
     if (this.backgroundTheme === "beach") {
-      dotFill = "#fde047";
+      dotFill = isLight ? "#d97706" : "#fde047";
     } else if (this.backgroundTheme === "autumn") {
-      dotFill = "#fbbf24";
+      dotFill = isLight ? "#dc2626" : "#fbbf24";
     } else if (this.backgroundTheme === "grid") {
-      dotFill = "#93c5fd";
+      dotFill = isLight ? "#2563eb" : "#93c5fd";
     }
     for (const candidate of candidates) {
       const { x, y } = camera.worldToScreen(
@@ -10262,7 +11987,9 @@ export class StageRenderer {
       ctx.fillStyle = dotFill;
       ctx.fill();
       ctx.lineWidth = strokeWidthPx;
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.strokeStyle = isLight
+        ? "rgba(15, 23, 42, 0.75)"
+        : "rgba(255,255,255,0.85)";
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
@@ -10272,14 +11999,23 @@ export class StageRenderer {
     const { ctx, canvas } = this;
     const groundY = camera.groundScreenY();
     if (groundY < 0 || groundY > canvas.height) return;
+    const isLight = this.isLightMode();
     if (this.backgroundTheme === "beach") {
-      ctx.strokeStyle = "rgba(253, 224, 71, 0.3)";
+      ctx.strokeStyle = isLight
+        ? "rgba(180, 83, 9, 0.45)"
+        : "rgba(253, 224, 71, 0.3)";
     } else if (this.backgroundTheme === "autumn") {
-      ctx.strokeStyle = "rgba(245, 158, 11, 0.35)";
+      ctx.strokeStyle = isLight
+        ? "rgba(185, 28, 28, 0.45)"
+        : "rgba(245, 158, 11, 0.35)";
     } else if (this.backgroundTheme === "grid") {
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+      ctx.strokeStyle = isLight
+        ? "rgba(30, 58, 138, 0.35)"
+        : "rgba(255, 255, 255, 0.18)";
     } else {
-      ctx.strokeStyle = "rgba(168, 85, 247, 0.3)";
+      ctx.strokeStyle = isLight
+        ? "rgba(109, 40, 217, 0.45)"
+        : "rgba(168, 85, 247, 0.3)";
     }
     ctx.setLineDash([6, 6]);
     ctx.beginPath();

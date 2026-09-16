@@ -66,7 +66,9 @@ describe("GameList rendering", () => {
     const html = mockContainer.innerHTML;
 
     // Check widget classes
-    expect(html).toContain('class="game-row single-game-pulse row-won"');
+    expect(html).toContain(
+      'class="game-row compact single-game-pulse row-won"',
+    );
     expect(html).toContain('class="game-row-header"');
     expect(html).toContain('class="game-row-body"');
 
@@ -76,11 +78,12 @@ describe("GameList rendering", () => {
     expect(html).toContain("Pikachu");
     expect(html).toContain("Mew2King");
     expect(html).toContain("Fox");
-    expect(html).toContain('class="player-entry winner"');
-    expect(html).toContain('class="player-entry loser"');
+    // The one game's matchup is the session's matchup - shown in the header.
+    expect(html).toContain('class="session-matchup"');
 
     // Check supplementary body contents
-    expect(html).toContain("Stocks Remaining: 3");
+    expect(html).toContain("W · 3 left");
+    expect(html).toContain("Stocks Remaining: 3"); // result tooltip
     expect(html).toContain("Rec</span> 75% (3/4)");
     expect(html).toContain("EG</span> A (3)");
     expect(html).toContain("Getup</span> 100% (2/2)");
@@ -273,72 +276,159 @@ describe("GameList rendering", () => {
       aliases: new Set(["nue"]),
     };
 
-    const g1: GameSummary = {
-      id: "cb1",
-      sourceName: "g1.rmgr",
-      recordedAt: new Date("2026-08-27T17:00:00Z"),
+    // A complete 12CB: nue's Luigi (carrying 2 stocks after game 1) beats
+    // all 12 of shidozz2's characters. Only complete battles are shown.
+    const opponentChars = [39, 40, 41, 42, 36, 37, 44, 46, 48, 49, 50, 43];
+    const games: GameSummary[] = opponentChars.map((oppChar, i) => ({
+      id: `cb${i + 1}`,
+      sourceName: `g${i + 1}.rmgr`,
+      recordedAt: new Date(Date.UTC(2026, 7, 27, 17, i * 3)),
       stageId: DREAM_LAND_STAGE_ID,
       frameCount: 3600,
       isComplete: true,
       fileRef: null,
-      isUnevenStockStart: false,
+      isUnevenStockStart: i > 0,
       ports: [
         {
           port: 0,
           playerName: "nue",
           characterId: 43,
           finalStocks: 2,
-          startStocks: 4,
+          startStocks: i === 0 ? 4 : 2,
         },
         {
           port: 1,
           playerName: "shidozz2",
-          characterId: 39,
+          characterId: oppChar,
           finalStocks: 0,
           startStocks: 4,
         },
       ],
       statsByPort: {},
-    };
+    }));
 
-    const g2: GameSummary = {
-      id: "cb2",
-      sourceName: "g2.rmgr",
-      recordedAt: new Date("2026-08-27T17:03:00Z"),
-      stageId: DREAM_LAND_STAGE_ID,
-      frameCount: 3600,
-      isComplete: true,
-      fileRef: null,
-      isUnevenStockStart: true,
-      ports: [
-        {
-          port: 0,
-          playerName: "nue",
-          characterId: 43,
-          finalStocks: 0,
-          startStocks: 2,
-        },
-        {
-          port: 1,
-          playerName: "shidozz2",
-          characterId: 43,
-          finalStocks: 2,
-          startStocks: 4,
-        },
-      ],
-      statsByPort: {},
-    };
-
-    gameList.render([g1, g2], identity, 2);
+    gameList.render(games, identity, games.length);
 
     const html = mockContainer.innerHTML;
     expect(html).toContain('class="session-stat-pill session-12cb-pill"');
     expect(html).toContain("12CB");
     expect(html).toContain('class="twelve-cb-section"');
     expect(html).toContain('class="twelve-cb-outcome-pill');
-    expect(html).toContain("Match 1/2");
-    expect(html).toContain("Match 2/2");
+    expect(html).toContain("Match 1/12");
+    expect(html).toContain("Match 12/12");
     expect(html).toContain('class="player-entry winner"');
     expect(html).toContain('class="player-entry loser"');
+  });
+
+  describe("compact session rows", () => {
+    const identity = {
+      ...createDefaultIdentity("nue"),
+      aliases: new Set(["nue"]),
+    };
+
+    const makeGame = (
+      id: string,
+      time: string,
+      oppName: string,
+      yourChar: number,
+      oppChar: number,
+      yourStocks: number,
+      oppStocks: number,
+    ): GameSummary => ({
+      id,
+      sourceName: `${id}.rmgr`,
+      recordedAt: new Date(time),
+      stageId: DREAM_LAND_STAGE_ID,
+      frameCount: 3600,
+      isComplete: true,
+      fileRef: null,
+      ports: [
+        {
+          port: 0,
+          playerName: "nue",
+          characterId: yourChar,
+          finalStocks: yourStocks,
+        },
+        {
+          port: 1,
+          playerName: oppName,
+          characterId: oppChar,
+          finalStocks: oppStocks,
+        },
+      ],
+      statsByPort: {},
+    });
+
+    const renderHtml = (games: GameSummary[]): string => {
+      const container = {
+        innerHTML: "",
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      } as unknown as HTMLElement;
+      new GameList(
+        container,
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+      ).render(games, identity, games.length);
+      return container.innerHTML;
+    };
+
+    it("shows what every game shares once, in the session header", () => {
+      const html = renderHtml([
+        makeGame("a", "2026-08-23T18:32:00", "Wario", 9, 2, 0, 2),
+        makeGame("b", "2026-08-23T18:35:00", "Wario", 9, 2, 1, 0),
+      ]);
+
+      expect(html).toContain('class="session-matchup"');
+      expect(html.split("Dream Land").length - 1).toBe(1); // header only
+      expect(html).not.toContain('class="player-entry'); // no per-row matchup
+      expect(html).toContain("L · 2 left");
+      expect(html).toContain("W · 1 left");
+    });
+
+    it("keeps characters in the rows when the matchup varies", () => {
+      const html = renderHtml([
+        makeGame("a", "2026-08-23T18:32:00", "Wario", 9, 2, 0, 2),
+        makeGame("b", "2026-08-23T18:35:00", "Wario", 9, 1, 1, 0),
+      ]);
+
+      expect(html).not.toContain('class="session-matchup"');
+      expect(html).toContain('class="player-entry');
+    });
+
+    it("collapses every session except the most recent", () => {
+      const html = renderHtml([
+        makeGame("old", "2026-08-20T18:00:00", "Wario", 9, 2, 1, 0),
+        makeGame("new", "2026-08-23T18:00:00", "kix", 9, 1, 1, 0),
+      ]);
+
+      expect(html).toContain(
+        'class="session-group" data-session-id="session_new"',
+      );
+      expect(html).toContain(
+        'class="session-group collapsed" data-session-id="session_old"',
+      );
+    });
+
+    it("shows games you only watched as dimmed 'watched' rows, with no player chooser", () => {
+      // nue is in the lobby but sat out: shidozzzz vs zabuton.
+      const watched: GameSummary = {
+        ...makeGame("w", "2026-08-23T18:38:00", "zabuton", 9, 2, 1, 0),
+        lobbyNames: ["shidozzzz", "zabuton", "nue"],
+        ports: [
+          { port: 0, playerName: "shidozzzz", characterId: 9, finalStocks: 1 },
+          { port: 1, playerName: "zabuton", characterId: 2, finalStocks: 0 },
+        ],
+      };
+      const html = renderHtml([watched]);
+
+      expect(html).toContain('class="game-row watched');
+      expect(html).toContain("Watched");
+      expect(html).toContain("shidozzzz");
+      expect(html).not.toContain("inline-perspective-btn");
+    });
   });
 });

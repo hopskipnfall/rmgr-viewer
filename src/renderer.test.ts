@@ -2141,6 +2141,95 @@ describe("StageRenderer background themes", () => {
     strokes.length = 0;
     renderer["drawPlatform"](fakeCamera, platform);
     expect(strokes).toContain("#93c5fd");
+
+    // Switch to light mode: verifies daytime high-contrast colors
+    renderer.setAppTheme("light");
+    expect(renderer.isLightMode()).toBe(true);
+
+    // Mountain light theme -> middle line is #7c3aed
+    renderer.setBackgroundTheme("mountain");
+    strokes.length = 0;
+    renderer["drawPlatform"](fakeCamera, platform);
+    expect(strokes).toContain("#7c3aed");
+
+    // Beach light theme -> middle line is #0d9488
+    renderer.setBackgroundTheme("beach");
+    strokes.length = 0;
+    renderer["drawPlatform"](fakeCamera, platform);
+    expect(strokes).toContain("#0d9488");
+
+    // Autumn light theme -> middle line is #b45309
+    renderer.setBackgroundTheme("autumn");
+    strokes.length = 0;
+    renderer["drawPlatform"](fakeCamera, platform);
+    expect(strokes).toContain("#b45309");
+
+    // Grid light theme -> middle line is #2563eb
+    renderer.setBackgroundTheme("grid");
+    strokes.length = 0;
+    renderer["drawPlatform"](fakeCamera, platform);
+    expect(strokes).toContain("#2563eb");
+  });
+
+  it("renders all four stage themes in light / day mode without crashing", () => {
+    const fills: unknown[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        setLineDash: () => {},
+        fillRect: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        clearRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        drawImage: () => {},
+        createLinearGradient: () => ({
+          addColorStop: () => {},
+        }),
+        createRadialGradient: () => ({
+          addColorStop: () => {},
+        }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setAppTheme("light");
+    expect(renderer.isLightMode()).toBe(true);
+
+    for (const theme of ["mountain", "beach", "autumn", "grid"] as const) {
+      renderer.setBackgroundTheme(theme);
+      expect(() => {
+        renderer["drawBackground"]();
+      }).not.toThrow();
+    }
+
+    // In light mode, grid background fillStyle should be #f8fafc
+    renderer.setBackgroundTheme("grid");
+    fills.length = 0;
+    renderer["drawGridBackground"]();
+    expect(fills).toContain("#f8fafc");
+
+    // In dark mode, grid background fillStyle should be #12141c
+    renderer.setAppTheme("dark");
+    expect(renderer.isLightMode()).toBe(false);
+    fills.length = 0;
+    renderer["drawGridBackground"]();
+    expect(fills).toContain("#12141c");
   });
 
   it("draws stage palm trees on the beach theme without crashing", () => {

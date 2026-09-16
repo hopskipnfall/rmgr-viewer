@@ -5,6 +5,7 @@ import { Camera } from "../camera.js";
 import {
   CHARACTER_NAMES,
   CHARACTER_NAMES_JA,
+  characterName,
   getGameDefinitions,
 } from "../lookups.js";
 import { characterSize } from "../characterSizes.js";
@@ -1302,7 +1303,7 @@ export class CharacterPreviewController {
                   ${group.characters
                     .map(
                       (c) =>
-                        `<option value="${c.id}" ${c.id === this.characterId ? "selected" : ""}>0x${c.id.toString(16).padStart(2, "0")} - ${c.name} (${c.nameJa})</option>`,
+                        `<option value="${c.id}" ${c.id === this.characterId ? "selected" : ""}>0x${c.id.toString(16).padStart(2, "0")} - ${characterName(c.id)}</option>`,
                     )
                     .join("")}
                 </optgroup>`,

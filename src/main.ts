@@ -1,10 +1,20 @@
 import { initLanguage, setLanguage, t, type Language } from "./i18n.js";
 import {
+  initTheme,
+  setThemePreference,
+  getEffectiveTheme,
+  getStoredThemePreference,
+  type Theme,
+  type ThemePreference,
+} from "./theme.js";
+import {
   navigateToLibrary,
   navigateToMatch,
+  navigateToMatchup,
   navigateToSearch,
   onRoute,
   type Route,
+  type SearchRouteCriteria,
 } from "./router.js";
 import type { PortIndex } from "@rmg-k/rmgr";
 import {
@@ -15,25 +25,52 @@ import {
 import {
   deserializeGameSummary,
   type GameSummary,
-  type SerializedGameSummary,
+  type DemoSummariesFile,
 } from "./data/gameSummary.js";
 import { DEMO_REPLAY_FILENAMES } from "./data/demoReplayFiles.js";
-import { importReplayFiles } from "./data/importer.js";
+import { importReplayFiles, type ImportProgress } from "./data/importer.js";
+import { clearLocalData } from "./data/clearLocalData.js";
+import {
+  MissingFileCancelledError,
+  promptForMissingFile,
+} from "./library/missingFilePrompt.js";
+import {
+  importIntoLibrary,
+  loadPersistedLibrary,
+  setManualPerspective,
+} from "./data/libraryPersistence.js";
+import {
+  buildProjectFile,
+  identityOf,
+  mergeProjectFile,
+  parseProjectFile,
+  ProjectFileError,
+  serializeProjectFile,
+} from "./data/projectFile.js";
+import {
+  openLibraryStore,
+  type LibraryStore,
+  type StoredGame,
+} from "./data/libraryStore.js";
 import { MatchViewController } from "./match/matchView.js";
 import { LibraryViewController } from "./library/libraryView.js";
+import { MatchupViewController } from "./matchup/matchupView.js";
 import { CharacterPreviewController } from "./preview/characterPreview.js";
 import {
   createDefaultIdentity,
   matchesAlias,
   resolvePerspectivePort,
+  saveIdentity,
 } from "./data/identity.js";
 import { computeOverallBaseline, type DerivedRates } from "./data/aggregate.js";
 import { groupGamesIntoSessions, type SessionGroup } from "./data/session.js";
 import type { PlaylistClip } from "./playlist.js";
 import { SearchViewController } from "./search/searchView.js";
+import { SessionViewController } from "./session/sessionView.js";
 import {
   hasVideoLink,
   loadVideoLink,
+  migrateVideoLink,
   propagateVideoLinkToSession,
   saveVideoLink,
   type VideoLinkData,
@@ -49,6 +86,8 @@ const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
 const previewViewEl = document.getElementById("previewView") as HTMLDivElement;
 const matchViewEl = document.getElementById("matchView") as HTMLDivElement;
 const searchViewEl = document.getElementById("searchView") as HTMLDivElement;
+const sessionViewEl = document.getElementById("sessionView") as HTMLDivElement;
+const matchupViewEl = document.getElementById("matchupView") as HTMLDivElement;
 const matchFooterEl = document.getElementById("matchFooter") as HTMLElement;
 const modalContainerEl = document.getElementById(
   "modalContainer",
@@ -62,33 +101,31 @@ const twelveCbPrevMatchBtn = document.getElementById(
 const twelveCbNextMatchBtn = document.getElementById(
   "twelveCbNextMatchBtn",
 ) as HTMLButtonElement;
-const importContainer = document.getElementById(
-  "importContainer",
-) as HTMLDivElement;
-const importBtn = document.getElementById("importBtn") as HTMLButtonElement;
-const importDropdownMenu = document.getElementById(
-  "importDropdownMenu",
-) as HTMLDivElement;
-const importFilesBtn = document.getElementById(
-  "importFilesBtn",
+const sessionPrevGameBtn = document.getElementById(
+  "sessionPrevGameBtn",
+) as HTMLButtonElement | null;
+const sessionNextGameBtn = document.getElementById(
+  "sessionNextGameBtn",
+) as HTMLButtonElement | null;
+const aboutClearDataBtn = document.getElementById(
+  "aboutClearDataBtn",
 ) as HTMLButtonElement;
-const importFolderBtn = document.getElementById(
-  "importFolderBtn",
-) as HTMLButtonElement;
+const exportProjectBtn = document.getElementById(
+  "exportProjectBtn",
+) as HTMLButtonElement | null;
+const importProjectBtn = document.getElementById(
+  "importProjectBtn",
+) as HTMLButtonElement | null;
+const importProjectInput = document.getElementById(
+  "importProjectInput",
+) as HTMLInputElement | null;
+const projectFileStatus = document.getElementById(
+  "projectFileStatus",
+) as HTMLElement | null;
 const filePicker = document.getElementById("filePicker") as HTMLInputElement;
 const folderPicker = document.getElementById(
   "folderPicker",
 ) as HTMLInputElement;
-const importProgressWrap = document.getElementById(
-  "importProgressWrap",
-) as HTMLDivElement;
-const importProgressBar = document.getElementById(
-  "importProgressBar",
-) as HTMLDivElement;
-const importProgressText = document.getElementById(
-  "importProgressText",
-) as HTMLSpanElement;
-const loadStatus = document.getElementById("loadStatus") as HTMLSpanElement;
 const appLoadingScreen = document.getElementById(
   "appLoadingScreen",
 ) as HTMLDivElement;
@@ -98,7 +135,16 @@ const appLoadingProgressBar = document.getElementById(
 const appLoadingText = document.getElementById(
   "appLoadingText",
 ) as HTMLDivElement;
-const langToggleEl = document.getElementById("langToggle") as HTMLDivElement;
+const themeSelectWrap = document.getElementById(
+  "themeSelectWrap",
+) as HTMLDivElement | null;
+const themeSelectIcon = document.getElementById(
+  "themeSelectIcon",
+) as HTMLSpanElement | null;
+const themeSelect = document.getElementById(
+  "themeSelect",
+) as HTMLSelectElement | null;
+const langSelect = document.getElementById("langSelect") as HTMLSelectElement;
 const appTitleBtn = document.getElementById("appTitleBtn") as HTMLButtonElement;
 const aboutModal = document.getElementById("aboutModal") as HTMLDivElement;
 const aboutModalTitle = document.getElementById(
@@ -113,9 +159,6 @@ const aboutAuthorLabel = document.getElementById(
 const aboutAuthorLink = document.getElementById(
   "aboutAuthorLink",
 ) as HTMLAnchorElement;
-const aboutTwitterLabel = document.getElementById(
-  "aboutTwitterLabel",
-) as HTMLSpanElement;
 const aboutGithubLabel = document.getElementById(
   "aboutGithubLabel",
 ) as HTMLSpanElement;
@@ -187,6 +230,8 @@ let matchController: MatchViewController;
 let libraryController: LibraryViewController;
 let previewController: CharacterPreviewController;
 let searchController: SearchViewController;
+let sessionController: SessionViewController;
+let matchupController: MatchupViewController;
 
 const DEMO_REPLAY_URLS = DEMO_REPLAY_FILENAMES.map(
   (filename) => `${import.meta.env.BASE_URL}replays/${filename}`,
@@ -203,16 +248,20 @@ const DEMO_SUMMARIES_URL = `${import.meta.env.BASE_URL}replays/demo-summaries.js
 
 function updateHeaderTranslations(): void {
   const tr = t();
-  importBtn.textContent = `+ ${tr.importReplays}`;
-  importFilesBtn.textContent = tr.importFiles;
-  importFolderBtn.textContent = tr.importFolder;
   backToLibraryBtn.textContent = tr.backToLibrary;
+  const navLibraryLink = document.getElementById("navLibraryLink");
+  const navSearchLink = document.getElementById("navSearchLink");
+  if (navLibraryLink) navLibraryLink.textContent = tr.navLibrary;
+  if (navSearchLink) navSearchLink.textContent = tr.navSearch;
+  renderStaleBanner();
+  aboutClearDataBtn.textContent = tr.clearLocalData;
+  if (exportProjectBtn) exportProjectBtn.textContent = tr.exportProject;
+  if (importProjectBtn) importProjectBtn.textContent = tr.importProject;
   // About modal labels
   aboutModalTitle.textContent = tr.aboutTitle;
   aboutModalDesc.textContent = tr.aboutDescription;
   aboutAuthorLabel.textContent = tr.authorLabel;
   aboutAuthorLink.textContent = tr.authorName;
-  aboutTwitterLabel.textContent = tr.twitterLabel;
   aboutGithubLabel.textContent = tr.githubLabel;
   aboutTobloSfxLabel.textContent = tr.tobloSfxLabel;
   aboutModalFooterCloseBtn.textContent = tr.close;
@@ -230,57 +279,197 @@ function updateHeaderTranslations(): void {
   shortcutsHelp.textContent = tr.shortcutsHelp;
   shortcutsClose.textContent = tr.shortcutsClose;
   shortcutsModalFooterCloseBtn.textContent = tr.close;
+
+  // Update theme select options and accessibility label
+  if (themeSelect) {
+    themeSelect.setAttribute("aria-label", tr.themeSelectLabel);
+    const systemOpt = themeSelect.querySelector<HTMLOptionElement>(
+      'option[value="system"]',
+    );
+    if (systemOpt) systemOpt.textContent = `💻 ${tr.themeSystem}`;
+    const lightOpt = themeSelect.querySelector<HTMLOptionElement>(
+      'option[value="light"]',
+    );
+    if (lightOpt) lightOpt.textContent = `☀️ ${tr.themeLight}`;
+    const darkOpt = themeSelect.querySelector<HTMLOptionElement>(
+      'option[value="dark"]',
+    );
+    if (darkOpt) darkOpt.textContent = `🌙 ${tr.themeDark}`;
+  }
+  updateThemeSelectUI(getEffectiveTheme(), getStoredThemePreference());
+}
+
+function updateThemeSelectUI(theme: Theme, pref: ThemePreference): void {
+  if (themeSelectIcon) {
+    themeSelectIcon.textContent = theme === "dark" ? "🌙" : "☀️";
+  }
+  if (themeSelect && themeSelect.value !== pref) {
+    themeSelect.value = pref;
+  }
+  if (themeSelectWrap) {
+    const tr = t();
+    const prefLabel =
+      pref === "system"
+        ? `${tr.themeSystem} (${theme === "dark" ? tr.themeDark : tr.themeLight})`
+        : pref === "dark"
+          ? tr.themeDark
+          : tr.themeLight;
+    themeSelectWrap.title = `${tr.themeSelectLabel}: ${prefLabel}`;
+  }
 }
 
 function applyLanguage(lang: Language): void {
   setLanguage(lang);
   updateHeaderTranslations();
-  for (const btn of langToggleEl.querySelectorAll<HTMLButtonElement>(
-    ".lang-btn",
-  )) {
-    btn.classList.toggle("active", btn.dataset.lang === lang);
+  if (langSelect.value !== lang) {
+    langSelect.value = lang;
   }
   libraryController?.updateTranslations();
   matchController?.updateStaticTranslations();
+  rerenderMatchupIfActive();
+}
+
+function rerenderMatchupIfActive(): void {
+  if (!currentMatchupRoute) return;
+  matchupController.render(
+    currentMatchupRoute.myChar,
+    currentMatchupRoute.oppChar,
+    libraryController.getSummaries(),
+    libraryController.getIdentity(),
+  );
+}
+
+/** IndexedDB-backed cache of every imported game's summary. Null when IndexedDB is unavailable. */
+let libraryStore: LibraryStore | null = null;
+/** Cached games from an older ANALYSIS_VERSION - kept out of the library until re-imported. */
+let staleEntries: StoredGame[] = [];
+
+/** Notified after every import completes (see promptForMissingFile). */
+const importFinishedListeners = new Set<() => void>();
+
+function renderStaleBanner(): void {
+  const count = staleEntries.length;
+  const bannerEl = document.getElementById("libStaleBanner");
+  const bannerText = document.getElementById("libStaleBannerText");
+  const bannerBtn = document.getElementById("libStaleBannerBtn");
+  if (!bannerEl) return;
+  bannerEl.hidden = count === 0;
+  if (count === 0) return;
+  const tr = t();
+  if (bannerText) bannerText.textContent = tr.staleBanner(count);
+  if (bannerBtn) bannerBtn.textContent = tr.reimportFolder;
+}
+
+/**
+ * Adds freshly imported games to the library. A game already listed (e.g.
+ * loaded from the cache after a refresh) is updated in place instead - it
+ * gets its File for this session, plus any recomputed stats.
+ */
+function attachImportedSummaries(imported: GameSummary[]): void {
+  const added: GameSummary[] = [];
+  for (const summary of imported) {
+    const existing = libraryController.getSummaryById(summary.id);
+    if (existing && !existing.isBundledSample) {
+      Object.assign(existing, summary);
+    } else {
+      added.push(summary);
+    }
+  }
+  if (added.length > 0) {
+    libraryController.addSummaries(added);
+  } else {
+    libraryController.render();
+  }
 }
 
 async function handleImport(files: FileList | File[]): Promise<void> {
   if (!files || files.length === 0) return;
 
-  loadStatus.textContent = "";
-  importProgressWrap.hidden = false;
+  // Elements live inside the library sidebar (rendered dynamically)
+  const libStatusEl = document.getElementById(
+    "libLoadStatus",
+  ) as HTMLSpanElement | null;
+  const libProgressWrap = document.getElementById(
+    "libImportProgressWrap",
+  ) as HTMLDivElement | null;
+  const libProgressBar = document.getElementById(
+    "libImportProgressBar",
+  ) as HTMLDivElement | null;
+  const libProgressText = document.getElementById(
+    "libImportProgressText",
+  ) as HTMLSpanElement | null;
+
+  if (libStatusEl) libStatusEl.textContent = "";
+  if (libProgressWrap) libProgressWrap.hidden = false;
   const tr = t();
 
-  try {
-    const result = await importReplayFiles(files, (progress) => {
-      const pct =
-        progress.total > 0
-          ? Math.round((progress.loaded / progress.total) * 100)
-          : 0;
-      importProgressBar.style.setProperty("--progress-pct", `${pct}%`);
-      importProgressText.textContent = tr.importingProgress(
+  const onProgress = (progress: ImportProgress): void => {
+    const pct =
+      progress.total > 0
+        ? Math.round((progress.loaded / progress.total) * 100)
+        : 0;
+    if (libProgressBar)
+      libProgressBar.style.setProperty("--progress-pct", `${pct}%`);
+    if (libProgressText)
+      libProgressText.textContent = tr.importingProgress(
         progress.loaded,
         progress.total,
       );
-    });
+  };
 
-    if (result.summaries.length > 0) {
-      libraryController.addSummaries(result.summaries);
+  try {
+    let summaries: GameSummary[];
+    let errorCount: number;
+    let duplicateCount = 0;
+    if (libraryStore) {
+      const result = await importIntoLibrary(
+        libraryStore,
+        [...files],
+        onProgress,
+      );
+      for (const { id, legacyId } of result.newIds) {
+        migrateVideoLink(legacyId, id);
+      }
+      staleEntries = result.staleEntries;
+      summaries = result.summaries;
+      errorCount = result.errors.length;
+      duplicateCount = result.duplicateCount;
+    } else {
+      // No IndexedDB (e.g. a locked-down private window): session-only, as before.
+      const result = await importReplayFiles(files, onProgress);
+      summaries = result.games.map((g) => g.summary);
+      errorCount = result.errors.length;
     }
 
-    if (result.errors.length > 0) {
-      loadStatus.textContent = `Skipped ${result.errors.length} file(s) with errors.`;
+    attachImportedSummaries(summaries);
+    renderStaleBanner();
+
+    const messages: string[] = [];
+    if (errorCount > 0) {
+      messages.push(`Skipped ${errorCount} file(s) with errors.`);
     }
+    if (duplicateCount > 0) {
+      messages.push(tr.importDuplicatesSkipped(duplicateCount));
+    }
+    if (libStatusEl) libStatusEl.textContent = messages.join(" ");
   } catch (err) {
-    loadStatus.textContent = `Import failed: ${(err as Error).message}`;
+    if (libStatusEl)
+      libStatusEl.textContent = `Import failed: ${(err as Error).message}`;
   } finally {
+    for (const listener of [...importFinishedListeners]) listener();
+    // A search only covers games loaded this session - refresh it so the
+    // newly imported games are included.
+    if (!searchViewEl.hidden) {
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
     setTimeout(() => {
-      importProgressWrap.hidden = true;
+      if (libProgressWrap) libProgressWrap.hidden = true;
     }, 1500);
   }
 }
 
 let currentMatchSummary: GameSummary | null = null;
+let currentMatchupRoute: { myChar: number; oppChar: number } | null = null;
 
 function computeMatchupBaselineForPort(
   summary: GameSummary,
@@ -321,7 +510,22 @@ async function loadReplayForSummary(
   } else if (summary.url) {
     return loadReplayFromUrl(summary.url);
   }
-  return loadReplayFromUrl(DEMO_REPLAY_URLS[0]!);
+  // Loaded from the persistent cache, but its file isn't imported this session.
+  // On a refresh of #/match/<id> this runs inside the first route, while the
+  // app loading screen is still up - drop it, or it would cover the prompt.
+  appLoadingScreen.hidden = true;
+  const loaded = await promptForMissingFile({
+    modalContainer: modalContainerEl,
+    summary,
+    pickFile: () => filePicker.click(),
+    pickFolder: () => folderPicker.click(),
+    onImportFinished: (listener) => {
+      importFinishedListeners.add(listener);
+      return () => importFinishedListeners.delete(listener);
+    },
+  });
+  if (!loaded || !summary.fileRef) throw new MissingFileCancelledError();
+  return loadReplayFromFile(summary.fileRef);
 }
 
 /** A playlist queued by e.g. the search view's "play this clip" action, consumed once handleRouteChange() finishes loading its starting clip's game. */
@@ -359,6 +563,11 @@ function handleShowFailedEdgeGuards(session: SessionGroup): void {
       firstGame.ports.find((p) => p.port === yourPort)?.playerName ?? null;
   }
   navigateToSearch({
+    type: "edgeGuards",
+    victimName: null,
+    minHits: null,
+    killed: null,
+    allowGaps: false,
     result: "failure",
     sessionId: session.id,
     playerName,
@@ -380,10 +589,48 @@ function handleShowFailedEdgeGuards(session: SessionGroup): void {
  */
 let routeGeneration = 0;
 
+/** Highlights the header nav entry matching the route being shown. */
+function setCurrentNavLink(id: string, isCurrent: boolean): void {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (isCurrent) el.setAttribute("aria-current", "page");
+  else el.removeAttribute("aria-current");
+}
+
+/**
+ * What the header's Search link opens: combos in the most recent session.
+ * Scoped deliberately - an unscoped search has to load and re-analyze every
+ * replay in the library before showing anything.
+ */
+function defaultSearchCriteria(): SearchRouteCriteria {
+  const sessions = groupGamesIntoSessions(
+    libraryController.getSummaries(),
+    libraryController.getIdentity(),
+    "newest",
+  );
+  return {
+    type: "combos",
+    victimName: null,
+    minHits: null,
+    killed: null,
+    allowGaps: false,
+    result: null,
+    sessionId: sessions[0]?.id ?? null,
+    playerName: null,
+    playerCharacterId: null,
+    opponentCharacterId: null,
+    jumpCount: null,
+    startingAreaBox: null,
+  };
+}
+
 async function handleRouteChange(route: Route): Promise<void> {
   const myRouteGeneration = ++routeGeneration;
+  setCurrentNavLink("navLibraryLink", route.view === "library");
+  setCurrentNavLink("navSearchLink", route.view === "search");
   if (route.view === "library") {
     currentMatchSummary = null;
+    currentMatchupRoute = null;
     // Show Library View
     matchController.deactivate();
     previewController?.deactivate();
@@ -391,25 +638,31 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchFooterEl.hidden = true;
     previewViewEl.hidden = true;
     searchViewEl.hidden = true;
+    sessionViewEl.hidden = true;
+    matchupViewEl.hidden = true;
     backToLibraryBtn.hidden = true;
-    importContainer.hidden = false;
 
     libraryViewEl.hidden = false;
     libraryController.render();
   } else if (route.view === "preview") {
     currentMatchSummary = null;
+    currentMatchupRoute = null;
     // Show Character Preview View
     matchController.deactivate();
     matchViewEl.hidden = true;
     matchFooterEl.hidden = true;
     libraryViewEl.hidden = true;
     searchViewEl.hidden = true;
-    backToLibraryBtn.hidden = false;
-    importContainer.hidden = true;
+    sessionViewEl.hidden = true;
+    matchupViewEl.hidden = true;
+    // The header nav's Library link covers this; keeping both showed two
+    // Library buttons side by side.
+    backToLibraryBtn.hidden = true;
 
     previewController.activate();
   } else if (route.view === "search") {
     currentMatchSummary = null;
+    currentMatchupRoute = null;
     // Show Search View
     matchController.deactivate();
     previewController?.deactivate();
@@ -417,15 +670,23 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchFooterEl.hidden = true;
     previewViewEl.hidden = true;
     libraryViewEl.hidden = true;
-    backToLibraryBtn.hidden = false;
-    importContainer.hidden = true;
+    matchupViewEl.hidden = true;
+    // The header nav's Library link covers this; keeping both showed two
+    // Library buttons side by side.
+    backToLibraryBtn.hidden = true;
 
     searchViewEl.hidden = false;
+    sessionViewEl.hidden = true;
     searchController.setData(
       libraryController.getSummaries(),
       libraryController.getIdentity(),
     );
     searchController.setCriteria({
+      type: route.type,
+      victimName: route.victimName,
+      minHits: route.minHits,
+      killed: route.killed,
+      allowGaps: route.allowGaps,
       result: route.result,
       sessionId: route.sessionId,
       playerName: route.playerName,
@@ -434,8 +695,31 @@ async function handleRouteChange(route: Route): Promise<void> {
       jumpCount: route.jumpCount,
       startingAreaBox: route.startingAreaBox,
     });
+  } else if (route.view === "session") {
+    currentMatchSummary = null;
+    currentMatchupRoute = null;
+    // Show Session View
+    matchController.deactivate();
+    previewController?.deactivate();
+    matchViewEl.hidden = true;
+    matchFooterEl.hidden = true;
+    previewViewEl.hidden = true;
+    libraryViewEl.hidden = true;
+    searchViewEl.hidden = true;
+    matchupViewEl.hidden = true;
+    // The header nav's Library link covers this; keeping both showed two
+    // Library buttons side by side.
+    backToLibraryBtn.hidden = true;
+
+    sessionViewEl.hidden = false;
+    sessionController.setData(
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
+    sessionController.setSessionId(route.id);
   } else if (route.view === "match") {
     // Show Match View
+    currentMatchupRoute = null;
     const summary = libraryController.getSummaryById(route.id);
     if (!summary) {
       // Game not found (e.g. reload or invalid ID) — gracefully fallback to library (§6.1)
@@ -448,12 +732,14 @@ async function handleRouteChange(route: Route): Promise<void> {
     previewViewEl.hidden = true;
     libraryViewEl.hidden = true;
     searchViewEl.hidden = true;
+    sessionViewEl.hidden = true;
+    matchupViewEl.hidden = true;
     matchViewEl.hidden = false;
     matchFooterEl.hidden = false;
-    backToLibraryBtn.hidden = false;
-    importContainer.hidden = true;
+    // The header nav's Library link covers this; keeping both showed two
+    // Library buttons side by side.
+    backToLibraryBtn.hidden = true;
 
-    loadStatus.textContent = "Loading replay...";
     try {
       const loaded = await loadReplayForSummary(summary);
       if (myRouteGeneration !== routeGeneration) return; // a newer navigation superseded this one
@@ -491,7 +777,6 @@ async function handleRouteChange(route: Route): Promise<void> {
       );
       matchController.loadMatch(loaded, initialPort, matchupBaseline);
       matchController.activate();
-      loadStatus.textContent = "";
 
       // Every normal navigation into a match starts outside any playlist -
       // clear whatever the previous match view left behind (its bar
@@ -519,8 +804,35 @@ async function handleRouteChange(route: Route): Promise<void> {
         pendingPlaylistClips = null;
       }
     } catch (err) {
-      loadStatus.textContent = `Failed to load match: ${(err as Error).message}`;
+      if (err instanceof MissingFileCancelledError) {
+        navigateToLibrary();
+        return;
+      }
+      console.error("Failed to load match:", err);
     }
+  } else if (route.view === "matchup") {
+    currentMatchSummary = null;
+    currentMatchupRoute = { myChar: route.myChar, oppChar: route.oppChar };
+    // Show Matchup View
+    matchController.deactivate();
+    previewController?.deactivate();
+    matchViewEl.hidden = true;
+    matchFooterEl.hidden = true;
+    previewViewEl.hidden = true;
+    libraryViewEl.hidden = true;
+    searchViewEl.hidden = true;
+    sessionViewEl.hidden = true;
+    // The header nav's Library link covers this; keeping both showed two
+    // Library buttons side by side.
+    backToLibraryBtn.hidden = true;
+
+    matchupViewEl.hidden = false;
+    matchupController.render(
+      route.myChar,
+      route.oppChar,
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
   }
 }
 
@@ -536,12 +848,46 @@ async function init(): Promise<void> {
       matchController.setMatchupBaseline(baseline);
     }
   });
+  matchController.setOnViewMatchup((myChar, oppChar) => {
+    navigateToMatchup(myChar, oppChar);
+  });
 
   libraryController = new LibraryViewController(
     libraryViewEl,
     modalContainerEl,
     (selectedSummary) => {
       navigateToMatch(selectedSummary.id);
+    },
+    (session) => {
+      handleShowFailedEdgeGuards(session);
+    },
+    (myChar, oppChar) => {
+      navigateToMatchup(myChar, oppChar);
+    },
+  );
+
+  libraryController.setPersistenceHooks({
+    identity: (identity) => saveIdentity(identity),
+    perspective: (id, port) => {
+      if (libraryStore) void setManualPerspective(libraryStore, id, port);
+    },
+    remove: (id) => {
+      if (libraryStore) void libraryStore.delete(id);
+    },
+  });
+
+  matchupController = new MatchupViewController(
+    matchupViewEl,
+    (summary) => {
+      navigateToMatch(summary.id);
+    },
+    (summary, port) => {
+      libraryController.selectPlayerPerspective(summary, port);
+      rerenderMatchupIfActive();
+    },
+    (id) => {
+      libraryController.removeSummary(id);
+      rerenderMatchupIfActive();
     },
     (session) => {
       handleShowFailedEdgeGuards(session);
@@ -555,6 +901,22 @@ async function init(): Promise<void> {
     loadReplayForSummary,
     (clips, startIndex) => {
       playPlaylistClips(clips, startIndex);
+    },
+    () => folderPicker.click(),
+  );
+  sessionController = new SessionViewController(
+    sessionViewEl,
+    (summary) => {
+      navigateToMatch(summary.id);
+    },
+    (summary, port) => {
+      libraryController.selectPlayerPerspective(summary, port);
+    },
+    (id) => {
+      libraryController.removeSummary(id);
+    },
+    (session) => {
+      handleShowFailedEdgeGuards(session);
     },
   );
 
@@ -573,23 +935,58 @@ async function init(): Promise<void> {
     if (id) navigateToMatch(id);
   });
 
-  importBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    importDropdownMenu.hidden = !importDropdownMenu.hidden;
+  // The header's Search link opens the cheapest useful search rather than
+  // "failed edge guards across every game", which re-reads the whole library.
+  document.getElementById("navSearchLink")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    navigateToSearch(defaultSearchCriteria());
   });
 
+  sessionPrevGameBtn?.addEventListener("click", () => {
+    const id = sessionPrevGameBtn.dataset.gameId;
+    if (id) navigateToMatch(id);
+  });
+
+  sessionNextGameBtn?.addEventListener("click", () => {
+    const id = sessionNextGameBtn.dataset.gameId;
+    if (id) navigateToMatch(id);
+  });
+
+  // Import button controls (delegated on libraryViewEl — elements live inside the
+  // dynamically-rendered library sidebar and may be re-created on render)
+  libraryViewEl.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const importDropdownMenu = document.getElementById(
+      "importDropdownMenu",
+    ) as HTMLDivElement | null;
+
+    if (target.id === "importBtn" || target.closest("#importBtn")) {
+      e.stopPropagation();
+      if (importDropdownMenu) {
+        importDropdownMenu.hidden = !importDropdownMenu.hidden;
+      }
+    } else if (target.id === "importFilesBtn") {
+      if (importDropdownMenu) importDropdownMenu.hidden = true;
+      filePicker.click();
+    } else if (target.id === "importFolderBtn") {
+      if (importDropdownMenu) importDropdownMenu.hidden = true;
+      folderPicker.click();
+    } else if (target.id === "libStaleBannerBtn") {
+      folderPicker.click();
+    } else {
+      // Clicks outside the dropdown close it
+      if (importDropdownMenu && !importDropdownMenu.contains(target)) {
+        importDropdownMenu.hidden = true;
+      }
+    }
+  });
+
+  // Also close the import dropdown on any click outside the library view
   document.addEventListener("click", () => {
-    importDropdownMenu.hidden = true;
-  });
-
-  importFilesBtn.addEventListener("click", () => {
-    importDropdownMenu.hidden = true;
-    filePicker.click();
-  });
-
-  importFolderBtn.addEventListener("click", () => {
-    importDropdownMenu.hidden = true;
-    folderPicker.click();
+    const importDropdownMenu = document.getElementById(
+      "importDropdownMenu",
+    ) as HTMLDivElement | null;
+    if (importDropdownMenu) importDropdownMenu.hidden = true;
   });
 
   filePicker.addEventListener("change", () => {
@@ -606,6 +1003,80 @@ async function init(): Promise<void> {
     }
   });
 
+  // Project export/import: everything the app knows about this library except
+  // the replay bytes. Lives here rather than in libraryView because main.ts
+  // owns `libraryStore`, alongside Clear local data.
+  exportProjectBtn?.addEventListener("click", () => {
+    void (async () => {
+      if (!libraryStore) return;
+      const rows = await libraryStore.getAll();
+      const videoLinks: Record<string, VideoLinkData> = {};
+      for (const row of rows) {
+        const link = loadVideoLink(row.id);
+        if (link) videoLinks[row.id] = link;
+      }
+      const blob = serializeProjectFile(
+        buildProjectFile(rows, libraryController.getIdentity(), videoLinks),
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rmgr-viewer-project-${new Date()
+        .toISOString()
+        .slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (projectFileStatus) {
+        projectFileStatus.textContent = t().exportProjectDone(rows.length);
+      }
+    })();
+  });
+
+  importProjectBtn?.addEventListener("click", () =>
+    importProjectInput?.click(),
+  );
+
+  importProjectInput?.addEventListener("change", () => {
+    void (async () => {
+      const file = importProjectInput.files?.[0];
+      if (!file || !libraryStore) return;
+      try {
+        const parsed = parseProjectFile(await file.text());
+        const result = await mergeProjectFile(parsed, libraryStore);
+        saveIdentity(identityOf(parsed));
+        for (const [id, link] of Object.entries(parsed.videoLinks)) {
+          saveVideoLink(id, link);
+        }
+        if (projectFileStatus) {
+          projectFileStatus.textContent = t().importProjectDone(
+            result.imported,
+            result.skippedStale,
+          );
+        }
+        // Reload so the merged library loads through the normal startup path,
+        // the same way Clear local data does.
+        window.location.reload();
+      } catch (err) {
+        if (projectFileStatus) {
+          projectFileStatus.textContent =
+            err instanceof ProjectFileError
+              ? t().importProjectInvalid
+              : String(err);
+        }
+      } finally {
+        importProjectInput.value = "";
+      }
+    })();
+  });
+
+  aboutClearDataBtn.addEventListener("click", () => {
+    if (!window.confirm(t().clearLocalDataConfirm)) return;
+    void clearLocalData(libraryStore).finally(() => {
+      window.location.hash = "";
+      window.location.reload();
+    });
+  });
+
   // Drag and Drop support
   window.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -618,17 +1089,24 @@ async function init(): Promise<void> {
     }
   });
 
-  // Language toggle
-  langToggleEl.addEventListener("click", (e) => {
-    const target = (e.target as HTMLElement).closest<HTMLButtonElement>(
-      ".lang-btn",
-    );
-    if (!target) return;
-    const lang = target.dataset.lang as Language | undefined;
+  // Language select dropdown
+  langSelect.addEventListener("change", () => {
+    const lang = langSelect.value as Language;
     if (lang === "en" || lang === "ja") {
       applyLanguage(lang);
     }
   });
+
+  // Theme select dropdown
+  if (themeSelect) {
+    themeSelect.addEventListener("change", () => {
+      const pref = themeSelect.value as ThemePreference;
+      if (pref === "system" || pref === "light" || pref === "dark") {
+        setThemePreference(pref);
+        updateThemeSelectUI(getEffectiveTheme(), pref);
+      }
+    });
+  }
 
   // About modal
   const openAboutModal = (): void => {
@@ -678,9 +1156,12 @@ async function init(): Promise<void> {
     }
   });
 
-  // 3. Initialize Language (before the demo-seeding progress text below,
+  // 3. Initialize Theme & Language (before the demo-seeding progress text below,
   // and before the router's initial route can render anything, so both
-  // are localized from the very first frame)
+  // are localized and styled from the very first frame)
+  initTheme((theme, pref) => {
+    updateThemeSelectUI(theme, pref);
+  });
   const initialLang = initLanguage();
   applyLanguage(initialLang);
 
@@ -690,35 +1171,60 @@ async function init(): Promise<void> {
   // the full Replay is only fetched+parsed later, on demand, when the
   // user actually opens that game (see the "match" branch of
   // handleRouteChange, which already loads lazily from `summary.url`).
+  //
+  // 4a. ...unless this browser already has a saved library (IndexedDB),
+  // in which case that loads instead - no files needed until the user
+  // opens a game (see loadReplayForSummary).
+  let hasPersistedLibrary = false;
+  try {
+    libraryStore = await openLibraryStore();
+    const persisted = await loadPersistedLibrary(libraryStore);
+    staleEntries = persisted.staleEntries;
+    if (persisted.summaries.length > 0 || persisted.staleEntries.length > 0) {
+      hasPersistedLibrary = true;
+      libraryController.addSummaries(persisted.summaries);
+    }
+  } catch (err) {
+    console.warn(
+      "Persistent library unavailable; imports will only last this session:",
+      err,
+    );
+    libraryStore = null;
+  }
+  renderStaleBanner();
+
   const demoSummaries: GameSummary[] = [];
   appLoadingProgressBar.style.setProperty("--progress-pct", "50%");
   appLoadingText.textContent = t().loadingDemoReplays;
-  try {
-    const response = await fetch(DEMO_SUMMARIES_URL);
-    if (!response.ok) {
-      throw new Error(
-        `failed to fetch ${DEMO_SUMMARIES_URL}: ${response.status} ${response.statusText}`,
-      );
-    }
-    const serialized = (await response.json()) as SerializedGameSummary[];
-    for (const s of serialized) {
-      const summary = deserializeGameSummary(s);
-      const url = DEMO_REPLAY_URLS[DEMO_REPLAY_FILENAMES.indexOf(s.sourceName)];
-      if (!url) {
-        console.warn(
-          "No demo URL found for precomputed summary:",
-          s.sourceName,
+  if (!hasPersistedLibrary) {
+    try {
+      const response = await fetch(DEMO_SUMMARIES_URL);
+      if (!response.ok) {
+        throw new Error(
+          `failed to fetch ${DEMO_SUMMARIES_URL}: ${response.status} ${response.statusText}`,
         );
-        continue;
       }
-      summary.isBundledSample = true;
-      summary.url = url;
-      demoSummaries.push(summary);
+      const file = (await response.json()) as DemoSummariesFile;
+      for (const s of file.games) {
+        const summary = deserializeGameSummary(s);
+        const url =
+          DEMO_REPLAY_URLS[DEMO_REPLAY_FILENAMES.indexOf(s.sourceName)];
+        if (!url) {
+          console.warn(
+            "No demo URL found for precomputed summary:",
+            s.sourceName,
+          );
+          continue;
+        }
+        summary.isBundledSample = true;
+        summary.url = url;
+        demoSummaries.push(summary);
+      }
+    } catch (err) {
+      console.warn("Could not load precomputed demo summaries:", err);
+    } finally {
+      appLoadingProgressBar.style.setProperty("--progress-pct", "100%");
     }
-  } catch (err) {
-    console.warn("Could not load precomputed demo summaries:", err);
-  } finally {
-    appLoadingProgressBar.style.setProperty("--progress-pct", "100%");
   }
 
   if (demoSummaries.length > 0) {

@@ -23,22 +23,48 @@ export function createDefaultIdentity(initialName = ""): Identity {
 }
 
 /**
- * Loads default identity (in-memory for current session, resets on page reload).
+ * Loads the saved identity from localStorage, or the empty default. Saved
+ * since the library itself became persistent (libraryStore.ts) - otherwise
+ * every refresh would bring back your games but forget which player is you.
  */
 export function loadIdentity(): Identity {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as {
+        displayName?: unknown;
+        aliases?: unknown;
+      };
+      if (
+        typeof parsed.displayName === "string" &&
+        Array.isArray(parsed.aliases)
+      ) {
+        return {
+          displayName: parsed.displayName,
+          aliases: new Set(
+            parsed.aliases.filter((a): a is string => typeof a === "string"),
+          ),
+        };
+      }
+    }
   } catch {
-    // Ignore localStorage errors
+    // Ignore localStorage read errors and corrupt data
   }
   return createDefaultIdentity();
 }
 
-/**
- * Saves identity (no-op as identity is session-only and resets on page reload).
- */
-export function saveIdentity(): void {
-  // Session-only: do not persist to localStorage
+export function saveIdentity(identity: Identity): void {
+  try {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        displayName: identity.displayName,
+        aliases: [...identity.aliases],
+      }),
+    );
+  } catch {
+    // Ignore localStorage write errors
+  }
 }
 
 /**
