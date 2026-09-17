@@ -5,7 +5,7 @@ import {
   filterGameSummaries,
 } from "../data/aggregate.js";
 import type { GameSummary } from "../data/gameSummary.js";
-import type { Identity } from "../data/identity.js";
+import { resolvePerspectivePort, type Identity } from "../data/identity.js";
 import { groupGamesIntoSessions, type SessionGroup } from "../data/session.js";
 import { t } from "../i18n.js";
 import { BreakdownTable } from "../library/breakdownTable.js";
@@ -37,14 +37,25 @@ export interface QuickSearchLink {
   readonly href: string;
 }
 
-/** The session page's pre-filtered search links, in display order. */
+/**
+ * The session page's pre-filtered search links, in display order.
+ * `playerName` scopes Failed Edge Guards to the user's own perspective in
+ * this session (mirrors main.ts's handleShowFailedEdgeGuards) - otherwise it
+ * would show every failed edge guard by either player, not just yours.
+ */
 export function sessionQuickSearchLinks(
   sessionId: string,
+  playerName: string | null,
 ): readonly QuickSearchLink[] {
   return [
     {
       labelKey: "quickSearchFailedEdgeGuards",
-      href: searchHash({ ...EMPTY_CRITERIA, sessionId, result: "failure" }),
+      href: searchHash({
+        ...EMPTY_CRITERIA,
+        sessionId,
+        result: "failure",
+        playerName,
+      }),
     },
     {
       labelKey: "quickSearchCombos",
@@ -142,6 +153,18 @@ export class SessionViewController {
       session.startTime,
     )}–${formatClock(session.endTime)}`;
 
+    // Same resolution main.ts's handleShowFailedEdgeGuards uses for the
+    // library's own button, so both entry points scope to the same person.
+    const firstGame = session.games[0];
+    const playerName = firstGame
+      ? (firstGame.ports.find(
+          (p) =>
+            p.port ===
+            (firstGame.manualPerspectivePort ??
+              resolvePerspectivePort(firstGame, this.identity!)),
+        )?.playerName ?? null)
+      : null;
+
     this.container.innerHTML = `
       <div class="session-page">
         <section class="session-page-header">
@@ -184,7 +207,7 @@ export class SessionViewController {
       "#sessionQuickSearchLinks",
     );
     if (linksEl) {
-      linksEl.innerHTML = sessionQuickSearchLinks(session.id)
+      linksEl.innerHTML = sessionQuickSearchLinks(session.id, playerName)
         .map(
           (link) =>
             `<a class="btn-secondary" href="${link.href}">${escapeHtml(

@@ -1,0 +1,12 @@
+export { drawPikachuPolygons } from "./pikachu.js";
+export { drawFalconPolygons } from "./falcon.js";
+export { drawMarioPolygons } from "./mario.js";
+export { drawLuigiPolygons } from "./luigi.js";
+export { drawKirbyPolygons } from "./kirby.js";
+export { drawJigglypuffPolygons } from "./jigglypuff.js";
+export { drawFoxPolygons } from "./fox.js";
+export { drawYoshiPolygons } from "./yoshi.js";
+export { drawDonkeyKongPolygons } from "./donkeyKong.js";
+export { drawLinkPolygons } from "./link.js";
+export { drawNessPolygons } from "./ness.js";
+export { drawSamusPolygons } from "./samus.js";
