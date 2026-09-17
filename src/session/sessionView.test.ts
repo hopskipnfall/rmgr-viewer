@@ -3,7 +3,7 @@ import { sessionQuickSearchLinks } from "./sessionView.js";
 
 describe("sessionQuickSearchLinks", () => {
   it("scopes every quick search to the session", () => {
-    const links = sessionQuickSearchLinks("session-1");
+    const links = sessionQuickSearchLinks("session-1", null);
     expect(links).toHaveLength(3);
     for (const link of links) {
       expect(link.href).toContain("sessionId=session-1");
@@ -11,7 +11,7 @@ describe("sessionQuickSearchLinks", () => {
   });
 
   it("builds failed edge guards, combos, and kill combos", () => {
-    const [failed, combos, kills] = sessionQuickSearchLinks("s");
+    const [failed, combos, kills] = sessionQuickSearchLinks("s", null);
     expect(failed?.href).toContain("result=failure");
     expect(combos?.href).toContain("type=combos");
     expect(kills?.href).toContain("type=combos");
@@ -19,7 +19,15 @@ describe("sessionQuickSearchLinks", () => {
   });
 
   it("escapes a session id that needs encoding", () => {
-    const [failed] = sessionQuickSearchLinks("a b&c");
+    const [failed] = sessionQuickSearchLinks("a b&c", null);
     expect(failed?.href).toContain("sessionId=a+b%26c");
+  });
+
+  it("scopes Failed Edge Guards to the given player, not everybody's", () => {
+    const [failed, combos] = sessionQuickSearchLinks("s", "Jonn");
+    expect(failed?.href).toContain("player=Jonn");
+    // Combos/Kill Combos intentionally show both players' - only Failed
+    // Edge Guards defaults to "just me".
+    expect(combos?.href).not.toContain("player=");
   });
 });

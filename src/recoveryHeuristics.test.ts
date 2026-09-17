@@ -764,34 +764,42 @@ describe("Captain Falcon: Falcon Dive", () => {
   });
 
   it("the Falcon Punch branch is modeled only after a double jump", () => {
-    // Same spot as the Wario-Player-6 case, jump already used: out of reach.
+    // Same spot as the Wario-Player-6 case, jump already used: out of reach
+    // for the (validated) freefall+jump search, and the model has no other
+    // way to confirm death without the not-yet-validated Falcon Dive curve
+    // (see the CAVEAT on FALCON_DIVE_DY) - so "not-implemented", not a
+    // guessed "dead".
     expect(classify(CHAR_FALCON, 6686.6, 58.2, -3.0, -66.0, 0, 0x39, 1)).toBe(
-      "dead",
+      "not-implemented",
     );
   });
 
   it("is monotonic and not trivially always-true/always-false along an x sweep", () => {
+    // "dead" and "not-implemented" are both "no confirmed path" for this
+    // check - Falcon's whole model routes through the not-yet-validated
+    // Falcon Dive curve, so far-enough positions report "not-implemented"
+    // rather than a guessed "dead" (see the classify() Falcon case).
     for (const y of [-1000, 0, 1000]) {
       let sawReachable = false;
-      let sawDead = false;
-      let wentFromDeadBackToReachable = false;
-      let seenDead = false;
+      let sawUnreachable = false;
+      let wentFromUnreachableBackToReachable = false;
+      let seenUnreachable = false;
       for (let x = 2500; x <= 9000; x += 250) {
         const verdict = classify(CHAR_FALCON, x, y, 0, 0, 0, 0x39, 1);
-        if (verdict === "dead") {
-          seenDead = true;
-          sawDead = true;
+        if (verdict === "dead" || verdict === "not-implemented") {
+          seenUnreachable = true;
+          sawUnreachable = true;
         } else if (
           verdict === "reaches-stage" ||
           verdict === "dead-if-ledge-occupied"
         ) {
           sawReachable = true;
-          if (seenDead) wentFromDeadBackToReachable = true;
+          if (seenUnreachable) wentFromUnreachableBackToReachable = true;
         }
       }
       expect(sawReachable).toBe(true);
-      expect(sawDead).toBe(true);
-      expect(wentFromDeadBackToReachable).toBe(false);
+      expect(sawUnreachable).toBe(true);
+      expect(wentFromUnreachableBackToReachable).toBe(false);
     }
   });
 

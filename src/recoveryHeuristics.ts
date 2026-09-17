@@ -3287,21 +3287,35 @@ function classifyImpl(
         noUpBRecoveryOutcomes(x, y, vx, vy, jumpsRemaining, JIGGLYPUFF_ATTR),
       );
     case CHAR_FALCON:
-    case CHAR_FALCON_JP:
+    case CHAR_FALCON_JP: {
       // Delay + jump search, no angle/magnitude search (see the section header above for why),
       // plus jump -> Falcon Punch -> Dive when the jump is still available (see FALCON_PUNCH).
       // Facing-independent -- confirmed against source, see section header.
       if (jumpsRemaining > 1) return null;
-      return toRecoveryVerdict(
-        falconRecoveryOutcomes(
-          x,
-          y,
-          vx,
-          vy,
-          jumpsRemaining,
-          characterId === CHAR_FALCON_JP ? FALCON_JP : FALCON,
-        ),
+      const outcomes = falconRecoveryOutcomes(
+        x,
+        y,
+        vx,
+        vy,
+        jumpsRemaining,
+        characterId === CHAR_FALCON_JP ? FALCON_JP : FALCON,
       );
+      // Falcon Dive is root-motion for its entire duration via a hand-extracted curve that is
+      // explicitly NOT yet cross-validated against real replay data (see FALCON_DIVE_DY's own
+      // doc comment on its suspect first three values). Confirmed 2026-09-17 against a real
+      // recording (260916185841-AandB-nue-41.rmgr, frame 2094): the search found no ledge/stage
+      // path and the model defaulted that to "dead" via toRecoveryVerdict, even though Falcon
+      // plainly recovered in the real recorded frames that follow. toRecoveryVerdict's "no path
+      // found -> dead" default is right for every other character's validated model, but for
+      // Falcon specifically "no path found" just as often means "the dive curve isn't trustworthy
+      // enough to say" -- so report that honestly instead of asserting a death that may not be
+      // real. A found path (reaches-stage / dead-if-ledge-occupied) is unaffected: the documented
+      // caveat is about the curve producing phantom failures, not phantom successes.
+      if (!outcomes.canReachStage && !outcomes.canReachLedge) {
+        return "not-implemented";
+      }
+      return toRecoveryVerdict(outcomes);
+    }
     case CHAR_KIRBY:
     case CHAR_KIRBY_JP:
       // Closed-form wait-for-peak, no search needed (see the section header above for why --
