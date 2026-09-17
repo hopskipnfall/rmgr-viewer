@@ -985,6 +985,7 @@ export class StageRenderer {
       stocksRemaining: number;
       jumpsRemaining: number;
       characterSpecific?: number;
+      shieldHealth?: number;
     },
     perspectivePort?: PortIndex | null,
     replay?: Replay | null,
@@ -1116,6 +1117,8 @@ export class StageRenderer {
     color: string,
     isShieldStun: boolean,
     frameCounter: number,
+    shieldHealth?: number,
+    isPaused?: boolean,
   ): void {
     drawShieldBubble(
       this.ctx,
@@ -1126,6 +1129,8 @@ export class StageRenderer {
       color,
       isShieldStun,
       frameCounter,
+      shieldHealth,
+      isPaused,
     );
   }
 

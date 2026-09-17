@@ -67,6 +67,7 @@ import {
   CHARGE_SHOT_FULL_CHARGE_RADIUS_WORLD,
   CHARGE_SHOT_FULL_CHARGE_SCALE,
   CHARGE_SHOT_LEVEL_SCALES,
+  drawShieldBubble,
 } from "./renderer.js";
 import {
   HazardFlag,
@@ -4481,6 +4482,271 @@ describe("StageRenderer background themes", () => {
         expect(arcCalls.length).toBeGreaterThan(0);
         expect(ellipseCalls.length).toBeGreaterThan(0);
       });
+    });
+  });
+
+  describe("Shield Health Visualization", () => {
+    const createMockShieldCanvas = () => {
+      const arcCalls: Array<{
+        x: number;
+        y: number;
+        radius: number;
+        startAngle?: number;
+        endAngle?: number;
+      }> = [];
+      const lineToCalls: Array<{ x: number; y: number }> = [];
+      const moveToCalls: Array<{ x: number; y: number }> = [];
+      const roundRectCalls: Array<{
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+      }> = [];
+      const textCalls: Array<{ text: string; x: number; y: number }> = [];
+      const strokeStyles: string[] = [];
+      let currentStrokeStyle = "";
+
+      const ctx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: (x: number, y: number) => {
+          moveToCalls.push({ x, y });
+        },
+        lineTo: (x: number, y: number) => {
+          lineToCalls.push({ x, y });
+        },
+        rect: () => {},
+        roundRect: (x: number, y: number, w: number, h: number) => {
+          roundRectCalls.push({ x, y, w, h });
+        },
+        createRadialGradient: () => ({ addColorStop: () => {} }),
+        fill: () => {},
+        stroke: () => {
+          strokeStyles.push(currentStrokeStyle);
+        },
+        arc: (
+          x: number,
+          y: number,
+          radius: number,
+          startAngle?: number,
+          endAngle?: number,
+        ) => {
+          arcCalls.push({ x, y, radius, startAngle, endAngle });
+        },
+        set strokeStyle(val: string) {
+          currentStrokeStyle = val;
+        },
+        get strokeStyle() {
+          return currentStrokeStyle;
+        },
+        set fillStyle(_val: string) {},
+        get fillStyle() {
+          return "";
+        },
+        lineWidth: 1,
+        lineCap: "butt",
+        lineJoin: "miter",
+        shadowColor: "",
+        shadowBlur: 0,
+        font: "",
+        textAlign: "left",
+        textBaseline: "alphabetic",
+        measureText: (s: string) => ({ width: s.length * 6 }),
+        fillText: (text: string, x: number, y: number) => {
+          textCalls.push({ text, x, y });
+        },
+      } as unknown as CanvasRenderingContext2D;
+
+      return {
+        ctx,
+        arcCalls,
+        lineToCalls,
+        moveToCalls,
+        roundRectCalls,
+        textCalls,
+        strokeStyles,
+      };
+    };
+
+    it("scales shield physical radius based on shieldHealth formula", () => {
+      // Unscaled base radius = Math.max(10 * 1.35, 30 * 0.58) + 3 = 17.4 + 3 = 20.4
+      // Full health (55 HP): radiusScale = 1.0 -> 20.4
+      const full = createMockShieldCanvas();
+      drawShieldBubble(full.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 55);
+      const fullRadius = full.arcCalls[0]!.radius;
+      expect(fullRadius).toBeCloseTo(20.4, 1);
+
+      // Low health (10 HP): healthRatio = 10/55, radiusScale = 0.48 + 0.52 * (10/55) ~ 0.5745 -> ~11.72
+      const low = createMockShieldCanvas();
+      drawShieldBubble(low.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 10);
+      const lowRadius = low.arcCalls[0]!.radius;
+      expect(lowRadius).toBeCloseTo(20.4 * (0.48 + 0.52 * (10 / 55)), 1);
+      expect(lowRadius).toBeLessThan(fullRadius);
+
+      // Broken / 0 health: radiusScale = 0.48 -> 20.4 * 0.48 ~ 9.79
+      const zero = createMockShieldCanvas();
+      drawShieldBubble(zero.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 0);
+      const zeroRadius = zero.arcCalls[0]!.radius;
+      expect(zeroRadius).toBeCloseTo(20.4 * 0.48, 1);
+
+      // Undefined health (Schema 1 fallback): defaults to 55 full health
+      const undef = createMockShieldCanvas();
+      drawShieldBubble(
+        undef.ctx,
+        100,
+        100,
+        10,
+        30,
+        "#3b82f6",
+        false,
+        0,
+        undefined,
+      );
+      expect(undef.arcCalls[0]!.radius).toBeCloseTo(fullRadius, 1);
+    });
+
+    it("transitions shield colors across health tiers (port color -> amber -> crimson -> flashing strobe)", () => {
+      // Full / High (55 HP): port color
+      const high = createMockShieldCanvas();
+      drawShieldBubble(high.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 55);
+      // Rim stroke contains player color
+      expect(high.strokeStyles.some((s) => s.includes("59, 130, 246"))).toBe(
+        true,
+      );
+
+      // Medium (30 HP, 26-41): amber #f59e0b
+      const med = createMockShieldCanvas();
+      drawShieldBubble(med.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 30);
+      expect(
+        med.strokeStyles.some(
+          (s) => s.includes("245, 158, 11") || s === "#f59e0b",
+        ),
+      ).toBe(true);
+
+      // Low (20 HP, 12-25): warning crimson #dc2626
+      const low = createMockShieldCanvas();
+      drawShieldBubble(low.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 20);
+      expect(
+        low.strokeStyles.some(
+          (s) => s.includes("220, 38, 38") || s === "#dc2626",
+        ),
+      ).toBe(true);
+
+      // Critical (10 HP, <= 11): flashing strobe between white and red
+      const crit0 = createMockShieldCanvas();
+      drawShieldBubble(crit0.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 10); // frame 0 -> #ffffff
+      const crit4 = createMockShieldCanvas();
+      drawShieldBubble(crit4.ctx, 100, 100, 10, 30, "#3b82f6", false, 4, 10); // frame 4 -> #ef4444
+      expect(
+        crit0.strokeStyles.some(
+          (s) => s === "#ffffff" || s.includes("255, 255, 255"),
+        ),
+      ).toBe(true);
+      expect(
+        crit4.strokeStyles.some(
+          (s) => s === "#ef4444" || s.includes("239, 68, 68"),
+        ),
+      ).toBe(true);
+    });
+
+    it("renders micro-cracks at low and critical shield health", () => {
+      // High health: no micro-cracks
+      const high = createMockShieldCanvas();
+      drawShieldBubble(high.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 50);
+      expect(high.lineToCalls.length).toBe(0);
+
+      // Low health (20 HP, 12-25): 2 micro-cracks drawn
+      const low = createMockShieldCanvas();
+      drawShieldBubble(low.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 20);
+      const lowLineCount = low.lineToCalls.length;
+      expect(lowLineCount).toBeGreaterThan(0);
+
+      // Critical health (10 HP, <= 11): 4 micro-cracks drawn (more line segments)
+      const crit = createMockShieldCanvas();
+      drawShieldBubble(crit.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 10);
+      expect(crit.lineToCalls.length).toBeGreaterThan(lowLineCount);
+    });
+
+    it("renders perimeter arc gauge showing remaining health fraction", () => {
+      const half = createMockShieldCanvas();
+      drawShieldBubble(half.ctx, 100, 100, 10, 30, "#3b82f6", false, 0, 27.5);
+      const baseRadius = half.arcCalls[0]!.radius;
+      // Gauge arc exists around outer perimeter (radius > baseRadius)
+      const gaugeArc = half.arcCalls.find(
+        (a) =>
+          a.startAngle !== undefined &&
+          a.endAngle !== undefined &&
+          a.radius > baseRadius &&
+          a.startAngle !== 0,
+      );
+      expect(gaugeArc).toBeDefined();
+      expect(gaugeArc?.startAngle).toBeCloseTo(-Math.PI / 2, 2);
+      // 27.5 / 55 = 0.5 -> arc sweeps to -PI/2 + PI = PI/2
+      expect(gaugeArc?.endAngle).toBeCloseTo(Math.PI / 2, 2);
+    });
+
+    it("renders paused status badge with exact numbers when isPaused is true", () => {
+      // Playing (isPaused = false): no text rendered
+      const playing = createMockShieldCanvas();
+      drawShieldBubble(
+        playing.ctx,
+        100,
+        100,
+        10,
+        30,
+        "#3b82f6",
+        false,
+        0,
+        30,
+        false,
+      );
+      expect(playing.textCalls.length).toBe(0);
+
+      // Paused with regular health (30 HP): renders exact badge "🛡️ 30/55"
+      const paused = createMockShieldCanvas();
+      drawShieldBubble(
+        paused.ctx,
+        100,
+        100,
+        10,
+        30,
+        "#3b82f6",
+        false,
+        0,
+        30,
+        true,
+      );
+      expect(paused.textCalls.length).toBe(1);
+      expect(paused.textCalls[0]!.text).toBe("🛡️ 30/55");
+      expect(paused.roundRectCalls.length).toBeGreaterThan(0);
+
+      // Paused with critical health (10 HP, <= 11): renders exact badge "🛡️ 10/55"
+      const critical = createMockShieldCanvas();
+      drawShieldBubble(
+        critical.ctx,
+        100,
+        100,
+        10,
+        30,
+        "#3b82f6",
+        false,
+        0,
+        10,
+        true,
+      );
+      expect(critical.textCalls.length).toBe(1);
+      expect(critical.textCalls[0]!.text).toBe("🛡️ 10/55");
+    });
+
+    it("supports shield stun state with health scaling and vibration", () => {
+      const stun = createMockShieldCanvas();
+      drawShieldBubble(stun.ctx, 100, 100, 10, 30, "#3b82f6", true, 3, 20);
+      expect(stun.arcCalls.length).toBeGreaterThan(0);
+      // Radius is scaled relative to full base
+      const stunRadius = stun.arcCalls[0]!.radius;
+      expect(stunRadius).toBeLessThan(22); // Less than full base with pulse
     });
   });
 });
