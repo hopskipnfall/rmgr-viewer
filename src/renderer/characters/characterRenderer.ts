@@ -178,6 +178,7 @@ export function drawPlayer(
     stocksRemaining: number;
     jumpsRemaining: number;
     characterSpecific?: number;
+    shieldHealth?: number;
   },
   perspectivePort?: PortIndex | null,
   replay?: Replay | null,
@@ -228,8 +229,12 @@ export function drawPlayer(
   const shielding = isShieldState(post.actionStateId);
   const shieldStun = isShieldStunState(post.actionStateId);
   if (shielding) {
-    const shieldRadius = Math.max(halfWidth * 1.35, heightPx * 0.58) + 3;
-    labelY = Math.min(labelY, centerY - shieldRadius - 16);
+    const health = post.shieldHealth !== undefined ? post.shieldHealth : 55;
+    const healthRatio = Math.max(0, Math.min(1, health / 55));
+    const radiusScale = 0.48 + 0.52 * healthRatio;
+    const shieldRadius =
+      (Math.max(halfWidth * 1.35, heightPx * 0.58) + 3) * radiusScale;
+    labelY = Math.min(labelY, centerY - shieldRadius - (isPaused ? 30 : 16));
   }
 
   // Draw capture lock brackets if character is trapped in a grab
@@ -1346,6 +1351,8 @@ export function drawPlayer(
       color,
       shieldStun,
       post.actionFrameCounter,
+      post.shieldHealth,
+      isPaused,
     );
   }
 
