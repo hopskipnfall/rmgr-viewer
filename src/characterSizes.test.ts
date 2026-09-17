@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { characterSize, getCharacterIconicColor } from "./characterSizes.js";
+import {
+  characterSize,
+  getCharacterIconicColor,
+  VARIANT_TO_BASE_ID,
+} from "./characterSizes.js";
 
 describe("characterSizes height hierarchy", () => {
   it("satisfies the exact height ladder specified", () => {
@@ -56,12 +60,42 @@ describe("characterSizes height hierarchy", () => {
     expect(characterSize(0x11)).toEqual(characterSize(0x03));
     // Samus (JP) -> Samus
     expect(characterSize(0x24)).toEqual(characterSize(0x03));
-    // Falcon (JP) -> Falcon
+    // Falcon (JP) -> Falcon: size is NOT region-split for Falcon (confirmed
+    // from source, FTAttributes.size has no #if REGION_JP guard at all -
+    // unlike his jump/tvel constants, which are region-split but don't
+    // affect model size).
     expect(characterSize(0x28)).toEqual(characterSize(0x07));
-    // Kirby (JP) -> Kirby
-    expect(characterSize(0x30)).toEqual(characterSize(0x08));
-    // Pikachu (JP) -> Pikachu
+    // Pikachu (JP) -> Pikachu: not region-split either (single value, no
+    // #if in the struct).
     expect(characterSize(0x32)).toEqual(characterSize(0x09));
+  });
+
+  it("scales Mario, Luigi, and Kirby by their confirmed region ratio, not a flat collapse to the US size", () => {
+    // FTAttributes.size (confirmed from source): Mario/Luigi US 1.12, JP
+    // 1.00 (JP smaller); Kirby US 0.91, JP 0.94 (JP LARGER - opposite
+    // direction from Mario/Luigi).
+    const marioUs = characterSize(0x00);
+    const marioJp = characterSize(0x2a);
+    expect(marioJp.height / marioUs.height).toBeCloseTo(1.0 / 1.12, 3);
+    expect(marioJp.width / marioUs.width).toBeCloseTo(1.0 / 1.12, 3);
+
+    const luigiUs = characterSize(0x04);
+    const luigiJp = characterSize(0x2b);
+    expect(luigiJp.height / luigiUs.height).toBeCloseTo(1.0 / 1.12, 3);
+
+    const kirbyUs = characterSize(0x08);
+    const kirbyJp = characterSize(0x30);
+    expect(kirbyJp.height / kirbyUs.height).toBeGreaterThan(1);
+    expect(kirbyJp.height / kirbyUs.height).toBeCloseTo(0.94 / 0.91, 3);
+  });
+
+  it("still resolves every OTHER JP variant of Mario/Luigi/Kirby (icons, ledge-grab reach) to the base fighter", () => {
+    // characterSize() is the only place these three diverge by region -
+    // VARIANT_TO_BASE_ID itself still collapses them, so any other consumer
+    // reading it directly (characterIcons.ts, ledgeGrabRange.ts) is unaffected.
+    expect(VARIANT_TO_BASE_ID[0x2a]).toBe(0x00);
+    expect(VARIANT_TO_BASE_ID[0x2b]).toBe(0x04);
+    expect(VARIANT_TO_BASE_ID[0x30]).toBe(0x08);
   });
 
   it("returns iconic colors for characters and their variants", () => {

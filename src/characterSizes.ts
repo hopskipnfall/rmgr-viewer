@@ -67,6 +67,14 @@ const LUIGI_SIZE: CharacterSize = {
   width: CAPTAIN_FALCON_HEIGHT * 0.81 * 0.82,
 };
 
+/** Same region split and ratio as Mario (221_LuigiMain.c: US 1.12, JP 1.00 -
+ * identical values to Mario's, confirmed from source). See MARIO_JP_SIZE's
+ * comment for why this is a ratio applied to LUIGI_SIZE, not a lookup. */
+const LUIGI_JP_SIZE: CharacterSize = {
+  height: LUIGI_SIZE.height * (1.0 / 1.12),
+  width: LUIGI_SIZE.width * (1.0 / 1.12),
+};
+
 // 5. Ness, Mario (little bit smaller than Yoshi/Luigi)
 const NESS_SIZE: CharacterSize = {
   height: CAPTAIN_FALCON_HEIGHT * 0.7,
@@ -76,6 +84,19 @@ const NESS_SIZE: CharacterSize = {
 const MARIO_SIZE: CharacterSize = {
   height: CAPTAIN_FALCON_HEIGHT * 0.7,
   width: CAPTAIN_FALCON_HEIGHT * 0.7 * 0.96,
+};
+
+/**
+ * FTAttributes.size is region-split for Mario (203_MarioMain.c: US 1.12,
+ * JP 1.00 - confirmed from source, Game Expert relay 2026-09-18). Applied as
+ * a ratio (0.893 = 1.00/1.12) onto MARIO_SIZE's already-calibrated US
+ * dimensions, not as a replacement value - MARIO_SIZE's numbers are a
+ * hand-tuned visual hierarchy against the stage, not a direct copy of
+ * FTAttributes.size, so only the region *ratio* transfers.
+ */
+const MARIO_JP_SIZE: CharacterSize = {
+  height: MARIO_SIZE.height * (1.0 / 1.12),
+  width: MARIO_SIZE.width * (1.0 / 1.12),
 };
 
 // 6. Pikachu (little bit smaller than Ness/Mario - ANCHORED)
@@ -88,6 +109,15 @@ const PIKACHU_SIZE: CharacterSize = {
 const KIRBY_SIZE: CharacterSize = {
   height: PIKACHU_HEIGHT * 0.88,
   width: PIKACHU_HEIGHT * 0.88,
+};
+
+/** FTAttributes.size is region-split for Kirby too (229_KirbyMain.c: US
+ * 0.91, JP 0.94 - confirmed from source), but unlike Mario/Luigi, JP Kirby
+ * is the LARGER one. See MARIO_JP_SIZE's comment for why this is a ratio
+ * applied to KIRBY_SIZE, not a lookup. */
+const KIRBY_JP_SIZE: CharacterSize = {
+  height: KIRBY_SIZE.height * (0.94 / 0.91),
+  width: KIRBY_SIZE.width * (0.94 / 0.91),
 };
 
 const JIGGLYPUFF_SIZE: CharacterSize = {
@@ -192,6 +222,9 @@ const CHARACTER_SIZES: Partial<Record<number, CharacterSize>> = {
   0x07: CAPTAIN_FALCON_SIZE, // Captain Falcon
   0x08: KIRBY_SIZE, // Kirby
   0x09: PIKACHU_SIZE, // Pikachu
+  0x2a: MARIO_JP_SIZE, // Mario (JP)
+  0x2b: LUIGI_JP_SIZE, // Luigi (JP)
+  0x30: KIRBY_JP_SIZE, // Kirby (JP)
   0x0a: JIGGLYPUFF_SIZE, // Jigglypuff
   0x0b: NESS_SIZE, // Ness
   0x1e: GANONDORF_SIZE, // Ganondorf
@@ -281,6 +314,12 @@ export const VARIANT_TO_BASE_ID: Partial<Record<number, number>> = {
 };
 
 export function characterSize(characterId: number): CharacterSize {
+  // Exact id first: Mario/Luigi/Kirby JP (0x2a/0x2b/0x30) have their own
+  // entries below (MARIO_JP_SIZE etc.) despite VARIANT_TO_BASE_ID collapsing
+  // them to their base fighter for every OTHER purpose (icon, ledge-grab
+  // reach) - only rendered model size is region-split for these three.
+  const exact = CHARACTER_SIZES[characterId];
+  if (exact) return exact;
   const resolvedId = VARIANT_TO_BASE_ID[characterId] ?? characterId;
   return CHARACTER_SIZES[resolvedId] ?? DEFAULT_SIZE;
 }
