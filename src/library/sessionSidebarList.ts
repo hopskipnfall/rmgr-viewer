@@ -43,8 +43,6 @@ export function sessionDateRecordLine(session: SessionGroup): string {
   return `${dateStr} · ${session.wins}-${session.losses}`;
 }
 
-import { navigateToSession } from "../router.js";
-
 /** Matches gameList.ts's escapeHtml exactly - document is undefined under
  * vitest's plain Node test environment. */
 function escapeHtml(s: string): string {
