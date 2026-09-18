@@ -27,7 +27,7 @@ describe("VOD panel light mode styles", () => {
     );
   });
 
-  it("defines explicit [data-theme=\"light\"] overrides for VOD panel elements", () => {
+  it('defines explicit [data-theme="light"] overrides for VOD panel elements', () => {
     const requiredLightSelectors = [
       '[data-theme="light"] #vodWidget',
       '[data-theme="light"] #vodWidgetHeader',
@@ -76,7 +76,7 @@ describe("VOD panel light mode styles", () => {
   it("defines light mode mobile sticky header rules for #vodWidgetHeader", () => {
     expect(html).toContain('[data-theme="light"] #vodWidgetHeader');
     expect(html).toContain(
-      '@media (max-width: 768px) and (prefers-color-scheme: light)',
+      "@media (max-width: 768px) and (prefers-color-scheme: light)",
     );
   });
 
