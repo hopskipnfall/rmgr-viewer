@@ -308,6 +308,18 @@ export function drawPlayerNameTag(
   ctx.restore();
 }
 
+export interface PlayerPauseHudItem {
+  readonly x: number;
+  readonly y: number;
+  readonly stateName: string;
+  readonly stateId: number;
+  readonly posX: number;
+  readonly posY: number;
+  readonly tagColor: string;
+  readonly knockbackResist?: number;
+  readonly hurtboxState?: number;
+}
+
 export function drawPlayerStateInfo(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -317,12 +329,25 @@ export function drawPlayerStateInfo(
   posX: number,
   posY: number,
   tagColor: string,
-): void {
+  knockbackResist?: number,
+  offsetY: number = 8,
+  hurtboxState?: number,
+): { pillWidth: number; pillHeight: number; pillX: number; pillY: number } {
   ctx.save();
 
   const font = "bold 11px system-ui, -apple-system, sans-serif";
   const stateText = `${stateName} (0x${stateId.toString(16)})`;
-  const positionText = `(${posX.toFixed(1)}, ${posY.toFixed(1)})`;
+  const armorText =
+    knockbackResist && knockbackResist > 0
+      ? ` • Armor: ${knockbackResist} KB`
+      : "";
+  const invincibleText =
+    hurtboxState === 2
+      ? " • Invincible"
+      : hurtboxState === 3
+        ? " • Invulnerable"
+        : "";
+  const positionText = `(${posX.toFixed(1)}, ${posY.toFixed(1)})${armorText}${invincibleText}`;
 
   ctx.font = font;
   ctx.textAlign = "center";
@@ -338,7 +363,7 @@ export function drawPlayerStateInfo(
   const paddingY = 5;
   const pillHeight = lineHeight * 2 + paddingY;
   const pillX = x - pillWidth / 2;
-  const pillY = y + 8; // just below the character's feet
+  const pillY = y + offsetY;
   const borderRadius = 5;
 
   ctx.beginPath();
@@ -353,14 +378,189 @@ export function drawPlayerStateInfo(
   ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
   ctx.shadowBlur = 2;
   ctx.fillText(stateText, x, pillY + paddingY / 2 + lineHeight / 2);
-  ctx.fillText(
-    positionText,
-    x,
-    pillY + paddingY / 2 + lineHeight + lineHeight / 2,
-  );
+
+  // If armor or invulnerability is active, render position and badges with accent colors
+  if ((knockbackResist && knockbackResist > 0) || invincibleText) {
+    const posBase = `(${posX.toFixed(1)}, ${posY.toFixed(1)})`;
+    const armorBadge =
+      knockbackResist && knockbackResist > 0
+        ? ` • Armor: ${knockbackResist} KB`
+        : "";
+    const totalW = ctx.measureText(posBase + armorBadge + invincibleText).width;
+    const baseW = ctx.measureText(posBase).width;
+    const armorW = ctx.measureText(armorBadge).width;
+    const textStartX = x - totalW / 2;
+    const textY = pillY + paddingY / 2 + lineHeight + lineHeight / 2;
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#e5e7eb";
+    ctx.fillText(posBase, textStartX, textY);
+
+    if (armorBadge) {
+      ctx.fillStyle = "#fbbf24";
+      ctx.fillText(armorBadge, textStartX + baseW, textY);
+    }
+    if (invincibleText) {
+      ctx.fillStyle = "#38bdf8";
+      ctx.shadowColor = "rgba(56, 189, 248, 0.6)";
+      ctx.shadowBlur = 3;
+      ctx.fillText(invincibleText, textStartX + baseW + armorW, textY);
+      ctx.shadowBlur = 0;
+    }
+  } else {
+    ctx.fillText(
+      positionText,
+      x,
+      pillY + paddingY / 2 + lineHeight + lineHeight / 2,
+    );
+  }
   ctx.shadowBlur = 0;
 
   ctx.restore();
+
+  return { pillWidth, pillHeight, pillX, pillY };
+}
+
+/**
+ * Renders pause HUD state pills across all active characters with collision deconfliction.
+ * If multiple characters are close together, prevents their state pills from covering each
+ * other by staggering vertical tiers and drawing a connecting stem in the fighter's tag color.
+ */
+export function drawDeconflictedPauseHuds(
+  ctx: CanvasRenderingContext2D,
+  huds: readonly PlayerPauseHudItem[],
+): void {
+  if (huds.length === 0) return;
+  const firstHud = huds[0];
+  if (huds.length === 1 && firstHud) {
+    drawPlayerStateInfo(
+      ctx,
+      firstHud.x,
+      firstHud.y,
+      firstHud.stateName,
+      firstHud.stateId,
+      firstHud.posX,
+      firstHud.posY,
+      firstHud.tagColor,
+      firstHud.knockbackResist,
+      8,
+      firstHud.hurtboxState,
+    );
+    return;
+  }
+
+  // Precompute pill dimensions
+  ctx.save();
+  ctx.font = "bold 11px system-ui, -apple-system, sans-serif";
+  const measured = huds.map((h) => {
+    const stateText = `${h.stateName} (0x${h.stateId.toString(16)})`;
+    const armorText =
+      h.knockbackResist && h.knockbackResist > 0
+        ? ` • Armor: ${h.knockbackResist} KB`
+        : "";
+    const invincibleText =
+      h.hurtboxState === 2
+        ? " • Invincible"
+        : h.hurtboxState === 3
+          ? " • Invulnerable"
+          : "";
+    const positionText = `(${h.posX.toFixed(1)}, ${h.posY.toFixed(1)})${armorText}${invincibleText}`;
+    const contentWidth = Math.max(
+      ctx.measureText(stateText).width,
+      ctx.measureText(positionText).width,
+    );
+    const pillWidth = Math.max(contentWidth + 16, 40);
+    const lineHeight = 15;
+    const paddingY = 5;
+    const pillHeight = lineHeight * 2 + paddingY;
+    return {
+      hud: h,
+      pillWidth,
+      pillHeight,
+      tier: 0, // 0 = standard (y + 8), 1 = staggered (y + 8 + pillHeight + 6), etc.
+    };
+  });
+  ctx.restore();
+
+  // Sort horizontally left to right to evaluate overlaps
+  const sortedIndices = measured
+    .map((_, i) => i)
+    .sort((a, b) => {
+      const itemA = measured[a];
+      const itemB = measured[b];
+      return (itemA?.hud.x ?? 0) - (itemB?.hud.x ?? 0);
+    });
+
+  for (let i = 0; i < sortedIndices.length; i++) {
+    const idxA = sortedIndices[i];
+    if (idxA === undefined) continue;
+    const itemA = measured[idxA];
+    if (!itemA) continue;
+
+    for (let j = i + 1; j < sortedIndices.length; j++) {
+      const idxB = sortedIndices[j];
+      if (idxB === undefined) continue;
+      const itemB = measured[idxB];
+      if (!itemB) continue;
+
+      // Check horizontal collision between bounding boxes
+      const halfA = itemA.pillWidth / 2;
+      const halfB = itemB.pillWidth / 2;
+      const xDistance = Math.abs(itemA.hud.x - itemB.hud.x);
+      const minSeparation = halfA + halfB + 6;
+
+      // Also check vertical distance between their character feet
+      const yDistance = Math.abs(itemA.hud.y - itemB.hud.y);
+
+      // If they are on similar ground level and overlap horizontally
+      if (xDistance < minSeparation && yDistance < itemA.pillHeight * 1.5) {
+        if (itemB.tier === itemA.tier) {
+          // Stagger itemB to the next vertical tier
+          itemB.tier = itemA.tier + 1;
+        }
+      }
+    }
+  }
+
+  // Draw pills in assigned tiers
+  for (const item of measured) {
+    const { hud, pillHeight, tier } = item;
+    const tierSpacing = pillHeight + 7;
+    const offsetY = 8 + tier * tierSpacing;
+
+    // If staggered into tier >= 1, draw an indicator leader stem connecting the lower pill to the fighter's feet
+    if (tier > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(hud.x, hud.y + 4);
+      ctx.lineTo(hud.x, hud.y + offsetY);
+      ctx.strokeStyle = hud.tagColor;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([2, 2]);
+      ctx.stroke();
+
+      // Soles anchor node
+      ctx.beginPath();
+      ctx.arc(hud.x, hud.y + 4, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = hud.tagColor;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    drawPlayerStateInfo(
+      ctx,
+      hud.x,
+      hud.y,
+      hud.stateName,
+      hud.stateId,
+      hud.posX,
+      hud.posY,
+      hud.tagColor,
+      hud.knockbackResist,
+      offsetY,
+      hud.hurtboxState,
+    );
+  }
 }
 
 export function drawChargeMeter(

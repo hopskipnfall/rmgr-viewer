@@ -12,23 +12,47 @@ export function drawAttackArc(
   attack: AttackInfo,
   joystick?: { x: number; y: number } | null,
   canAngle?: boolean,
+  actionFrameCounter?: number,
 ): void {
+  const frame = actionFrameCounter !== undefined ? actionFrameCounter : 7;
   const baseRadius = Math.max(halfWidth, heightPx * 0.5);
 
   if (attack.type === "aerial" && attack.direction === "neutral") {
-    // Nair: 360-degree sleek aerodynamic ring matching tilt stroke weight
-    const radius = baseRadius * 1.55;
+    // Nair: 360-degree expanding aerodynamic ring with concentric trailing echo ripple
+    // Outward expansion in frames 0-6 (7 frames of travel), then sustained at peak reach with energized shimmer
+    const progress = Math.min(1.0, (frame + 1) / 7);
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const startRadius = baseRadius * 0.75;
+    const peakRadius = baseRadius * 1.8;
+    const currentRadius = startRadius + (peakRadius - startRadius) * easeOut;
+    const pulse =
+      frame >= 7 ? Math.sin((frame - 7) * 0.45) * (baseRadius * 0.035) : 0;
+    const radius = currentRadius + pulse;
 
+    // Concentric trailing ripple ring (expanding behind the main wave)
+    const echoRadius = Math.max(baseRadius * 0.7, radius * 0.82);
+    ctx.beginPath();
+    ctx.arc(x, centerY, echoRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = hexToRgba(color, 0.45);
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+
+    // Primary aerodynamic ring in port color with energetic glow
+    ctx.save();
     ctx.beginPath();
     ctx.arc(x, centerY, radius, 0, Math.PI * 2);
     ctx.strokeStyle = color;
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = 4.2;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
     ctx.stroke();
+    ctx.restore();
 
+    // Crisp white-hot inner core
     ctx.beginPath();
     ctx.arc(x, centerY, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+    ctx.lineWidth = 2.0;
     ctx.stroke();
     return;
   }
@@ -386,20 +410,43 @@ export function drawAttackArc(
     (facingRight ? -1 : 1) * tiltFactor * ((18 * Math.PI) / 180);
   const effectiveCenter = centerAngle + angleShift;
 
-  if (attack.type === "tilt" || attack.type === "aerial") {
-    // Tilts and directional aerials: sleek, sharp aerodynamic single slash arc
-    const radius = baseRadius * 1.55;
-    const span = (75 * Math.PI) / 180;
+  if (attack.type === "aerial") {
+    // Directional aerial attacks (Fair, Bair, Uair, Dair):
+    // Fast, agile, aerodynamic razor slash with expansive 7-frame outward sweep and glowing trail
+    const progress = Math.min(1.0, (frame + 1) / 7);
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const startRadius = baseRadius * 0.75;
+    const peakRadius = baseRadius * 1.85;
+    const currentRadius = startRadius + (peakRadius - startRadius) * easeOut;
+    // Subtle energized shimmer once at peak (persists for entire duration of aerial state)
+    const pulse =
+      frame >= 7 ? Math.sin((frame - 7) * 0.4) * (baseRadius * 0.035) : 0;
+    const radius = currentRadius + pulse;
+
+    const span = (85 * Math.PI) / 180;
     const startAngle = effectiveCenter - span / 2;
     const endAngle = effectiveCenter + span / 2;
 
-    // Outer slash arc in player's color
+    // 1. Trailing speed echo arc (wind smear behind the nimble razor slash)
+    const echoRadius = Math.max(baseRadius * 0.7, radius * 0.82);
+    ctx.beginPath();
+    ctx.arc(x, centerY, echoRadius, startAngle + 0.08, endAngle - 0.08);
+    ctx.strokeStyle = hexToRgba(color, 0.5);
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // 2. Primary outer slash arc in player color with vivid energetic glow
+    ctx.save();
     ctx.beginPath();
     ctx.arc(x, centerY, radius, startAngle, endAngle);
     ctx.strokeStyle = color;
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = 4.2;
     ctx.lineCap = "round";
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
     ctx.stroke();
+    ctx.restore();
 
     if (hasStickAngle) {
       // Angled direction is significantly brighter in the direction of the joystick
@@ -409,17 +456,15 @@ export function drawAttackArc(
       const hy = centerY + Math.sin(highlightAngle) * radius;
 
       ctx.save();
-      // 1. Radiant luminous glow flare centered on stick direction
-      const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 20);
+      const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 22);
       flareGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
-      flareGrad.addColorStop(0.35, hexToRgba(color, 0.9));
+      flareGrad.addColorStop(0.35, hexToRgba(color, 0.92));
       flareGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
       ctx.fillStyle = flareGrad;
       ctx.beginPath();
-      ctx.arc(hx, hy, 20, 0, Math.PI * 2);
+      ctx.arc(hx, hy, 22, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2. Overlaid bright white-hot arc segment along the angled section
       const hSpan = span * 0.5;
       ctx.beginPath();
       ctx.arc(
@@ -430,26 +475,48 @@ export function drawAttackArc(
         highlightAngle + hSpan / 2,
       );
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 4.2;
+      ctx.lineWidth = 4.8;
       ctx.shadowColor = color;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 14;
       ctx.lineCap = "round";
       ctx.stroke();
       ctx.restore();
     } else {
-      // Inner white highlight core
+      // 3. Inner white highlight core
       ctx.beginPath();
       ctx.arc(x, centerY, radius, startAngle + 0.08, endAngle - 0.08);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+      ctx.lineWidth = 2.0;
       ctx.lineCap = "round";
       ctx.stroke();
     }
-  } else {
-    // Smash attack: significantly larger, glowing, heavier dual-layer energy crescent
-    const radiusOuter = baseRadius * 2.2;
-    const radiusInner = baseRadius * 1.45;
-    const span = (105 * Math.PI) / 180;
+  } else if (attack.type === "smash") {
+    // Smash attack: slow, heavy, massive dual-layer energy crescent with concussive power
+    // Multi-phase animation:
+    // - Gather phase (frame < 3): dense compact crescent close to body
+    // - Concussive surge phase (frame 3..8): expands heavily outward to peak reach
+    // - Sustained impact / recovery phase (frame >= 9): holds full wide crescent throughout endlag
+    let radiusOuter: number;
+    let radiusInner: number;
+
+    if (frame < 3) {
+      // Energy gather close to fighter
+      radiusOuter = baseRadius * (1.25 + frame * 0.08);
+      radiusInner = baseRadius * 0.95;
+    } else if (frame <= 8) {
+      // Heavy concussive outward expansion
+      const surgeProgress = Math.min(1.0, (frame - 2) / 6);
+      const surgeEase = 1 - Math.pow(1 - surgeProgress, 3);
+      radiusOuter = baseRadius * (1.45 + 0.85 * surgeEase);
+      radiusInner = baseRadius * (1.05 + 0.45 * surgeEase);
+    } else {
+      // Sustained power holding peak reach until smash state finishes
+      const deepHum = Math.sin((frame - 8) * 0.3) * (baseRadius * 0.02);
+      radiusOuter = baseRadius * 2.3 + deepHum;
+      radiusInner = baseRadius * 1.5 + deepHum * 0.5;
+    }
+
+    const span = (110 * Math.PI) / 180;
     const startAngle = effectiveCenter - span / 2;
     const endAngle = effectiveCenter + span / 2;
 
@@ -458,7 +525,7 @@ export function drawAttackArc(
     ctx.arc(x, centerY, radiusOuter, startAngle, endAngle);
     ctx.arc(x, centerY, radiusInner, endAngle, startAngle, true);
     ctx.closePath();
-    ctx.fillStyle = hexToRgba(color, 0.22);
+    ctx.fillStyle = hexToRgba(color, 0.28);
     ctx.fill();
 
     // 2. Heavy outer glowing impact blade
@@ -469,7 +536,7 @@ export function drawAttackArc(
     ctx.lineWidth = 5.5;
     ctx.lineCap = "round";
     ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 12;
     ctx.stroke();
     ctx.restore();
 
@@ -512,7 +579,7 @@ export function drawAttackArc(
       ctx.beginPath();
       ctx.arc(x, centerY, radiusOuter, startAngle + 0.1, endAngle - 0.1);
       ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = 2.4;
       ctx.lineCap = "round";
       ctx.stroke();
     }
@@ -524,6 +591,109 @@ export function drawAttackArc(
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.stroke();
+
+    // 5. Concussive radial impact sparks during active impact frames
+    if (frame >= 3 && frame <= 14) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = 2.0;
+      ctx.lineCap = "round";
+      const sparkAngles = [
+        effectiveCenter - span * 0.35,
+        effectiveCenter,
+        effectiveCenter + span * 0.35,
+      ];
+      const sparkLen = baseRadius * 0.22;
+      for (const sa of sparkAngles) {
+        const sx1 = x + Math.cos(sa) * radiusOuter;
+        const sy1 = centerY + Math.sin(sa) * radiusOuter;
+        const sx2 = x + Math.cos(sa) * (radiusOuter + sparkLen);
+        const sy2 = centerY + Math.sin(sa) * (radiusOuter + sparkLen);
+        ctx.beginPath();
+        ctx.moveTo(sx1, sy1);
+        ctx.lineTo(sx2, sy2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  } else {
+    // Grounded Tilts: crisp, sharp direct slash arc with 7-frame outward sweep and trailing echo
+    const progress = Math.min(1.0, (frame + 1) / 7);
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const startRadius = baseRadius * 0.7;
+    const peakRadius = baseRadius * 1.7;
+    const radius = startRadius + (peakRadius - startRadius) * easeOut;
+    const pulse =
+      frame >= 7 ? Math.sin((frame - 7) * 0.35) * (baseRadius * 0.025) : 0;
+    const effectiveRadius = radius + pulse;
+
+    const span = (82 * Math.PI) / 180;
+    const startAngle = effectiveCenter - span / 2;
+    const endAngle = effectiveCenter + span / 2;
+
+    // 1. Trailing speed echo arc
+    const echoRadius = Math.max(baseRadius * 0.65, effectiveRadius * 0.82);
+    ctx.beginPath();
+    ctx.arc(x, centerY, echoRadius, startAngle + 0.08, endAngle - 0.08);
+    ctx.strokeStyle = hexToRgba(color, 0.45);
+    ctx.lineWidth = 2.0;
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // 2. Outer slash arc in player's color with glowing edge
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, centerY, effectiveRadius, startAngle, endAngle);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4.0;
+    ctx.lineCap = "round";
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.stroke();
+    ctx.restore();
+
+    if (hasStickAngle) {
+      // Angled direction is significantly brighter in the direction of the joystick
+      const highlightAngle =
+        effectiveCenter + (facingRight ? -1 : 1) * (tiltFactor * (span * 0.28));
+      const hx = x + Math.cos(highlightAngle) * effectiveRadius;
+      const hy = centerY + Math.sin(highlightAngle) * effectiveRadius;
+
+      ctx.save();
+      const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 20);
+      flareGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+      flareGrad.addColorStop(0.35, hexToRgba(color, 0.9));
+      flareGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+      ctx.fillStyle = flareGrad;
+      ctx.beginPath();
+      ctx.arc(hx, hy, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      const hSpan = span * 0.5;
+      ctx.beginPath();
+      ctx.arc(
+        x,
+        centerY,
+        effectiveRadius,
+        highlightAngle - hSpan / 2,
+        highlightAngle + hSpan / 2,
+      );
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4.4;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.lineCap = "round";
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // 3. Inner white highlight core
+      ctx.beginPath();
+      ctx.arc(x, centerY, effectiveRadius, startAngle + 0.08, endAngle - 0.08);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = "round";
+      ctx.stroke();
+    }
   }
 }
 

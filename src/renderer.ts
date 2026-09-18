@@ -13,14 +13,20 @@ import {
   drawMissedTechBounce,
   drawTechBreakfall,
   drawTechRollSpeedLines,
+  drawJumpSquatFx,
+  drawSuperArmorAura,
+  drawDeconflictedPauseHuds,
+  type PlayerPauseHudItem,
   drawPikachuQuickAttackStreak,
   drawQuickAttackOverlay,
   drawRollTrail,
   drawAttackArc,
   drawYoshiEggShell,
   drawYoshiEgg,
+  COMBO_GAP_CALLOUT_FADE_FRAMES,
 } from "./renderer/characters/index.js";
 export * from "./renderer/characters/index.js";
+import { computeComboEscapeGaps, type ComboEscapeGap } from "./combos.js";
 import {
   drawPikachuPolygons,
   drawFalconPolygons,
@@ -100,6 +106,8 @@ import {
 import { extractAllHitsWithDI, type HitDIResult } from "./di.js";
 import { characterIconUrl } from "./characterIcons.js";
 import { LEDGE_GRAB_VISUALIZATION_ENABLED } from "./ledgeGrabRange.js";
+import { getPlayerColor } from "./players.js";
+import { actionStateName } from "./lookups.js";
 import {
   drawBowserPolygons,
   drawFalcoPolygons,
@@ -146,6 +154,7 @@ import {
   isPikachuCharacter,
   isKirbyCharacter,
   isJigglypuffCharacter,
+  isYoshiCharacter,
   type FalconSpecialType,
   type PikachuSpecialType,
   type FoxSpecialType,
@@ -205,6 +214,10 @@ export class StageRenderer {
     this.backgroundRenderer.invalidateBuffer();
   }
 
+  public setLightMode(light: boolean): void {
+    this.setAppTheme(light ? "light" : "dark");
+  }
+
   public invalidateBackground(): void {
     this.bgBufferDirty = true;
     this.backgroundRenderer.invalidateBuffer();
@@ -232,6 +245,17 @@ export class StageRenderer {
       this.diEventsCache.set(replay, events);
     }
     return events;
+  }
+
+  private comboEscapeGapsCache = new WeakMap<Replay, ComboEscapeGap[]>();
+
+  private getComboEscapeGaps(replay: Replay): ComboEscapeGap[] {
+    let gaps = this.comboEscapeGapsCache.get(replay);
+    if (!gaps) {
+      gaps = computeComboEscapeGaps(replay);
+      this.comboEscapeGapsCache.set(replay, gaps);
+    }
+    return gaps;
   }
 
   private recoveryVerdictFramesCache = new WeakMap<
@@ -494,6 +518,11 @@ export class StageRenderer {
         }
       }
 
+      const escapeGaps =
+        replay && frameIndex !== undefined
+          ? this.getComboEscapeGaps(replay)
+          : [];
+
       for (const key of Object.keys(frame.ports)) {
         const port = Number(key) as PortIndex;
         const portData = frame.ports[port];
@@ -504,6 +533,52 @@ export class StageRenderer {
         ) {
           continue;
         }
+
+        let comboEscapeState: {
+          isActionableFrame: boolean;
+          actionableFrameCount: number;
+          fadeAlpha: number;
+          anchorWorldX?: number;
+          anchorWorldY?: number;
+          anchorFacingRight?: boolean;
+        } | null = null;
+
+        if (frameIndex !== undefined && escapeGaps.length > 0) {
+          for (const gap of escapeGaps) {
+            if (gap.victimPort !== port) continue;
+            if (
+              frameIndex >= gap.gapStartFrameIndex &&
+              frameIndex <= gap.gapEndFrameIndex + COMBO_GAP_CALLOUT_FADE_FRAMES
+            ) {
+              const isActionableFrame =
+                gap.actionableFrameIndices.includes(frameIndex);
+              const fadeAlpha =
+                frameIndex <= gap.gapEndFrameIndex
+                  ? 1.0
+                  : Math.max(
+                      0,
+                      1.0 -
+                        (frameIndex - gap.gapEndFrameIndex) /
+                          COMBO_GAP_CALLOUT_FADE_FRAMES,
+                    );
+              if (
+                !comboEscapeState ||
+                fadeAlpha > comboEscapeState.fadeAlpha ||
+                isActionableFrame
+              ) {
+                comboEscapeState = {
+                  isActionableFrame,
+                  actionableFrameCount: gap.actionableFrameCount,
+                  fadeAlpha,
+                  anchorWorldX: gap.anchorWorldX,
+                  anchorWorldY: gap.anchorWorldY,
+                  anchorFacingRight: gap.anchorFacingRight,
+                };
+              }
+            }
+          }
+        }
+
         this.drawPlayer(
           camera,
           port,
@@ -515,8 +590,52 @@ export class StageRenderer {
           recoveryVerdict && recoveryVerdict.port === port
             ? recoveryVerdict
             : null,
+          isPaused, // suppress per-player pause HUD to render unified deconflict pass after all players
+          comboEscapeState,
         );
       }
+
+      // If paused, render de-conflicted player state HUD pills across all active characters
+      if (isPaused) {
+        const pauseHudItems: PlayerPauseHudItem[] = [];
+        for (const key of Object.keys(frame.ports)) {
+          const port = Number(key) as PortIndex;
+          const portData = frame.ports[port];
+          if (!portData || !portData.state) continue;
+          if (
+            isDeadState(portData.state.actionStateId) ||
+            portData.state.stocksRemaining < 0
+          ) {
+            continue;
+          }
+          const { x, y } = camera.worldToScreen(
+            portData.state.positionX,
+            portData.state.positionY,
+          );
+          const tagColor = getPlayerColor(port, perspectivePort);
+          const armorForHud =
+            portData.state.knockbackResist !== undefined
+              ? portData.state.knockbackResist
+              : (portData.state.actionStateId === 0x018 ||
+                    portData.state.actionStateId === 0x019) &&
+                  isYoshiCharacter(portData.state.characterId)
+                ? 140
+                : undefined;
+          pauseHudItems.push({
+            x,
+            y,
+            stateName: actionStateName(portData.state.actionStateId),
+            stateId: portData.state.actionStateId,
+            posX: portData.state.positionX,
+            posY: portData.state.positionY,
+            tagColor,
+            knockbackResist: armorForHud,
+            hurtboxState: portData.state.hurtboxState,
+          });
+        }
+        drawDeconflictedPauseHuds(this.ctx, pauseHudItems);
+      }
+
       this.drawItemObjects(camera, frame.items ?? [], replay, frame, isPaused);
       if (replay && frameIndex !== undefined) {
         this.drawBombExplosions(camera, frameIndex, replay);
@@ -831,7 +950,7 @@ export class StageRenderer {
     camera: Camera,
     stageId: number | undefined,
   ): void {
-    drawStageAutumnTrees(this.ctx, camera, stageId);
+    drawStageAutumnTrees(this.ctx, camera, stageId, this.isLightMode());
   }
 
   private drawStageAutumnTree(
@@ -846,6 +965,7 @@ export class StageRenderer {
       rootWorldX,
       rootWorldY,
       curveDirection,
+      this.isLightMode(),
     );
   }
 
@@ -968,6 +1088,12 @@ export class StageRenderer {
     );
   }
 
+  private getEffectiveCharacterTheme(): BackgroundTheme {
+    return this.backgroundTheme === "mountain" && this.isLightMode()
+      ? "grid"
+      : this.backgroundTheme;
+  }
+
   private drawPlayer(
     camera: Camera,
     port: PortIndex,
@@ -986,16 +1112,26 @@ export class StageRenderer {
       jumpsRemaining: number;
       characterSpecific?: number;
       shieldHealth?: number;
+      knockbackResist?: number;
     },
     perspectivePort?: PortIndex | null,
     replay?: Replay | null,
     frameIndex?: number,
     isPaused?: boolean,
     recoveryVerdict?: RecoveryVerdictFrame | null,
+    suppressPauseHud?: boolean,
+    comboEscapeState?: {
+      isActionableFrame: boolean;
+      actionableFrameCount: number;
+      fadeAlpha: number;
+      anchorWorldX?: number;
+      anchorWorldY?: number;
+      anchorFacingRight?: boolean;
+    } | null,
   ): void {
     drawPlayer(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       this.isLightMode(),
       (id) => this.getCharacterIconImage(id),
       (rep, fIdx) => this.getFramesSinceSpawn(rep, fIdx),
@@ -1008,6 +1144,8 @@ export class StageRenderer {
       frameIndex,
       isPaused,
       recoveryVerdict,
+      suppressPauseHud,
+      comboEscapeState,
     );
   }
 
@@ -1096,6 +1234,7 @@ export class StageRenderer {
     posX: number,
     posY: number,
     tagColor: string,
+    knockbackResist?: number,
   ): void {
     drawPlayerStateInfo(
       this.ctx,
@@ -1106,6 +1245,34 @@ export class StageRenderer {
       posX,
       posY,
       tagColor,
+      knockbackResist,
+    );
+  }
+
+  private drawSuperArmorAura(
+    x: number,
+    y: number,
+    centerY: number,
+    halfWidth: number,
+    heightPx: number,
+    effectiveDir: number,
+    frameCounter: number,
+    armorValue: number,
+    playerColor: string,
+    isOpponent: boolean,
+  ): void {
+    drawSuperArmorAura(
+      this.ctx,
+      x,
+      y,
+      centerY,
+      halfWidth,
+      heightPx,
+      effectiveDir,
+      frameCounter,
+      armorValue,
+      playerColor,
+      isOpponent,
     );
   }
 
@@ -1203,6 +1370,27 @@ export class StageRenderer {
     );
   }
 
+  private drawJumpSquatFx(
+    x: number,
+    y: number,
+    halfWidth: number,
+    heightPx: number,
+    frameCounter: number,
+    playerColor: string,
+    isOpponent: boolean,
+  ): void {
+    drawJumpSquatFx(
+      this.ctx,
+      x,
+      y,
+      halfWidth,
+      heightPx,
+      frameCounter,
+      playerColor,
+      isOpponent,
+    );
+  }
+
   private drawPikachuPolygons(
     x: number,
     y: number,
@@ -1216,7 +1404,7 @@ export class StageRenderer {
   ): void {
     drawPikachuPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1242,7 +1430,7 @@ export class StageRenderer {
   ): void {
     drawFalconPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1268,7 +1456,7 @@ export class StageRenderer {
   ): void {
     drawMarioPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1294,7 +1482,7 @@ export class StageRenderer {
   ): void {
     drawLuigiPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1320,7 +1508,7 @@ export class StageRenderer {
   ): void {
     drawKirbyPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1346,7 +1534,7 @@ export class StageRenderer {
   ): void {
     drawJigglypuffPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1372,7 +1560,7 @@ export class StageRenderer {
   ): void {
     drawFoxPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1416,7 +1604,7 @@ export class StageRenderer {
   ): void {
     drawYoshiPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1442,7 +1630,7 @@ export class StageRenderer {
   ): void {
     drawDonkeyKongPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1468,7 +1656,7 @@ export class StageRenderer {
   ): void {
     drawLinkPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1494,7 +1682,7 @@ export class StageRenderer {
   ): void {
     drawNessPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1520,7 +1708,7 @@ export class StageRenderer {
   ): void {
     drawSamusPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1551,7 +1739,7 @@ export class StageRenderer {
   ): void {
     drawBowserPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1577,7 +1765,7 @@ export class StageRenderer {
   ): void {
     drawFalcoPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1603,7 +1791,7 @@ export class StageRenderer {
   ): void {
     drawGanondorfPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1629,7 +1817,7 @@ export class StageRenderer {
   ): void {
     drawYoungLinkPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1655,7 +1843,7 @@ export class StageRenderer {
   ): void {
     drawDrMarioPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1681,7 +1869,7 @@ export class StageRenderer {
   ): void {
     drawWarioPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1707,7 +1895,7 @@ export class StageRenderer {
   ): void {
     drawDarkSamusPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1733,7 +1921,7 @@ export class StageRenderer {
   ): void {
     drawLucasPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1759,7 +1947,7 @@ export class StageRenderer {
   ): void {
     drawGigaBowserPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1785,7 +1973,7 @@ export class StageRenderer {
   ): void {
     drawMarthPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1811,7 +1999,7 @@ export class StageRenderer {
   ): void {
     drawRoyPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1837,7 +2025,7 @@ export class StageRenderer {
   ): void {
     drawMewtwoPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1863,7 +2051,7 @@ export class StageRenderer {
   ): void {
     drawSheikPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1889,7 +2077,7 @@ export class StageRenderer {
   ): void {
     drawPeachPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1915,7 +2103,7 @@ export class StageRenderer {
   ): void {
     drawSonicPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1941,7 +2129,7 @@ export class StageRenderer {
   ): void {
     drawSuperSonicPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1967,7 +2155,7 @@ export class StageRenderer {
   ): void {
     drawWolfPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -1993,7 +2181,7 @@ export class StageRenderer {
   ): void {
     drawDededePolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2019,7 +2207,7 @@ export class StageRenderer {
   ): void {
     drawBanjoPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2045,7 +2233,7 @@ export class StageRenderer {
   ): void {
     drawCrashPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2071,7 +2259,7 @@ export class StageRenderer {
   ): void {
     drawConkerPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2097,7 +2285,7 @@ export class StageRenderer {
   ): void {
     drawSandbagPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2123,7 +2311,7 @@ export class StageRenderer {
   ): void {
     drawPianoPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2149,7 +2337,7 @@ export class StageRenderer {
   ): void {
     drawMarinaPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2175,7 +2363,7 @@ export class StageRenderer {
   ): void {
     drawGoemonPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2201,7 +2389,7 @@ export class StageRenderer {
   ): void {
     drawPeppyPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2227,7 +2415,7 @@ export class StageRenderer {
   ): void {
     drawSlippyPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2253,7 +2441,7 @@ export class StageRenderer {
   ): void {
     drawMetalLuigiPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2279,7 +2467,7 @@ export class StageRenderer {
   ): void {
     drawDrLuigiPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2305,7 +2493,7 @@ export class StageRenderer {
   ): void {
     drawEbisumaruPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2331,7 +2519,7 @@ export class StageRenderer {
   ): void {
     drawDragonKingPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2357,7 +2545,7 @@ export class StageRenderer {
   ): void {
     drawLankyKongPolygons(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       topY,
@@ -2380,6 +2568,7 @@ export class StageRenderer {
     attack: AttackInfo,
     joystick?: { x: number; y: number } | null,
     canAngle?: boolean,
+    actionFrameCounter?: number,
   ): void {
     drawAttackArc(
       this.ctx,
@@ -2392,6 +2581,7 @@ export class StageRenderer {
       attack,
       joystick,
       canAngle,
+      actionFrameCounter,
     );
   }
 
@@ -2605,7 +2795,7 @@ export class StageRenderer {
   ): void {
     drawDKSpecial(
       this.ctx,
-      this.backgroundTheme,
+      this.getEffectiveCharacterTheme(),
       x,
       y,
       centerY,

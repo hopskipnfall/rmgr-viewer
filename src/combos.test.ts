@@ -4,6 +4,10 @@ import {
   computeCombos,
   computeKillCombos,
   joinCombosAcrossGaps,
+  isActionableInComboGap,
+  computeComboEscapeGaps,
+  CAPTURE_STATES,
+  DEAD_OR_RESPAWNING_STATES,
   COMBO_JUMP_LEAD_IN_FRAMES,
   type Combo,
 } from "./combos.js";
@@ -864,5 +868,122 @@ describe("computeKillCombos: recovery-classifier-confirmed hopeless kills", () =
 
     const combos = computeKillCombos(makeRichMockReplay(frames));
     expect(combos.length).toBe(0);
+  });
+});
+
+describe("isActionableInComboGap", () => {
+  it("returns true for states where player has agency with zero hitstun", () => {
+    expect(isActionableInComboGap(0x00a, 0)).toBe(true); // Idle
+    expect(isActionableInComboGap(0x018, 0)).toBe(true); // JumpF
+    expect(isActionableInComboGap(0x02e, 0)).toBe(true); // AttackAirN
+    expect(isActionableInComboGap(0x031, 0)).toBe(true); // Fall
+    expect(isActionableInComboGap(0x099, 0)).toBe(true); // Shield
+  });
+
+  it("returns false when hitstun is active", () => {
+    expect(isActionableInComboGap(0x033, 10)).toBe(false); // DamageFlyHi in hitstun
+    expect(isActionableInComboGap(0x035, 5)).toBe(false); // DamageFlyLow in hitstun
+    expect(isActionableInComboGap(0x038, 0)).toBe(false); // WallBounce (always hitstun)
+    expect(isActionableInComboGap(0x039, 8)).toBe(false); // DamageFlyN in hitstun
+  });
+
+  it("returns false for dead or respawning states", () => {
+    for (const stateId of DEAD_OR_RESPAWNING_STATES) {
+      expect(isActionableInComboGap(stateId, 0)).toBe(false);
+    }
+  });
+
+  it("returns false for capture / grab states", () => {
+    for (const stateId of CAPTURE_STATES) {
+      expect(isActionableInComboGap(stateId, 0)).toBe(false);
+    }
+  });
+
+  it("returns false for shield break, dizzy, and sleep states", () => {
+    expect(isActionableInComboGap(0x09e, 0)).toBe(false); // ShieldBreakFly
+    expect(isActionableInComboGap(0x0a2, 0)).toBe(false); // FuraFura (Dizzy)
+    expect(isActionableInComboGap(0x0a5, 0)).toBe(false); // Sleep
+  });
+
+  it("returns false for prone, downed, and missed tech states", () => {
+    expect(isActionableInComboGap(0x043, 0)).toBe(false); // DownBoundD
+    expect(isActionableInComboGap(0x044, 0)).toBe(false); // DownWaitD (prone)
+    expect(isActionableInComboGap(0x04a, 0)).toBe(false); // DownBoundU
+    expect(isActionableInComboGap(0x04c, 0)).toBe(false); // DownWaitU
+  });
+});
+
+describe("computeComboEscapeGaps", () => {
+  it("returns empty array when there are no combos or no joined combos", () => {
+    const replay = makeMockReplay([]);
+    expect(computeComboEscapeGaps(replay)).toEqual([]);
+  });
+
+  it("identifies actionable escape window inside joined combo gap", () => {
+    const frames: Frame[] = [];
+    // Segment 1: frames 0..10 (attacker combos victim, 2 hits)
+    for (let f = 0; f <= 10; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: 0, y: 0 },
+          {
+            state: 0x33,
+            x: 50,
+            y: 0,
+            dmg: 10 + f,
+            comboHit: Math.min(2, f + 1),
+            hitstun: 20,
+          },
+        ),
+      );
+    }
+    // Gap: frames 11..25 (15 frames) where victim is in Idle (0x0a) with 0 hitstun
+    for (let f = 11; f <= 25; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: 0, y: 0 },
+          { state: 0x0a, x: 100, y: 0, dmg: 20, comboHit: 0, hitstun: 0 },
+        ),
+      );
+    }
+    // Segment 2: frames 26..35 (attacker combos victim again, 2 hits)
+    for (let f = 26; f <= 35; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: 0, y: 0 },
+          {
+            state: 0x34,
+            x: 200,
+            y: 0,
+            dmg: 30 + (f - 26),
+            comboHit: Math.min(2, f - 25),
+            hitstun: 25,
+          },
+        ),
+      );
+    }
+
+    const replay = makeMockReplay(frames);
+    const gaps = computeComboEscapeGaps(replay);
+
+    expect(gaps).toHaveLength(1);
+    const gap = gaps[0]!;
+    expect(gap.victimPort).toBe(1);
+    expect(gap.attackerPort).toBe(0);
+    expect(gap.actionableFrameCount).toBe(15);
+    expect(gap.actionableFrameIndices.length).toBe(15);
+    expect(gap.gapStartFrameIndex).toBe(11);
+    expect(gap.gapEndFrameIndex).toBe(25);
+    expect(gap.anchorWorldX).toBe(100);
+    expect(gap.anchorWorldY).toBe(0);
+    expect(gap.anchorFacingRight).toBe(false);
+    // All actionable frames must fall strictly within the gap boundaries
+    for (const fIdx of gap.actionableFrameIndices) {
+      expect(fIdx).toBeGreaterThanOrEqual(gap.gapStartFrameIndex);
+      expect(fIdx).toBeLessThanOrEqual(gap.gapEndFrameIndex);
+    }
   });
 });

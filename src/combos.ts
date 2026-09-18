@@ -4,6 +4,14 @@ import {
   computeClassifiedSituations,
   type ClassifiedSituation,
 } from "./classifiedSituations.js";
+import {
+  isShieldBreakActionState,
+  isDizzyState,
+  isSleepState,
+  isProneState,
+  isDownBoundState,
+  isMissedTechState,
+} from "./renderer/common/actionStates.js";
 
 /** Ledge catch/wait states that cancel pending kill combo tracking. */
 const LEDGE_GRAB_STATES = new Set([
@@ -12,7 +20,7 @@ const LEDGE_GRAB_STATES = new Set([
 ]);
 
 /** Action states where the player is captured/held/thrown by a grab. */
-const CAPTURE_STATES = new Set([
+export const CAPTURE_STATES = new Set([
   0x0ab, // CapturePull
   0x0ac, // CaptureWait
   0x0ad, // CaptureDamage
@@ -23,7 +31,7 @@ const CAPTURE_STATES = new Set([
   0x0bb,
 ]);
 
-const DEAD_OR_RESPAWNING_STATES = new Set([
+export const DEAD_OR_RESPAWNING_STATES = new Set([
   0x000, 0x001, 0x002, 0x003, 0x004, 0x005, 0x007, 0x008, 0x009,
 ]);
 
@@ -241,6 +249,148 @@ export function joinCombosAcrossGaps(
     lastComboedAt.set(combo.victimPort, combo.startFrame);
   }
   return joined;
+}
+
+/**
+ * Checks whether a fighter has agency (is actionable) during a gap within a joined combo.
+ * A frame is actionable when the victim:
+ * 1. Is not in hitstun (!isHitstunState)
+ * 2. Is not dead or respawning (DEAD_OR_RESPAWNING_STATES)
+ * 3. Is not captured / grabbed / thrown (CAPTURE_STATES)
+ * 4. Is not shield-broken, dizzy, or asleep
+ * 5. Is not prone, downed, or in missed tech lag (excluded because knockdown locks player out of inputs)
+ */
+export function isActionableInComboGap(
+  actionStateId: number,
+  hitstunCounter: number = 0,
+): boolean {
+  if (isHitstunState(actionStateId, hitstunCounter)) return false;
+  if (DEAD_OR_RESPAWNING_STATES.has(actionStateId)) return false;
+  if (CAPTURE_STATES.has(actionStateId)) return false;
+  if (
+    isShieldBreakActionState(actionStateId) ||
+    isDizzyState(actionStateId) ||
+    isSleepState(actionStateId)
+  ) {
+    return false;
+  }
+  if (
+    isProneState(actionStateId) ||
+    isDownBoundState(actionStateId) ||
+    isMissedTechState(actionStateId)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export interface ComboEscapeGap {
+  readonly victimPort: PortIndex;
+  readonly attackerPort: PortIndex;
+  readonly gapStartFrame: number;
+  readonly gapEndFrame: number;
+  readonly gapStartFrameIndex: number;
+  readonly gapEndFrameIndex: number;
+  readonly actionableFrameIndices: readonly number[];
+  readonly actionableFrameCount: number;
+  readonly anchorWorldX: number;
+  readonly anchorWorldY: number;
+  readonly anchorFacingRight: boolean;
+}
+
+/**
+ * Finds all actionable escape windows strictly inside the gaps of joined combos.
+ * Only applies to merged combos where joinCombosAcrossGaps joined two native segments separated by <= maxGapFrames.
+ * Gaps with 0 actionable frames (e.g. victim was locked in a grab or sleep) are omitted.
+ */
+export function computeComboEscapeGaps(
+  replay: Replay,
+  maxGapFrames: number = COMBO_GAP_MAX_FRAMES,
+): ComboEscapeGap[] {
+  const combos = computeCombos(replay, 1);
+  const sorted = [...combos].sort((a, b) => a.startFrame - b.startFrame);
+  const joined: Combo[] = [];
+  const openIndexByVictim = new Map<PortIndex, number>();
+  const lastComboedAt = new Map<PortIndex, number>();
+  const gaps: ComboEscapeGap[] = [];
+
+  for (const combo of sorted) {
+    const openIndex = openIndexByVictim.get(combo.victimPort);
+    const prev = openIndex !== undefined ? joined[openIndex] : undefined;
+    const attackerComboedSince =
+      prev !== undefined &&
+      (lastComboedAt.get(combo.attackerPort) ?? -Infinity) > prev.comboEndFrame;
+
+    if (
+      prev !== undefined &&
+      openIndex !== undefined &&
+      prev.attackerPort === combo.attackerPort &&
+      !prev.killed &&
+      combo.startFrame - prev.comboEndFrame <= maxGapFrames &&
+      !attackerComboedSince
+    ) {
+      // Gap strictly between prev.comboEndFrameIndex and combo.startFrameIndex (exclusive on both ends)
+      const gapStartFrameIndex = prev.comboEndFrameIndex + 1;
+      const gapEndFrameIndex = combo.startFrameIndex - 1;
+      const actionableFrameIndices: number[] = [];
+
+      for (let f = gapStartFrameIndex; f <= gapEndFrameIndex; f++) {
+        const state = replay.frames[f]?.ports[combo.victimPort]?.state;
+        if (state) {
+          if (
+            isActionableInComboGap(
+              state.actionStateId,
+              state.hitstunCounter ?? 0,
+            )
+          ) {
+            actionableFrameIndices.push(f);
+          }
+        }
+      }
+
+      if (actionableFrameIndices.length > 0) {
+        const firstActionableIndex =
+          actionableFrameIndices[0] ?? gapStartFrameIndex;
+        const anchorState =
+          replay.frames[firstActionableIndex]?.ports[combo.victimPort]?.state;
+        const anchorWorldX = anchorState?.positionX ?? 0;
+        const anchorWorldY = anchorState?.positionY ?? 0;
+        const anchorFacingRight = (anchorState?.facingDirection ?? 1) > 0;
+
+        gaps.push({
+          victimPort: combo.victimPort,
+          attackerPort: combo.attackerPort,
+          gapStartFrame: prev.comboEndFrame + 1,
+          gapEndFrame: combo.startFrame - 1,
+          gapStartFrameIndex,
+          gapEndFrameIndex,
+          actionableFrameIndices,
+          actionableFrameCount: actionableFrameIndices.length,
+          anchorWorldX,
+          anchorWorldY,
+          anchorFacingRight,
+        });
+      }
+
+      joined[openIndex] = {
+        ...prev,
+        endFrame: combo.endFrame,
+        endFrameIndex: combo.endFrameIndex,
+        comboEndFrame: combo.comboEndFrame,
+        comboEndFrameIndex: combo.comboEndFrameIndex,
+        hitCount: prev.hitCount + combo.hitCount,
+        endDamage: combo.endDamage,
+        damageDealt: Math.max(0, combo.endDamage - prev.startDamage),
+        killed: combo.killed,
+      };
+    } else {
+      openIndexByVictim.set(combo.victimPort, joined.length);
+      joined.push(combo);
+    }
+    lastComboedAt.set(combo.victimPort, combo.startFrame);
+  }
+
+  return gaps;
 }
 
 type ComboStart = Pick<

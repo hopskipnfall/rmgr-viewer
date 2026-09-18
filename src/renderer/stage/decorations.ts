@@ -103,9 +103,9 @@ export function drawStageMatureSakuraTree(
     0,
     Math.PI * 2,
   );
-  ctx.fillStyle = isLight ? "#64748b" : "#1e1b4b";
+  ctx.fillStyle = isLight ? "#94a3b8" : "#1e1b4b";
   ctx.fill();
-  // Moonlit royal moss patches
+  // Moss patches (fresh alpine green in day, royal purple at night)
   ctx.beginPath();
   ctx.ellipse(
     baseScreen.x - stoneRadiusPx * 0.4,
@@ -116,7 +116,7 @@ export function drawStageMatureSakuraTree(
     0,
     Math.PI * 2,
   );
-  ctx.fillStyle = "#3730a3";
+  ctx.fillStyle = isLight ? "#16a34a" : "#3730a3";
   ctx.fill();
   ctx.beginPath();
   ctx.ellipse(
@@ -128,7 +128,7 @@ export function drawStageMatureSakuraTree(
     0,
     Math.PI * 2,
   );
-  ctx.fillStyle = "#4338ca";
+  ctx.fillStyle = isLight ? "#22c55e" : "#4338ca";
   ctx.fill();
   // 2. Traditional Shinto Stone Lantern (Tōrō) nestled beside the ancient roots
   const lanternX = baseScreen.x + stoneRadiusPx * 0.75;
@@ -136,12 +136,12 @@ export function drawStageMatureSakuraTree(
   const lW = Math.max(3, camera.worldLengthToScreen(36));
   const lH = Math.max(6, camera.worldLengthToScreen(75));
   // Lantern base & pillar
-  ctx.fillStyle = "#312e81";
+  ctx.fillStyle = isLight ? "#64748b" : "#312e81";
   ctx.fillRect(lanternX - lW * 0.25, lanternY - lH * 0.55, lW * 0.5, lH * 0.55);
-  // Lantern glowing firebox (Moonlit cyan glow)
-  ctx.fillStyle = "#38bdf8";
+  // Lantern firebox (soft stone interior in day, glowing cyan at night)
+  ctx.fillStyle = isLight ? "#cbd5e1" : "#38bdf8";
   ctx.fillRect(lanternX - lW * 0.42, lanternY - lH * 0.85, lW * 0.84, lH * 0.3);
-  ctx.fillStyle = "#fdf4ff";
+  ctx.fillStyle = isLight ? "#f1f5f9" : "#fdf4ff";
   ctx.fillRect(
     lanternX - lW * 0.22,
     lanternY - lH * 0.78,
@@ -149,7 +149,7 @@ export function drawStageMatureSakuraTree(
     lH * 0.18,
   );
   // Lantern wide flared pagoda roof cap
-  ctx.fillStyle = "#1e1b4b";
+  ctx.fillStyle = isLight ? "#475569" : "#1e1b4b";
   ctx.beginPath();
   ctx.moveTo(lanternX - lW * 0.75, lanternY - lH * 0.85);
   ctx.lineTo(lanternX + lW * 0.75, lanternY - lH * 0.85);
@@ -157,6 +157,10 @@ export function drawStageMatureSakuraTree(
   ctx.closePath();
   ctx.fill();
   // 3. Thick, gnarled ancient trunk & buttress root flares
+  const deepBarkColor = isLight ? "#573010" : "#1e1b4b";
+  const innerBarkColor = isLight ? "#78350f" : "#312e81";
+  const woodgrainHighlight = isLight ? "#b45309" : "#6366f1";
+
   const mainTrunkGirthPx = Math.max(6, camera.worldLengthToScreen(135));
   const boughWidthPx = Math.max(4, camera.worldLengthToScreen(75));
   const branchWidthPx = Math.max(2.5, camera.worldLengthToScreen(42));
@@ -167,7 +171,7 @@ export function drawStageMatureSakuraTree(
   // Buttress root flares spreading outwards into the soil
   const leftRootTip = camera.worldToScreen(rootWorldX - 160, rootWorldY);
   const rightRootTip = camera.worldToScreen(rootWorldX + 130, rootWorldY);
-  ctx.strokeStyle = "#1e1b4b";
+  ctx.strokeStyle = deepBarkColor;
   ctx.lineWidth = mainTrunkGirthPx * 0.65;
   ctx.lineCap = "round";
   ctx.beginPath();
@@ -189,7 +193,7 @@ export function drawStageMatureSakuraTree(
   );
   ctx.stroke();
   // Main massive ancient trunk body
-  ctx.strokeStyle = "#1e1b4b"; // Deepest bark crevice
+  ctx.strokeStyle = deepBarkColor; // Deepest bark crevice
   ctx.lineWidth = mainTrunkGirthPx;
   ctx.beginPath();
   ctx.moveTo(baseScreen.x, baseScreen.y);
@@ -200,8 +204,8 @@ export function drawStageMatureSakuraTree(
     forkScreen.y,
   );
   ctx.stroke();
-  // Inner bark rich indigo tone
-  ctx.strokeStyle = "#312e81";
+  // Inner bark tone
+  ctx.strokeStyle = innerBarkColor;
   ctx.lineWidth = mainTrunkGirthPx * 0.65;
   ctx.beginPath();
   ctx.moveTo(baseScreen.x, baseScreen.y);
@@ -212,8 +216,8 @@ export function drawStageMatureSakuraTree(
     forkScreen.y,
   );
   ctx.stroke();
-  // Gnarled woodgrain ridge highlights (Moonlit lilac)
-  ctx.strokeStyle = "#6366f1";
+  // Gnarled woodgrain ridge highlights (warm cedar in day, moonlit lilac at night)
+  ctx.strokeStyle = woodgrainHighlight;
   ctx.lineWidth = mainTrunkGirthPx * 0.18;
   ctx.beginPath();
   ctx.moveTo(baseScreen.x - 4, baseScreen.y);
@@ -234,7 +238,7 @@ export function drawStageMatureSakuraTree(
     rootWorldX - 680,
     rootWorldY + 1520,
   );
-  ctx.strokeStyle = "#1e1b4b";
+  ctx.strokeStyle = deepBarkColor;
   ctx.lineWidth = boughWidthPx;
   ctx.beginPath();
   ctx.moveTo(forkScreen.x, forkScreen.y);
@@ -245,7 +249,7 @@ export function drawStageMatureSakuraTree(
     leftBoughTip.y,
   );
   ctx.stroke();
-  ctx.strokeStyle = "#312e81";
+  ctx.strokeStyle = innerBarkColor;
   ctx.lineWidth = boughWidthPx * 0.6;
   ctx.beginPath();
   ctx.moveTo(forkScreen.x, forkScreen.y);
@@ -258,7 +262,7 @@ export function drawStageMatureSakuraTree(
   ctx.stroke();
   // Left sub-branch
   const leftSubTip = camera.worldToScreen(rootWorldX - 920, rootWorldY + 1620);
-  ctx.strokeStyle = "#1e1b4b";
+  ctx.strokeStyle = deepBarkColor;
   ctx.lineWidth = branchWidthPx;
   ctx.beginPath();
   ctx.moveTo(leftBoughTip.x, leftBoughTip.y);
@@ -278,7 +282,7 @@ export function drawStageMatureSakuraTree(
     rootWorldX + 660,
     rootWorldY + 1480,
   );
-  ctx.strokeStyle = "#1e1b4b";
+  ctx.strokeStyle = deepBarkColor;
   ctx.lineWidth = boughWidthPx;
   ctx.beginPath();
   ctx.moveTo(forkScreen.x, forkScreen.y);
@@ -289,7 +293,7 @@ export function drawStageMatureSakuraTree(
     rightBoughTip.y,
   );
   ctx.stroke();
-  ctx.strokeStyle = "#312e81";
+  ctx.strokeStyle = innerBarkColor;
   ctx.lineWidth = boughWidthPx * 0.6;
   ctx.beginPath();
   ctx.moveTo(forkScreen.x, forkScreen.y);
@@ -302,7 +306,7 @@ export function drawStageMatureSakuraTree(
   ctx.stroke();
   // Right sub-branch
   const rightSubTip = camera.worldToScreen(rootWorldX + 900, rootWorldY + 1580);
-  ctx.strokeStyle = "#1e1b4b";
+  ctx.strokeStyle = deepBarkColor;
   ctx.lineWidth = branchWidthPx;
   ctx.beginPath();
   ctx.moveTo(rightBoughTip.x, rightBoughTip.y);
@@ -318,7 +322,7 @@ export function drawStageMatureSakuraTree(
     rootWorldX + 20,
     rootWorldY + 1750,
   );
-  ctx.strokeStyle = "#1e1b4b";
+  ctx.strokeStyle = deepBarkColor;
   ctx.lineWidth = boughWidthPx * 0.85;
   ctx.beginPath();
   ctx.moveTo(forkScreen.x, forkScreen.y);
@@ -329,7 +333,7 @@ export function drawStageMatureSakuraTree(
     centerBoughTip.y,
   );
   ctx.stroke();
-  ctx.strokeStyle = "#312e81";
+  ctx.strokeStyle = innerBarkColor;
   ctx.lineWidth = boughWidthPx * 0.5;
   ctx.beginPath();
   ctx.moveTo(forkScreen.x, forkScreen.y);
@@ -347,160 +351,178 @@ export function drawStageMatureSakuraTree(
     radiusWorld: number;
     color: string;
   }
+  const plumBacking = isLight ? "#9d174d" : "#4a044e";
+  const deepShadow = isLight ? "#be185d" : "#581c87";
+  const richMagenta = isLight ? "#be185d" : "#831843";
+  const deepRose = isLight ? "#db2777" : "#9d174d";
+  const blossomHighlight = isLight ? "#fdf2f8" : "#fbcfe8";
+
   const blossomClusters: SakuraBlossomCluster[] = [
     // Base shadow / deep plum blossom backing
     {
       worldX: rootWorldX - 680,
       worldY: rootWorldY + 1460,
       radiusWorld: 420,
-      color: "#4a044e",
+      color: plumBacking,
     },
     {
       worldX: rootWorldX + 650,
       worldY: rootWorldY + 1430,
       radiusWorld: 420,
-      color: "#4a044e",
+      color: plumBacking,
     },
     {
       worldX: rootWorldX + 20,
       worldY: rootWorldY + 1680,
       radiusWorld: 480,
-      color: "#4a044e",
+      color: plumBacking,
     },
     {
       worldX: rootWorldX - 320,
       worldY: rootWorldY + 1620,
       radiusWorld: 440,
-      color: "#581c87",
+      color: deepShadow,
     },
     {
       worldX: rootWorldX + 340,
       worldY: rootWorldY + 1580,
       radiusWorld: 440,
-      color: "#581c87",
+      color: deepShadow,
     },
     // Rich Deep Magenta & Sakura Rose Tier
     {
       worldX: rootWorldX - 750,
       worldY: rootWorldY + 1540,
       radiusWorld: 380,
-      color: "#831843",
+      color: richMagenta,
     },
     {
       worldX: rootWorldX - 480,
       worldY: rootWorldY + 1480,
       radiusWorld: 390,
-      color: "#9d174d",
+      color: deepRose,
     },
     {
       worldX: rootWorldX + 460,
       worldY: rootWorldY + 1450,
       radiusWorld: 390,
-      color: "#9d174d",
+      color: deepRose,
     },
     {
       worldX: rootWorldX + 730,
       worldY: rootWorldY + 1520,
       radiusWorld: 380,
-      color: "#831843",
+      color: richMagenta,
     },
     {
       worldX: rootWorldX - 160,
       worldY: rootWorldY + 1750,
       radiusWorld: 420,
-      color: "#db2777",
+      color: isLight ? "#f472b6" : "#db2777",
     },
     {
       worldX: rootWorldX + 180,
       worldY: rootWorldY + 1720,
       radiusWorld: 420,
-      color: "#db2777",
+      color: isLight ? "#f472b6" : "#db2777",
     },
     {
       worldX: rootWorldX + 10,
       worldY: rootWorldY + 1880,
       radiusWorld: 430,
-      color: "#ec4899",
+      color: isLight ? "#fbcfe8" : "#ec4899",
     },
     // Mid-layer Luminous Cherry Pink
     {
       worldX: rootWorldX - 840,
       worldY: rootWorldY + 1600,
       radiusWorld: 320,
-      color: "#f472b6",
+      color: isLight ? "#fbcfe8" : "#f472b6",
     },
     {
       worldX: rootWorldX - 580,
       worldY: rootWorldY + 1620,
       radiusWorld: 340,
-      color: "#f472b6",
+      color: isLight ? "#fbcfe8" : "#f472b6",
     },
     {
       worldX: rootWorldX - 280,
       worldY: rootWorldY + 1790,
       radiusWorld: 360,
-      color: "#f472b6",
+      color: isLight ? "#fbcfe8" : "#f472b6",
     },
     {
       worldX: rootWorldX + 280,
       worldY: rootWorldY + 1760,
       radiusWorld: 360,
-      color: "#f472b6",
+      color: isLight ? "#fbcfe8" : "#f472b6",
     },
     {
       worldX: rootWorldX + 590,
       worldY: rootWorldY + 1590,
       radiusWorld: 340,
-      color: "#f472b6",
+      color: isLight ? "#fbcfe8" : "#f472b6",
     },
     {
       worldX: rootWorldX + 820,
       worldY: rootWorldY + 1570,
       radiusWorld: 310,
-      color: "#f472b6",
+      color: isLight ? "#fbcfe8" : "#f472b6",
     },
     {
       worldX: rootWorldX - 30,
       worldY: rootWorldY + 1950,
       radiusWorld: 380,
-      color: "#f472b6",
+      color: isLight ? "#fbcfe8" : "#f472b6",
     },
     // Foreground Pale Cherry Blossom Highlights
     {
       worldX: rootWorldX - 780,
       worldY: rootWorldY + 1660,
       radiusWorld: 260,
-      color: "#fbcfe8",
+      color: blossomHighlight,
     },
     {
       worldX: rootWorldX - 440,
       worldY: rootWorldY + 1690,
       radiusWorld: 290,
-      color: "#fbcfe8",
+      color: blossomHighlight,
     },
     {
       worldX: rootWorldX - 120,
       worldY: rootWorldY + 1880,
       radiusWorld: 320,
-      color: "#fbcfe8",
+      color: blossomHighlight,
     },
     {
       worldX: rootWorldX + 130,
       worldY: rootWorldY + 1850,
       radiusWorld: 320,
-      color: "#fbcfe8",
+      color: blossomHighlight,
     },
     {
       worldX: rootWorldX + 450,
       worldY: rootWorldY + 1670,
       radiusWorld: 290,
-      color: "#fbcfe8",
+      color: blossomHighlight,
     },
     {
       worldX: rootWorldX + 760,
       worldY: rootWorldY + 1640,
-      radiusWorld: 250,
-      color: "#fbcfe8",
+      radiusWorld: 260,
+      color: blossomHighlight,
+    },
+    {
+      worldX: rootWorldX - 220,
+      worldY: rootWorldY + 2020,
+      radiusWorld: 280,
+      color: blossomHighlight,
+    },
+    {
+      worldX: rootWorldX + 160,
+      worldY: rootWorldY + 1990,
+      radiusWorld: 280,
+      color: blossomHighlight,
     },
     {
       worldX: rootWorldX + 0,
@@ -635,6 +657,7 @@ export function drawStageAutumnTrees(
   ctx: CanvasRenderingContext2D,
   camera: Camera,
   stageId: number | undefined,
+  isLight = false,
 ): void {
   const platforms = stageGeometry(stageId);
   const ground = platforms?.find((p) => p.kind === "ground");
@@ -642,9 +665,9 @@ export function drawStageAutumnTrees(
   const groundRightX = ground ? ground.rightX : 2318;
   const groundY = ground ? ground.y : 0;
   // Left Japanese maple tree & stone lantern
-  drawStageAutumnTree(ctx, camera, groundLeftX + 280, groundY, -1);
+  drawStageAutumnTree(ctx, camera, groundLeftX + 280, groundY, -1, isLight);
   // Right Japanese maple tree & stone lantern
-  drawStageAutumnTree(ctx, camera, groundRightX - 280, groundY, 1);
+  drawStageAutumnTree(ctx, camera, groundRightX - 280, groundY, 1, isLight);
 }
 
 export function drawStageAutumnTree(
@@ -653,6 +676,7 @@ export function drawStageAutumnTree(
   rootWorldX: number,
   rootWorldY: number,
   curveDirection: 1 | -1,
+  isLight = false,
 ): void {
   const dir = curveDirection;
   const baseWorld = { x: rootWorldX, y: rootWorldY };
@@ -682,7 +706,7 @@ export function drawStageAutumnTree(
     0,
     Math.PI * 2,
   );
-  ctx.fillStyle = "#3f3f46"; // Weathered stone base
+  ctx.fillStyle = isLight ? "#78716c" : "#3f3f46"; // Weathered stone base
   ctx.fill();
   // Moss accent
   ctx.beginPath();
@@ -695,7 +719,7 @@ export function drawStageAutumnTree(
     0,
     Math.PI * 2,
   );
-  ctx.fillStyle = "#15803d"; // Lush green moss
+  ctx.fillStyle = isLight ? "#16a34a" : "#15803d"; // Lush green moss
   ctx.fill();
   // Small Traditional Stone Lantern (Tōrō) on stage
   const lanternX = baseScreen.x - dir * stoneRadiusPx * 0.7;
@@ -703,23 +727,23 @@ export function drawStageAutumnTree(
   const lW = Math.max(2, camera.worldLengthToScreen(26));
   const lH = Math.max(4, camera.worldLengthToScreen(55));
   // Lantern base & pillar
-  ctx.fillStyle = "#52525b";
+  ctx.fillStyle = isLight ? "#78716c" : "#52525b";
   ctx.fillRect(lanternX - lW * 0.2, lanternY - lH * 0.6, lW * 0.4, lH * 0.6);
   // Lantern light box with warm glowing amber
-  ctx.fillStyle = "#f59e0b";
+  ctx.fillStyle = isLight ? "#fde68a" : "#f59e0b";
   ctx.fillRect(lanternX - lW * 0.35, lanternY - lH * 0.85, lW * 0.7, lH * 0.25);
-  ctx.fillStyle = "#fef08a";
+  ctx.fillStyle = isLight ? "#fef9c3" : "#fef08a";
   ctx.fillRect(lanternX - lW * 0.2, lanternY - lH * 0.8, lW * 0.4, lH * 0.15);
   // Lantern curved roof cap
-  ctx.fillStyle = "#27272a";
+  ctx.fillStyle = isLight ? "#44403c" : "#27272a";
   ctx.beginPath();
   ctx.moveTo(lanternX - lW * 0.6, lanternY - lH * 0.85);
   ctx.lineTo(lanternX + lW * 0.6, lanternY - lH * 0.85);
   ctx.lineTo(lanternX, lanternY - lH);
   ctx.closePath();
   ctx.fill();
-  // 2. Trunk main dark woody bark
-  ctx.strokeStyle = "#292524";
+  // 2. Trunk main woody bark (warm chestnut in day, dark charcoal at night)
+  ctx.strokeStyle = isLight ? "#78350f" : "#292524";
   ctx.lineWidth = trunkWidthPx;
   ctx.lineCap = "round";
   ctx.beginPath();
@@ -727,7 +751,7 @@ export function drawStageAutumnTree(
   ctx.quadraticCurveTo(ctrlScreen.x, ctrlScreen.y, headScreen.x, headScreen.y);
   ctx.stroke();
   // 3. Trunk bark highlight
-  ctx.strokeStyle = "#44403c";
+  ctx.strokeStyle = isLight ? "#b45309" : "#44403c";
   ctx.lineWidth = innerWidthPx;
   ctx.beginPath();
   ctx.moveTo(baseScreen.x + dir * 1.5, baseScreen.y);
@@ -747,7 +771,7 @@ export function drawStageAutumnTree(
     rootWorldX - dir * 280,
     rootWorldY + 1050,
   );
-  ctx.strokeStyle = "#292524";
+  ctx.strokeStyle = isLight ? "#78350f" : "#292524";
   ctx.lineWidth = Math.max(1.5, trunkWidthPx * 0.6);
   ctx.beginPath();
   ctx.moveTo(
@@ -765,21 +789,61 @@ export function drawStageAutumnTree(
   }
   const clusters: StageCanopyCluster[] = [
     // Main Crown
-    { offsetX: dir * 100, offsetY: 0, radiusWorld: 340, color: "#7f1d1d" },
-    { offsetX: dir * 220, offsetY: 80, radiusWorld: 280, color: "#991b1b" },
-    { offsetX: dir * 40, offsetY: 120, radiusWorld: 290, color: "#dc2626" },
-    { offsetX: -dir * 120, offsetY: 40, radiusWorld: 260, color: "#b91c1c" },
-    { offsetX: dir * 150, offsetY: 180, radiusWorld: 240, color: "#ea580c" },
-    { offsetX: dir * 60, offsetY: 220, radiusWorld: 210, color: "#f59e0b" },
+    {
+      offsetX: dir * 100,
+      offsetY: 0,
+      radiusWorld: 340,
+      color: isLight ? "#dc2626" : "#7f1d1d",
+    },
+    {
+      offsetX: dir * 220,
+      offsetY: 80,
+      radiusWorld: 280,
+      color: isLight ? "#ea580c" : "#991b1b",
+    },
+    {
+      offsetX: dir * 40,
+      offsetY: 120,
+      radiusWorld: 290,
+      color: isLight ? "#f59e0b" : "#dc2626",
+    },
+    {
+      offsetX: -dir * 120,
+      offsetY: 40,
+      radiusWorld: 260,
+      color: isLight ? "#ea580c" : "#b91c1c",
+    },
+    {
+      offsetX: dir * 150,
+      offsetY: 180,
+      radiusWorld: 240,
+      color: isLight ? "#f59e0b" : "#ea580c",
+    },
+    {
+      offsetX: dir * 60,
+      offsetY: 220,
+      radiusWorld: 210,
+      color: isLight ? "#facc15" : "#f59e0b",
+    },
     // Secondary branch crown
     {
       offsetX: -dir * 280,
       offsetY: -120,
       radiusWorld: 260,
-      color: "#991b1b",
+      color: isLight ? "#ea580c" : "#991b1b",
     },
-    { offsetX: -dir * 320, offsetY: -80, radiusWorld: 220, color: "#dc2626" },
-    { offsetX: -dir * 240, offsetY: -40, radiusWorld: 190, color: "#f59e0b" },
+    {
+      offsetX: -dir * 320,
+      offsetY: -80,
+      radiusWorld: 220,
+      color: isLight ? "#f59e0b" : "#dc2626",
+    },
+    {
+      offsetX: -dir * 240,
+      offsetY: -40,
+      radiusWorld: 190,
+      color: isLight ? "#facc15" : "#f59e0b",
+    },
   ];
   for (const cl of clusters) {
     const clWorld = {

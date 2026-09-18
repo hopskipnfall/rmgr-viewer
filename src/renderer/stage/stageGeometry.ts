@@ -33,7 +33,7 @@ export function drawStage(
     if (theme === "beach") {
       drawStagePalmTrees(ctx, camera, stageId);
     } else if (theme === "autumn") {
-      drawStageAutumnTrees(ctx, camera, stageId);
+      drawStageAutumnTrees(ctx, camera, stageId, isLight);
       drawAnimatedAutumnLeaves(ctx, camera, frameIndex);
     } else if (theme === "mountain") {
       drawStageSakuraTrees(ctx, camera, stageId, frameIndex, isLight);
@@ -44,7 +44,7 @@ export function drawStage(
   if (theme === "beach") {
     drawStagePalmTrees(ctx, camera, stageId);
   } else if (theme === "autumn") {
-    drawStageAutumnTrees(ctx, camera, stageId);
+    drawStageAutumnTrees(ctx, camera, stageId, isLight);
     drawAnimatedAutumnLeaves(ctx, camera, frameIndex);
   } else if (theme === "mountain") {
     drawStageSakuraTrees(ctx, camera, stageId, frameIndex, isLight);
@@ -110,7 +110,19 @@ export function drawStageSlopesAndSilhouette(
     ctx.fill();
   };
   if (theme === "autumn") {
-    // Autumn theme: Carved garden stone & dark lacquer foundation
+    // Autumn theme: Carved garden stone & lacquer foundation (warm sunlit sandstone in day, dark lacquer at night)
+    const f1 = isLight ? "#9a3412" : "#23100a";
+    const f2 = isLight ? "#78350f" : "#1a0c07";
+    const f3 = isLight ? "#854d0e" : "#2b140c";
+    const f4 = isLight ? "#573010" : "#150805";
+    const f5 = isLight ? "#b45309" : "#2f160e";
+    const f6 = isLight ? "#6b3d18" : "#200e08";
+    const f7 = isLight ? "#c2410c" : "#3a1c11";
+    const f8 = isLight ? "#9a3412" : "#32170e";
+    const f9 = isLight ? "#d97706" : "#442215";
+    const f10 = isLight ? "#78350f" : "#28120a";
+    const f11 = isLight ? "#b45309" : "#3e1e12";
+    const f12 = isLight ? "#854d0e" : "#35190f";
     drawWorldPoly(
       [
         { x: -2318, y: 0 },
@@ -118,7 +130,7 @@ export function drawStageSlopesAndSilhouette(
         { x: -2290, y: -331 },
         { x: -1400, y: -420 },
       ],
-      "#23100a",
+      f1,
     );
     drawWorldPoly(
       [
@@ -126,7 +138,7 @@ export function drawStageSlopesAndSilhouette(
         { x: -2075, y: -834 },
         { x: -1400, y: -420 },
       ],
-      "#1a0c07",
+      f2,
     );
     drawWorldPoly(
       [
@@ -135,7 +147,7 @@ export function drawStageSlopesAndSilhouette(
         { x: -600, y: -750 },
         { x: -1400, y: -420 },
       ],
-      "#2b140c",
+      f3,
     );
     drawWorldPoly(
       [
@@ -143,7 +155,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -1072 },
         { x: -600, y: -750 },
       ],
-      "#150805",
+      f4,
     );
     drawWorldPoly(
       [
@@ -152,7 +164,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -500 },
         { x: 0, y: 0 },
       ],
-      "#2f160e",
+      f5,
     );
     drawWorldPoly(
       [
@@ -161,7 +173,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -1072 },
         { x: 0, y: -500 },
       ],
-      "#200e08",
+      f6,
     );
     drawWorldPoly(
       [
@@ -170,7 +182,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 2290, y: -331 },
         { x: 1400, y: -420 },
       ],
-      "#3a1c11",
+      f7,
     );
     drawWorldPoly(
       [
@@ -178,7 +190,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 2075, y: -834 },
         { x: 1400, y: -420 },
       ],
-      "#32170e",
+      f8,
     );
     drawWorldPoly(
       [
@@ -187,7 +199,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 600, y: -750 },
         { x: 1400, y: -420 },
       ],
-      "#442215",
+      f9,
     );
     drawWorldPoly(
       [
@@ -195,7 +207,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -1072 },
         { x: 600, y: -750 },
       ],
-      "#28120a",
+      f10,
     );
     drawWorldPoly(
       [
@@ -204,7 +216,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -500 },
         { x: 0, y: 0 },
       ],
-      "#3e1e12",
+      f11,
     );
     drawWorldPoly(
       [
@@ -213,7 +225,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -1072 },
         { x: 0, y: -500 },
       ],
-      "#35190f",
+      f12,
     );
     // Autumn turf rim
     drawWorldPoly(
@@ -223,7 +235,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 2307, y: -30 },
         { x: -2307, y: -30 },
       ],
-      "#14532d",
+      isLight ? "#16a34a" : "#14532d",
     );
     drawWorldPoly(
       [
@@ -232,9 +244,11 @@ export function drawStageSlopesAndSilhouette(
         { x: 1190, y: -20 },
         { x: -1190, y: -20 },
       ],
-      "#78350f",
+      isLight ? "#b45309" : "#78350f",
     );
-    ctx.strokeStyle = "rgba(245, 158, 11, 0.12)";
+    ctx.strokeStyle = isLight
+      ? "rgba(245, 158, 11, 0.38)"
+      : "rgba(245, 158, 11, 0.12)";
     ctx.lineWidth = 1;
     const seamPaths = [
       [
@@ -498,7 +512,19 @@ export function drawStageSlopesAndSilhouette(
     ctx.fill();
     ctx.restore();
   } else {
-    // Mountain theme: Low-poly rock crags with moonlit facets
+    // Mountain theme: Low-poly rock crags with moonlit facets (night) or sunlit alpine granite facets (day)
+    const m1 = isLight ? "#64748b" : "#110e28";
+    const m2 = isLight ? "#475569" : "#0d0b20";
+    const m3 = isLight ? "#64748b" : "#141032";
+    const m4 = isLight ? "#334155" : "#090716";
+    const m5 = isLight ? "#94a3b8" : "#161338";
+    const m6 = isLight ? "#475569" : "#120f2d";
+    const m7 = isLight ? "#94a3b8" : "#251f50";
+    const m8 = isLight ? "#cbd5e1" : "#201a45";
+    const m9 = isLight ? "#94a3b8" : "#2b245c";
+    const m10 = isLight ? "#475569" : "#191438";
+    const m11 = isLight ? "#cbd5e1" : "#282256";
+    const m12 = isLight ? "#64748b" : "#221c4b";
     drawWorldPoly(
       [
         { x: -2318, y: 0 },
@@ -506,7 +532,7 @@ export function drawStageSlopesAndSilhouette(
         { x: -2290, y: -331 },
         { x: -1400, y: -420 },
       ],
-      "#110e28",
+      m1,
     );
     drawWorldPoly(
       [
@@ -514,7 +540,7 @@ export function drawStageSlopesAndSilhouette(
         { x: -2075, y: -834 },
         { x: -1400, y: -420 },
       ],
-      "#0d0b20",
+      m2,
     );
     drawWorldPoly(
       [
@@ -523,7 +549,7 @@ export function drawStageSlopesAndSilhouette(
         { x: -600, y: -750 },
         { x: -1400, y: -420 },
       ],
-      "#141032",
+      m3,
     );
     drawWorldPoly(
       [
@@ -531,7 +557,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -1072 },
         { x: -600, y: -750 },
       ],
-      "#090716",
+      m4,
     );
     drawWorldPoly(
       [
@@ -540,7 +566,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -500 },
         { x: 0, y: 0 },
       ],
-      "#161338",
+      m5,
     );
     drawWorldPoly(
       [
@@ -549,7 +575,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -1072 },
         { x: 0, y: -500 },
       ],
-      "#120f2d",
+      m6,
     );
     drawWorldPoly(
       [
@@ -558,7 +584,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 2290, y: -331 },
         { x: 1400, y: -420 },
       ],
-      "#251f50",
+      m7,
     );
     drawWorldPoly(
       [
@@ -566,7 +592,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 2075, y: -834 },
         { x: 1400, y: -420 },
       ],
-      "#201a45",
+      m8,
     );
     drawWorldPoly(
       [
@@ -575,7 +601,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 600, y: -750 },
         { x: 1400, y: -420 },
       ],
-      "#2b245c",
+      m9,
     );
     drawWorldPoly(
       [
@@ -583,7 +609,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -1072 },
         { x: 600, y: -750 },
       ],
-      "#191438",
+      m10,
     );
     drawWorldPoly(
       [
@@ -592,7 +618,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -500 },
         { x: 0, y: 0 },
       ],
-      "#282256",
+      m11,
     );
     drawWorldPoly(
       [
@@ -601,7 +627,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 0, y: -1072 },
         { x: 0, y: -500 },
       ],
-      "#221c4b",
+      m12,
     );
     drawWorldPoly(
       [
@@ -610,7 +636,7 @@ export function drawStageSlopesAndSilhouette(
         { x: 2307, y: -32 },
         { x: -2307, y: -32 },
       ],
-      "#064e3b",
+      isLight ? "#15803d" : "#064e3b",
     );
     drawWorldPoly(
       [
@@ -619,9 +645,11 @@ export function drawStageSlopesAndSilhouette(
         { x: 2307, y: -22 },
         { x: 0, y: -22 },
       ],
-      "#0f766e",
+      isLight ? "#22c55e" : "#0f766e",
     );
-    ctx.strokeStyle = "rgba(168, 85, 247, 0.12)";
+    ctx.strokeStyle = isLight
+      ? "rgba(148, 163, 184, 0.45)"
+      : "rgba(168, 85, 247, 0.12)";
     ctx.lineWidth = 1;
     const seamPaths = [
       [

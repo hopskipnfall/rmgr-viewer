@@ -28,6 +28,10 @@ export function isLandingState(actionStateId: number): boolean {
   return LANDING_ACTION_STATES.has(actionStateId);
 }
 
+export function isLightLandingState(actionStateId: number): boolean {
+  return actionStateId === 0x01f;
+}
+
 export function isHeavyLandingState(actionStateId: number): boolean {
   return (
     actionStateId === 0x020 ||
@@ -304,6 +308,14 @@ export function isJumpActionState(actionStateId: number): boolean {
     actionStateId === 0x018 || // JumpAerialF
     actionStateId === 0x019 // JumpAerialB
   );
+}
+
+export function isJumpSquatState(actionStateId: number): boolean {
+  return actionStateId === 0x014 || actionStateId === 0x015;
+}
+
+export function isShieldDropState(actionStateId: number): boolean {
+  return actionStateId === 0x022; // ShieldDrop (dropping through a platform while in shield)
 }
 
 const FIRE_FOX_FLIGHT_STATES = new Set([0x0e8, 0x0ec]);
