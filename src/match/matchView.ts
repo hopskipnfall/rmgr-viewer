@@ -1597,14 +1597,14 @@ export class MatchViewController {
       this.playback?.toggle();
     } else if (e.code === "ArrowLeft" || e.code === "KeyJ") {
       e.preventDefault();
-      if (this.currentVideoViewMode === "video-only") {
+      if (this.isYouTubeVideoActive()) {
         this.playback?.jumpBackward(60);
       } else {
         this.playback?.jumpBackwardAnimated(60);
       }
     } else if (e.code === "ArrowRight" || e.code === "KeyL") {
       e.preventDefault();
-      if (this.currentVideoViewMode === "video-only") {
+      if (this.isYouTubeVideoActive()) {
         this.playback?.jumpForward(60);
       } else {
         this.playback?.jumpForwardAnimated(60);
@@ -4725,10 +4725,7 @@ export class MatchViewController {
     // A linked YouTube video with its own audio playing (any mode besides
     // "canvas-muted") would double up with these sound effects - skip all
     // of them entirely rather than fight for the user's ears.
-    const hasAudibleVideo =
-      this.youtubeSync.getLinkData() !== null &&
-      this.currentVideoViewMode !== "canvas-muted";
-    if (hasAudibleVideo) return;
+    if (this.isYouTubeVideoActive()) return;
 
     // Tied to playback actually reaching frame 1, not to loadMatch() - the
     // latter fires the instant a match is opened, before the user has even
@@ -5353,6 +5350,10 @@ export class MatchViewController {
     this.youtubePlayerWrap.classList.toggle("pip-small", videoSmall);
     this.pipVideoCatcher.hidden = !videoSmall;
     this.resizeStageCanvas();
+  }
+
+  private isYouTubeVideoActive(): boolean {
+    return this.youtubeSync.hasActiveVideo();
   }
 
   private exitPipMode(): void {

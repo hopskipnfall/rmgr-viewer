@@ -657,6 +657,14 @@ export class YouTubeSyncController {
     return this.linkData;
   }
 
+  /**
+   * Returns true if a YouTube video is currently linked and active
+   * (in "video-pip", "video-only", or "canvas" with audio mode, i.e. not "canvas-muted").
+   */
+  public hasActiveVideo(): boolean {
+    return this.linkData !== null && this.linkData.viewMode !== "canvas-muted";
+  }
+
   public setLinkData(data: VideoLinkData | null, persist = true): void {
     this.linkData = data;
     if (persist && this.currentReplayId) {

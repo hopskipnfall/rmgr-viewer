@@ -192,6 +192,7 @@ describe("YouTubeSyncController", () => {
     );
 
     expect(controller.getLinkData()).toBeNull();
+    expect(controller.hasActiveVideo()).toBe(false);
 
     controller.setReplay("test-replay-1");
     const data: VideoLinkData = {
@@ -205,6 +206,7 @@ describe("YouTubeSyncController", () => {
     expect(controller.getLinkData()).toEqual(data);
     expect(modeState).toBe("video-pip");
     expect(linkState).toEqual(data);
+    expect(controller.hasActiveVideo()).toBe(true);
 
     // Nudge offset +1s
     controller.nudgeOffset(1, currentFrame);
@@ -214,18 +216,27 @@ describe("YouTubeSyncController", () => {
     controller.setViewMode("video-only");
     expect(controller.getLinkData()?.viewMode).toBe("video-only");
     expect(modeState).toBe("video-only");
+    expect(controller.hasActiveVideo()).toBe(true);
+
+    // Canvas with audio ("Replay 🔊")
+    controller.setViewMode("canvas");
+    expect(controller.getLinkData()?.viewMode).toBe("canvas");
+    expect(modeState).toBe("canvas");
+    expect(controller.hasActiveVideo()).toBe(true);
 
     // Replay 🔇: distinct from Replay 🔊 ("canvas"), no player crash without
     // a real YT player attached in this test environment.
     controller.setViewMode("canvas-muted");
     expect(controller.getLinkData()?.viewMode).toBe("canvas-muted");
     expect(modeState).toBe("canvas-muted");
+    expect(controller.hasActiveVideo()).toBe(false);
 
     // Unload
     controller.unloadVideo();
     expect(controller.getLinkData()).toBeNull();
     expect(modeState).toBe("canvas");
     expect(linkState).toBeNull();
+    expect(controller.hasActiveVideo()).toBe(false);
   });
 });
 
