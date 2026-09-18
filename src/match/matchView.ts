@@ -1597,10 +1597,18 @@ export class MatchViewController {
       this.playback?.toggle();
     } else if (e.code === "ArrowLeft" || e.code === "KeyJ") {
       e.preventDefault();
-      this.playback?.jumpBackward(60);
+      if (this.currentVideoViewMode === "video-only") {
+        this.playback?.jumpBackward(60);
+      } else {
+        this.playback?.jumpBackwardAnimated(60);
+      }
     } else if (e.code === "ArrowRight" || e.code === "KeyL") {
       e.preventDefault();
-      this.playback?.jumpForward(60);
+      if (this.currentVideoViewMode === "video-only") {
+        this.playback?.jumpForward(60);
+      } else {
+        this.playback?.jumpForwardAnimated(60);
+      }
     } else if (e.code === "Comma" || e.key === ",") {
       e.preventDefault();
       this.playback?.stepBackward();
@@ -1895,7 +1903,11 @@ export class MatchViewController {
    * "I paused to inspect this moment," not the initial unstarted load.
    */
   private isPausedMidMatch(index: number): boolean {
-    return !(this.playback?.isPlaying ?? false) && index > 0;
+    return (
+      !(this.playback?.isPlaying ?? false) &&
+      !(this.playback?.isAnimatingJump ?? false) &&
+      index > 0
+    );
   }
 
   private renderFrame(
@@ -4691,7 +4703,9 @@ export class MatchViewController {
     this.updateEventLogHighlight(index);
     this.updateDILiveMonitor(index);
     this.updateNeutralHitsHighlight(index);
-    this.youtubeSync.onReplayFrameChange(index, isPlaying, reason);
+    if (reason !== "fast-forward") {
+      this.youtubeSync.onReplayFrameChange(index, isPlaying, reason);
+    }
   }
 
   /**

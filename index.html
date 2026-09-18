@@ -3159,7 +3159,7 @@
         border-color: rgba(239, 68, 68, 1);
       }
       .video-sync-btn {
-        background: rgba(36, 40, 52, 0.7);
+        background: var(--btn-secondary-bg);
         border: 1px solid var(--panel-border);
         color: var(--text-dim);
         font-size: 11px;
@@ -3177,9 +3177,9 @@
           border-color 0.15s;
       }
       .video-sync-btn:hover {
-        background: #2a2e3d;
+        background: var(--btn-secondary-hover);
         color: var(--text);
-        border-color: rgba(255, 255, 255, 0.2);
+        border-color: var(--panel-border);
       }
       .video-sync-btn.active {
         background: rgba(56, 189, 248, 0.25);
@@ -3197,7 +3197,8 @@
         font-weight: 600;
         color: var(--text);
         padding: 3px 6px;
-        background: rgba(0, 0, 0, 0.4);
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
         border-radius: 4px;
         letter-spacing: 0.02em;
       }
@@ -3341,24 +3342,30 @@
         outline: none;
       }
       .video-offset-input:hover {
-        border-color: rgba(255, 255, 255, 0.15);
+        border-color: var(--input-border);
       }
       .video-offset-input:focus {
         border-color: var(--accent);
-        background: rgba(0, 0, 0, 0.3);
+        background: var(--panel);
       }
       .form-control {
-        background: #12141a;
-        border: 1px solid var(--panel-border);
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
         border-radius: 6px;
         color: var(--text);
         font-size: 13px;
         padding: 8px 10px;
         outline: none;
-        transition: border-color 0.15s;
+        transition:
+          border-color 0.15s,
+          background-color 0.15s;
       }
       .form-control:focus {
         border-color: var(--accent);
+      }
+      .form-control::placeholder {
+        color: var(--text-dim);
+        opacity: 0.7;
       }
       .form-error {
         font-size: 12px;
@@ -3392,6 +3399,141 @@
       }
       .form-notice[hidden] {
         display: none !important;
+      }
+
+      /* Light mode overrides for video and VOD controls */
+      [data-theme="light"] .video-sync-btn.active {
+        background: #e0f2fe;
+        color: #0369a1;
+        border-color: #38bdf8;
+      }
+      [data-theme="light"] .video-sync-btn.active:hover {
+        background: #bae6fd;
+        color: #0284c7;
+        border-color: #0284c7;
+      }
+      [data-theme="light"] .video-sync-btn.active.muted {
+        background: #f1f5f9;
+        color: #475569;
+        border-color: #cbd5e1;
+      }
+      [data-theme="light"] .video-sync-btn.active.muted:hover {
+        background: #e2e8f0;
+        color: #1e293b;
+      }
+      [data-theme="light"] .video-sync-btn.sync-frame-btn {
+        background: #fef3c7;
+        border-color: #fcd34d;
+        color: #92400e;
+      }
+      [data-theme="light"] .video-sync-btn.sync-frame-btn:hover {
+        background: #fde68a;
+        color: #78350f;
+      }
+      [data-theme="light"] .offset-manual-badge {
+        color: #92400e;
+        background: #fef3c7;
+        border-color: #fcd34d;
+      }
+      [data-theme="light"] .video-offset-input:focus {
+        background: #ffffff;
+      }
+      [data-theme="light"] .vod-unlink-btn {
+        color: #dc2626;
+      }
+      [data-theme="light"] .vod-unlink-btn:hover {
+        color: #b91c1c;
+      }
+      [data-theme="light"] .video-linked-status {
+        color: #0284c7;
+      }
+      [data-theme="light"] .form-error {
+        color: #b91c1c;
+        background: #fef2f2;
+        border-color: #fecaca;
+      }
+      [data-theme="light"] .form-notice {
+        background: #f0f9ff;
+        border-color: #bae6fd;
+        color: #0369a1;
+      }
+      [data-theme="light"] .form-notice.warning {
+        background: #fef3c7;
+        border-color: #fcd34d;
+        color: #92400e;
+      }
+      [data-theme="light"] .form-notice.success {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) .video-sync-btn.active {
+          background: #e0f2fe;
+          color: #0369a1;
+          border-color: #38bdf8;
+        }
+        :root:not([data-theme="dark"]) .video-sync-btn.active:hover {
+          background: #bae6fd;
+          color: #0284c7;
+          border-color: #0284c7;
+        }
+        :root:not([data-theme="dark"]) .video-sync-btn.active.muted {
+          background: #f1f5f9;
+          color: #475569;
+          border-color: #cbd5e1;
+        }
+        :root:not([data-theme="dark"]) .video-sync-btn.active.muted:hover {
+          background: #e2e8f0;
+          color: #1e293b;
+        }
+        :root:not([data-theme="dark"]) .video-sync-btn.sync-frame-btn {
+          background: #fef3c7;
+          border-color: #fcd34d;
+          color: #92400e;
+        }
+        :root:not([data-theme="dark"]) .video-sync-btn.sync-frame-btn:hover {
+          background: #fde68a;
+          color: #78350f;
+        }
+        :root:not([data-theme="dark"]) .offset-manual-badge {
+          color: #92400e;
+          background: #fef3c7;
+          border-color: #fcd34d;
+        }
+        :root:not([data-theme="dark"]) .video-offset-input:focus {
+          background: #ffffff;
+        }
+        :root:not([data-theme="dark"]) .vod-unlink-btn {
+          color: #dc2626;
+        }
+        :root:not([data-theme="dark"]) .vod-unlink-btn:hover {
+          color: #b91c1c;
+        }
+        :root:not([data-theme="dark"]) .video-linked-status {
+          color: #0284c7;
+        }
+        :root:not([data-theme="dark"]) .form-error {
+          color: #b91c1c;
+          background: #fef2f2;
+          border-color: #fecaca;
+        }
+        :root:not([data-theme="dark"]) .form-notice {
+          background: #f0f9ff;
+          border-color: #bae6fd;
+          color: #0369a1;
+        }
+        :root:not([data-theme="dark"]) .form-notice.warning {
+          background: #fef3c7;
+          border-color: #fcd34d;
+          color: #92400e;
+        }
+        :root:not([data-theme="dark"]) .form-notice.success {
+          background: #eff6ff;
+          border-color: #bfdbfe;
+          color: #1d4ed8;
+        }
       }
       .disclaimer-banner {
         font-size: 12px;
@@ -5308,6 +5450,41 @@
       .vod-youtube-link:hover {
         text-decoration: underline;
       }
+      [data-theme="light"] #vodWidget {
+        border-color: #bae6fd;
+      }
+      [data-theme="light"] #vodWidgetHeader {
+        background: #f0f9ff;
+        border-bottom-color: #e0f2fe;
+      }
+      [data-theme="light"] #vodWidgetHeader h2 {
+        color: #0369a1;
+      }
+      [data-theme="light"] .vod-youtube-link {
+        color: #0284c7;
+      }
+      [data-theme="light"] .vod-youtube-link:hover {
+        color: #0369a1;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) #vodWidget {
+          border-color: #bae6fd;
+        }
+        :root:not([data-theme="dark"]) #vodWidgetHeader {
+          background: #f0f9ff;
+          border-bottom-color: #e0f2fe;
+        }
+        :root:not([data-theme="dark"]) #vodWidgetHeader h2 {
+          color: #0369a1;
+        }
+        :root:not([data-theme="dark"]) .vod-youtube-link {
+          color: #0284c7;
+        }
+        :root:not([data-theme="dark"]) .vod-youtube-link:hover {
+          color: #0369a1;
+        }
+      }
       #perspectiveWidget {
         flex-shrink: 0;
         display: flex;
@@ -6016,12 +6193,37 @@
           pointer-events: none;
           z-index: 10;
         }
+        [data-theme="light"] #vodWidgetHeader {
+          background: #f0f9ff;
+        }
+        [data-theme="light"] #vodWidgetHeader::after {
+          background: linear-gradient(
+            to bottom,
+            #f0f9ff 0%,
+            rgba(240, 249, 255, 0.85) 40%,
+            rgba(240, 249, 255, 0) 100%
+          );
+        }
         #frameLabel {
           display: none;
         }
         footer {
           padding: 8px 12px;
           gap: 8px;
+        }
+      }
+
+      @media (max-width: 768px) and (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) #vodWidgetHeader {
+          background: #f0f9ff;
+        }
+        :root:not([data-theme="dark"]) #vodWidgetHeader::after {
+          background: linear-gradient(
+            to bottom,
+            #f0f9ff 0%,
+            rgba(240, 249, 255, 0.85) 40%,
+            rgba(240, 249, 255, 0) 100%
+          );
         }
       }
 
@@ -7003,6 +7205,12 @@
           1x
         </button>
         <div id="speedDropdown" class="speed-dropdown" role="menu" hidden>
+          <button class="speed-option-btn" data-speed="2" role="menuitem">
+            2x
+          </button>
+          <button class="speed-option-btn" data-speed="1.5" role="menuitem">
+            1.5x
+          </button>
           <button
             class="speed-option-btn active"
             data-speed="1"
