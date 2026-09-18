@@ -31,6 +31,8 @@ import {
   isGrabbedState,
   isEggEncasedState,
   isJigglypuffCharacter,
+  isJumpSquatState,
+  drawJumpSquatFx,
   isKirbyCharacter,
   isLandingState,
   isHeavyLandingState,
@@ -68,6 +70,17 @@ import {
   CHARGE_SHOT_FULL_CHARGE_SCALE,
   CHARGE_SHOT_LEVEL_SCALES,
   drawShieldBubble,
+  drawAttackArc,
+  drawDeconflictedPauseHuds,
+  drawComboEscapeHighlight,
+  drawComboEscapeTextCallout,
+  COMBO_GAP_CALLOUT_FADE_FRAMES,
+  getComboGapBadgeColors,
+  getComboEscapeSilhouetteColors,
+  getHitstunSilhouetteColors,
+  createSilhouetteContext,
+  isShieldDropState,
+  isLightLandingState,
 } from "./renderer.js";
 import {
   HazardFlag,
@@ -241,16 +254,17 @@ describe("getFalconSpecialType", () => {
 
   it("classifies Falcon Dive states correctly", () => {
     expect(getFalconSpecialType(0x07, 0x0e8)).toBe("dive_reach");
-    expect(getFalconSpecialType(0x07, 0x0e9)).toBe("dive_reach");
     expect(getFalconSpecialType(0x07, 0x0ea)).toBe("dive_catch");
     expect(getFalconSpecialType(0x07, 0x0ee)).toBe("dive_explosion");
     expect(getFalconSpecialType(0x28, 0x0ea)).toBe("dive_catch");
   });
 
   it("classifies Falcon Kick states correctly", () => {
+    expect(getFalconSpecialType(0x07, 0x0e9)).toBe("kick_air");
     expect(getFalconSpecialType(0x07, 0x0eb)).toBe("kick");
     expect(getFalconSpecialType(0x07, 0x0ec)).toBe("kick");
     expect(getFalconSpecialType(0x07, 0x0ed)).toBe("kick_end");
+    expect(getFalconSpecialType(0x28, 0x0e9)).toBe("kick_air");
     expect(getFalconSpecialType(0x28, 0x0eb)).toBe("kick");
   });
 
@@ -617,6 +631,23 @@ describe("isCrouchState", () => {
     expect(isCrouchState(0x014)).toBe(false); // JumpSquat
     expect(isCrouchState(0x01a)).toBe(false); // Fall
     expect(isCrouchState(0x099)).toBe(false); // Shield
+  });
+});
+
+describe("isJumpSquatState", () => {
+  it("identifies jumpsquat action states correctly", () => {
+    expect(isJumpSquatState(0x014)).toBe(true); // JumpSquat
+    expect(isJumpSquatState(0x015)).toBe(true); // ShieldJumpSquat
+  });
+
+  it("returns false for non-jumpsquat action states", () => {
+    expect(isJumpSquatState(0x00a)).toBe(false); // Idle
+    expect(isJumpSquatState(0x00f)).toBe(false); // Dash
+    expect(isJumpSquatState(0x016)).toBe(false); // JumpF
+    expect(isJumpSquatState(0x017)).toBe(false); // JumpB
+    expect(isJumpSquatState(0x01a)).toBe(false); // Fall
+    expect(isJumpSquatState(0x01c)).toBe(false); // Crouch
+    expect(isJumpSquatState(0x099)).toBe(false); // Shield
   });
 });
 
@@ -1009,7 +1040,9 @@ describe("getFalconSpecialType", () => {
   });
 
   it("identifies Falcon Kick (Down-B) states", () => {
+    expect(getFalconSpecialType(0x07, 0x0e9)).toBe("kick_air");
     expect(getFalconSpecialType(0x07, 0x0eb)).toBe("kick");
+    expect(getFalconSpecialType(0x07, 0x0ec)).toBe("kick");
     expect(getFalconSpecialType(0x07, 0x0ed)).toBe("kick_end");
   });
 
@@ -3222,6 +3255,249 @@ describe("StageRenderer background themes", () => {
     expect(fills).toContain("#fbcfe8"); // Pale blossom petal
   });
 
+  it("renders daytime sakura tree and mountain stage geometry when light mode is enabled", () => {
+    const fills: unknown[] = [];
+    const strokes: unknown[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        fillRect: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        scale: () => {},
+        setLineDash: () => {},
+        fill: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: function (this: { strokeStyle: unknown }) {
+          strokes.push(this.strokeStyle);
+        },
+        drawImage: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    const fakeCamera = {
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+      groundScreenY: () => 400,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setBackgroundTheme("mountain");
+    renderer.setLightMode(true);
+
+    expect(() => {
+      renderer["drawStage"](fakeCamera, DREAM_LAND_STAGE_ID, 10);
+    }).not.toThrow();
+
+    // Natural warm cherry bark
+    expect(strokes).toContain("#573010");
+    // Dais slate stone base & moss
+    expect(fills).toContain("#94a3b8");
+    expect(fills).toContain("#16a34a");
+    // Stone lantern pillar
+    expect(fills).toContain("#64748b");
+    // Sunlit alpine granite rock facets on underbody
+    expect(fills).toContain("#94a3b8");
+    expect(fills).toContain("#cbd5e1");
+    // Sunlit pink blossoms
+    expect(fills).toContain("#fbcfe8");
+  });
+
+  it("renders daytime autumn trees and sandstone stage geometry when light mode is enabled", () => {
+    const fills: unknown[] = [];
+    const strokes: unknown[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        fillRect: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        scale: () => {},
+        setLineDash: () => {},
+        fill: function (this: { fillStyle: unknown }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: function (this: { strokeStyle: unknown }) {
+          strokes.push(this.strokeStyle);
+        },
+        drawImage: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    const fakeCamera = {
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+      groundScreenY: () => 400,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setBackgroundTheme("autumn");
+    renderer.setLightMode(true);
+
+    expect(() => {
+      renderer["drawStage"](fakeCamera, DREAM_LAND_STAGE_ID, 10);
+    }).not.toThrow();
+
+    // Warm chestnut tree trunk
+    expect(strokes).toContain("#78350f");
+    // Dais weathered stone base & moss
+    expect(fills).toContain("#78716c");
+    expect(fills).toContain("#16a34a");
+    // Sunlit carved sandstone/earthen facets on underbody
+    expect(fills).toContain("#9a3412");
+    expect(fills).toContain("#b45309");
+    expect(fills).toContain("#c2410c");
+  });
+
+  it("renders daytime fighter lighting on mountain theme when light mode is enabled", () => {
+    const fills: string[] = [];
+    const fakeCanvas = {
+      getContext: () => ({
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        ellipse: () => {},
+        arc: () => {},
+        quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
+        translate: () => {},
+        rotate: () => {},
+        scale: () => {},
+        setLineDash: () => {},
+        fillRect: function (this: { fillStyle: string }) {
+          fills.push(this.fillStyle);
+        },
+        clearRect: () => {},
+        fillText: () => {},
+        measureText: () => ({ width: 10 }),
+        fill: function (this: { fillStyle: string }) {
+          fills.push(this.fillStyle);
+        },
+        stroke: () => {},
+        drawImage: () => {},
+      }),
+      width: 960,
+      height: 540,
+    } as unknown as HTMLCanvasElement;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = new (StageRenderer as any)(fakeCanvas);
+    renderer.setBackgroundTheme("mountain");
+    renderer.setLightMode(true);
+
+    const defaultState = {
+      taunting: false,
+      inCombo: false,
+      isRoll: false,
+      isOpponent: false,
+      actionFrameCounter: 0,
+    };
+
+    // Pikachu in daytime: Classic Yellow #facc15, NOT Moonlit Cyan #38bdf8
+    fills.length = 0;
+    renderer["drawPikachuPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#facc15");
+    expect(fills).not.toContain("#38bdf8");
+
+    // Donkey Kong in daytime: Classic Brown #78350f, NOT Moonlit Indigo #6366f1
+    fills.length = 0;
+    renderer["drawDonkeyKongPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#78350f");
+    expect(fills).not.toContain("#6366f1");
+
+    // Mario in daytime: Classic Red #dc2626 & Blue #2563eb, NOT Neon Rose #f43f5e
+    fills.length = 0;
+    renderer["drawMarioPolygons"](
+      100,
+      200,
+      100,
+      150,
+      30,
+      60,
+      1,
+      "#fff",
+      defaultState,
+    );
+    expect(fills).toContain("#dc2626");
+    expect(fills).toContain("#2563eb");
+    expect(fills).not.toContain("#f43f5e");
+
+    // drawPlayer integration test: Pikachu in daytime mountain mode
+    fills.length = 0;
+    const fakeCamera = {
+      worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+      worldLengthToScreen: (len: number) => len,
+      groundScreenY: () => 400,
+    };
+    renderer["drawPlayer"](fakeCamera, 0, {
+      positionX: 0,
+      positionY: 0,
+      facingDirection: 1,
+      damagePercent: 0,
+      characterId: 0x09, // Pikachu
+      actionStateId: 0x00e, // Wait
+      actionFrameCounter: 0,
+      stocksRemaining: 4,
+      jumpsRemaining: 1,
+    });
+    expect(fills).toContain("#facc15");
+    expect(fills).not.toContain("#38bdf8");
+  });
+
   it("ensures falling sakura petals stop at the stage floor and never drop below ground", () => {
     const ellipseYCoordinates: number[] = [];
     const fakeCanvas = {
@@ -3949,6 +4225,7 @@ describe("StageRenderer background themes", () => {
         w: number;
         h: number;
       }> = [];
+      const rotateCalls: number[] = [];
       let currentGlobalAlpha = 1;
       let currentFillStyle = "";
       let currentStrokeStyle = "";
@@ -3981,7 +4258,9 @@ describe("StageRenderer background themes", () => {
             strokeCalls.push(1);
           },
           translate: () => {},
-          rotate: () => {},
+          rotate: (angle: number) => {
+            rotateCalls.push(angle);
+          },
           scale: () => {},
           arc: (x: number, y: number, radius: number) => {
             arcCalls.push({ x, y, radius });
@@ -4032,6 +4311,7 @@ describe("StageRenderer background themes", () => {
         ellipseCalls,
         fillRectCalls,
         roundRectCalls,
+        rotateCalls,
         getGlobalAlpha: () => currentGlobalAlpha,
         getStrokeStyle: () => currentStrokeStyle,
         getFillStyle: () => currentFillStyle,
@@ -4483,6 +4763,145 @@ describe("StageRenderer background themes", () => {
         expect(ellipseCalls.length).toBeGreaterThan(0);
       });
     });
+
+    describe("Part 6: Captain Falcon Falcon Punch and Falcon Kick animations", () => {
+      it("renders charging windup with swirling vortex and solar core during punch windup (frame < 40)", () => {
+        const { fakeCanvas, arcCalls, ellipseCalls } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawFalconSpecial(
+          200,
+          300,
+          25,
+          60,
+          true,
+          "#ff0000",
+          "punch",
+          20, // Windup phase
+        );
+
+        // Should render cocked glove fist ellipse and solar core / ember arcs
+        expect(ellipseCalls.length).toBeGreaterThan(0);
+        expect(arcCalls.length).toBeGreaterThan(0);
+      });
+
+      it("renders fiery raptor falcon silhouette, glove fist, and shockwaves during punch strike (40 <= frame < 55)", () => {
+        const { fakeCanvas, arcCalls, ellipseCalls } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawFalconSpecial(
+          200,
+          300,
+          25,
+          60,
+          true,
+          "#ff0000",
+          "punch",
+          45, // Strike phase
+        );
+
+        // Should render raptor eye, shockwave ellipse, and white fist glove
+        expect(ellipseCalls.length).toBeGreaterThan(0);
+        expect(arcCalls.length).toBeGreaterThan(0);
+      });
+
+      it("renders dissolving embers and follow-through fist during punch dissipation (frame >= 55)", () => {
+        const { fakeCanvas, arcCalls, ellipseCalls } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawFalconSpecial(
+          200,
+          300,
+          25,
+          60,
+          true,
+          "#ff0000",
+          "punch",
+          65, // Dissipation phase
+        );
+
+        // Should render follow-through glove and dissipating embers
+        expect(ellipseCalls.length).toBeGreaterThan(0);
+        expect(arcCalls.length).toBeGreaterThan(0);
+      });
+
+      it("renders supersonic flame lance, boot, and jet exhaust during active falcon kick", () => {
+        const { fakeCanvas, arcCalls, ellipseCalls } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawFalconSpecial(
+          200,
+          300,
+          25,
+          60,
+          true,
+          "#ff0000",
+          "kick",
+          10, // Active flying kick
+        );
+
+        // Should render shockwave ellipse and friction spark arcs
+        expect(ellipseCalls.length).toBeGreaterThan(0);
+        expect(arcCalls.length).toBeGreaterThan(0);
+      });
+
+      it("maps aerial falcon kick state 0x0e9 to kick_air and renders 20-degree steep downward dive spear", () => {
+        const specialType = getFalconSpecialType(0x07, 0x0e9);
+        expect(specialType).toBe("kick_air");
+
+        const { fakeCanvas, arcCalls, ellipseCalls, rotateCalls } =
+          createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawFalconSpecial(
+          200,
+          300,
+          25,
+          60,
+          true,
+          "#ff0000",
+          specialType!,
+          12,
+        );
+
+        expect(ellipseCalls.length).toBeGreaterThan(0);
+        expect(arcCalls.length).toBeGreaterThan(0);
+        // Expect rotation to be ~20° from straight down = 70° below horizontal
+        const expectedAngle = (70 * Math.PI) / 180;
+        expect(rotateCalls).toContainEqual(expectedAngle);
+      });
+
+      it("renders scorched floor skid trace, friction sparks, and smoke plumes during falcon kick end", () => {
+        const { fakeCanvas, arcCalls } = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer = new (StageRenderer as any)(fakeCanvas);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).drawFalconSpecial(
+          200,
+          300,
+          25,
+          60,
+          true,
+          "#ff0000",
+          "kick_end",
+          5, // Braking recovery
+        );
+
+        // Should render friction sparks and smoke puff arcs
+        expect(arcCalls.length).toBeGreaterThan(0);
+      });
+    });
   });
 
   describe("Shield Health Visualization", () => {
@@ -4747,6 +5166,1566 @@ describe("StageRenderer background themes", () => {
       // Radius is scaled relative to full base
       const stunRadius = stun.arcCalls[0]!.radius;
       expect(stunRadius).toBeLessThan(22); // Less than full base with pulse
+    });
+  });
+
+  describe("Animated Attack Arcs (Aerial vs Smash Differentiation)", () => {
+    const createMockAttackCanvas = () => {
+      const arcCalls: Array<{
+        x: number;
+        y: number;
+        radius: number;
+        startAngle?: number;
+        endAngle?: number;
+      }> = [];
+      const lineToCalls: Array<{ x: number; y: number }> = [];
+      const moveToCalls: Array<{ x: number; y: number }> = [];
+      const strokeCalls: Array<{ strokeStyle: string; lineWidth: number }> = [];
+      const fillCalls: number[] = [];
+      let currentStrokeStyle = "";
+      let currentLineWidth = 1;
+
+      const ctx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: (x: number, y: number) => {
+          moveToCalls.push({ x, y });
+        },
+        lineTo: (x: number, y: number) => {
+          lineToCalls.push({ x, y });
+        },
+        createRadialGradient: () => ({ addColorStop: () => {} }),
+        fill: () => {
+          fillCalls.push(1);
+        },
+        stroke: () => {
+          strokeCalls.push({
+            strokeStyle: currentStrokeStyle,
+            lineWidth: currentLineWidth,
+          });
+        },
+        arc: (
+          x: number,
+          y: number,
+          radius: number,
+          startAngle?: number,
+          endAngle?: number,
+        ) => {
+          arcCalls.push({ x, y, radius, startAngle, endAngle });
+        },
+        set strokeStyle(val: string) {
+          currentStrokeStyle = val;
+        },
+        get strokeStyle() {
+          return currentStrokeStyle;
+        },
+        set fillStyle(_val: string) {},
+        get fillStyle() {
+          return "";
+        },
+        set lineWidth(val: number) {
+          currentLineWidth = val;
+        },
+        get lineWidth() {
+          return currentLineWidth;
+        },
+        lineCap: "butt",
+        lineJoin: "miter",
+        shadowColor: "",
+        shadowBlur: 0,
+      } as unknown as CanvasRenderingContext2D;
+
+      return {
+        ctx,
+        arcCalls,
+        lineToCalls,
+        moveToCalls,
+        strokeCalls,
+        fillCalls,
+      };
+    };
+
+    it("animates aerial attack arc expanding outward from character over initial frames", () => {
+      // baseRadius = Math.max(10, 30 * 0.5) = 15
+      // Frame 0: closer to body
+      const frame0 = createMockAttackCanvas();
+      drawAttackArc(
+        frame0.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "aerial", direction: "forward" },
+        null,
+        false,
+        0,
+      );
+      // Primary outer arc is the 2nd arc (1st is trailing speed echo)
+      const r0 = frame0.arcCalls[1]!.radius;
+
+      // Frame 7: expanded to peak reach
+      const frame7 = createMockAttackCanvas();
+      drawAttackArc(
+        frame7.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "aerial", direction: "forward" },
+        null,
+        false,
+        7,
+      );
+      const r7 = frame7.arcCalls[1]!.radius;
+
+      expect(r0).toBeLessThan(r7);
+      expect(r7).toBeCloseTo(15 * 1.85, 1);
+    });
+
+    it("ensures aerial attack arc remains fully visible across late frames until action state ends", () => {
+      // Frame 25 (deep in endlag/active state)
+      const late = createMockAttackCanvas();
+      drawAttackArc(
+        late.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "aerial", direction: "forward" },
+        null,
+        false,
+        25,
+      );
+      expect(late.arcCalls.length).toBeGreaterThan(0);
+      expect(late.strokeCalls.length).toBeGreaterThan(0);
+      // Arc radius is held at peak reach without disappearing
+      const rLate = late.arcCalls[1]!.radius;
+      expect(rLate).toBeCloseTo(15 * 1.85, 0);
+    });
+
+    it("distinguishes smash attacks with wider span, dual-layer wedge fill, and heavier stroke weight", () => {
+      const aerial = createMockAttackCanvas();
+      drawAttackArc(
+        aerial.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "aerial", direction: "forward" },
+        null,
+        false,
+        4,
+      );
+
+      const smash = createMockAttackCanvas();
+      drawAttackArc(
+        smash.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "smash", direction: "forward" },
+        null,
+        false,
+        8,
+      );
+
+      // Smash has wedge fill (fillCalls > 0), aerial does not
+      expect(smash.fillCalls.length).toBeGreaterThan(0);
+      expect(aerial.fillCalls.length).toBe(0);
+
+      // Smash has heavier maximum stroke width (5.5 vs 3.5)
+      const maxSmashWidth = Math.max(
+        ...smash.strokeCalls.map((s) => s.lineWidth),
+      );
+      const maxAerialWidth = Math.max(
+        ...aerial.strokeCalls.map((s) => s.lineWidth),
+      );
+      expect(maxSmashWidth).toBeGreaterThan(maxAerialWidth);
+
+      // Smash reaches a substantially larger peak reach radius (2.3 vs 1.65)
+      const smashOuterRadius = Math.max(...smash.arcCalls.map((a) => a.radius));
+      const aerialMaxRadius = Math.max(...aerial.arcCalls.map((a) => a.radius));
+      expect(smashOuterRadius).toBeGreaterThan(aerialMaxRadius);
+    });
+
+    it("animates smash attack through gather phase and concussive power surge", () => {
+      // Frame 0: energy gathered close to character
+      const gather = createMockAttackCanvas();
+      drawAttackArc(
+        gather.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "smash", direction: "forward" },
+        null,
+        false,
+        0,
+      );
+      const rGather = Math.max(...gather.arcCalls.map((a) => a.radius));
+
+      // Frame 8: fully surged outward
+      const surged = createMockAttackCanvas();
+      drawAttackArc(
+        surged.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "smash", direction: "forward" },
+        null,
+        false,
+        8,
+      );
+      const rSurged = Math.max(...surged.arcCalls.map((a) => a.radius));
+
+      expect(rGather).toBeLessThan(rSurged);
+      expect(rSurged).toBeCloseTo(15 * 2.3, 1);
+    });
+
+    it("animates Nair 360-degree shockwave ring expanding outward and persisting", () => {
+      const frame0 = createMockAttackCanvas();
+      drawAttackArc(
+        frame0.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "aerial", direction: "neutral" },
+        null,
+        false,
+        0,
+      );
+
+      const frame4 = createMockAttackCanvas();
+      drawAttackArc(
+        frame4.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "aerial", direction: "neutral" },
+        null,
+        false,
+        4,
+      );
+
+      // Both draw full circle arcs (startAngle = 0, endAngle = 2*PI)
+      expect(frame0.arcCalls[0]!.endAngle).toBeCloseTo(Math.PI * 2, 2);
+      expect(frame4.arcCalls[0]!.endAngle).toBeCloseTo(Math.PI * 2, 2);
+
+      // Expansion from frame 0 to frame 4
+      const r0 = frame0.arcCalls[1]!.radius;
+      const r4 = frame4.arcCalls[1]!.radius;
+      expect(r0).toBeLessThan(r4);
+    });
+
+    it("defaults cleanly to peak reach when actionFrameCounter is undefined", () => {
+      const def = createMockAttackCanvas();
+      drawAttackArc(
+        def.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "aerial", direction: "forward" },
+        null,
+        false,
+        undefined,
+      );
+      const rDef = def.arcCalls[1]!.radius;
+      expect(rDef).toBeCloseTo(15 * 1.85, 1);
+    });
+
+    it("animates grounded tilt attack arc expanding outward with trailing echo and glow", () => {
+      const frame0 = createMockAttackCanvas();
+      drawAttackArc(
+        frame0.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#ef4444",
+        { type: "tilt", direction: "forward" },
+        null,
+        false,
+        0,
+      );
+      // Primary outer arc is arc index 1 (0 is trailing echo)
+      const r0 = frame0.arcCalls[1]!.radius;
+
+      const frame7 = createMockAttackCanvas();
+      drawAttackArc(
+        frame7.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#ef4444",
+        { type: "tilt", direction: "forward" },
+        null,
+        false,
+        7,
+      );
+      const r7 = frame7.arcCalls[1]!.radius;
+
+      expect(r0).toBeLessThan(r7);
+      expect(r7).toBeCloseTo(15 * 1.7, 1);
+      // Has trailing echo arc
+      expect(frame7.arcCalls.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe("JumpSquat (0x14) Visualization", () => {
+    it("draws jumpsquat ground pressure ring, lateral dust puffs, and anticipation chevrons", () => {
+      const ellipses: { x: number; y: number; rx: number; ry: number }[] = [];
+      const arcs: { x: number; y: number; r: number }[] = [];
+      const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
+      let currentX = 0;
+      let currentY = 0;
+
+      const mockCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: (x: number, y: number) => {
+          currentX = x;
+          currentY = y;
+        },
+        lineTo: (x: number, y: number) => {
+          lines.push({ x1: currentX, y1: currentY, x2: x, y2: y });
+          currentX = x;
+          currentY = y;
+        },
+        arc: (x: number, y: number, r: number) => {
+          arcs.push({ x, y, r });
+        },
+        ellipse: (x: number, y: number, rx: number, ry: number) => {
+          ellipses.push({ x, y, rx, ry });
+        },
+        stroke: () => {},
+        fill: () => {},
+      } as unknown as CanvasRenderingContext2D;
+
+      // Frame 0: Initial compression
+      drawJumpSquatFx(mockCtx, 100, 200, 20, 50, 0, "#3b82f6", false);
+      expect(ellipses.length).toBeGreaterThanOrEqual(2); // Outer pressure ring and inner contact ellipse
+      expect(arcs.length).toBeGreaterThanOrEqual(4); // Left & right dust billows (primary + secondary)
+      expect(lines.length).toBeGreaterThan(0); // Ground skid lines & chevrons
+
+      // Check ground ring is at foot level
+      expect(ellipses[0]!.y).toBe(200);
+
+      // Frame 3: Advanced compression with sparks and higher chevrons
+      const arcsFrame3: { x: number; y: number; r: number }[] = [];
+      const mockCtxF3 = {
+        ...mockCtx,
+        arc: (x: number, y: number, r: number) => {
+          arcsFrame3.push({ x, y, r });
+        },
+      } as unknown as CanvasRenderingContext2D;
+
+      drawJumpSquatFx(mockCtxF3, 100, 200, 20, 50, 3, "#3b82f6", false);
+      // Frame 3 has additional kinetic compression sparks at the feet
+      expect(arcsFrame3.length).toBeGreaterThan(arcs.length);
+    });
+
+    it("applies spring compression scale transform and renders FX during 0x014 jumpsquat in drawPlayer", () => {
+      const scales: { sx: number; sy: number }[] = [];
+      const fakeCanvas = {
+        getContext: () => ({
+          save: () => {},
+          restore: () => {},
+          beginPath: () => {},
+          closePath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          ellipse: () => {},
+          arc: () => {},
+          quadraticCurveTo: () => {},
+          bezierCurveTo: () => {},
+          translate: () => {},
+          rotate: () => {},
+          scale: (sx: number, sy: number) => {
+            scales.push({ sx, sy });
+          },
+          setLineDash: () => {},
+          fillRect: () => {},
+          clearRect: () => {},
+          fillText: () => {},
+          measureText: () => ({ width: 10 }),
+          fill: () => {},
+          stroke: () => {},
+          drawImage: () => {},
+        }),
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // Draw player in jumpsquat state (0x014) on frame 2
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 0,
+        positionY: 0,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x09, // Pikachu
+        actionStateId: 0x014, // JumpSquat
+        actionFrameCounter: 2,
+        stocksRemaining: 4,
+        jumpsRemaining: 1,
+      });
+
+      // Verify that spring compression scale was applied (scaleY < 1 and scaleX > 1)
+      const jumpSquatScale = scales.find((s) => s.sx > 1.1 && s.sy < 0.8);
+      expect(jumpSquatScale).toBeDefined();
+      expect(jumpSquatScale!.sy).toBeLessThan(0.75); // Vertical squash
+      expect(jumpSquatScale!.sx).toBeGreaterThan(1.15); // Horizontal stretch
+    });
+
+    it("renders metallic silver armor with gold outline and includes armor KB in HUD for Yoshi during double jump", () => {
+      const texts: string[] = [];
+      const fillStyles: string[] = [];
+      const strokeStyles: string[] = [];
+      const ellipses: Array<{ x: number; y: number; rx: number; ry: number }> =
+        [];
+      const lines: Array<{ x: number; y: number }> = [];
+      let currentFillStyle = "";
+      let currentStrokeStyle = "";
+      const fakeCanvas = {
+        getContext: () => ({
+          save: () => {},
+          restore: () => {},
+          beginPath: () => {},
+          closePath: () => {},
+          moveTo: () => {},
+          lineTo: (x: number, y: number) => {
+            lines.push({ x, y });
+          },
+          ellipse: (x: number, y: number, rx: number, ry: number) => {
+            ellipses.push({ x, y, rx, ry });
+          },
+          arc: () => {},
+          roundRect: () => {},
+          clip: () => {},
+          translate: () => {},
+          rotate: () => {},
+          scale: () => {},
+          createRadialGradient: () => ({ addColorStop: () => {} }),
+          fill: () => {
+            fillStyles.push(currentFillStyle);
+          },
+          stroke: () => {
+            strokeStyles.push(currentStrokeStyle);
+          },
+          fillText: (t: string) => {
+            texts.push(t);
+          },
+          measureText: (s: string) => ({ width: s.length * 6 }),
+          shadowColor: "",
+          shadowBlur: 0,
+          font: "",
+          get fillStyle() {
+            return currentFillStyle;
+          },
+          set fillStyle(val: string) {
+            currentFillStyle = val;
+          },
+          get strokeStyle() {
+            return currentStrokeStyle;
+          },
+          set strokeStyle(val: string) {
+            currentStrokeStyle = val;
+          },
+          lineWidth: 1,
+        }),
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // Yoshi double jump with knockback resistance 140 (US ROM)
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        {
+          positionX: 50,
+          positionY: 100,
+          facingDirection: 1,
+          damagePercent: 45,
+          characterId: 0x06, // Yoshi
+          actionStateId: 0x018, // JumpAerialF
+          actionFrameCounter: 5,
+          stocksRemaining: 4,
+          jumpsRemaining: 0,
+          knockbackResist: 140,
+        },
+        null,
+        null,
+        0,
+        true, // isPaused = true -> pause HUD rendered
+      );
+
+      // Verify Yoshi's body rendered with metallic silver and gold colors
+      expect(fillStyles).toContain("#94a3b8"); // Silver armor body
+      expect(fillStyles).toContain("#f59e0b"); // Burnished gold shell
+      expect(strokeStyles).toContain("#fbbf24"); // Glowing gold outline
+      expect(ellipses.length).toBeGreaterThan(0);
+
+      // Verify pause HUD contains "Armor: 140 KB"
+      const armorTextFound = texts.some((t) => t.includes("Armor: 140 KB"));
+      expect(armorTextFound).toBe(true);
+    });
+
+    it("falls back to super armor for schema 1 Yoshi double jump when knockbackResist is undefined", () => {
+      const fillStyles: string[] = [];
+      const strokeStyles: string[] = [];
+      let currentFillStyle = "";
+      let currentStrokeStyle = "";
+      const fakeCanvas = {
+        getContext: () => ({
+          save: () => {},
+          restore: () => {},
+          beginPath: () => {},
+          closePath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          ellipse: () => {},
+          arc: () => {},
+          roundRect: () => {},
+          clip: () => {},
+          translate: () => {},
+          rotate: () => {},
+          scale: () => {},
+          createRadialGradient: () => ({ addColorStop: () => {} }),
+          fill: () => {
+            fillStyles.push(currentFillStyle);
+          },
+          stroke: () => {
+            strokeStyles.push(currentStrokeStyle);
+          },
+          fillText: () => {},
+          measureText: () => ({ width: 10 }),
+          get fillStyle() {
+            return currentFillStyle;
+          },
+          set fillStyle(val: string) {
+            currentFillStyle = val;
+          },
+          get strokeStyle() {
+            return currentStrokeStyle;
+          },
+          set strokeStyle(val: string) {
+            currentStrokeStyle = val;
+          },
+          lineWidth: 1,
+        }),
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // Yoshi JumpAerialB without knockbackResist defined (Schema 1)
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        {
+          positionX: 50,
+          positionY: 100,
+          facingDirection: -1,
+          damagePercent: 20,
+          characterId: 0x06, // Yoshi
+          actionStateId: 0x019, // JumpAerialB
+          actionFrameCounter: 8,
+          stocksRemaining: 4,
+          jumpsRemaining: 0,
+          knockbackResist: undefined,
+        },
+        null,
+        null,
+        0,
+        false,
+      );
+
+      // Should still render metallic silver body and gold outline
+      expect(fillStyles).toContain("#94a3b8");
+      expect(strokeStyles).toContain("#fbbf24");
+    });
+  });
+
+  describe("Anti-Overlap Pause HUDs De-collision", () => {
+    it("staggers overlapping pause HUDs into vertical tiers with indicator stems", () => {
+      const roundRectCalls: Array<{
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+      }> = [];
+      const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> =
+        [];
+      let currentX = 0;
+      let currentY = 0;
+
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: (x: number, y: number) => {
+          currentX = x;
+          currentY = y;
+        },
+        lineTo: (x: number, y: number) => {
+          lines.push({ x1: currentX, y1: currentY, x2: x, y2: y });
+          currentX = x;
+          currentY = y;
+        },
+        arc: () => {},
+        roundRect: (x: number, y: number, w: number, h: number) => {
+          roundRectCalls.push({ x, y, w, h });
+        },
+        fill: () => {},
+        stroke: () => {},
+        fillText: () => {},
+        measureText: (str: string) => ({ width: str.length * 6.5 }),
+        setLineDash: () => {},
+        shadowColor: "",
+        shadowBlur: 0,
+        font: "",
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      // Two characters right next to each other (x = 200 and x = 215)
+      const huds = [
+        {
+          x: 200,
+          y: 300,
+          stateName: "Wait",
+          stateId: 0x00a,
+          posX: -10,
+          posY: 0,
+          tagColor: "#ef4444",
+        },
+        {
+          x: 215,
+          y: 300,
+          stateName: "Squat",
+          stateId: 0x00d,
+          posX: -5,
+          posY: 0,
+          tagColor: "#3b82f6",
+        },
+      ];
+
+      drawDeconflictedPauseHuds(fakeCtx, huds);
+
+      // Both pills should be drawn
+      expect(roundRectCalls).toHaveLength(2);
+      const pill1 = roundRectCalls[0]!;
+      const pill2 = roundRectCalls[1]!;
+
+      // Pill 2 should be staggered lower than Pill 1 to avoid covering it
+      expect(pill2.y).toBeGreaterThan(pill1.y + 20);
+
+      // A dashed leader stem line should connect the lower pill to the fighter's feet
+      expect(lines.length).toBeGreaterThan(0);
+    });
+
+    it("does not stagger pause HUDs when characters are sufficiently far apart", () => {
+      const roundRectCalls: Array<{
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+      }> = [];
+      const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> =
+        [];
+
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: () => {},
+        roundRect: (x: number, y: number, w: number, h: number) => {
+          roundRectCalls.push({ x, y, w, h });
+        },
+        fill: () => {},
+        stroke: () => {},
+        fillText: () => {},
+        measureText: (str: string) => ({ width: str.length * 6.5 }),
+        setLineDash: () => {},
+        shadowColor: "",
+        shadowBlur: 0,
+        font: "",
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      // Two characters far apart (x = 100 and x = 400)
+      const huds = [
+        {
+          x: 100,
+          y: 300,
+          stateName: "Wait",
+          stateId: 0x00a,
+          posX: -100,
+          posY: 0,
+          tagColor: "#ef4444",
+        },
+        {
+          x: 400,
+          y: 300,
+          stateName: "Wait",
+          stateId: 0x00a,
+          posX: 100,
+          posY: 0,
+          tagColor: "#3b82f6",
+        },
+      ];
+
+      drawDeconflictedPauseHuds(fakeCtx, huds);
+
+      expect(roundRectCalls).toHaveLength(2);
+      // Both pills remain in the default top tier (y + 8 = 308)
+      expect(roundRectCalls[0]?.y).toBe(308);
+      expect(roundRectCalls[1]?.y).toBe(308);
+      expect(lines).toHaveLength(0);
+    });
+  });
+
+  describe("Combo Escape Gap Visuals", () => {
+    it("draws yellow highlight backdrop behind character during actionable gap frames", () => {
+      const roundRectCalls: Array<{
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+        r: number;
+      }> = [];
+      const fillStyles: string[] = [];
+      const strokeStyles: string[] = [];
+      let shadowColor = "";
+      let shadowBlur = 0;
+
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        roundRect: (x: number, y: number, w: number, h: number, r: number) => {
+          roundRectCalls.push({ x, y, w, h, r });
+        },
+        fill: () => {
+          fillStyles.push(fakeCtx.fillStyle as string);
+        },
+        stroke: () => {
+          strokeStyles.push(fakeCtx.strokeStyle as string);
+        },
+        get fillStyle() {
+          return fillStyles[fillStyles.length - 1] ?? "";
+        },
+        set fillStyle(val: string) {
+          fillStyles.push(val);
+        },
+        get strokeStyle() {
+          return strokeStyles[strokeStyles.length - 1] ?? "";
+        },
+        set strokeStyle(val: string) {
+          strokeStyles.push(val);
+        },
+        get shadowColor() {
+          return shadowColor;
+        },
+        set shadowColor(val: string) {
+          shadowColor = val;
+        },
+        get shadowBlur() {
+          return shadowBlur;
+        },
+        set shadowBlur(val: number) {
+          shadowBlur = val;
+        },
+        lineWidth: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      drawComboEscapeHighlight(fakeCtx, 100, 200, 20, 60);
+
+      // Should draw outer yellow card and inner highlight card
+      expect(roundRectCalls).toHaveLength(2);
+      expect(fillStyles).toContain("rgba(250, 204, 21, 0.42)");
+      expect(strokeStyles).toContain("rgba(234, 179, 8, 0.95)");
+      expect(strokeStyles).toContain("rgba(254, 240, 138, 0.65)");
+      expect(shadowColor).toBe("#facc15");
+      expect(shadowBlur).toBe(14);
+    });
+
+    it("draws fading 'XF gap' text callout beside fighter when alpha > 0.01", () => {
+      const fillTextCalls: Array<{ text: string; x: number; y: number }> = [];
+      const roundRectCalls: Array<{
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+      }> = [];
+
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        roundRect: (x: number, y: number, w: number, h: number) => {
+          roundRectCalls.push({ x, y, w, h });
+        },
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: (text: string, x: number, y: number) => {
+          fillTextCalls.push({ text, x, y });
+        },
+        fill: () => {},
+        stroke: () => {},
+        font: "",
+        textAlign: "",
+        textBaseline: "",
+        fillStyle: "",
+        strokeStyle: "",
+        shadowColor: "",
+        shadowBlur: 0,
+        lineWidth: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      // When facing right, badge floats to the left behind character
+      drawComboEscapeTextCallout(fakeCtx, 200, 300, 25, 60, true, 5, 1.0);
+
+      expect(fillTextCalls).toHaveLength(1);
+      expect(fillTextCalls[0]?.text).toBe("5F gap");
+      expect(fillTextCalls[0]?.x).toBeLessThan(200); // Behind the fighter (to the left)
+      expect(roundRectCalls).toHaveLength(1);
+      expect(COMBO_GAP_CALLOUT_FADE_FRAMES).toBe(90);
+
+      // When alpha <= 0.01, it early returns without drawing
+      fillTextCalls.length = 0;
+      roundRectCalls.length = 0;
+      drawComboEscapeTextCallout(fakeCtx, 200, 300, 25, 60, true, 5, 0.005);
+      expect(fillTextCalls).toHaveLength(0);
+      expect(roundRectCalls).toHaveLength(0);
+    });
+
+    it("buckets gap badge colors based on difficulty (<=3f, <=10f, <=20f, >20f)", () => {
+      const hardest = getComboGapBadgeColors(2);
+      expect(hardest.border).toContain("148, 163, 184"); // Gray
+
+      const tight = getComboGapBadgeColors(7);
+      expect(tight.border).toContain("234, 179, 8"); // Yellow
+
+      const moderate = getComboGapBadgeColors(15);
+      expect(moderate.border).toContain("249, 115, 22"); // Orange
+
+      const easiest = getComboGapBadgeColors(25);
+      expect(easiest.border).toContain("239, 68, 68"); // Crimson Red
+    });
+
+    it("resolves red hitstun silhouette colors", () => {
+      const dark = getHitstunSilhouetteColors("grid", false);
+      expect(dark.fill).toBe("rgba(239, 68, 68, 0.95)");
+      expect(dark.glow).toBe("#ef4444");
+
+      const light = getHitstunSilhouetteColors("mountain", true);
+      expect(light.fill).toBe("rgba(220, 38, 38, 0.95)");
+    });
+
+    it("resolves theme-adaptive silhouette colors", () => {
+      const darkGrid = getComboEscapeSilhouetteColors("grid", false);
+      expect(darkGrid.fill).toBe("rgba(250, 204, 21, 0.95)");
+
+      const autumn = getComboEscapeSilhouetteColors("autumn", false);
+      expect(autumn.fill).toBe("rgba(254, 240, 138, 0.95)");
+
+      const light = getComboEscapeSilhouetteColors("mountain", true);
+      expect(light.fill).toBe("rgba(234, 179, 8, 0.95)");
+      expect(light.stroke).toBe("rgba(161, 98, 7, 0.95)");
+    });
+
+    it("createSilhouetteContext locks fillStyle and strokeStyle", () => {
+      const realCtx = {
+        fillStyle: "#000000",
+        strokeStyle: "#ffffff",
+      } as unknown as CanvasRenderingContext2D;
+
+      const proxy = createSilhouetteContext(
+        realCtx,
+        "rgba(250, 204, 21, 0.95)",
+        "rgba(234, 179, 8, 0.95)",
+      );
+
+      expect(proxy.fillStyle).toBe("rgba(250, 204, 21, 0.95)");
+      expect(proxy.strokeStyle).toBe("rgba(234, 179, 8, 0.95)");
+
+      // Overwrite attempts are intercepted
+      proxy.fillStyle = "#ff0000";
+      expect(proxy.fillStyle).toBe("rgba(250, 204, 21, 0.95)");
+
+      // Overwrite attempts on shadow are intercepted so silhouette halo is preserved
+      proxy.shadowColor = "#0000ff";
+      proxy.shadowBlur = 0;
+
+      // Native WebIDL setters and getters checking receiver identity execute safely on target
+      class MockWebIdlContext {
+        public fillStyle = "";
+        public strokeStyle = "";
+        private _lineWidth = 1.0;
+        get lineWidth(): number {
+          if (!(this instanceof MockWebIdlContext)) {
+            throw new TypeError(
+              "'get lineWidth' called on an object that does not implement interface CanvasRenderingContext2D",
+            );
+          }
+          return this._lineWidth;
+        }
+        set lineWidth(val: number) {
+          if (!(this instanceof MockWebIdlContext)) {
+            throw new TypeError(
+              "'set lineWidth' called on an object that does not implement interface CanvasRenderingContext2D",
+            );
+          }
+          this._lineWidth = val;
+        }
+      }
+
+      const mockNativeCtx = new MockWebIdlContext();
+      const webIdlProxy = createSilhouetteContext(
+        mockNativeCtx as unknown as CanvasRenderingContext2D,
+        "rgba(250, 204, 21, 0.95)",
+        "rgba(234, 179, 8, 0.95)",
+      );
+
+      // Should not throw TypeError: 'set lineWidth' called on an object that does not implement interface CanvasRenderingContext2D
+      expect(() => {
+        webIdlProxy.lineWidth = 1.5;
+      }).not.toThrow();
+      expect(webIdlProxy.lineWidth).toBe(1.5);
+      expect(mockNativeCtx.lineWidth).toBe(1.5);
+    });
+
+    it("drawPlayer integrates combo escape gap silhouette and text callout based on comboEscapeState", () => {
+      const fillStyles: string[] = [];
+      const fillTextCalls: Array<{ text: string; x: number; y: number }> = [];
+
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: (text: string, x: number, y: number) => {
+          fillTextCalls.push({ text, x, y });
+        },
+        strokeText: () => {},
+        get fillStyle() {
+          return fillStyles[fillStyles.length - 1] ?? "";
+        },
+        set fillStyle(val: string) {
+          fillStyles.push(val);
+        },
+        strokeStyle: "",
+        shadowColor: "",
+        shadowBlur: 0,
+        font: "",
+        textAlign: "",
+        textBaseline: "",
+        lineWidth: 1,
+        setLineDash: () => {},
+        createLinearGradient: () => ({
+          addColorStop: () => {},
+        }),
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // 1. Actionable frame during combo gap: silhouette proxy is active and callout rendered
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        {
+          positionX: 50,
+          positionY: 100,
+          facingDirection: 1,
+          damagePercent: 40,
+          characterId: 0x02, // Fox
+          actionStateId: 0x00a, // Wait
+          actionFrameCounter: 1,
+          stocksRemaining: 4,
+          jumpsRemaining: 2,
+        },
+        null,
+        null,
+        0,
+        false,
+        null,
+        false,
+        {
+          isActionableFrame: true,
+          actionableFrameCount: 3,
+          fadeAlpha: 1.0,
+        },
+      );
+
+      expect(fillStyles).toContain("rgba(250, 204, 21, 0.95)");
+      expect(fillTextCalls.some((c) => c.text === "3F gap")).toBe(true);
+
+      // 1b. Actionable frame for Pikachu (characterId: 0x07) which mutates ctx.lineWidth
+      expect(() => {
+        renderer["drawPlayer"](
+          fakeCamera,
+          1,
+          {
+            positionX: 60,
+            positionY: 100,
+            facingDirection: 1,
+            damagePercent: 20,
+            characterId: 0x07, // Pikachu
+            actionStateId: 0x00a, // Wait
+            actionFrameCounter: 1,
+            stocksRemaining: 4,
+            jumpsRemaining: 2,
+          },
+          null,
+          null,
+          0,
+          false,
+          null,
+          false,
+          {
+            isActionableFrame: true,
+            actionableFrameCount: 4,
+            fadeAlpha: 1.0,
+          },
+        );
+      }).not.toThrow();
+
+      // 2. Post-gap frame within 90-frame fadeout: silhouette is OFF, but callout badge is ON
+      fillStyles.length = 0;
+      fillTextCalls.length = 0;
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        {
+          positionX: 50,
+          positionY: 100,
+          facingDirection: 1,
+          damagePercent: 40,
+          characterId: 0x02, // Fox
+          actionStateId: 0x04b, // DamageFlyHi
+          actionFrameCounter: 1,
+          stocksRemaining: 4,
+          jumpsRemaining: 2,
+        },
+        null,
+        null,
+        10,
+        false,
+        null,
+        false,
+        {
+          isActionableFrame: false,
+          actionableFrameCount: 3,
+          fadeAlpha: 0.75,
+        },
+      );
+
+      expect(fillStyles).not.toContain("rgba(250, 204, 21, 0.95)");
+      expect(fillTextCalls.some((c) => c.text === "3F gap")).toBe(true);
+
+      // 3. Null comboEscapeState: neither silhouette nor callout is rendered
+      fillStyles.length = 0;
+      fillTextCalls.length = 0;
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        {
+          positionX: 50,
+          positionY: 100,
+          facingDirection: 1,
+          damagePercent: 40,
+          characterId: 0x02, // Fox
+          actionStateId: 0x00a, // Wait
+          actionFrameCounter: 1,
+          stocksRemaining: 4,
+          jumpsRemaining: 2,
+        },
+        null,
+        null,
+        0,
+        false,
+        null,
+        false,
+        null,
+      );
+
+      expect(fillStyles).not.toContain("rgba(250, 204, 21, 0.95)");
+      expect(fillTextCalls.some((c) => c.text.includes("gap"))).toBe(false);
+
+      // 4. Position locking: Callout renders at anchor coords rather than current position
+      fillTextCalls.length = 0;
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        {
+          positionX: 800, // Player has moved far away
+          positionY: 500,
+          facingDirection: 1,
+          damagePercent: 40,
+          characterId: 0x02,
+          actionStateId: 0x00a,
+          actionFrameCounter: 1,
+          stocksRemaining: 4,
+          jumpsRemaining: 2,
+        },
+        null,
+        null,
+        0,
+        false,
+        null,
+        false,
+        {
+          isActionableFrame: false,
+          actionableFrameCount: 22,
+          fadeAlpha: 0.8,
+          anchorWorldX: 150, // Locked where gap occurred
+          anchorWorldY: 200,
+          anchorFacingRight: true,
+        },
+      );
+
+      expect(fillTextCalls.some((c) => c.text === "22F gap")).toBe(true);
+      const callout = fillTextCalls.find((c) => c.text === "22F gap");
+      // Callout X should be anchored around worldX = 150, not player position 800
+      expect(callout?.x).toBeLessThan(200);
+    });
+
+    it("identifies shield drop state (0x022) and applies squat compression", () => {
+      expect(isShieldDropState(0x022)).toBe(true);
+      expect(isShieldDropState(0x014)).toBe(false);
+      expect(isShieldDropState(0x00a)).toBe(false);
+
+      const scaleCalls: Array<{ sx: number; sy: number }> = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: (sx: number, sy: number) => {
+          scaleCalls.push({ sx, sy });
+        },
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00, // Mario
+        actionStateId: 0x022, // ShieldDrop
+        actionFrameCounter: 1,
+        stocksRemaining: 4,
+        jumpsRemaining: 2,
+      });
+
+      // Character squashes down (scaleY < 1 and scaleX > 1)
+      expect(scaleCalls.some((c) => c.sy < 1.0 && c.sx > 1.0)).toBe(true);
+    });
+
+    it("heavy landing (0x020) applies squat compression and does NOT render yellow ground underline", () => {
+      const scaleCalls: Array<{ sx: number; sy: number }> = [];
+      const strokeStyles: string[] = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: (sx: number, sy: number) => {
+          scaleCalls.push({ sx, sy });
+        },
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {
+          strokeStyles.push(fakeCtx.strokeStyle as string);
+        },
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        fillStyle: "",
+        get strokeStyle() {
+          return strokeStyles[strokeStyles.length - 1] ?? "";
+        },
+        set strokeStyle(val: string) {
+          strokeStyles.push(val);
+        },
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00, // Mario
+        actionStateId: 0x020, // LandingHeavy
+        actionFrameCounter: 1,
+        stocksRemaining: 4,
+        jumpsRemaining: 2,
+      });
+
+      // Squat compression is active
+      expect(scaleCalls.some((c) => c.sy < 1.0 && c.sx > 1.0)).toBe(true);
+
+      // Yellow ground underline is NOT rendered
+      expect(strokeStyles).not.toContain("rgba(251, 191, 36, 0.9)");
+    });
+
+    it("light landing (0x01f) applies 4-frame squat compression and does NOT render ground underline", () => {
+      expect(isLightLandingState(0x01f)).toBe(true);
+      expect(isLightLandingState(0x020)).toBe(false);
+
+      const scaleCalls: Array<{ sx: number; sy: number }> = [];
+      const strokeStyles: string[] = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: (sx: number, sy: number) => {
+          scaleCalls.push({ sx, sy });
+        },
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {
+          strokeStyles.push(fakeCtx.strokeStyle as string);
+        },
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        fillStyle: "",
+        get strokeStyle() {
+          return strokeStyles[strokeStyles.length - 1] ?? "";
+        },
+        set strokeStyle(val: string) {
+          strokeStyles.push(val);
+        },
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00, // Mario
+        actionStateId: 0x01f, // LandingLight
+        actionFrameCounter: 1,
+        stocksRemaining: 4,
+        jumpsRemaining: 2,
+      });
+
+      // Squat compression is active
+      expect(scaleCalls.some((c) => c.sy < 1.0 && c.sx > 1.0)).toBe(true);
+
+      // Floor underline is NOT rendered
+      expect(strokeStyles).not.toContain("rgba(226, 232, 240, 0.75)");
+    });
+
+    it("renders red silhouette proxy when character is in hitstun", () => {
+      const fillStyles: string[] = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        get fillStyle() {
+          return fillStyles[fillStyles.length - 1] ?? "";
+        },
+        set fillStyle(val: string) {
+          fillStyles.push(val);
+        },
+        strokeStyle: "",
+        shadowColor: "",
+        shadowBlur: 0,
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // DamageFlyHi (0x04b) with hitstunCounter = 20 -> inHitstun = true -> red silhouette
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        {
+          positionX: 50,
+          positionY: 100,
+          facingDirection: 1,
+          damagePercent: 40,
+          characterId: 0x02, // Fox
+          actionStateId: 0x033, // DamageFlyHi
+          actionFrameCounter: 1,
+          hitstunCounter: 20,
+          stocksRemaining: 4,
+          jumpsRemaining: 2,
+        },
+        null,
+        null,
+        0,
+        false,
+        null,
+        false,
+        null,
+      );
+
+      expect(fillStyles).toContain("rgba(239, 68, 68, 0.95)");
+    });
+
+    it("displays Invincible / Invulnerable tags in pause HUD based on hurtboxState", () => {
+      const fillTextCalls: string[] = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        fillText: (text: string) => {
+          fillTextCalls.push(text);
+        },
+        measureText: (str: string) => ({ width: str.length * 6.5 }),
+        setLineDash: () => {},
+        shadowColor: "",
+        shadowBlur: 0,
+        font: "",
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      // P1: Invincible (hurtboxState: 2), P2: Invulnerable (hurtboxState: 3)
+      const huds = [
+        {
+          x: 100,
+          y: 300,
+          stateName: "Wait",
+          stateId: 0x00a,
+          posX: 0,
+          posY: 0,
+          tagColor: "#ef4444",
+          hurtboxState: 2,
+        },
+        {
+          x: 400,
+          y: 300,
+          stateName: "RollF",
+          stateId: 0x09c,
+          posX: 50,
+          posY: 0,
+          tagColor: "#3b82f6",
+          hurtboxState: 3,
+        },
+      ];
+
+      drawDeconflictedPauseHuds(fakeCtx, huds);
+
+      expect(fillTextCalls.some((t) => t.includes("Invincible"))).toBe(true);
+      expect(fillTextCalls.some((t) => t.includes("Invulnerable"))).toBe(true);
     });
   });
 });

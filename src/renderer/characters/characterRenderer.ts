@@ -39,6 +39,7 @@ import {
   isTauntState,
   isSpecialState,
   isLandingState,
+  isLightLandingState,
   isHeavyLandingState,
   isDizzyState,
   isSleepState,
@@ -46,6 +47,8 @@ import {
   isWalkState,
   isDashOrRunState,
   isCrouchState,
+  isJumpSquatState,
+  isShieldDropState,
   isTeeterState,
   isPikachuCharacter,
   isFalconCharacter,
@@ -80,6 +83,7 @@ import {
   drawMissedTechBounce,
   drawTechBreakfall,
   drawTechRollSpeedLines,
+  drawJumpSquatFx,
 } from "./statusAuras.js";
 import {
   drawPlayerNameTag,
@@ -150,10 +154,16 @@ import {
   drawKirbySpecial,
   drawJigglypuffSpecial,
 } from "../../characters/specials/index.js";
+import {
+  createSilhouetteContext,
+  getComboEscapeSilhouetteColors,
+  getHitstunSilhouetteColors,
+  drawComboEscapeTextCallout,
+} from "./comboEscapeGapRenderer.js";
 
 export function drawPlayer(
   ctx: CanvasRenderingContext2D,
-  backgroundTheme: BackgroundTheme,
+  rawBackgroundTheme: BackgroundTheme,
   isLight: boolean,
   getCharacterIconImage: (characterId: number) => HTMLImageElement | null,
   getFramesSinceSpawn: (replay: Replay, frameIndex: number) => number,
@@ -179,13 +189,28 @@ export function drawPlayer(
     jumpsRemaining: number;
     characterSpecific?: number;
     shieldHealth?: number;
+    knockbackResist?: number;
   },
   perspectivePort?: PortIndex | null,
   replay?: Replay | null,
   frameIndex?: number,
   isPaused?: boolean,
   recoveryVerdict?: RecoveryVerdictFrame | null,
+  suppressPauseHud?: boolean,
+  comboEscapeState?: {
+    isActionableFrame: boolean;
+    actionableFrameCount: number;
+    fadeAlpha: number;
+    anchorWorldX?: number;
+    anchorWorldY?: number;
+    anchorFacingRight?: boolean;
+  } | null,
 ): void {
+  // In daylight mode on mountain (cherry tree) theme, fighters are illuminated with
+  // standard daylight colors rather than nocturnal moonlit skins.
+  const backgroundTheme: BackgroundTheme =
+    rawBackgroundTheme === "mountain" && isLight ? "grid" : rawBackgroundTheme;
+
   // positionY is the character's foot position, not their center - Teeter
   // samples land exactly on platform surface Y (see stageGeometry.ts), so
   // the marker's bottom edge (not its middle) belongs at y.
@@ -357,9 +382,12 @@ export function drawPlayer(
   const comboHits = inHitstun ? (post.comboHitCount ?? 0) : 0;
   const isSpecial = isSpecialState(post.actionStateId);
   const isLanding = isLandingState(post.actionStateId);
+  const isLightLanding = isLightLandingState(post.actionStateId);
   const isHeavyLanding = isHeavyLandingState(post.actionStateId);
   const isDizzy = isDizzyState(post.actionStateId);
   const isSleep = isSleepState(post.actionStateId);
+  const isJumpSquat = isJumpSquatState(post.actionStateId);
+  const isShieldDrop = isShieldDropState(post.actionStateId);
   const isOpponent =
     perspectivePort !== null &&
     perspectivePort !== undefined &&
@@ -370,6 +398,12 @@ export function drawPlayer(
   } else if (isDizzy) {
     labelY = Math.min(labelY, topY - 36);
   }
+
+  const hasYoshiSuperArmor =
+    isYoshiCharacter(post.characterId) &&
+    (post.knockbackResist !== undefined
+      ? post.knockbackResist > 0
+      : post.actionStateId === 0x018 || post.actionStateId === 0x019);
 
   const animState: CharacterAnimState = {
     taunting,
@@ -388,6 +422,7 @@ export function drawPlayer(
     isSleep,
     isOpponent,
     actionFrameCounter: post.actionFrameCounter,
+    isSuperArmor: hasYoshiSuperArmor,
   };
 
   ctx.save();
@@ -448,6 +483,42 @@ export function drawPlayer(
     ctx.translate(x, y);
     ctx.scale(1.15, 0.72);
     ctx.translate(-x, -y);
+  } else if (isJumpSquat) {
+    // Dynamic jumpsquat spring-compression (coiling downward in anticipation of liftoff)
+    const f = post.actionFrameCounter;
+    const compression = Math.min(1.0, 0.65 + f * 0.12);
+    const scaleY = 1.0 - 0.32 * compression;
+    const scaleX = 1.0 + 0.22 * compression;
+    ctx.translate(x, y);
+    ctx.scale(scaleX, scaleY);
+    ctx.translate(-x, -y);
+  } else if (isShieldDrop) {
+    // Platform drop-through from shield (0x022) squatting compression
+    const f = post.actionFrameCounter;
+    const compression = Math.min(1.0, 0.7 + f * 0.1);
+    const scaleY = 1.0 - 0.3 * compression;
+    const scaleX = 1.0 + 0.2 * compression;
+    ctx.translate(x, y);
+    ctx.scale(scaleX, scaleY);
+    ctx.translate(-x, -y);
+  } else if (isHeavyLanding) {
+    // Heavy landing (0x020) impact squat: compresses downward upon hitting the ground and eases back up
+    const f = post.actionFrameCounter;
+    const impact = Math.max(0, 1.0 - f * 0.2);
+    const scaleY = 1.0 - 0.35 * impact;
+    const scaleX = 1.0 + 0.25 * impact;
+    ctx.translate(x, y);
+    ctx.scale(scaleX, scaleY);
+    ctx.translate(-x, -y);
+  } else if (isLightLanding) {
+    // Light landing (0x01f) impact squat: 4 frames total
+    const f = post.actionFrameCounter;
+    const impact = Math.max(0, 1.0 - f * 0.25);
+    const scaleY = 1.0 - 0.22 * impact;
+    const scaleX = 1.0 + 0.16 * impact;
+    ctx.translate(x, y);
+    ctx.scale(scaleX, scaleY);
+    ctx.translate(-x, -y);
   } else if (isTeeterState(post.actionStateId)) {
     // Teetering ledge balance sway
     const teeterAngle = Math.sin(post.actionFrameCounter * 0.28) * 0.14;
@@ -456,711 +527,724 @@ export function drawPlayer(
     ctx.translate(-x, -y);
   }
 
-  if (isEggEncasedState(post.actionStateId)) {
-    drawYoshiEggShell(ctx, x, centerY, halfWidth, heightPx);
-  } else if (post.characterId === 0x1d) {
-    drawFalcoPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x1e) {
-    drawGanondorfPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x1f) {
-    drawYoungLinkPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x20) {
-    drawDrMarioPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x21) {
-    drawWarioPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x22) {
-    drawDarkSamusPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x26) {
-    drawLucasPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x35) {
-    drawGigaBowserPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x36) {
-    drawPianoPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x37) {
-    drawWolfPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x38) {
-    drawConkerPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x39) {
-    drawMewtwoPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x3a) {
-    drawMarthPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x3b) {
-    drawSonicPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x3c) {
-    drawSandbagPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x3d) {
-    drawSuperSonicPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x3e) {
-    drawSheikPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x3f) {
-    drawMarinaPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x40) {
-    drawDededePolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x41) {
-    drawGoemonPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x42) {
-    drawPeppyPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x43) {
-    drawSlippyPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x44) {
-    drawBanjoPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x45) {
-    drawMetalLuigiPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x46) {
-    drawEbisumaruPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x47) {
-    drawDragonKingPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x48) {
-    drawCrashPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x49) {
-    drawPeachPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x4a) {
-    drawRoyPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x4b) {
-    drawDrLuigiPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (post.characterId === 0x4c) {
-    drawLankyKongPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isPikachuCharacter(post.characterId)) {
-    drawPikachuPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isFalconCharacter(post.characterId)) {
-    drawFalconPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isMarioCharacter(post.characterId)) {
-    drawMarioPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isLuigiCharacter(post.characterId)) {
-    drawLuigiPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isKirbyCharacter(post.characterId)) {
-    drawKirbyPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isJigglypuffCharacter(post.characterId)) {
-    drawJigglypuffPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isFoxCharacter(post.characterId)) {
-    drawFoxPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isYoshiCharacter(post.characterId)) {
-    drawYoshiPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isDonkeyKongCharacter(post.characterId)) {
-    drawDonkeyKongPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isLinkCharacter(post.characterId)) {
-    drawLinkPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isNessCharacter(post.characterId)) {
-    drawNessPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isSamusCharacter(post.characterId)) {
-    drawSamusPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else if (isBowserCharacter(post.characterId)) {
-    drawBowserPolygons(
-      ctx,
-      backgroundTheme,
-      x,
-      y,
-      topY,
-      centerY,
-      halfWidth,
-      heightPx,
-      effectiveDir,
-      color,
-      animState,
-    );
-  } else {
-    // Isosceles triangle, nose pointing in the facing direction, feet at y and head at topY.
-    const triX =
-      inCombo && !taunting
-        ? x + (post.actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
-        : x;
-    const noseX = triX + effectiveDir * halfWidth;
-    const backX = triX - effectiveDir * halfWidth;
-
+  // Apply theme-adaptive silhouette proxy:
+  // - Yellow silhouette when actionable during a combo gap
+  // - Red silhouette when in hitstun
+  const originalCtx = ctx;
+  const isGapSilhouette = Boolean(comboEscapeState?.isActionableFrame);
+  const isHitstunSilhouette = inHitstun;
+  const isSilhouette = isGapSilhouette || isHitstunSilhouette;
+  if (isSilhouette) {
+    const silColors = isGapSilhouette
+      ? getComboEscapeSilhouetteColors(backgroundTheme, isLight)
+      : getHitstunSilhouetteColors(backgroundTheme, isLight);
     ctx.save();
-    if (taunting) {
-      // Spin triangle continuously around its geometric center (x, centerY)
-      const spinAngle =
-        post.actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
-      ctx.translate(x, centerY);
-      ctx.rotate(spinAngle);
-      ctx.translate(-x, -centerY);
-    }
+    ctx.shadowColor = silColors.glow;
+    ctx.shadowBlur = 12;
+    ctx = createSilhouetteContext(
+      originalCtx,
+      silColors.fill,
+      silColors.stroke,
+    );
+  }
 
-    ctx.beginPath();
-    ctx.moveTo(noseX, noseY);
-    ctx.lineTo(backX, topY);
-    ctx.lineTo(backX, y);
-    ctx.closePath();
-    ctx.fillStyle = triangleColor;
-    ctx.fill();
-
-    if (inCombo) {
-      // Active hitstun / combo electric outline & outer glow (taking damage)
-      ctx.save();
-      ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
-      ctx.lineWidth = 5.0; // 2x thicker for legibility
-      ctx.shadowColor = "rgba(255, 120, 0, 0.85)";
-      ctx.shadowBlur = 10;
-      ctx.stroke();
-      ctx.restore();
-
-      ctx.beginPath();
-      ctx.moveTo(noseX, noseY);
-      ctx.lineTo(backX, topY);
-      ctx.lineTo(backX, y);
-      ctx.closePath();
-      ctx.strokeStyle = "rgba(255, 220, 180, 0.9)";
-      ctx.lineWidth = 1.8;
-      ctx.stroke();
-    } else if (isTechRoll) {
-      // High-speed vibrant cyan/teal tech roll aura
-      ctx.save();
-      ctx.strokeStyle = isInvulnerable
-        ? "rgba(34, 211, 238, 0.95)"
-        : "rgba(6, 182, 212, 0.9)";
-      ctx.lineWidth = 2.8;
-      ctx.shadowColor = "rgba(6, 182, 212, 0.85)";
-      ctx.shadowBlur = 10;
-      ctx.stroke();
-      ctx.restore();
-
-      ctx.beginPath();
-      ctx.moveTo(noseX, noseY);
-      ctx.lineTo(backX, topY);
-      ctx.lineTo(backX, y);
-      ctx.closePath();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
+  try {
+    if (isEggEncasedState(post.actionStateId)) {
+      drawYoshiEggShell(ctx, x, centerY, halfWidth, heightPx);
+    } else if (post.characterId === 0x1d) {
+      drawFalcoPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x1e) {
+      drawGanondorfPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x1f) {
+      drawYoungLinkPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x20) {
+      drawDrMarioPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x21) {
+      drawWarioPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x22) {
+      drawDarkSamusPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x26) {
+      drawLucasPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x35) {
+      drawGigaBowserPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x36) {
+      drawPianoPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x37) {
+      drawWolfPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x38) {
+      drawConkerPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x39) {
+      drawMewtwoPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3a) {
+      drawMarthPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3b) {
+      drawSonicPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3c) {
+      drawSandbagPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3d) {
+      drawSuperSonicPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3e) {
+      drawSheikPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x3f) {
+      drawMarinaPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x40) {
+      drawDededePolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x41) {
+      drawGoemonPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x42) {
+      drawPeppyPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x43) {
+      drawSlippyPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x44) {
+      drawBanjoPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x45) {
+      drawMetalLuigiPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x46) {
+      drawEbisumaruPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x47) {
+      drawDragonKingPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x48) {
+      drawCrashPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x49) {
+      drawPeachPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x4a) {
+      drawRoyPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x4b) {
+      drawDrLuigiPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (post.characterId === 0x4c) {
+      drawLankyKongPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isPikachuCharacter(post.characterId)) {
+      drawPikachuPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isFalconCharacter(post.characterId)) {
+      drawFalconPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isMarioCharacter(post.characterId)) {
+      drawMarioPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isLuigiCharacter(post.characterId)) {
+      drawLuigiPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isKirbyCharacter(post.characterId)) {
+      drawKirbyPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isJigglypuffCharacter(post.characterId)) {
+      drawJigglypuffPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isFoxCharacter(post.characterId)) {
+      drawFoxPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isYoshiCharacter(post.characterId)) {
+      drawYoshiPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isDonkeyKongCharacter(post.characterId)) {
+      drawDonkeyKongPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isLinkCharacter(post.characterId)) {
+      drawLinkPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isNessCharacter(post.characterId)) {
+      drawNessPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isSamusCharacter(post.characterId)) {
+      drawSamusPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
+    } else if (isBowserCharacter(post.characterId)) {
+      drawBowserPolygons(
+        ctx,
+        backgroundTheme,
+        x,
+        y,
+        topY,
+        centerY,
+        halfWidth,
+        heightPx,
+        effectiveDir,
+        color,
+        animState,
+      );
     } else {
-      ctx.strokeStyle = "rgba(0,0,0,0.5)";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
+      // Isosceles triangle, nose pointing in the facing direction, feet at y and head at topY.
+      const triX =
+        inCombo && !taunting
+          ? x + (post.actionFrameCounter % 2 === 0 ? 1.2 : -1.2)
+          : x;
+      const noseX = triX + effectiveDir * halfWidth;
+      const backX = triX - effectiveDir * halfWidth;
 
-    if (isLanding) {
-      // Ground impact compression line along floor (y)
       ctx.save();
-      const impactSpread = isHeavyLanding ? halfWidth * 1.35 : halfWidth * 0.9;
+      if (taunting) {
+        // Spin triangle continuously around its geometric center (x, centerY)
+        const spinAngle =
+          post.actionFrameCounter * 0.125 * (facingRight ? 1 : -1);
+        ctx.translate(x, centerY);
+        ctx.rotate(spinAngle);
+        ctx.translate(-x, -centerY);
+      }
+
       ctx.beginPath();
-      ctx.moveTo(x - impactSpread, y);
-      ctx.lineTo(x + impactSpread, y);
-      ctx.strokeStyle = isHeavyLanding
-        ? "rgba(251, 191, 36, 0.9)"
-        : "rgba(226, 232, 240, 0.75)";
-      ctx.lineWidth = isHeavyLanding ? 3 : 1.8;
-      ctx.stroke();
+      ctx.moveTo(noseX, noseY);
+      ctx.lineTo(backX, topY);
+      ctx.lineTo(backX, y);
+      ctx.closePath();
+      ctx.fillStyle = triangleColor;
+      ctx.fill();
+
+      if (inCombo && !isSilhouette) {
+        // Active hitstun / combo electric outline & outer glow (taking damage)
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 60, 40, 0.95)";
+        ctx.lineWidth = 5.0; // 2x thicker for legibility
+        ctx.shadowColor = "rgba(255, 120, 0, 0.85)";
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.moveTo(noseX, noseY);
+        ctx.lineTo(backX, topY);
+        ctx.lineTo(backX, y);
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(255, 220, 180, 0.9)";
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+      } else if (isTechRoll) {
+        // High-speed vibrant cyan/teal tech roll aura
+        ctx.save();
+        ctx.strokeStyle = isInvulnerable
+          ? "rgba(34, 211, 238, 0.95)"
+          : "rgba(6, 182, 212, 0.9)";
+        ctx.lineWidth = 2.8;
+        ctx.shadowColor = "rgba(6, 182, 212, 0.85)";
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.moveTo(noseX, noseY);
+        ctx.lineTo(backX, topY);
+        ctx.lineTo(backX, y);
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = "rgba(0,0,0,0.5)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
       ctx.restore();
     }
-
-    ctx.restore();
+  } finally {
+    if (isSilhouette) {
+      originalCtx.restore();
+      ctx = originalCtx;
+    }
   }
   ctx.restore(); // Closes the character sway/bob/tumble/prone transform
 
@@ -1183,6 +1267,7 @@ export function drawPlayer(
       attack,
       joystick ? { x: joystick.stickX, y: joystick.stickY } : null,
       angleable,
+      post.actionFrameCounter,
     );
   }
 
@@ -1421,6 +1506,19 @@ export function drawPlayer(
     );
   }
 
+  if (isJumpSquat) {
+    drawJumpSquatFx(
+      ctx,
+      x,
+      y,
+      halfWidth,
+      heightPx,
+      post.actionFrameCounter,
+      color,
+      isOpponent,
+    );
+  }
+
   // Damage% label above the triangle, in the player's color (or cycling if taunting).
   ctx.font = "bold 15px system-ui, -apple-system, sans-serif";
   ctx.fillStyle = taunting ? triangleColor : color;
@@ -1467,6 +1565,40 @@ export function drawPlayer(
     ctx.restore();
   }
 
+  // Floating "XF gap" badge beside fighter during actionable combo gap and subsequent fade-out
+  if (comboEscapeState && comboEscapeState.fadeAlpha > 0.01) {
+    const calloutX =
+      comboEscapeState.anchorWorldX !== undefined
+        ? camera.worldToScreen(
+            comboEscapeState.anchorWorldX,
+            comboEscapeState.anchorWorldY ?? 0,
+          ).x
+        : x;
+    const calloutY =
+      comboEscapeState.anchorWorldY !== undefined
+        ? camera.worldToScreen(
+            comboEscapeState.anchorWorldX ?? 0,
+            comboEscapeState.anchorWorldY,
+          ).y
+        : y;
+    const calloutCenterY = calloutY - heightPx / 2;
+    const calloutFacingRight =
+      comboEscapeState.anchorFacingRight !== undefined
+        ? comboEscapeState.anchorFacingRight
+        : facingRight;
+
+    drawComboEscapeTextCallout(
+      ctx,
+      calloutX,
+      calloutCenterY,
+      halfWidth,
+      heightPx,
+      calloutFacingRight,
+      comboEscapeState.actionableFrameCount,
+      comboEscapeState.fadeAlpha,
+    );
+  }
+
   // Player name + stock tag, shown at match start and again (for every
   // player, not just the one who respawned) for a few seconds after any
   // respawn (fades out after initial frames) - and persistently, at full
@@ -1508,8 +1640,15 @@ export function drawPlayer(
   // only while playback is paused - a paused frame is exactly when this
   // level of detail (otherwise only in the sidebar panel) is useful to
   // read without it constantly changing underneath you.
-  if (isPaused) {
+  if (isPaused && !suppressPauseHud) {
     const tagColor = getPlayerColor(port, perspectivePort);
+    const armorForHud =
+      post.knockbackResist !== undefined
+        ? post.knockbackResist
+        : (post.actionStateId === 0x018 || post.actionStateId === 0x019) &&
+            isYoshiCharacter(post.characterId)
+          ? 140
+          : undefined;
     drawPlayerStateInfo(
       ctx,
       x,
@@ -1519,6 +1658,7 @@ export function drawPlayer(
       post.positionX,
       post.positionY,
       tagColor,
+      armorForHud,
     );
   }
 

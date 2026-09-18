@@ -261,3 +261,337 @@ export function drawTechRollSpeedLines(
   }
   ctx.restore();
 }
+
+/**
+ * Draws dynamic jumpsquat anticipation visuals during action state 0x014 / 0x015:
+ * 1. Lateral ground dust kick puffs billowing outward left & right from the planted feet
+ * 2. Expanding ground compression pressure ring directly under the soles
+ * 3. Rising jump anticipation chevrons and vertical energy streaks flanking the character
+ * 4. Ground compression sparks at the soles on later frames
+ */
+export function drawJumpSquatFx(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  halfWidth: number,
+  heightPx: number,
+  frameCounter: number,
+  playerColor: string,
+  isOpponent: boolean,
+): void {
+  ctx.save();
+
+  // Progress through jumpsquat (ranges 3-7 frames depending on character)
+  const f = Math.max(0, frameCounter);
+  const progress = Math.min(1, f / 4);
+
+  // 1. Ground Compression Pressure Ring on the stage floor
+  const ringRadiusX = halfWidth * (1.15 + progress * 0.35);
+  const ringRadiusY = Math.max(2.5, 3 + progress * 1.5);
+  const ringAlpha = 0.85 - progress * 0.2;
+
+  ctx.beginPath();
+  ctx.ellipse(x, y, ringRadiusX, ringRadiusY, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = resolveColor(playerColor, isOpponent, ringAlpha);
+  ctx.lineWidth = 2.0;
+  ctx.shadowColor = resolveColor(playerColor, isOpponent, 0.8);
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+
+  // Soft inner ground contact fill
+  ctx.beginPath();
+  ctx.ellipse(x, y, ringRadiusX * 0.75, ringRadiusY * 0.75, 0, 0, Math.PI * 2);
+  ctx.fillStyle = resolveColor(playerColor, isOpponent, 0.15 + progress * 0.15);
+  ctx.fill();
+
+  // 2. Lateral Ground Dust Kick Puffs (Left and Right)
+  // When planting feet and coiling, friction sends dust puffs outward to both sides
+  const dustColor = resolveColor("rgba(203, 213, 225, 0.75)", isOpponent, 0.75);
+  const dustBorder = resolveColor("rgba(148, 163, 184, 0.6)", isOpponent, 0.6);
+
+  for (const dir of [-1, 1] as const) {
+    const baseOffset = halfWidth * 0.6;
+    const travel = f * 3.5;
+    const dustX = x + dir * (baseOffset + travel);
+    const dustY = y - 1;
+    const dustAlpha = Math.max(0.2, 0.75 - f * 0.08);
+
+    // Primary billow
+    const r1 = Math.max(2, 3.5 + f * 1.2);
+    ctx.beginPath();
+    ctx.arc(dustX, dustY, r1, 0, Math.PI * 2);
+    ctx.fillStyle = resolveColor(dustColor, isOpponent, dustAlpha);
+    ctx.fill();
+    ctx.strokeStyle = resolveColor(dustBorder, isOpponent, dustAlpha * 0.8);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Secondary trailing billow
+    const r2 = Math.max(1.5, 2.2 + f * 0.8);
+    ctx.beginPath();
+    ctx.arc(dustX - dir * (r1 * 0.8), dustY + 0.5, r2, 0, Math.PI * 2);
+    ctx.fillStyle = resolveColor(dustColor, isOpponent, dustAlpha * 0.7);
+    ctx.fill();
+
+    // Ground skid streak
+    ctx.beginPath();
+    ctx.moveTo(x + dir * (baseOffset * 0.5), y);
+    ctx.lineTo(dustX + dir * r1, y);
+    ctx.strokeStyle = resolveColor("#e2e8f0", isOpponent, dustAlpha * 0.8);
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
+
+  // 3. Upward Jump Anticipation Chevrons / Vertical Energy Streaks
+  // Flanking the fighter's legs/torso, telegraphing the upcoming vertical launch
+  const chevronCount = 2;
+  for (let i = 0; i < chevronCount; i++) {
+    const side = i === 0 ? -1 : 1;
+    const chevronX = x + side * (halfWidth * 0.75);
+    // Rises higher as frames advance
+    const riseDist = 6 + f * 4.5;
+    const chevronY = y - riseDist;
+    const chevAlpha = 0.5 + progress * 0.45;
+    const chevSpan = 5;
+
+    ctx.beginPath();
+    ctx.moveTo(chevronX - chevSpan, chevronY + 4);
+    ctx.lineTo(chevronX, chevronY);
+    ctx.lineTo(chevronX + chevSpan, chevronY + 4);
+    ctx.strokeStyle = resolveColor("#ffffff", isOpponent, chevAlpha);
+    ctx.lineWidth = 1.8;
+    ctx.shadowColor = resolveColor(playerColor, isOpponent, 0.8);
+    ctx.shadowBlur = 6;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    // Vertical trailing energy line below the chevron
+    ctx.beginPath();
+    ctx.moveTo(chevronX, chevronY + 4);
+    ctx.lineTo(chevronX, y - 2);
+    ctx.strokeStyle = resolveColor(playerColor, isOpponent, chevAlpha * 0.6);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  // 4. Kinetic Compression Sparks at the Soles
+  if (f >= 1) {
+    const sparkAlpha = Math.min(1.0, 0.4 + f * 0.15);
+    for (const side of [-1, 1] as const) {
+      const sx = x + side * (halfWidth * 0.35);
+      const sy = y - 1;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = resolveColor("#ffffff", isOpponent, sparkAlpha);
+      ctx.shadowColor = resolveColor(playerColor, isOpponent, 0.9);
+      ctx.shadowBlur = 5;
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Draws Yoshi's Super Armor effect during his double jump (JumpAerialF/B).
+ * Knockback resistance (140 US / 110 JP) protects him from being interrupted by light hits.
+ *
+ * Rather than an ambiguous generic circle/bubble that conflicts with neutral air attack arcs,
+ * this conforms directly to Yoshi's organic dinosaur silhouette:
+ * 1. An anatomical body contour conforming to Yoshi's snout, eyes, neck spines, back shell,
+ *    belly, boots, and tail.
+ * 2. Crystalline armor facet plates that wrap his body segments.
+ * 3. A reinforced shell carapace plating that highlights his red back shell.
+ * 4. Flutter wings radiating from his shell with flapping oscillation.
+ * 5. Kinetic diamond spark nodes along his body outline.
+ */
+export function drawSuperArmorAura(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  centerY: number,
+  halfWidth: number,
+  heightPx: number,
+  effectiveDir: number,
+  frameCounter: number,
+  armorValue: number,
+  playerColor: string,
+  isOpponent: boolean,
+): void {
+  ctx.save();
+
+  const facingRight = effectiveDir >= 0;
+  const dir = facingRight ? 1 : -1;
+  const w = halfWidth;
+  const h = heightPx;
+
+  // Pulse & shimmer frequencies based on frameCounter
+  const pulse = Math.sin(frameCounter * 0.32) * 0.08;
+  const armorScale = 1.08 + pulse; // Conforms tightly around Yoshi's body (~8% offset)
+
+  // Primary armor theme colors: iridescent crystalline emerald / diamond cyan accented with player color
+  const armorHex = armorValue >= 130 ? "#34d399" : "#38bdf8"; // 140 US = emerald, 110 JP = sky/diamond
+  const auraFill = resolveColor(armorHex, isOpponent, 0.22);
+  const outerBorder = resolveColor(armorHex, isOpponent, 0.9);
+  const innerCore = resolveColor("#ffffff", isOpponent, 0.9);
+
+  // 1. Anatomical Dinosaur Body-Conforming Armor Aura
+  // Traces the precise perimeter of Yoshi (snout, eyes, neck spines, back shell, tail, boots, belly)
+  ctx.save();
+  ctx.beginPath();
+
+  // Head: eye crown top
+  ctx.moveTo(x + 0.1 * dir * w * armorScale, y - 0.98 * h * armorScale);
+  // Snout top ridge down to nose tip
+  ctx.lineTo(x + 0.45 * dir * w * armorScale, y - 0.9 * h * armorScale);
+  ctx.lineTo(x + 0.88 * dir * w * armorScale, y - 0.74 * h * armorScale);
+  // Snout bottom curve to mouth
+  ctx.lineTo(x + 0.75 * dir * w * armorScale, y - 0.6 * h * armorScale);
+  ctx.lineTo(x + 0.45 * dir * w * armorScale, y - 0.52 * h * armorScale);
+  // Front chest & white belly curve down to front boot
+  ctx.lineTo(x + 0.44 * dir * w * armorScale, y - 0.35 * h * armorScale);
+  ctx.lineTo(x + 0.58 * dir * w * armorScale, y - 0.12 * h * armorScale);
+  ctx.lineTo(x + 0.38 * dir * w * armorScale, y - 0.02 * h);
+  // Between boots (underbelly / soles)
+  ctx.lineTo(x + 0.05 * dir * w, y - 0.05 * h);
+  // Rear boot
+  ctx.lineTo(x - 0.22 * dir * w * armorScale, y - 0.02 * h);
+  ctx.lineTo(x - 0.52 * dir * w * armorScale, y - 0.12 * h * armorScale);
+  // Rear leg up to tail base
+  ctx.lineTo(x - 0.4 * dir * w * armorScale, y - 0.26 * h * armorScale);
+  // Tail point
+  ctx.lineTo(x - 1.08 * dir * w * armorScale, y - 0.52 * h * armorScale);
+  ctx.lineTo(x - 0.52 * dir * w * armorScale, y - 0.62 * h * armorScale);
+  // Back shell bulge
+  ctx.lineTo(x - 0.68 * dir * w * armorScale, y - 0.72 * h * armorScale);
+  ctx.lineTo(x - 0.42 * dir * w * armorScale, y - 0.78 * h * armorScale);
+  // Neck spines
+  ctx.lineTo(x - 0.46 * dir * w * armorScale, y - 0.92 * h * armorScale);
+  ctx.lineTo(x - 0.15 * dir * w * armorScale, y - 0.88 * h * armorScale);
+  ctx.closePath();
+
+  // Translucent crystalline armor fill
+  ctx.fillStyle = auraFill;
+  ctx.fill();
+
+  // Glowing outer reinforced armor contour
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = outerBorder;
+  ctx.shadowColor = resolveColor(armorHex, isOpponent, 0.9);
+  ctx.shadowBlur = 9;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+
+  // Crisp high-tensile core stroke
+  ctx.lineWidth = 1.0;
+  ctx.strokeStyle = innerCore;
+  ctx.stroke();
+  ctx.restore();
+
+  // 2. Reinforced Shell Carapace Armor Ring
+  // Yoshi's shell is the origin of his armor / flutter energy
+  const shellX = x - 0.48 * dir * w;
+  const shellY = y - 0.62 * h;
+  const shellRadiusW = Math.max(0.1, 0.32 * w);
+  const shellRadiusH = Math.max(0.1, 0.22 * h);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(
+    shellX,
+    shellY,
+    shellRadiusW * armorScale,
+    shellRadiusH * armorScale,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.strokeStyle = resolveColor("#ffffff", isOpponent, 0.9);
+  ctx.lineWidth = 2.0;
+  ctx.shadowColor = resolveColor(armorHex, isOpponent, 0.95);
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+
+  // Crystalline ridge cross on the shell
+  ctx.beginPath();
+  ctx.moveTo(shellX - shellRadiusW * 0.7, shellY);
+  ctx.lineTo(shellX + shellRadiusW * 0.7, shellY);
+  ctx.moveTo(shellX, shellY - shellRadiusH * 0.7);
+  ctx.lineTo(shellX, shellY + shellRadiusH * 0.7);
+  ctx.strokeStyle = resolveColor(armorHex, isOpponent, 0.85);
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  ctx.restore();
+
+  // 3. Flutter Wings Accents
+  // Radiating from Yoshi's back shell during his double jump flutter
+  const flapAngle = Math.sin(frameCounter * 0.55) * 0.35;
+  const wingAlpha = 0.65 + Math.cos(frameCounter * 0.55) * 0.25;
+
+  ctx.save();
+  ctx.translate(shellX, shellY);
+  ctx.scale(dir, 1);
+
+  for (const wingIndex of [0, 1] as const) {
+    const isTop = wingIndex === 0;
+    const baseRot = isTop ? -0.55 + flapAngle : 0.35 - flapAngle * 0.7;
+    const wingLen = isTop ? w * 1.1 : w * 0.85;
+    const wingThick = isTop ? h * 0.22 : h * 0.16;
+
+    ctx.save();
+    ctx.rotate(baseRot);
+    ctx.beginPath();
+    ctx.ellipse(
+      -wingLen * 0.45,
+      0,
+      wingLen * 0.55,
+      wingThick * 0.5,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = resolveColor("#e0f2fe", isOpponent, wingAlpha * 0.4);
+    ctx.fill();
+    ctx.strokeStyle = resolveColor("#38bdf8", isOpponent, wingAlpha * 0.9);
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // 4. Kinetic Armor Diamond Spark Nodes along Yoshi's Body
+  // Placed at key anatomical vertices (snout tip, crown, spines, shell, tail tip, soles)
+  const sparkVertices = [
+    { px: x + 0.88 * dir * w * armorScale, py: y - 0.74 * h * armorScale }, // Snout tip
+    { px: x + 0.1 * dir * w * armorScale, py: y - 0.98 * h * armorScale }, // Head crest
+    { px: x - 0.46 * dir * w * armorScale, py: y - 0.92 * h * armorScale }, // Neck spines
+    { px: x - 1.08 * dir * w * armorScale, py: y - 0.52 * h * armorScale }, // Tail tip
+    { px: x + 0.58 * dir * w * armorScale, py: y - 0.12 * h * armorScale }, // Front boot
+    { px: x - 0.52 * dir * w * armorScale, py: y - 0.12 * h * armorScale }, // Rear boot
+  ];
+
+  ctx.save();
+  for (let i = 0; i < sparkVertices.length; i++) {
+    const v = sparkVertices[i];
+    if (!v) continue;
+    const sparkPhase = frameCounter * 0.25 + i * 1.2;
+    const sparkPulse = 0.5 + 0.5 * Math.sin(sparkPhase);
+    const sparkRadius = 1.8 + 1.2 * sparkPulse;
+
+    // Small 4-pointed diamond spark
+    ctx.beginPath();
+    ctx.moveTo(v.px, v.py - sparkRadius * 1.4);
+    ctx.lineTo(v.px + sparkRadius, v.py);
+    ctx.lineTo(v.px, v.py + sparkRadius * 1.4);
+    ctx.lineTo(v.px - sparkRadius, v.py);
+    ctx.closePath();
+    ctx.fillStyle = resolveColor("#ffffff", isOpponent, 0.9);
+    ctx.shadowColor = resolveColor(armorHex, isOpponent, 0.95);
+    ctx.shadowBlur = 6;
+    ctx.fill();
+  }
+  ctx.restore();
+
+  ctx.restore();
+}

@@ -339,11 +339,26 @@ export function getCharacterSpecialStates(characterId: number): StateOption[] {
         visualizedDesc: "Fiery Detonation Explosion",
       },
       {
+        id: 0x0e9,
+        name: "Falcon Kick (Air)",
+        category: "special",
+        visualized: true,
+        visualizedDesc:
+          "Aerial Falcon Kick Steep Dive Spear (20° from straight down)",
+      },
+      {
         id: 0x0eb,
-        name: "Falcon Kick (Down-B Flame)",
+        name: "Falcon Kick (Ground)",
         category: "special",
         visualized: true,
         visualizedDesc: "Flame Kick Forward Streak",
+      },
+      {
+        id: 0x0ec,
+        name: "Falcon Kick (Landing / Slide)",
+        category: "special",
+        visualized: true,
+        visualizedDesc: "Falcon Kick Active Slide",
       },
       {
         id: 0x0ed,

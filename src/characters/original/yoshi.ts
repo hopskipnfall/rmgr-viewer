@@ -58,13 +58,21 @@ export function drawYoshiPolygons(
   let whiteColor = resolveColor(baseWhite, isOpponent);
   let orangeBoot = resolveColor(baseOrangeBoot, isOpponent);
   let redShell = resolveColor(baseRedShell, isOpponent);
-  const outlineColor = resolveColor(baseOutline, isOpponent);
-  const outlineWidth = 1.2;
+  let outlineColor = resolveColor(baseOutline, isOpponent);
+  let outlineWidth = 1.2;
 
   if (taunting) {
     const hue = (actionFrameCounter * 10) % 360;
     greenColor = resolveColor(`hsl(${hue}, 85%, 50%)`, isOpponent);
     orangeBoot = resolveColor(`hsl(${(hue + 60) % 360}, 90%, 55%)`, isOpponent);
+  } else if (state.isSuperArmor) {
+    // Silver / metallic chrome armor body with gleaming gold outline
+    greenColor = resolveColor("#94a3b8", isOpponent); // Polished silver body / snout / tail
+    whiteColor = resolveColor("#f1f5f9", isOpponent); // Gleaming chrome belly plate
+    orangeBoot = resolveColor("#475569", isOpponent); // Heavy slate titanium boots
+    redShell = resolveColor("#f59e0b", isOpponent); // Burnished gold shell & crest
+    outlineColor = resolveColor("#fbbf24", isOpponent); // Radiant gold armor contour
+    outlineWidth = 2.0;
   } else if (isRoll) {
     greenColor = resolveColor(baseGreen, isOpponent, 0.45);
     whiteColor = resolveColor(baseWhite, isOpponent, 0.45);
@@ -75,6 +83,11 @@ export function drawYoshiPolygons(
   const dir = effectiveDir;
   const w = halfWidth;
   const h = heightPx;
+
+  if (state.isSuperArmor) {
+    ctx.shadowColor = resolveColor("rgba(245, 158, 11, 0.65)", isOpponent);
+    ctx.shadowBlur = 5;
+  }
 
   // Tail & Red Shell (Background)
   ctx.beginPath();
@@ -151,6 +164,9 @@ export function drawYoshiPolygons(
   ctx.closePath();
   ctx.fillStyle = whiteColor;
   ctx.fill();
+  if (state.isSuperArmor) {
+    ctx.stroke();
+  }
 
   // Big Rounded Green Snout
   ctx.beginPath();
@@ -182,7 +198,9 @@ export function drawYoshiPolygons(
       Math.PI * 2,
     );
     ctx.fillStyle = resolveColor("#18181b", isOpponent);
+    if (state.isSuperArmor) ctx.shadowBlur = 0;
     ctx.fill();
+    if (state.isSuperArmor) ctx.shadowBlur = 5;
   }
 
   // Eye White (on top of snout bridge)
@@ -215,7 +233,9 @@ export function drawYoshiPolygons(
       Math.PI * 2,
     );
     ctx.fillStyle = resolveColor("#18181b", isOpponent);
+    if (state.isSuperArmor) ctx.shadowBlur = 0;
     ctx.fill();
+    if (state.isSuperArmor) ctx.shadowBlur = 5;
   }
 
   // Red Spines along neck
@@ -226,7 +246,13 @@ export function drawYoshiPolygons(
   ctx.closePath();
   ctx.fillStyle = redShell;
   ctx.fill();
+  if (state.isSuperArmor) {
+    ctx.stroke();
+  }
 
+  if (state.isSuperArmor) {
+    ctx.shadowBlur = 0;
+  }
   drawCharacterStateAuras(ctx, posX, y, w, h, dir, state);
   ctx.restore();
 }

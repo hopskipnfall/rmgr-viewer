@@ -6,3 +6,4 @@ export * from "./motionTrails.js";
 export * from "./attackArc.js";
 export * from "./yoshiEgg.js";
 export * from "./characterRenderer.js";
+export * from "./comboEscapeGapRenderer.js";

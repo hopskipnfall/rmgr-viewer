@@ -17,6 +17,7 @@ export interface CharacterAnimState {
   isSleep: boolean;
   isOpponent: boolean;
   actionFrameCounter: number;
+  isSuperArmor?: boolean;
 }
 
 export function toGrayscale(colorStr: string, overrideAlpha?: number): string {

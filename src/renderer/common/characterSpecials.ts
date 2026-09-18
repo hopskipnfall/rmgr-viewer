@@ -242,6 +242,7 @@ export type FalconSpecialType =
   | "dive_catch"
   | "dive_explosion"
   | "kick"
+  | "kick_air"
   | "kick_end";
 
 export function getFalconSpecialType(
@@ -256,7 +257,7 @@ export function getFalconSpecialType(
   ) {
     return "punch";
   }
-  if (actionStateId === 0x0e8 || actionStateId === 0x0e9) {
+  if (actionStateId === 0x0e8) {
     return "dive_reach";
   }
   if (actionStateId === 0x0ea) {
@@ -264,6 +265,9 @@ export function getFalconSpecialType(
   }
   if (actionStateId === 0x0ee) {
     return "dive_explosion";
+  }
+  if (actionStateId === 0x0e9) {
+    return "kick_air";
   }
   if (actionStateId === 0x0eb || actionStateId === 0x0ec) {
     return "kick";
