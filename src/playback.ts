@@ -7,7 +7,22 @@ const FPS = 60;
  * playback. Consumers (the camera, specifically) use this to decide
  * whether to reframe instantly or smoothly - see camera.ts's doc comment.
  */
-export type FrameChangeReason = "jump" | "tick";
+/**
+ * Whether a frame-index change was a discontinuous jump (scrub, step,
+ * restart-from-end), a natural one-frame advance during continuous
+ * playback ("tick"), or a smooth fast-forward/rewind animation ("fast-forward").
+ * Consumers (the camera, specifically) use this to decide
+ * whether to reframe instantly or smoothly - see camera.ts's doc comment.
+ */
+export type FrameChangeReason = "jump" | "tick" | "fast-forward";
+
+interface FastForwardAnimation {
+  startFrame: number;
+  targetFrame: number;
+  startTime: number;
+  durationMs: number;
+  wasPlaying: boolean;
+}
 
 /**
  * Owns "which frame index are we looking at" over time. Playback advances
@@ -23,6 +38,7 @@ export class PlaybackController {
   private accumulatedMs = 0;
 
   private speed = 1;
+  private fastForwardAnim: FastForwardAnimation | null = null;
 
   constructor(
     private frameCount: number,
@@ -34,6 +50,7 @@ export class PlaybackController {
   ) {}
 
   setFrameCount(frameCount: number): void {
+    this.cancelAnimatedJump();
     this.frameCount = frameCount;
     this.seek(0);
   }
@@ -51,10 +68,21 @@ export class PlaybackController {
   }
 
   get isPlaying(): boolean {
-    return this.playing;
+    return this.playing || (this.fastForwardAnim?.wasPlaying ?? false);
+  }
+
+  get isAnimatingJump(): boolean {
+    return this.fastForwardAnim !== null;
+  }
+
+  cancelAnimatedJump(): void {
+    if (!this.fastForwardAnim) return;
+    this.fastForwardAnim = null;
+    cancelAnimationFrame(this.rafHandle);
   }
 
   seek(index: number): void {
+    this.cancelAnimatedJump();
     this.index = Math.max(0, Math.min(this.frameCount - 1, index));
     if (this.playing) {
       this.lastTimestampMs = performance.now();
@@ -64,6 +92,7 @@ export class PlaybackController {
   }
 
   seekAndPlay(index: number): void {
+    this.cancelAnimatedJump();
     if (this.frameCount === 0) return;
     this.index = Math.max(0, Math.min(this.frameCount - 1, index));
     if (this.index >= this.frameCount - 1) {
@@ -78,11 +107,13 @@ export class PlaybackController {
   }
 
   stepForward(): void {
+    this.cancelAnimatedJump();
     this.pause();
     this.seek(this.index + 1);
   }
 
   stepBackward(): void {
+    this.cancelAnimatedJump();
     this.pause();
     this.seek(this.index - 1);
   }
@@ -95,7 +126,123 @@ export class PlaybackController {
     this.seek(this.index - frames);
   }
 
+  jumpForwardAnimated(frames = 60, durationMs = 200): void {
+    this.animatedJump(frames, durationMs);
+  }
+
+  jumpBackwardAnimated(frames = 60, durationMs = 200): void {
+    this.animatedJump(-frames, durationMs);
+  }
+
+  animatedJump(deltaFrames: number, durationMs = 200): void {
+    if (this.frameCount === 0) return;
+
+    if (this.fastForwardAnim !== null) {
+      // If the player presses an arrow key while that animation is going on,
+      // snap immediately to that point.
+      const activeAnim = this.fastForwardAnim;
+      const isSameDirection =
+        (deltaFrames > 0 && activeAnim.targetFrame >= activeAnim.startFrame) ||
+        (deltaFrames < 0 && activeAnim.targetFrame <= activeAnim.startFrame);
+
+      if (isSameDirection) {
+        // Jump directly to that animation's destination point
+        const target = activeAnim.targetFrame;
+        const wasPlaying = activeAnim.wasPlaying;
+        this.cancelAnimatedJump();
+        this.index = target;
+        if (wasPlaying) {
+          this.playing = true;
+          this.lastTimestampMs = performance.now();
+          this.accumulatedMs = 0;
+          this.rafHandle = requestAnimationFrame(this.tick);
+        }
+        this.onChange(this.index, this.playing, "jump");
+        return;
+      } else {
+        // Opposite direction: jump immediately in the new direction
+        const wasPlaying = activeAnim.wasPlaying;
+        this.cancelAnimatedJump();
+        const newTarget = Math.max(
+          0,
+          Math.min(this.frameCount - 1, this.index + deltaFrames),
+        );
+        this.index = newTarget;
+        if (wasPlaying) {
+          this.playing = true;
+          this.lastTimestampMs = performance.now();
+          this.accumulatedMs = 0;
+          this.rafHandle = requestAnimationFrame(this.tick);
+        }
+        this.onChange(this.index, this.playing, "jump");
+        return;
+      }
+    }
+
+    const startFrame = this.index;
+    const targetFrame = Math.max(
+      0,
+      Math.min(this.frameCount - 1, startFrame + deltaFrames),
+    );
+    if (startFrame === targetFrame) return;
+
+    const distance = Math.abs(targetFrame - startFrame);
+    const scaledDuration = Math.min(
+      durationMs,
+      Math.max(50, (distance / Math.abs(deltaFrames || 60)) * durationMs),
+    );
+
+    const wasPlaying = this.playing;
+    if (this.playing) {
+      this.playing = false;
+      cancelAnimationFrame(this.rafHandle);
+    }
+
+    this.fastForwardAnim = {
+      startFrame,
+      targetFrame,
+      startTime: performance.now(),
+      durationMs: scaledDuration,
+      wasPlaying,
+    };
+
+    this.rafHandle = requestAnimationFrame(this.animTick);
+  }
+
+  private readonly animTick = (nowMs: number): void => {
+    if (!this.fastForwardAnim) return;
+    const { startFrame, targetFrame, startTime, durationMs, wasPlaying } =
+      this.fastForwardAnim;
+    const elapsed = nowMs - startTime;
+    const progress = Math.min(1, Math.max(0, elapsed / durationMs));
+    // Ease-out quadratic: rapid initial response, smooth deceleration onto landing
+    const eased = 1 - Math.pow(1 - progress, 2);
+    const currentFrame = Math.round(
+      startFrame + (targetFrame - startFrame) * eased,
+    );
+
+    if (progress >= 1) {
+      this.fastForwardAnim = null;
+      this.index = targetFrame;
+      if (wasPlaying) {
+        this.playing = true;
+        this.lastTimestampMs = performance.now();
+        this.accumulatedMs = 0;
+        this.rafHandle = requestAnimationFrame(this.tick);
+      }
+      this.onChange(this.index, this.playing, "jump");
+      return;
+    }
+
+    if (currentFrame !== this.index) {
+      this.index = currentFrame;
+      this.onChange(this.index, wasPlaying, "fast-forward");
+    }
+    this.rafHandle = requestAnimationFrame(this.animTick);
+  };
+
   play(): void {
+    this.cancelAnimatedJump();
     if (this.playing || this.frameCount === 0) return;
     if (this.index >= this.frameCount - 1) {
       this.index = 0; // replay from the start if already at the end
@@ -108,13 +255,19 @@ export class PlaybackController {
   }
 
   pause(): void {
-    if (!this.playing) return;
+    const wasAnimating = this.fastForwardAnim !== null;
+    this.cancelAnimatedJump();
+    if (!this.playing && !wasAnimating) return;
     this.playing = false;
     cancelAnimationFrame(this.rafHandle);
     this.onChange(this.index, this.playing, "jump");
   }
 
   toggle(): void {
+    if (this.isAnimatingJump) {
+      this.pause();
+      return;
+    }
     if (this.playing) this.pause();
     else this.play();
   }
