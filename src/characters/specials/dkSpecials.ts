@@ -64,11 +64,11 @@ export function drawDKSpecial(
       const armY = centerY + Math.sin(angle) * (heightPx * 0.25);
 
       ctx.beginPath();
-      ctx.arc(armX, armY, 8, 0, Math.PI * 2);
+      ctx.arc(armX, armY, Math.max(1.5, halfWidth * 0.32), 0, Math.PI * 2);
       ctx.fillStyle = armFur;
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(armX, armY, 5, 0, Math.PI * 2);
+      ctx.arc(armX, armY, Math.max(1.0, halfWidth * 0.2), 0, Math.PI * 2);
       ctx.fillStyle = armSkin;
       ctx.fill();
     }
@@ -81,7 +81,7 @@ export function drawDKSpecial(
     ctx.save();
     // Down-B: Hand Slap ground earthquake shockwaves
     const slamProg = (frameCounter % 14) / 14;
-    const shockRadius = halfWidth * 1.4 + slamProg * 36;
+    const shockRadius = halfWidth * (1.4 + slamProg * 1.4);
     const alpha = 1 - slamProg;
 
     const ripple1Color = isMountainTheme
@@ -107,30 +107,46 @@ export function drawDKSpecial(
 
     // 1. Expanding earthquake floor ripple ellipse
     ctx.beginPath();
-    ctx.ellipse(x, y, shockRadius, 6 + slamProg * 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(
+      x,
+      y,
+      shockRadius,
+      Math.max(1, heightPx * (0.08 + slamProg * 0.05)),
+      0,
+      0,
+      Math.PI * 2,
+    );
     ctx.strokeStyle = resolveColor(ripple1Color, false, alpha * 0.95);
-    ctx.lineWidth = 2.8;
+    ctx.lineWidth = Math.max(1, 2.8 * (halfWidth / 25));
     ctx.shadowColor = ripple1Glow;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = Math.max(2, 10 * (halfWidth / 25));
     ctx.stroke();
 
     // 2. Secondary inner shock ripple
     ctx.beginPath();
-    ctx.ellipse(x, y, shockRadius * 0.6, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(
+      x,
+      y,
+      shockRadius * 0.6,
+      Math.max(0.8, heightPx * 0.05),
+      0,
+      0,
+      Math.PI * 2,
+    );
     ctx.strokeStyle = resolveColor(ripple2Color, false, alpha * 0.7);
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = Math.max(0.8, 1.8 * (halfWidth / 25));
     ctx.stroke();
 
     // 3. Jagged floor fracture fissure lines radiating outwards
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(0.8, 2 * (halfWidth / 25));
     ctx.strokeStyle = resolveColor(crackColor, false, alpha * 0.85);
     for (const side of [-1, 1]) {
       const crackX1 = x + side * (halfWidth * 0.5);
       const crackX2 = x + side * (shockRadius * 0.9);
       ctx.beginPath();
       ctx.moveTo(crackX1, y);
-      ctx.lineTo(crackX1 + side * 8, y - 3);
-      ctx.lineTo(crackX1 + side * 16, y + 2);
+      ctx.lineTo(crackX1 + side * (halfWidth * 0.3), y - heightPx * 0.04);
+      ctx.lineTo(crackX1 + side * (halfWidth * 0.6), y + heightPx * 0.03);
       ctx.lineTo(crackX2, y);
       ctx.stroke();
     }
@@ -154,8 +170,8 @@ export function drawDKSpecial(
     // Backward windmill arm rotation
     const spinSpeed = 0.45;
     const rotAngle = -frameCounter * spinSpeed;
-    // Scaled up significantly to match DK's gorilla proportions
-    const armRadius = Math.max(34, halfWidth * 1.55);
+    // Scaled proportionally to DK's body dimensions (scales naturally with camera distance)
+    const armRadius = halfWidth * 1.55;
     const armRadiusY = armRadius * 0.86;
 
     const fistX = Math.cos(rotAngle) * armRadius;
@@ -176,7 +192,7 @@ export function drawDKSpecial(
           ? "rgba(249, 115, 22, 0.65)"
           : "rgba(251, 191, 36, 0.7)";
     ctx.strokeStyle = trailStroke;
-    ctx.lineWidth = Math.max(4.5, halfWidth * 0.18);
+    ctx.lineWidth = Math.max(1, halfWidth * 0.18);
     ctx.shadowColor = isFullCharge
       ? `hsl(${(frameCounter * 8) % 360}, 95%, 65%)`
       : isMountainTheme
@@ -184,11 +200,11 @@ export function drawDKSpecial(
         : isAutumnTheme
           ? "#ea580c"
           : "#f59e0b";
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = Math.max(2, 10 * (halfWidth / 25));
     ctx.stroke();
 
     // 2. Thick gorilla arm linking shoulder to fist
-    const armThickness = Math.max(13, halfWidth * 0.42);
+    const armThickness = halfWidth * 0.42;
     const armFur = isMountainTheme
       ? "#4f46e5"
       : isAutumnTheme
@@ -204,7 +220,7 @@ export function drawDKSpecial(
     ctx.moveTo(0, 0);
     ctx.lineTo(fistX, fistY);
     ctx.strokeStyle = armFur;
-    ctx.lineWidth = armThickness;
+    ctx.lineWidth = Math.max(1, armThickness);
     ctx.lineCap = "round";
     ctx.shadowBlur = 0;
     ctx.stroke();
@@ -214,11 +230,11 @@ export function drawDKSpecial(
     ctx.moveTo(0, 0);
     ctx.lineTo(fistX * 0.75, fistY * 0.75);
     ctx.strokeStyle = armHighlight;
-    ctx.lineWidth = armThickness * 0.35;
+    ctx.lineWidth = Math.max(0.5, armThickness * 0.35);
     ctx.stroke();
 
     // 3. Clenched gorilla fist (fur knuckle mass with peach palm)
-    const fistRadius = Math.max(18, halfWidth * 0.55);
+    const fistRadius = halfWidth * 0.55;
     const fistFur = isMountainTheme
       ? "#6366f1"
       : isAutumnTheme
@@ -235,10 +251,10 @@ export function drawDKSpecial(
     ctx.fillStyle = fistFur;
     if (isFullCharge) {
       ctx.shadowColor = `hsl(${(frameCounter * 8) % 360}, 95%, 65%)`;
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = Math.max(3, 14 * (halfWidth / 25));
     } else {
       ctx.shadowColor = isMountainTheme ? "#ec4899" : "#f59e0b";
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = Math.max(2, 8 * (halfWidth / 25));
     }
     ctx.fill();
 
@@ -260,7 +276,7 @@ export function drawDKSpecial(
       ctx.fillStyle = fistSkin;
       ctx.fill();
       ctx.strokeStyle = fistFur;
-      ctx.lineWidth = 1.4;
+      ctx.lineWidth = Math.max(0.5, fistRadius * 0.1);
       ctx.stroke();
     }
 
@@ -294,9 +310,8 @@ export function drawDKSpecial(
     const punchDist = (baseReach + chargeBonus) * thrustProgress;
     const punchY = heightPx * 0.02;
 
-    const fistRadius =
-      Math.max(20, halfWidth * 0.65) * (1 + chargeRatio * 0.22);
-    const armThickness = Math.max(14, halfWidth * 0.44);
+    const fistRadius = halfWidth * 0.65 * (1 + chargeRatio * 0.22);
+    const armThickness = halfWidth * 0.44;
 
     // Fur & skin colors matching DK theme
     const armFur = isMountainTheme
@@ -336,7 +351,7 @@ export function drawDKSpecial(
           : "#fbbf24";
 
     // 1. Kinetic speed streaks trailing behind the thrusting fist
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = Math.max(1, 2.4 * (halfWidth / 25));
     ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
     const streakOffsets = [-armThickness * 0.6, 0, armThickness * 0.6];
     for (let i = 0; i < streakOffsets.length; i++) {
@@ -354,10 +369,10 @@ export function drawDKSpecial(
     ctx.moveTo(0, 0);
     ctx.lineTo(punchDist, punchY);
     ctx.strokeStyle = armFur;
-    ctx.lineWidth = armThickness;
+    ctx.lineWidth = Math.max(1, armThickness);
     ctx.lineCap = "round";
     ctx.shadowColor = primaryGlow;
-    ctx.shadowBlur = isFullCharge ? 14 : 6;
+    ctx.shadowBlur = Math.max(2, (isFullCharge ? 14 : 6) * (halfWidth / 25));
     ctx.stroke();
 
     // Arm muscle highlight core
@@ -365,7 +380,7 @@ export function drawDKSpecial(
     ctx.moveTo(armThickness * 0.2, -1);
     ctx.lineTo(punchDist - fistRadius * 0.4, punchY - 1);
     ctx.strokeStyle = armHighlight;
-    ctx.lineWidth = armThickness * 0.35;
+    ctx.lineWidth = Math.max(0.5, armThickness * 0.35);
     ctx.shadowBlur = 0;
     ctx.stroke();
 
@@ -375,7 +390,7 @@ export function drawDKSpecial(
     ctx.arc(punchDist, punchY, fistRadius, 0, Math.PI * 2);
     ctx.fillStyle = fistFur;
     ctx.shadowColor = primaryGlow;
-    ctx.shadowBlur = isFullCharge ? 18 : 10;
+    ctx.shadowBlur = Math.max(2, (isFullCharge ? 18 : 10) * (halfWidth / 25));
     ctx.fill();
 
     // Tan skin palm/knuckle plate
@@ -404,15 +419,16 @@ export function drawDKSpecial(
       ctx.fillStyle = fistSkin;
       ctx.fill();
       ctx.strokeStyle = fistFur;
-      ctx.lineWidth = 1.6;
+      ctx.lineWidth = Math.max(0.5, fistRadius * 0.1);
       ctx.stroke();
     }
 
     // 4. Conical impact shockwaves radiating forward
     const shockwaveCount = isFullCharge ? 3 : 2;
     for (let s = 1; s <= shockwaveCount; s++) {
-      const swDist = punchDist + fistRadius + s * (12 + chargeRatio * 8);
-      const swRadiusX = (6 + s * 4) * (1 + chargeRatio * 0.4);
+      const swDist =
+        punchDist + fistRadius + s * halfWidth * (0.45 + chargeRatio * 0.3);
+      const swRadiusX = halfWidth * (0.22 + s * 0.15) * (1 + chargeRatio * 0.4);
       const swRadiusY = fistRadius * (1.1 + s * 0.45);
       ctx.beginPath();
       ctx.ellipse(
@@ -425,9 +441,12 @@ export function drawDKSpecial(
         Math.PI * 0.42,
       );
       ctx.strokeStyle = s === 1 ? primaryGlow : secondaryGlow;
-      ctx.lineWidth = Math.max(2.4, 4 - s * 0.8 + chargeRatio * 1.5);
+      ctx.lineWidth = Math.max(
+        1,
+        (4 - s * 0.8 + chargeRatio * 1.5) * (halfWidth / 25),
+      );
       ctx.shadowColor = primaryGlow;
-      ctx.shadowBlur = 10 + s * 4;
+      ctx.shadowBlur = Math.max(2, (10 + s * 4) * (halfWidth / 25));
       ctx.stroke();
     }
 

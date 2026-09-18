@@ -45,6 +45,8 @@ import {
   isPikachuCharacter,
   isProneState,
   isQuickAttackState,
+  isQuickAttackLandingState,
+  isSpecialLandingLagState,
   extractAllQuickAttackPaths,
   isRollForward,
   isRollState,
@@ -81,6 +83,14 @@ import {
   createSilhouetteContext,
   isShieldDropState,
   isLightLandingState,
+  isReviveState,
+  drawReviveCloud,
+  drawReviveCloudDissipating,
+  CLOUD_DISSIPATE_FRAMES,
+  isShieldBreakFlyState,
+  isVulnerableStunState,
+  drawShieldBreakPop,
+  SHIELD_BREAK_POP_FRAMES,
 } from "./renderer.js";
 import {
   HazardFlag,
@@ -339,6 +349,21 @@ describe("isQuickAttackState", () => {
     expect(isQuickAttackState(0x01a)).toBe(false); // Fall
     expect(isQuickAttackState(0x03a)).toBe(false); // FallSpecial
     expect(isQuickAttackState(0x0e3)).toBe(false); // Thunder
+  });
+});
+
+describe("isQuickAttackLandingState", () => {
+  it("identifies 0x0ea as Quick Attack landing lag state", () => {
+    expect(isQuickAttackLandingState(0x0ea)).toBe(true);
+    expect(isSpecialLandingLagState(0x0ea)).toBe(true);
+  });
+
+  it("returns false for other action states", () => {
+    expect(isQuickAttackLandingState(0x00a)).toBe(false);
+    expect(isQuickAttackLandingState(0x01f)).toBe(false);
+    expect(isQuickAttackLandingState(0x020)).toBe(false);
+    expect(isQuickAttackLandingState(0x0e8)).toBe(false);
+    expect(isQuickAttackLandingState(0x0ec)).toBe(false);
   });
 });
 
@@ -4739,6 +4764,56 @@ describe("StageRenderer background themes", () => {
         expect(arcCalls.length).toBeGreaterThan(0);
       });
 
+      it("scales giant_punch_windup fist and arm proportionally with halfWidth across camera zooms", () => {
+        const mockZoomedIn = createMockCanvas();
+        const mockZoomedOut = createMockCanvas();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer1 = new (StageRenderer as any)(mockZoomedIn.fakeCanvas);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderer2 = new (StageRenderer as any)(mockZoomedOut.fakeCanvas);
+
+        // Zoomed in: halfWidth = 30
+        renderer1.drawDKSpecial(
+          200,
+          350,
+          300,
+          30,
+          72,
+          true,
+          "#ff0000",
+          "giant_punch_windup",
+          10,
+          5,
+        );
+        // Zoomed out: halfWidth = 6 (5x smaller camera zoom)
+        renderer2.drawDKSpecial(
+          200,
+          350,
+          300,
+          6,
+          14.4,
+          true,
+          "#ff0000",
+          "giant_punch_windup",
+          10,
+          5,
+        );
+
+        // Clenched fist radius is halfWidth * 0.55
+        const fistArcZoomedIn = mockZoomedIn.arcCalls.find(
+          (c) => Math.abs(c.radius - 30 * 0.55) < 0.01,
+        );
+        const fistArcZoomedOut = mockZoomedOut.arcCalls.find(
+          (c) => Math.abs(c.radius - 6 * 0.55) < 0.01,
+        );
+
+        expect(fistArcZoomedIn).toBeDefined();
+        expect(fistArcZoomedOut).toBeDefined();
+        // The zoomed-out fist radius should be strictly smaller (1/5th), not clamped to a large minimum
+        expect(fistArcZoomedOut!.radius).toBeCloseTo(3.3, 1);
+        expect(fistArcZoomedIn!.radius).toBeCloseTo(16.5, 1);
+      });
+
       it("renders forward haymaker punch and shockwave burst during giant_punch execution", () => {
         const { fakeCanvas, arcCalls, ellipseCalls } = createMockCanvas();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -6593,6 +6668,175 @@ describe("StageRenderer background themes", () => {
       expect(strokeStyles).not.toContain("rgba(226, 232, 240, 0.75)");
     });
 
+    it("special landing lag (0x0ea, Pikachu Quick Attack landing) applies persistent squatting animation across 40+ frames to indicate vulnerability", () => {
+      const scaleCalls: Array<{ sx: number; sy: number }> = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
+        translate: () => {},
+        scale: (sx: number, sy: number) => {
+          scaleCalls.push({ sx, sy });
+        },
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // Test across the 40 frames of landing lag:
+      for (const frame of [0, 5, 15, 25, 35]) {
+        scaleCalls.length = 0;
+        renderer["drawPlayer"](fakeCamera, 0, {
+          positionX: 50,
+          positionY: 100,
+          facingDirection: 1,
+          damagePercent: 0,
+          characterId: 0x09, // Pikachu
+          actionStateId: 0x0ea, // Quick Attack landing lag
+          actionFrameCounter: frame,
+          stocksRemaining: 4,
+          jumpsRemaining: 2,
+        });
+
+        // Squatting compression is active: squashed vertically (sy < 1) and widened horizontally (sx > 1)
+        const squat = scaleCalls.find((c) => c.sy < 1.0 && c.sx > 1.0);
+        expect(squat).toBeDefined();
+        expect(squat!.sy).toBeLessThan(0.95);
+        expect(squat!.sx).toBeGreaterThan(1.03);
+      }
+
+      // At frame 40 (end of lag): recovery finishes
+      scaleCalls.length = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x09, // Pikachu
+        actionStateId: 0x0ea, // Quick Attack landing lag
+        actionFrameCounter: 40,
+        stocksRemaining: 4,
+        jumpsRemaining: 2,
+      });
+      const endSquat = scaleCalls.find((c) => c.sy < 1.0 && c.sx > 1.0);
+      expect(endSquat).toBeUndefined();
+    });
+
+    it("drawReviveCloud and drawReviveCloudDissipating scale strictly proportionally with halfWidth across camera zooms", () => {
+      // Zoomed far out (camera far away): halfWidth = 5
+      const farArcs: { x: number; y: number; r: number }[] = [];
+      const farCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: (x: number, y: number, r: number) => {
+          farArcs.push({ x, y, r });
+        },
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+        fill: () => {},
+        stroke: () => {},
+        shadowColor: "",
+        shadowBlur: 0,
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      drawReviveCloud(farCtx, 100, 200, 5, 0);
+
+      // Close up (camera zoomed in): halfWidth = 25 (5x larger)
+      const closeArcs: { x: number; y: number; r: number }[] = [];
+      const closeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: (x: number, y: number, r: number) => {
+          closeArcs.push({ x, y, r });
+        },
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+        fill: () => {},
+        stroke: () => {},
+        shadowColor: "",
+        shadowBlur: 0,
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      drawReviveCloud(closeCtx, 100, 200, 25, 0);
+
+      // Bottom lobe is the first arc:
+      // far (halfWidth = 5): w = 8, lobe r = 8 * 0.52 = 4.16
+      // close (halfWidth = 25): w = 40, lobe r = 40 * 0.52 = 20.8
+      // Ratio must be exactly 5.0 (proportional to camera zoom, NOT clamped to 34px)
+      expect(farArcs[0]!.r).toBeCloseTo(4.16, 2);
+      expect(closeArcs[0]!.r).toBeCloseTo(20.8, 2);
+      expect(closeArcs[0]!.r / farArcs[0]!.r).toBeCloseTo(5.0, 2);
+
+      // Dissipating cloud also scales strictly proportionally
+      const farDissipateArcs: { r: number }[] = [];
+      const farDissipateCtx = {
+        ...farCtx,
+        arc: (_x: number, _y: number, r: number) => {
+          farDissipateArcs.push({ r });
+        },
+      } as unknown as CanvasRenderingContext2D;
+      drawReviveCloudDissipating(farDissipateCtx, 100, 200, 5, 2);
+
+      const closeDissipateArcs: { r: number }[] = [];
+      const closeDissipateCtx = {
+        ...closeCtx,
+        arc: (_x: number, _y: number, r: number) => {
+          closeDissipateArcs.push({ r });
+        },
+      } as unknown as CanvasRenderingContext2D;
+      drawReviveCloudDissipating(closeDissipateCtx, 100, 200, 25, 2);
+
+      expect(closeDissipateArcs[0]!.r / farDissipateArcs[0]!.r).toBeCloseTo(
+        5.0,
+        2,
+      );
+    });
+
     it("renders red silhouette proxy when character is in hitstun", () => {
       const fillStyles: string[] = [];
       const fakeCtx = {
@@ -6726,6 +6970,833 @@ describe("StageRenderer background themes", () => {
 
       expect(fillTextCalls.some((t) => t.includes("Invincible"))).toBe(true);
       expect(fillTextCalls.some((t) => t.includes("Invulnerable"))).toBe(true);
+    });
+
+    it("identifies revive states correctly with isReviveState", () => {
+      expect(isReviveState(0x007)).toBe(true); // Revive1
+      expect(isReviveState(0x008)).toBe(true); // Revive2
+      expect(isReviveState(0x009)).toBe(true); // ReviveWait
+
+      // Non-revive states
+      expect(isReviveState(0x005)).toBe(false); // Entry
+      expect(isReviveState(0x00a)).toBe(false); // Wait
+      expect(isReviveState(0x016)).toBe(false); // JumpF
+      expect(isReviveState(0x02b)).toBe(false); // Fall
+      expect(isReviveState(0x000)).toBe(false); // Dead
+    });
+
+    it("drawReviveCloud renders cumulus billows with linear gradient and highlights", () => {
+      const arcCalls: Array<{ x: number; y: number; r: number }> = [];
+      let gradCreated = false;
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: (x: number, y: number, r: number) => {
+          arcCalls.push({ x, y, r });
+        },
+        fill: () => {},
+        stroke: () => {},
+        createLinearGradient: () => {
+          gradCreated = true;
+          return { addColorStop: () => {} };
+        },
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeStyle: "",
+        fillStyle: "",
+        lineWidth: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      drawReviveCloud(fakeCtx, 100, 200, 25, 0, false);
+      expect(gradCreated).toBe(true);
+      expect(arcCalls.length).toBeGreaterThan(5); // Multi-lobed cloud puffs + highlights + wisps
+    });
+
+    it("drawPlayer renders cloud when in revive/revive wait states and disappears when leaving", () => {
+      const gradientCoords: Array<{ y1: number; y2: number }> = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        createLinearGradient: (
+          _x1: number,
+          y1: number,
+          _x2: number,
+          y2: number,
+        ) => {
+          gradientCoords.push({ y1, y2 });
+          return { addColorStop: () => {} };
+        },
+        fillStyle: "",
+        strokeStyle: "",
+        shadowColor: "",
+        shadowBlur: 0,
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // 1. In ReviveWait (0x009): Cloud gradient is created underneath feet (y = 100)
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00, // Mario
+        actionStateId: 0x009, // ReviveWait
+        actionFrameCounter: 1,
+        stocksRemaining: 3,
+        jumpsRemaining: 2,
+      });
+
+      expect(gradientCoords.length).toBeGreaterThan(0);
+      const hasCloudGrad = gradientCoords.some(
+        (c) => c.y1 <= 100 && c.y2 >= 100,
+      );
+      expect(hasCloudGrad).toBe(true);
+
+      // 2. Leaves ReviveWait (drops or jumps into 0x02b Fall): Cloud disappears!
+      gradientCoords.length = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00, // Mario
+        actionStateId: 0x02b, // Fall
+        actionFrameCounter: 1,
+        stocksRemaining: 3,
+        jumpsRemaining: 2,
+      });
+
+      // No cloud gradient created beneath player
+      expect(gradientCoords.some((c) => c.y1 >= 95 && c.y2 <= 125)).toBe(false);
+    });
+
+    it("identifies shield break fly state correctly with isShieldBreakFlyState", () => {
+      expect(isShieldBreakFlyState(0x09e)).toBe(true);
+      expect(isShieldBreakFlyState(0x09f)).toBe(false); // ShieldBreakFall
+      expect(isShieldBreakFlyState(0x0a0)).toBe(false); // ShieldBreakDownBound
+      expect(isShieldBreakFlyState(0x0a1)).toBe(false); // ShieldBreakStand
+      expect(isShieldBreakFlyState(0x099)).toBe(false); // Shield
+      expect(isShieldBreakFlyState(0x00a)).toBe(false); // Wait
+    });
+
+    it("drawShieldBreakPop renders pre-pop crimson stressed bubble in frames 0-3", () => {
+      let radialGradCount = 0;
+      let strokeCount = 0;
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: () => {},
+        fill: () => {},
+        stroke: () => {
+          strokeCount++;
+        },
+        createRadialGradient: () => {
+          radialGradCount++;
+          return { addColorStop: () => {} };
+        },
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeStyle: "",
+        fillStyle: "",
+        lineWidth: 1,
+        lineCap: "",
+        lineJoin: "",
+      } as unknown as CanvasRenderingContext2D;
+
+      // Frame 0: Stressed crimson bubble with fractures
+      drawShieldBreakPop(fakeCtx, 100, 100, 10, 30, "#3b82f6", 0, false);
+      expect(radialGradCount).toBe(1);
+      expect(strokeCount).toBeGreaterThan(0);
+
+      // Frame 2: Bulging bubble with cross-cutting split fissure
+      radialGradCount = 0;
+      strokeCount = 0;
+      drawShieldBreakPop(fakeCtx, 100, 100, 10, 30, "#3b82f6", 2, false);
+      expect(radialGradCount).toBe(1);
+      expect(strokeCount).toBeGreaterThan(1);
+    });
+
+    it("drawShieldBreakPop renders detonation burst flash and rotating shards in frames 4-22", () => {
+      let radialGradCount = 0;
+      let rotateCount = 0;
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: () => {},
+        fill: () => {},
+        stroke: () => {},
+        translate: () => {},
+        rotate: () => {
+          rotateCount++;
+        },
+        createRadialGradient: () => {
+          radialGradCount++;
+          return { addColorStop: () => {} };
+        },
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeStyle: "",
+        fillStyle: "",
+        lineWidth: 1,
+        lineCap: "",
+      } as unknown as CanvasRenderingContext2D;
+
+      // Frame 5: Flash burst active + 10 rotating crystal shards flying outward
+      drawShieldBreakPop(fakeCtx, 100, 100, 10, 30, "#3b82f6", 5, false);
+      expect(radialGradCount).toBe(1); // Central detonation flash
+      expect(rotateCount).toBe(10); // 10 shards individually rotated
+
+      // Frame 15: Post-flash, shards continuing flight and spin
+      radialGradCount = 0;
+      rotateCount = 0;
+      drawShieldBreakPop(fakeCtx, 100, 100, 10, 30, "#3b82f6", 15, false);
+      expect(radialGradCount).toBe(0); // Flash ended
+      expect(rotateCount).toBe(10); // 10 shards still spinning
+    });
+
+    it("drawShieldBreakPop terminates cleanly after SHIELD_BREAK_POP_FRAMES", () => {
+      let anyOperation = false;
+      const fakeCtx = {
+        save: () => {
+          anyOperation = true;
+        },
+        restore: () => {},
+      } as unknown as CanvasRenderingContext2D;
+
+      drawShieldBreakPop(
+        fakeCtx,
+        100,
+        100,
+        10,
+        30,
+        "#3b82f6",
+        SHIELD_BREAK_POP_FRAMES,
+        false,
+      );
+      expect(anyOperation).toBe(false);
+
+      drawShieldBreakPop(fakeCtx, 100, 100, 10, 30, "#3b82f6", 50, false);
+      expect(anyOperation).toBe(false);
+    });
+
+    it("drawPlayer renders shield break pop animation during 0x09e and disappears when frame >= 24", () => {
+      let rotateCount = 0;
+      let radialGradCount = 0;
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {
+          rotateCount++;
+        },
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+        createRadialGradient: () => {
+          radialGradCount++;
+          return { addColorStop: () => {} };
+        },
+        fillStyle: "",
+        strokeStyle: "",
+        shadowColor: "",
+        shadowBlur: 0,
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // 1. Frame 0 of 0x09e: Pre-pop stressed crimson bubble
+      radialGradCount = 0;
+      rotateCount = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00, // Mario
+        actionStateId: 0x09e, // ShieldBreakFly
+        actionFrameCounter: 0,
+        stocksRemaining: 3,
+        jumpsRemaining: 2,
+      });
+      expect(radialGradCount).toBeGreaterThan(0); // Stressed crimson core radial gradient
+
+      // 2. Frame 6 of 0x09e: Pop detonation + 10 flying crystal shards
+      radialGradCount = 0;
+      rotateCount = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00, // Mario
+        actionStateId: 0x09e, // ShieldBreakFly
+        actionFrameCounter: 6,
+        stocksRemaining: 3,
+        jumpsRemaining: 2,
+      });
+      // 10 shards rotated + body rotations
+      expect(rotateCount).toBeGreaterThanOrEqual(10);
+      expect(radialGradCount).toBeGreaterThan(0); // Detonation burst flash
+
+      // 3. Frame 25 of 0x09e: Shield break pop has ended completely
+      radialGradCount = 0;
+      rotateCount = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00, // Mario
+        actionStateId: 0x09e, // ShieldBreakFly
+        actionFrameCounter: 25,
+        stocksRemaining: 3,
+        jumpsRemaining: 2,
+      });
+      // No shield pop radial gradients drawn
+      expect(radialGradCount).toBe(0);
+    });
+
+    it("identifies vulnerable stun states correctly with isVulnerableStunState", () => {
+      expect(isVulnerableStunState(0x0a0)).toBe(true); // ShieldBreakDownBound
+      expect(isVulnerableStunState(0x0a2)).toBe(true); // FuraFura (shield broken dizzy stuck state)
+      expect(isVulnerableStunState(0x0a4)).toBe(true); // Stun
+      expect(isVulnerableStunState(0x09e)).toBe(false); // ShieldBreakFly
+      expect(isVulnerableStunState(0x09f)).toBe(false); // ShieldBreakFall
+      expect(isVulnerableStunState(0x0a1)).toBe(false); // ShieldBreakStand
+      expect(isVulnerableStunState(0x00a)).toBe(false); // Wait
+    });
+
+    it("drawPlayer renders red hitstun silhouette when in 0x0a0 (ShieldBreakDownBound), 0x0a2 (FuraFura), or 0x0a4 (Stun)", () => {
+      const fillStyles: string[] = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+        createRadialGradient: () => ({ addColorStop: () => {} }),
+        get fillStyle() {
+          return fillStyles[fillStyles.length - 1] ?? "";
+        },
+        set fillStyle(val: string) {
+          fillStyles.push(val);
+        },
+        strokeStyle: "",
+        shadowColor: "",
+        shadowBlur: 0,
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // 1. In 0x0a0 (ShieldBreakDownBound)
+      fillStyles.length = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00,
+        actionStateId: 0x0a0,
+        actionFrameCounter: 5,
+        stocksRemaining: 3,
+        jumpsRemaining: 2,
+      });
+      expect(fillStyles).toContain("rgba(239, 68, 68, 0.95)");
+
+      // 2. In 0x0a2 (FuraFura)
+      fillStyles.length = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00,
+        actionStateId: 0x0a2,
+        actionFrameCounter: 5,
+        stocksRemaining: 3,
+        jumpsRemaining: 2,
+      });
+      expect(fillStyles).toContain("rgba(239, 68, 68, 0.95)");
+
+      // 3. In 0x0a4 (Stun)
+      fillStyles.length = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00,
+        actionStateId: 0x0a4,
+        actionFrameCounter: 10,
+        stocksRemaining: 3,
+        jumpsRemaining: 2,
+      });
+      expect(fillStyles).toContain("rgba(239, 68, 68, 0.95)");
+
+      // 4. Normal idle (0x00a) does not have hitstun silhouette
+      fillStyles.length = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 50,
+        positionY: 100,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x00,
+        actionStateId: 0x00a,
+        actionFrameCounter: 10,
+        stocksRemaining: 3,
+        jumpsRemaining: 2,
+      });
+      expect(fillStyles).not.toContain("rgba(239, 68, 68, 0.95)");
+    });
+
+    it("keeps shield break pop centered at the initial world position while fighter ascends in ShieldBreakFly", () => {
+      const radialGradCoords: Array<{ x0: number; y0: number }> = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+        createRadialGradient: (x0: number, y0: number) => {
+          radialGradCoords.push({ x0, y0 });
+          return { addColorStop: () => {} };
+        },
+        fillStyle: "",
+        strokeStyle: "",
+        shadowColor: "",
+        shadowBlur: 0,
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: 540 - wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 540,
+      };
+
+      // Create a replay where Mario has shield broken on frame 10 at (100, 50).
+      // On frame 16 (6 frames later), Mario has flown up to (100, 200).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dummyReplay: any = {
+        header: { gameFamily: "smash64", schemaVersion: 1 },
+        matchSettings: {
+          characterId: [0x00, 0, 0, 0],
+          playerNames: ["Mario", "", "", ""],
+          slotType: ["human", "empty", "empty", "empty"],
+        },
+        frames: [
+          // Frame 9: Shielding on ground (100, 50)
+          {
+            frame: 9,
+            ports: {
+              0: {
+                state: {
+                  positionX: 100,
+                  positionY: 50,
+                  characterId: 0x00,
+                  actionStateId: 0x099, // Shield
+                  actionFrameCounter: 15,
+                  stocksRemaining: 3,
+                  jumpsRemaining: 2,
+                  damagePercent: 0,
+                  facingDirection: 1,
+                },
+              },
+            },
+          },
+          // Frame 10: Shield breaks! Enters ShieldBreakFly at (100, 50)
+          {
+            frame: 10,
+            ports: {
+              0: {
+                state: {
+                  positionX: 100,
+                  positionY: 50,
+                  characterId: 0x00,
+                  actionStateId: 0x09e, // ShieldBreakFly
+                  actionFrameCounter: 0,
+                  stocksRemaining: 3,
+                  jumpsRemaining: 2,
+                  damagePercent: 0,
+                  facingDirection: 1,
+                },
+              },
+            },
+          },
+          // Frame 16: 6 frames later, Mario is high in the air at (100, 200)
+          {
+            frame: 16,
+            ports: {
+              0: {
+                state: {
+                  positionX: 100,
+                  positionY: 200,
+                  characterId: 0x00,
+                  actionStateId: 0x09e, // ShieldBreakFly
+                  actionFrameCounter: 6,
+                  stocksRemaining: 3,
+                  jumpsRemaining: 2,
+                  damagePercent: 0,
+                  facingDirection: 1,
+                },
+              },
+            },
+          },
+          // Frame 35: 25 frames after break (pop animation ended)
+          {
+            frame: 35,
+            ports: {
+              0: {
+                state: {
+                  positionX: 100,
+                  positionY: 300,
+                  characterId: 0x00,
+                  actionStateId: 0x09e, // ShieldBreakFly
+                  actionFrameCounter: 25,
+                  stocksRemaining: 3,
+                  jumpsRemaining: 2,
+                  damagePercent: 0,
+                  facingDirection: 1,
+                },
+              },
+            },
+          },
+        ],
+      };
+
+      // Frame 16: render Mario at frame 16
+      radialGradCoords.length = 0;
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        dummyReplay.frames[2].ports[0].state,
+        undefined,
+        dummyReplay,
+        16,
+      );
+
+      // Mario's airborne foot position is at worldToScreen(100, 200) -> screen Y = 540 - 200 = 340.
+      // And airborne center is 540 - (200 + 422.5666 / 2) = 128.72.
+      // But the shield break pop detonation flash must remain centered at the break frame's starting position:
+      // worldX = 100, worldY = 50 + size.height / 2 = 261.28 -> screen Y = 540 - 261.28 = 278.72.
+      expect(radialGradCoords.length).toBeGreaterThan(0);
+      const popFlash = radialGradCoords[0]!;
+      expect(popFlash.x0).toBe(100);
+      // The pop flash Y must be centered at 278.72 (ground position), NOT 128.72 (airborne position)
+      expect(popFlash.y0).toBeCloseTo(278.72, 1);
+      expect(popFlash.y0).not.toBeCloseTo(128.72, 1);
+
+      // Frame 35: pop animation has finished, no radial gradient drawn
+      radialGradCoords.length = 0;
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        dummyReplay.frames[3].ports[0].state,
+        undefined,
+        dummyReplay,
+        35,
+      );
+      expect(radialGradCoords.length).toBe(0);
+    });
+
+    it("drawReviveCloudDissipating renders expanding dispersing billows and terminates at CLOUD_DISSIPATE_FRAMES", () => {
+      let gradCreated = false;
+      const arcCalls: Array<{ x: number; y: number; r: number }> = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: (x: number, y: number, r: number) => {
+          arcCalls.push({ x, y, r });
+        },
+        fill: () => {},
+        stroke: () => {},
+        createLinearGradient: () => {
+          gradCreated = true;
+          return { addColorStop: () => {} };
+        },
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeStyle: "",
+        fillStyle: "",
+        lineWidth: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      // Frame 0 of dissipation
+      drawReviveCloudDissipating(fakeCtx, 100, 200, 25, 0, false);
+      expect(gradCreated).toBe(true);
+      expect(arcCalls.length).toBeGreaterThan(5);
+
+      // Frame 10 of dissipation (mid-dissolve)
+      arcCalls.length = 0;
+      drawReviveCloudDissipating(fakeCtx, 100, 200, 25, 10, false);
+      expect(arcCalls.length).toBeGreaterThan(5);
+
+      // Frame 20+ (fully dissipated)
+      let anyOp = false;
+      const emptyCtx = {
+        save: () => {
+          anyOp = true;
+        },
+        restore: () => {},
+      } as unknown as CanvasRenderingContext2D;
+      drawReviveCloudDissipating(
+        emptyCtx,
+        100,
+        200,
+        25,
+        CLOUD_DISSIPATE_FRAMES,
+        false,
+      );
+      expect(anyOp).toBe(false);
+    });
+
+    it("drawPlayer renders dissipating cloud at exit world coordinates when leaving revive", () => {
+      const gradientCoords: Array<{ y1: number; y2: number }> = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        strokeRect: () => {},
+        fillRect: () => {},
+        clip: () => {},
+        measureText: (str: string) => ({ width: str.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        createLinearGradient: (
+          _x1: number,
+          y1: number,
+          _x2: number,
+          y2: number,
+        ) => {
+          gradientCoords.push({ y1, y2 });
+          return { addColorStop: () => {} };
+        },
+        createRadialGradient: () => ({ addColorStop: () => {} }),
+        fillStyle: "",
+        strokeStyle: "",
+        shadowColor: "",
+        shadowBlur: 0,
+        lineWidth: 1,
+        setLineDash: () => {},
+      };
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // Mock replay with revive exit at frame 100, platform at (50, 200)
+      const fakeReplay = {
+        frames: [
+          {
+            ports: [
+              {
+                state: {
+                  actionStateId: 0x009,
+                  positionX: 50,
+                  positionY: 200,
+                  characterId: 0,
+                },
+              },
+            ],
+          },
+          {
+            ports: [
+              {
+                state: {
+                  actionStateId: 0x02b,
+                  positionX: 60,
+                  positionY: 180,
+                  characterId: 0,
+                },
+              },
+            ],
+          },
+        ],
+      } as unknown as Replay;
+
+      // Frame 105: Player is in Fall (0x02b) at y=180, but cloud was at y=200 and is now 5 frames into dissipating
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        {
+          positionX: 60,
+          positionY: 180,
+          facingDirection: 1,
+          damagePercent: 0,
+          characterId: 0x00, // Mario
+          actionStateId: 0x02b, // Fall
+          actionFrameCounter: 5,
+          stocksRemaining: 3,
+          jumpsRemaining: 2,
+        },
+        null,
+        fakeReplay,
+        1, // frameIndex 1 (1 frame after exit at frame 0)
+      );
+
+      // Cloud gradient is drawn at platform position (y = 200)
+      const hasDissipatingCloud = gradientCoords.some(
+        (c) => c.y1 <= 200 && c.y2 >= 200,
+      );
+      expect(hasDissipatingCloud).toBe(true);
     });
   });
 });

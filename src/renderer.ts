@@ -24,6 +24,8 @@ import {
   drawYoshiEggShell,
   drawYoshiEgg,
   COMBO_GAP_CALLOUT_FADE_FRAMES,
+  type ReviveCloudExit,
+  type ShieldBreakEvent,
 } from "./renderer/characters/index.js";
 export * from "./renderer/characters/index.js";
 import { computeComboEscapeGaps, type ComboEscapeGap } from "./combos.js";
@@ -151,6 +153,8 @@ import {
   isRollState,
   isQuickAttackState,
   REVIVE2_ACTION_STATE_ID,
+  isReviveState,
+  isShieldBreakFlyState,
   isPikachuCharacter,
   isKirbyCharacter,
   isJigglypuffCharacter,
@@ -392,6 +396,136 @@ export class StageRenderer {
       const mid = (lo + hi) >> 1;
       if (marks[mid]!.frame <= frameIndex) {
         mostRecent = marks[mid]!;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return mostRecent;
+  }
+
+  // Cache of revival cloud exit events (when a player leaves Revive1, Revive2, or ReviveWait),
+  // allowing the cloud platform to dissolve and dissipate at its world coordinates over CLOUD_DISSIPATE_FRAMES.
+  private reviveExitsCache = new WeakMap<
+    Replay,
+    Map<PortIndex, ReviveCloudExit[]>
+  >();
+
+  private getReviveExits(replay: Replay, port: PortIndex): ReviveCloudExit[] {
+    let portMap = this.reviveExitsCache.get(replay);
+    if (!portMap) {
+      portMap = new Map();
+      for (const p of getSeatedPorts(replay)) {
+        const exits: ReviveCloudExit[] = [];
+        let wasRevive = false;
+        let lastReviveX = 0;
+        let lastReviveY = 0;
+        let lastCharacterId = 0;
+
+        for (let i = 0; i < replay.frames.length; i++) {
+          const portState = replay.frames[i]?.ports[p]?.state;
+          if (!portState) continue;
+          const curRevive = isReviveState(portState.actionStateId);
+          if (curRevive) {
+            wasRevive = true;
+            lastReviveX = portState.positionX;
+            lastReviveY = portState.positionY;
+            lastCharacterId = portState.characterId;
+          } else if (wasRevive) {
+            wasRevive = false;
+            exits.push({
+              exitFrame: i,
+              worldX: lastReviveX,
+              worldY: lastReviveY,
+              characterId: lastCharacterId,
+            });
+          }
+        }
+        portMap.set(p, exits);
+      }
+      this.reviveExitsCache.set(replay, portMap);
+    }
+    return portMap.get(port) ?? [];
+  }
+
+  /** Returns this port's most recent revival platform exit at or before frameIndex, if any. */
+  private getMostRecentReviveExit(
+    replay: Replay,
+    port: PortIndex,
+    frameIndex: number,
+  ): ReviveCloudExit | null {
+    const exits = this.getReviveExits(replay, port);
+    if (exits.length === 0) return null;
+    let lo = 0;
+    let hi = exits.length - 1;
+    let mostRecent: ReviveCloudExit | null = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const candidate = exits[mid]!;
+      if (candidate.exitFrame <= frameIndex) {
+        mostRecent = candidate;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return mostRecent;
+  }
+
+  // Cache of shield break events (when a player enters ShieldBreakFly 0x09e),
+  // allowing the shield pop animation to stay centered at the world coordinates
+  // where the break occurred over SHIELD_BREAK_POP_FRAMES (24 frames) instead of moving
+  // vertically with the launched fighter.
+  private shieldBreakCache = new WeakMap<
+    Replay,
+    Map<PortIndex, ShieldBreakEvent[]>
+  >();
+
+  private getShieldBreaks(replay: Replay, port: PortIndex): ShieldBreakEvent[] {
+    let portMap = this.shieldBreakCache.get(replay);
+    if (!portMap) {
+      portMap = new Map();
+      for (const p of getSeatedPorts(replay)) {
+        const events: ShieldBreakEvent[] = [];
+        let wasBreak = false;
+        for (let i = 0; i < replay.frames.length; i++) {
+          const f = replay.frames[i];
+          const portState = f?.ports[p]?.state;
+          if (!portState) continue;
+          const isBreak = isShieldBreakFlyState(portState.actionStateId);
+          if (isBreak && !wasBreak) {
+            events.push({
+              startFrame: f.frame ?? i,
+              worldX: portState.positionX,
+              worldY: portState.positionY,
+              characterId: portState.characterId,
+            });
+          }
+          wasBreak = isBreak;
+        }
+        portMap.set(p, events);
+      }
+      this.shieldBreakCache.set(replay, portMap);
+    }
+    return portMap.get(port) ?? [];
+  }
+
+  /** Returns this port's most recent shield break event at or before frameIndex, if any. */
+  private getMostRecentShieldBreak(
+    replay: Replay,
+    port: PortIndex,
+    frameIndex: number,
+  ): ShieldBreakEvent | null {
+    const events = this.getShieldBreaks(replay, port);
+    if (events.length === 0) return null;
+    let lo = 0;
+    let hi = events.length - 1;
+    let mostRecent: ShieldBreakEvent | null = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const candidate = events[mid]!;
+      if (candidate.startFrame <= frameIndex) {
+        mostRecent = candidate;
         lo = mid + 1;
       } else {
         hi = mid - 1;
@@ -1146,6 +1280,8 @@ export class StageRenderer {
       recoveryVerdict,
       suppressPauseHud,
       comboEscapeState,
+      (rep, p, fIdx) => this.getMostRecentReviveExit(rep, p, fIdx),
+      (rep, p, fIdx) => this.getMostRecentShieldBreak(rep, p, fIdx),
     );
   }
 
