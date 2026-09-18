@@ -49,6 +49,10 @@ import {
   isCrouchState,
   isJumpSquatState,
   isShieldDropState,
+  isShieldBreakFlyState,
+  isVulnerableStunState,
+  isReviveState,
+  isQuickAttackLandingState,
   isTeeterState,
   isPikachuCharacter,
   isFalconCharacter,
@@ -75,7 +79,11 @@ import { characterSize } from "../../characterSizes.js";
 import { actionStateName } from "../../lookups.js";
 import type { RecoveryVerdictFrame } from "../../recoveryVerdicts.js";
 import { drawGrabbedBrackets } from "./capsuleRenderer.js";
-import { drawShieldBubble } from "./shieldRenderer.js";
+import {
+  drawShieldBubble,
+  drawShieldBreakPop,
+  SHIELD_BREAK_POP_FRAMES,
+} from "./shieldRenderer.js";
 import {
   drawDizzyStars,
   drawSleepZzz,
@@ -160,6 +168,25 @@ import {
   getHitstunSilhouetteColors,
   drawComboEscapeTextCallout,
 } from "./comboEscapeGapRenderer.js";
+import {
+  drawReviveCloud,
+  drawReviveCloudDissipating,
+  CLOUD_DISSIPATE_FRAMES,
+} from "./reviveCloud.js";
+
+export interface ReviveCloudExit {
+  exitFrame: number;
+  worldX: number;
+  worldY: number;
+  characterId: number;
+}
+
+export interface ShieldBreakEvent {
+  startFrame: number;
+  worldX: number;
+  worldY: number;
+  characterId: number;
+}
 
 export function drawPlayer(
   ctx: CanvasRenderingContext2D,
@@ -205,6 +232,16 @@ export function drawPlayer(
     anchorWorldY?: number;
     anchorFacingRight?: boolean;
   } | null,
+  getMostRecentReviveExit?: (
+    replay: Replay,
+    port: PortIndex,
+    frameIndex: number,
+  ) => ReviveCloudExit | null,
+  getMostRecentShieldBreak?: (
+    replay: Replay,
+    port: PortIndex,
+    frameIndex: number,
+  ) => ShieldBreakEvent | null,
 ): void {
   // In daylight mode on mountain (cherry tree) theme, fighters are illuminated with
   // standard daylight colors rather than nocturnal moonlit skins.
@@ -384,6 +421,7 @@ export function drawPlayer(
   const isLanding = isLandingState(post.actionStateId);
   const isLightLanding = isLightLandingState(post.actionStateId);
   const isHeavyLanding = isHeavyLandingState(post.actionStateId);
+  const isSpecialLandingLag = isQuickAttackLandingState(post.actionStateId);
   const isDizzy = isDizzyState(post.actionStateId);
   const isSleep = isSleepState(post.actionStateId);
   const isJumpSquat = isJumpSquatState(post.actionStateId);
@@ -416,14 +454,38 @@ export function drawPlayer(
     isDownBound,
     isInvulnerable,
     isSpecial,
-    isLanding,
-    isHeavyLanding,
+    isLanding: isLanding || isSpecialLandingLag,
+    isHeavyLanding: isHeavyLanding || isSpecialLandingLag,
     isDizzy,
     isSleep,
     isOpponent,
     actionFrameCounter: post.actionFrameCounter,
     isSuperArmor: hasYoshiSuperArmor,
   };
+
+  // Revival Cloud Platform: fighter stands on a fluffy cumulus cloud during Revive1 (0x007), Revive2 (0x008), and ReviveWait (0x009).
+  // When departing, the cloud dissipates at the platform world position over CLOUD_DISSIPATE_FRAMES.
+  if (isReviveState(post.actionStateId)) {
+    drawReviveCloud(ctx, x, y, halfWidth, post.actionFrameCounter, isLight);
+  } else if (replay && frameIndex !== undefined && getMostRecentReviveExit) {
+    const exit = getMostRecentReviveExit(replay, port, frameIndex);
+    if (exit) {
+      const framesSinceExit = frameIndex - exit.exitFrame;
+      if (framesSinceExit >= 0 && framesSinceExit < CLOUD_DISSIPATE_FRAMES) {
+        const cloudScreen = camera.worldToScreen(exit.worldX, exit.worldY);
+        const cloudSize = characterSize(exit.characterId);
+        const cloudHalfWidth = camera.worldLengthToScreen(cloudSize.width) / 2;
+        drawReviveCloudDissipating(
+          ctx,
+          cloudScreen.x,
+          cloudScreen.y,
+          cloudHalfWidth,
+          framesSinceExit,
+          isLight,
+        );
+      }
+    }
+  }
 
   ctx.save();
   if (isDizzy) {
@@ -519,6 +581,20 @@ export function drawPlayer(
     ctx.translate(x, y);
     ctx.scale(scaleX, scaleY);
     ctx.translate(-x, -y);
+  } else if (isSpecialLandingLag) {
+    // Special landing lag (0x0ea, e.g. Pikachu Quick Attack landing lag ~40 frames):
+    // Heavy impact compression on landing, followed by persistent vulnerable squatting
+    // that holds while helpless and smoothly eases back up as the 40+ frames conclude.
+    const f = post.actionFrameCounter;
+    const impact = Math.max(0, 1.0 - f * 0.2);
+    const recoveryProgress = Math.min(1.0, f / 40);
+    const squatHold = Math.max(0, 1.0 - Math.pow(recoveryProgress, 2.5));
+    const compression = Math.max(0.6 * squatHold, impact);
+    const scaleY = 1.0 - 0.32 * compression;
+    const scaleX = 1.0 + 0.22 * compression;
+    ctx.translate(x, y);
+    ctx.scale(scaleX, scaleY);
+    ctx.translate(-x, -y);
   } else if (isTeeterState(post.actionStateId)) {
     // Teetering ledge balance sway
     const teeterAngle = Math.sin(post.actionFrameCounter * 0.28) * 0.14;
@@ -529,10 +605,11 @@ export function drawPlayer(
 
   // Apply theme-adaptive silhouette proxy:
   // - Yellow silhouette when actionable during a combo gap
-  // - Red silhouette when in hitstun
+  // - Red silhouette when in hitstun or vulnerable stun (0x0a0 ShieldBreakDownBound, 0x0a4 Stun)
   const originalCtx = ctx;
   const isGapSilhouette = Boolean(comboEscapeState?.isActionableFrame);
-  const isHitstunSilhouette = inHitstun;
+  const isVulnerableStun = isVulnerableStunState(post.actionStateId);
+  const isHitstunSilhouette = inHitstun || isVulnerableStun;
   const isSilhouette = isGapSilhouette || isHitstunSilhouette;
   if (isSilhouette) {
     const silColors = isGapSilhouette
@@ -1285,7 +1362,7 @@ export function drawPlayer(
       post.actionFrameCounter,
     );
   }
-  if (pikaSpecial) {
+  if (pikaSpecial && !isSpecialLandingLag) {
     drawPikachuSpecial(
       ctx,
       x,
@@ -1439,6 +1516,71 @@ export function drawPlayer(
       post.shieldHealth,
       isPaused,
     );
+  } else {
+    // Shield Break Pop Animation:
+    // When a shield breaks (player enters ShieldBreakFly 0x09e), the shield bursts into an
+    // explosive pop of shockwaves, ruby crystal shards, and spark flecks over SHIELD_BREAK_POP_FRAMES (24 frames).
+    // The animation stays centered at the single point in world space where the shield break began,
+    // rather than translating vertically with the airborne fighter as they shoot upward.
+    let popCenterX = x;
+    let popCenterY = centerY;
+    let popHalfWidth = halfWidth;
+    let popHeightPx = heightPx;
+    let popFrame = post.actionFrameCounter;
+    let shouldDrawPop = false;
+
+    if (replay && frameIndex !== undefined && getMostRecentShieldBreak) {
+      const breakEvent = getMostRecentShieldBreak(replay, port, frameIndex);
+      if (breakEvent) {
+        const elapsed = frameIndex - breakEvent.startFrame;
+        if (elapsed >= 0 && elapsed < SHIELD_BREAK_POP_FRAMES) {
+          shouldDrawPop = true;
+          popFrame = elapsed;
+          const bSize = characterSize(breakEvent.characterId);
+          const bScreen = camera.worldToScreen(
+            breakEvent.worldX,
+            breakEvent.worldY + bSize.height / 2,
+          );
+          popCenterX = bScreen.x;
+          popCenterY = bScreen.y;
+          popHalfWidth = camera.worldLengthToScreen(bSize.width) / 2;
+          popHeightPx = camera.worldLengthToScreen(bSize.height);
+        }
+      } else if (
+        isShieldBreakFlyState(post.actionStateId) &&
+        post.actionFrameCounter < SHIELD_BREAK_POP_FRAMES
+      ) {
+        shouldDrawPop = true;
+        popCenterX = x;
+        popCenterY = centerY;
+        popHalfWidth = halfWidth;
+        popHeightPx = heightPx;
+        popFrame = post.actionFrameCounter;
+      }
+    } else if (
+      isShieldBreakFlyState(post.actionStateId) &&
+      post.actionFrameCounter < SHIELD_BREAK_POP_FRAMES
+    ) {
+      shouldDrawPop = true;
+      popCenterX = x;
+      popCenterY = centerY;
+      popHalfWidth = halfWidth;
+      popHeightPx = heightPx;
+      popFrame = post.actionFrameCounter;
+    }
+
+    if (shouldDrawPop) {
+      drawShieldBreakPop(
+        ctx,
+        popCenterX,
+        popCenterY,
+        popHalfWidth,
+        popHeightPx,
+        color,
+        popFrame,
+        isLight,
+      );
+    }
   }
 
   if (isDizzy) {

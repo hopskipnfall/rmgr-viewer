@@ -206,7 +206,7 @@ export const COMMON_STATES: StateOption[] = [
     name: "ShieldBreakFly",
     category: "defense",
     visualized: true,
-    visualizedDesc: "Shield Break Launch & Orbiting Dizzy Stars",
+    visualizedDesc: "Shield Break Pop Animation & Dizzy Stars",
   },
   {
     id: 0x0a0,

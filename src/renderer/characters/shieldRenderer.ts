@@ -359,3 +359,295 @@ function drawShieldPausedBadge(
 
   ctx.restore();
 }
+
+export const SHIELD_BREAK_POP_FRAMES = 24;
+
+interface PopShard {
+  angle: number;
+  speed: number;
+  size: number;
+  spinDir: number;
+  aspect: number;
+}
+
+const POP_SHARDS: readonly PopShard[] = [
+  { angle: 0.15, speed: 1.8, size: 8, spinDir: 1, aspect: 1.3 },
+  { angle: 0.78, speed: 1.4, size: 7, spinDir: -1, aspect: 0.9 },
+  { angle: 1.41, speed: 2.1, size: 9, spinDir: 1, aspect: 1.1 },
+  { angle: 2.05, speed: 1.6, size: 6.5, spinDir: -1, aspect: 1.4 },
+  { angle: 2.68, speed: 1.9, size: 8.5, spinDir: 1, aspect: 1.0 },
+  { angle: 3.32, speed: 1.5, size: 7.5, spinDir: -1, aspect: 1.2 },
+  { angle: 3.95, speed: 2.2, size: 9, spinDir: 1, aspect: 0.8 },
+  { angle: 4.58, speed: 1.7, size: 6.5, spinDir: -1, aspect: 1.5 },
+  { angle: 5.21, speed: 2.0, size: 8, spinDir: 1, aspect: 1.1 },
+  { angle: 5.84, speed: 1.5, size: 7, spinDir: -1, aspect: 1.2 },
+];
+
+interface PopSpark {
+  angle: number;
+  speed: number;
+  size: number;
+  color: string;
+}
+
+const POP_SPARKS: readonly PopSpark[] = [
+  { angle: 0.35, speed: 2.8, size: 2.5, color: "#ffffff" },
+  { angle: 0.95, speed: 3.2, size: 2.0, color: "#fca5a5" },
+  { angle: 1.55, speed: 2.5, size: 2.2, color: "#ef4444" },
+  { angle: 2.15, speed: 3.4, size: 1.8, color: "#ffffff" },
+  { angle: 2.75, speed: 2.9, size: 2.4, color: "#fca5a5" },
+  { angle: 3.35, speed: 3.1, size: 2.0, color: "#ef4444" },
+  { angle: 3.95, speed: 2.6, size: 2.2, color: "#ffffff" },
+  { angle: 4.55, speed: 3.5, size: 1.9, color: "#fca5a5" },
+  { angle: 5.15, speed: 2.7, size: 2.3, color: "#ef4444" },
+  { angle: 5.75, speed: 3.3, size: 2.1, color: "#ffffff" },
+  { angle: 1.15, speed: 3.6, size: 1.7, color: "#fbbf24" },
+  { angle: 4.15, speed: 3.7, size: 1.7, color: "#fbbf24" },
+];
+
+/**
+ * Renders the explosive Smash 64 shield break "pop" animation.
+ * When a fighter's shield breaks and they enter state 0x9e (ShieldBreakFly):
+ * - Frames 0-3: The shield is shown in its ultimate critical, over-pressurized state:
+ *   intense crimson/white strobe, violent tremor/jitter, and spreading spiderweb fractures bulging outwards.
+ * - Frames 4-7: The shield violently "POPS":
+ *   central detonation burst flash, expanding shockwave rings, and radiating energy spikes.
+ * - Frames 4-22: The shattered crystal/glass fragments blast outward in all directions,
+ *   spinning with realistic ballistic deceleration and glowing rim highlights before dissolving into crimson embers.
+ * - Frames 4-23: Dispersing high-velocity spark flecks.
+ * - Frame 24+: Clean screen, transition complete.
+ */
+export function drawShieldBreakPop(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  centerY: number,
+  halfWidth: number,
+  heightPx: number,
+  color: string,
+  frameCounter: number,
+  isLight: boolean = false,
+): void {
+  const f = Math.max(0, Math.floor(frameCounter));
+  if (f >= SHIELD_BREAK_POP_FRAMES) {
+    return;
+  }
+
+  const unscaledRadius = Math.max(halfWidth * 1.35, heightPx * 0.58) + 3;
+  const baseRadius = unscaledRadius * 0.48; // Critical 0 HP shield radius
+
+  ctx.save();
+
+  if (f < 4) {
+    // -------------------------------------------------------------
+    // PHASE 1: Imminent Rupture (Frames 0 to 3)
+    // Stressed, bulging crimson shield flashing white with fissures
+    // -------------------------------------------------------------
+    const jitterX = (((f * 13 + 3) % 5) - 2) * (1.2 + f * 0.4);
+    const jitterY = (((f * 17 + 7) % 5) - 2) * (1.0 + f * 0.4);
+    const cx = x + jitterX;
+    const cy = centerY + jitterY;
+
+    // Radius balloons outward under extreme internal pressure
+    const expansionMult = [1.0, 1.1, 1.25, 1.45][f] ?? 1.0;
+    const radius = baseRadius * expansionMult;
+
+    // Strobe between incandescent white and intense warning crimson
+    const isWhiteStrobe = f % 2 === 1;
+    const rimColor = isWhiteStrobe ? "#ffffff" : "#ef4444";
+
+    // 1. Core radial gradient fill
+    const grad = ctx.createRadialGradient(
+      cx - radius * 0.15,
+      cy - radius * 0.15,
+      radius * 0.05,
+      cx,
+      cy,
+      radius,
+    );
+    if (isWhiteStrobe) {
+      grad.addColorStop(0, "rgba(255, 255, 255, 0.9)");
+      grad.addColorStop(0.45, "rgba(254, 202, 202, 0.8)");
+      grad.addColorStop(0.8, "rgba(239, 68, 68, 0.85)");
+      grad.addColorStop(1, "rgba(185, 28, 28, 0.95)");
+    } else {
+      grad.addColorStop(0, "rgba(255, 255, 255, 0.65)");
+      grad.addColorStop(0.4, "rgba(239, 68, 68, 0.75)");
+      grad.addColorStop(0.85, "rgba(220, 38, 38, 0.88)");
+      grad.addColorStop(1, "rgba(153, 27, 27, 0.98)");
+    }
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 2. High-energy perimeter rim with glowing shadow
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = rimColor;
+    ctx.lineWidth = 3.5 + f * 0.5;
+    ctx.shadowColor = isLight ? "rgba(220, 38, 38, 0.8)" : "#ef4444";
+    ctx.shadowBlur = 14 + f * 4;
+    ctx.stroke();
+
+    // 3. Dense fracture network spreading across the surface
+    drawMicroCracks(ctx, cx, cy, radius, 4);
+
+    // Extra cross-cutting split fissures during frames 2 and 3
+    if (f >= 2) {
+      ctx.beginPath();
+      ctx.moveTo(cx - radius * 0.7, cy);
+      ctx.lineTo(cx - radius * 0.2, cy + radius * 0.2);
+      ctx.lineTo(cx + radius * 0.2, cy - radius * 0.15);
+      ctx.lineTo(cx + radius * 0.75, cy + radius * 0.1);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+    }
+  } else {
+    // -------------------------------------------------------------
+    // PHASE 2 & 3: The "POP", Shockwave Halos & Shattered Flying Shards
+    // -------------------------------------------------------------
+    const elapsed = f - 3; // 1 to 20
+
+    // 1. Central Detonation Burst Flash (Frames 4 to 7)
+    if (f <= 7) {
+      const flashProgress = (f - 4) / 3; // 0 to 1
+      const flashRadius = baseRadius * (1.2 + flashProgress * 1.0);
+      const flashAlpha = (1 - flashProgress) * 0.9;
+
+      const flashGrad = ctx.createRadialGradient(
+        x,
+        centerY,
+        0,
+        x,
+        centerY,
+        flashRadius,
+      );
+      flashGrad.addColorStop(0, `rgba(255, 255, 255, ${flashAlpha})`);
+      flashGrad.addColorStop(0.4, `rgba(254, 202, 202, ${flashAlpha * 0.85})`);
+      flashGrad.addColorStop(0.8, `rgba(239, 68, 68, ${flashAlpha * 0.6})`);
+      flashGrad.addColorStop(1, "rgba(239, 68, 68, 0)");
+
+      ctx.beginPath();
+      ctx.arc(x, centerY, flashRadius, 0, Math.PI * 2);
+      ctx.fillStyle = flashGrad;
+      ctx.fill();
+
+      // Radiant energy burst spike rays
+      ctx.save();
+      ctx.strokeStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      for (let k = 0; k < 8; k++) {
+        const spikeAngle = (k * Math.PI) / 4 + 0.18;
+        const innerR = baseRadius * 0.6;
+        const outerR =
+          baseRadius * (1.4 + (k % 2 === 0 ? 0.7 : 0.35) * (1 - flashProgress));
+        ctx.beginPath();
+        ctx.moveTo(
+          x + Math.cos(spikeAngle) * innerR,
+          centerY + Math.sin(spikeAngle) * innerR,
+        );
+        ctx.lineTo(
+          x + Math.cos(spikeAngle) * outerR,
+          centerY + Math.sin(spikeAngle) * outerR,
+        );
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 2. Primary Expanding Shockwave Ring (Frames 4 to 18)
+    if (f <= 18) {
+      const ringProgress = (f - 4) / 14; // 0 to 1
+      const ringRadius = baseRadius * (1.1 + ringProgress * 2.2);
+      const ringAlpha = Math.max(0, (1 - ringProgress) * 0.85);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, centerY, ringRadius, 0, Math.PI * 2);
+      ctx.strokeStyle =
+        ringProgress < 0.3
+          ? `rgba(255, 255, 255, ${ringAlpha})`
+          : `rgba(239, 68, 68, ${ringAlpha})`;
+      ctx.lineWidth = Math.max(1, 3.8 * (1 - ringProgress));
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 8 * (1 - ringProgress);
+      ctx.stroke();
+
+      // Secondary trailing ripple
+      if (ringProgress > 0.1) {
+        ctx.beginPath();
+        ctx.arc(x, centerY, ringRadius * 0.78, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(254, 202, 202, ${ringAlpha * 0.55})`;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 3. Exploding Shattered Crystal Shards (Frames 4 to 22)
+    if (f <= 22) {
+      // Shard alpha fades gracefully after frame 9
+      const shardAlpha = f <= 9 ? 1.0 : Math.max(0, 1 - (f - 9) / 13);
+
+      for (const shard of POP_SHARDS) {
+        const dist =
+          baseRadius * 1.1 + shard.speed * Math.pow(elapsed, 0.86) * 4.4;
+        const sx = x + Math.cos(shard.angle) * dist;
+        const sy = centerY + Math.sin(shard.angle) * dist;
+        const spin = elapsed * 0.24 * shard.spinDir;
+        const sz = shard.size * (1 - (elapsed / 22) * 0.25);
+        const asp = shard.aspect;
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(shard.angle + spin);
+
+        // Draw multi-faceted crystal shard polygon
+        ctx.beginPath();
+        ctx.moveTo(-sz * 0.6, -sz * 0.35 * asp);
+        ctx.lineTo(sz * 0.7, -sz * 0.2 * asp);
+        ctx.lineTo(sz * 0.3, sz * 0.7 * asp);
+        ctx.lineTo(-sz * 0.5, sz * 0.45 * asp);
+        ctx.closePath();
+
+        // Crimson ruby shard fill
+        ctx.fillStyle = `rgba(239, 68, 68, ${shardAlpha * 0.88})`;
+        ctx.fill();
+
+        // Gleaming shard border
+        ctx.strokeStyle = `rgba(255, 255, 255, ${shardAlpha * 0.95})`;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    // 4. Dispersing High-Velocity Spark Flecks (Frames 4 to 23)
+    if (f <= 23) {
+      const sparkAlpha = Math.max(0, 1 - elapsed / 20);
+
+      ctx.save();
+      for (const spark of POP_SPARKS) {
+        const dist =
+          baseRadius * 1.0 + spark.speed * Math.pow(elapsed, 0.9) * 5.0;
+        const px = x + Math.cos(spark.angle) * dist;
+        const py = centerY + Math.sin(spark.angle) * dist;
+        const sparkRadius = Math.max(0.6, spark.size * (1 - elapsed / 22));
+
+        ctx.beginPath();
+        ctx.arc(px, py, sparkRadius, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(spark.color, sparkAlpha * 0.9);
+        ctx.shadowColor = spark.color;
+        ctx.shadowBlur = 4;
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  ctx.restore();
+}

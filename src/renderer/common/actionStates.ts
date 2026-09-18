@@ -108,6 +108,20 @@ export function isShieldBreakActionState(actionStateId: number): boolean {
   return SHIELD_BREAK_ACTION_STATES.has(actionStateId);
 }
 
+export const SHIELD_BREAK_FLY_ACTION_STATE_ID = 0x09e;
+
+export function isShieldBreakFlyState(actionStateId: number): boolean {
+  return actionStateId === SHIELD_BREAK_FLY_ACTION_STATE_ID;
+}
+
+export function isVulnerableStunState(actionStateId: number): boolean {
+  return (
+    actionStateId === 0x0a0 ||
+    actionStateId === 0x0a2 ||
+    actionStateId === 0x0a4
+  );
+}
+
 export function isSleepState(actionStateId: number): boolean {
   return actionStateId === 0x0a5;
 }
@@ -299,6 +313,14 @@ export function isQuickAttackState(actionStateId: number): boolean {
   return QUICK_ATTACK_STATES.has(actionStateId);
 }
 
+export function isQuickAttackLandingState(actionStateId: number): boolean {
+  return actionStateId === 0x0ea;
+}
+
+export function isSpecialLandingLagState(actionStateId: number): boolean {
+  return actionStateId === 0x0ea;
+}
+
 export function isJumpActionState(actionStateId: number): boolean {
   return (
     actionStateId === 0x014 || // JumpSquat
@@ -341,3 +363,19 @@ export function isSamusCharging(actionStateId: number): boolean {
 }
 
 export const REVIVE2_ACTION_STATE_ID = 0x008;
+
+const REVIVE_ACTION_STATES = new Set([
+  0x007, // Revive1 (descending on revival platform)
+  0x008, // Revive2 (respawn descend)
+  0x009, // ReviveWait (waiting on revival platform)
+]);
+
+/**
+ * Checks whether a character is on the respawn/revival cloud platform:
+ * - 0x007: Revive1 (initial descent from the heavens)
+ * - 0x008: Revive2 (descend and perch)
+ * - 0x009: ReviveWait (waiting on the revival platform)
+ */
+export function isReviveState(actionStateId: number): boolean {
+  return REVIVE_ACTION_STATES.has(actionStateId);
+}
