@@ -1103,6 +1103,15 @@
         min-height: 0;
         min-width: 0;
       }
+      #homeShell {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+        min-width: 0;
+      }
+      #homeShell[hidden] {
+        display: none;
+      }
 
       /* =========================================================================
          Search View Layout
@@ -5719,8 +5728,10 @@
 
       /* Narrow / responsive layout */
       @media (max-width: 860px) {
-        #libraryView {
+        #homeShell {
           flex-direction: column;
+        }
+        #libraryView {
           overflow-y: auto;
           padding: 12px;
           gap: 16px;
@@ -6175,15 +6186,69 @@
     />
 
     <main>
-      <!-- Library View -->
-      <div id="libraryView" class="view-container"></div>
+      <!-- Home shell: persistent sidebar (Import, YOU panel, session list) +
+           swappable content pane (library overview or a session page).
+           Stays mounted across the library <-> session routes; hidden
+           entirely for every other route. Below the 860px breakpoint,
+           #librarySidebar's content instead renders inline via the mobile
+           toggle, matching today's behavior exactly - see the
+           @media (max-width: 860px) block. -->
+      <div id="homeShell" class="home-shell">
+        <div id="librarySidebar" class="library-sidebar">
+          <div class="library-import-zone">
+            <div class="import-container" id="importContainer">
+              <button id="importBtn" class="btn-primary library-import-btn">
+                + Import replays
+              </button>
+              <div
+                id="importDropdownMenu"
+                class="dropdown-menu library-import-dropdown"
+                hidden
+              >
+                <button id="importFilesBtn">Select files (.rmgr)</button>
+                <button id="importFolderBtn">Select folder</button>
+              </div>
+            </div>
+            <div id="libImportProgressWrap" class="import-progress-wrap" hidden>
+              <div class="import-progress-bar" id="libImportProgressBar"></div>
+              <span id="libImportProgressText"></span>
+            </div>
+            <span id="libLoadStatus" class="lib-load-status"></span>
+            <div id="libStaleBanner" class="stale-banner" hidden>
+              <span id="libStaleBannerText"></span>
+              <button id="libStaleBannerBtn"></button>
+            </div>
+          </div>
+          <button
+            id="mobileSidebarToggle"
+            class="mobile-sidebar-toggle"
+            aria-expanded="false"
+          >
+            <div class="mobile-toggle-left">
+              <span class="mobile-toggle-icon">👤</span>
+              <span
+                id="mobileIdentitySummary"
+                class="mobile-toggle-name"
+              ></span>
+            </div>
+            <div class="mobile-toggle-right">
+              <span class="mobile-toggle-arrow">▾</span>
+            </div>
+          </button>
+          <div id="librarySidebarContent" class="library-sidebar-content">
+            <div id="identityCard" class="identity-card"></div>
+            <div id="sessionSidebarListWrap" class="session-sidebar-list"></div>
+          </div>
+        </div>
+        <div id="libraryView" class="view-container"></div>
+        <div id="sessionView" class="view-container" hidden></div>
+      </div>
 
       <!-- Preview View -->
       <div id="previewView" class="view-container" hidden></div>
 
       <!-- Search View -->
       <div id="searchView" class="view-container" hidden></div>
-      <div id="sessionView" class="view-container" hidden></div>
 
       <!-- Matchup View -->
       <div
