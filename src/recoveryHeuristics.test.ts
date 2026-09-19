@@ -855,13 +855,14 @@ describe("Kirby: Final Cutter", () => {
 
   // NOTE on x range: starts at 2900, not 0 -- realistic invocation range. classify() is only ever
   // called from real recovery situations, which by construction (isOutsideZone in edgeGuard.ts)
-  // never start closer to center than roughly x=2916. Below that, a KNOWN, DOCUMENTED limitation
-  // in kirbySimulateFinalCutterAndBeyond's own section-header comment applies: holding the stick
-  // toward the target for this move's unusually long total duration (wait-for-peak + 60-frame
-  // curve + gravity tail) can overshoot horizontally past the ledge while still well above landing
-  // height, spuriously returning "dead" from positions close enough to center that no real
-  // recovery situation ever actually starts there. Not exercised here since it's out of the real
-  // input domain -- see that comment for the full story if this ever needs revisiting.
+  // never start closer to center than roughly x=2916. Below that range this sweep isn't exercised
+  // at all here, but even within it, a KNOWN, DOCUMENTED limitation in
+  // kirbySimulateFinalCutterAndBeyond's own section-header comment applies (confirmed against real
+  // corpus data 2026-09-19, see that comment): holding the stick toward the target for this move's
+  // unusually long total duration can overshoot horizontally past the ledge while still well above
+  // landing height. classify()'s Kirby dispatch reports that as "not-implemented" rather than a
+  // guessed "dead" (same treatment as Falcon's dive curve) -- so this sweep treats "dead" and
+  // "not-implemented" as the same "no confirmed path" bucket, per the Falcon sweep test above.
 
   it("is not trivially always-true/always-false along a realistic x sweep (jumpsRemaining=1)", () => {
     // jumpsRemaining=1, not 0: Final Cutter's own root motion nets to exactly zero height (see
@@ -871,10 +872,11 @@ describe("Kirby: Final Cutter", () => {
     // not something this sanity check should assume away.
     for (const y of [-1000, 0, 1000]) {
       let sawReachable = false;
-      let sawDead = false;
+      let sawUnreachable = false;
       for (let x = 2900; x <= 8000; x += 250) {
         const verdict = classify(CHAR_KIRBY, x, y, 0, 0, 1, 0x39, 1);
-        if (verdict === "dead") sawDead = true;
+        if (verdict === "dead" || verdict === "not-implemented")
+          sawUnreachable = true;
         else if (
           verdict === "reaches-stage" ||
           verdict === "dead-if-ledge-occupied"
@@ -882,7 +884,7 @@ describe("Kirby: Final Cutter", () => {
           sawReachable = true;
       }
       expect(sawReachable).toBe(true);
-      expect(sawDead).toBe(true);
+      expect(sawUnreachable).toBe(true);
     }
   });
 
