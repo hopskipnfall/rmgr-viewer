@@ -817,6 +817,15 @@ describe("getAttackInfo", () => {
       type: "grab",
       direction: "forward",
     }); // GrabWait
+    expect(getAttackInfo(0x0a8, 0x05)).toBeNull(); // Link holding opponent (CatchWait) has retracted hookshot, no grab animation
+    expect(getAttackInfo(0x0a6, 0x05)).toEqual({
+      type: "grab",
+      direction: "forward",
+    }); // Link Hookshot grab
+    expect(getAttackInfo(0x0a7, 0x05)).toEqual({
+      type: "grab",
+      direction: "forward",
+    }); // Link Hookshot pull
     expect(getAttackInfo(0x0e5, 0x05)).toBeNull(); // Link Boomerang throw (0x0e5) is not a grab
     expect(getAttackInfo(0x0e5, 0x03)).toEqual({
       type: "grab",

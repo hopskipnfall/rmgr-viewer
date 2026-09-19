@@ -2,6 +2,7 @@ import {
   isFoxCharacter,
   isFalconCharacter,
   isSamusCharacter,
+  isLinkCharacter,
 } from "./characterSpecials.js";
 
 export type AttackType =
@@ -49,10 +50,12 @@ export function getAttackInfo(
   }
 
   // Grabs (standard + Samus grapple grab in Special 0x0e5)
+  // Note: Link in 0x0a8 is holding an opponent (CatchWait); hookshot is retracted
   if (
     actionStateId === 0x0a6 ||
     actionStateId === 0x0a7 ||
-    actionStateId === 0x0a8 ||
+    (actionStateId === 0x0a8 &&
+      !(characterId !== undefined && isLinkCharacter(characterId))) ||
     (characterId !== undefined &&
       isSamusCharacter(characterId) &&
       actionStateId === 0x0e5)
