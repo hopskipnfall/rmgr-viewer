@@ -903,6 +903,7 @@ async function init(): Promise<void> {
       homeSidebarController.setData(libraryController.getSummaries(), identity);
     },
     (sessionId) => navigateToSession(sessionId),
+    () => navigateToLibrary(),
   );
 
   libraryController.setPersistenceHooks({

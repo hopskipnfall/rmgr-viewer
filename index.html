@@ -1338,6 +1338,37 @@
       .session-sidebar-row-date {
         white-space: nowrap;
       }
+      /* Sits above the session list, styled like a session row (same
+         width/padding rhythm) but its selected state reuses the header
+         nav links' filled "you are here" treatment (see
+         .header-nav-link[aria-current="page"]) rather than the session
+         row's outline treatment, since it's a top-level nav destination
+         rather than a list item. */
+      .sidebar-statistics-link {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        text-align: left;
+        padding: 8px 10px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          background-color 0.12s,
+          color 0.12s;
+      }
+      .sidebar-statistics-link:hover {
+        background: var(--card-header-hover);
+      }
+      .sidebar-statistics-link[aria-current="page"] {
+        background: var(--accent);
+        color: #fff;
+      }
 
       .library-main {
         flex: 1;
@@ -6256,6 +6287,11 @@
           </button>
           <div id="librarySidebarContent" class="library-sidebar-content">
             <div id="identityCard" class="identity-card"></div>
+            <button
+              id="sidebarStatisticsLink"
+              class="sidebar-statistics-link"
+              type="button"
+            ></button>
             <div id="sessionSidebarListWrap" class="session-sidebar-list"></div>
           </div>
         </div>

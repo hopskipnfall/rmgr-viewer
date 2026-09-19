@@ -31,6 +31,7 @@ export class HomeSidebarController {
     identity: Identity,
     onIdentityChanged: (identity: Identity) => void,
     onSelectSession: (id: string) => void,
+    onSelectStatistics: () => void,
   ) {
     this.identity = identity;
 
@@ -50,6 +51,11 @@ export class HomeSidebarController {
       sessionListWrap ?? document.createElement("div"),
       onSelectSession,
     );
+
+    const statisticsLink = container.querySelector<HTMLButtonElement>(
+      "#sidebarStatisticsLink",
+    );
+    statisticsLink?.addEventListener("click", () => onSelectStatistics());
 
     // Mobile collapse/expand toggle - moved verbatim from
     // LibraryViewController's old constructor (it owned this same
@@ -114,9 +120,24 @@ export class HomeSidebarController {
     }
   }
 
+  /**
+   * `id === null` means the library/overview route is active, so the
+   * Statistics link (the sidebar's entry point to that route) is marked
+   * current the same way the header nav links mark "you are here" -
+   * see .sidebar-statistics-link[aria-current="page"] in index.html.
+   */
   public setSelectedSessionId(id: string | null): void {
     this.sessionList.setSelectedSessionId(id);
     this.sessionList.render();
+
+    const statisticsLink = this.container.querySelector<HTMLButtonElement>(
+      "#sidebarStatisticsLink",
+    );
+    if (id === null) {
+      statisticsLink?.setAttribute("aria-current", "page");
+    } else {
+      statisticsLink?.removeAttribute("aria-current");
+    }
   }
 
   public updateTranslations(): void {
@@ -127,8 +148,12 @@ export class HomeSidebarController {
       this.container.querySelector<HTMLButtonElement>("#importFilesBtn");
     const importFolderBtn =
       this.container.querySelector<HTMLButtonElement>("#importFolderBtn");
+    const statisticsLink = this.container.querySelector<HTMLButtonElement>(
+      "#sidebarStatisticsLink",
+    );
     if (importBtn) importBtn.textContent = `+ ${tr.importReplays}`;
     if (importFilesBtn) importFilesBtn.textContent = tr.importFiles;
     if (importFolderBtn) importFolderBtn.textContent = tr.importFolder;
+    if (statisticsLink) statisticsLink.textContent = tr.sidebarStatistics;
   }
 }
