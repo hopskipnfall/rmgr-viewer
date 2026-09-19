@@ -2,7 +2,6 @@ import {
   isFoxCharacter,
   isFalconCharacter,
   isSamusCharacter,
-  isLinkCharacter,
 } from "./characterSpecials.js";
 
 export type AttackType =
@@ -49,13 +48,13 @@ export function getAttackInfo(
     return { type: "dash-attack", direction: "forward" };
   }
 
-  // Grabs (standard + Link/Samus grapple grabs in Special 0x0e5)
+  // Grabs (standard + Samus grapple grab in Special 0x0e5)
   if (
     actionStateId === 0x0a6 ||
     actionStateId === 0x0a7 ||
     actionStateId === 0x0a8 ||
     (characterId !== undefined &&
-      (isLinkCharacter(characterId) || isSamusCharacter(characterId)) &&
+      isSamusCharacter(characterId) &&
       actionStateId === 0x0e5)
   ) {
     return { type: "grab", direction: "forward" };

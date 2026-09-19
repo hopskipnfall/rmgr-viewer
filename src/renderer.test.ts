@@ -817,10 +817,7 @@ describe("getAttackInfo", () => {
       type: "grab",
       direction: "forward",
     }); // GrabWait
-    expect(getAttackInfo(0x0e5, 0x05)).toEqual({
-      type: "grab",
-      direction: "forward",
-    }); // Link Hookshot grab
+    expect(getAttackInfo(0x0e5, 0x05)).toBeNull(); // Link Boomerang throw (0x0e5) is not a grab
     expect(getAttackInfo(0x0e5, 0x03)).toEqual({
       type: "grab",
       direction: "forward",

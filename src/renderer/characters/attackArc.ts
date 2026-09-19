@@ -1028,7 +1028,7 @@ export function drawSamusGrappleBeam(
   const frame = actionFrameCounter !== undefined ? actionFrameCounter : 22;
 
   // Slower, extended reach: extends out smoothly, dwells at peak, then retracts
-  const maxReach = Math.max(halfWidth * 5.0, heightPx * 2.2);
+  const maxReach = Math.max(halfWidth * 5.0, heightPx * 2.2) * 0.7;
   let reachProgress: number;
   if (actionFrameCounter === undefined) {
     reachProgress = 1.0;
@@ -1234,7 +1234,7 @@ export function drawLinkHookshot(
   const frame = actionFrameCounter !== undefined ? actionFrameCounter : 22;
 
   // Slower, extended reach: unspools outward, holds at apex, then retracts
-  const maxReach = Math.max(halfWidth * 4.6, heightPx * 2.0);
+  const maxReach = Math.max(halfWidth * 4.6, heightPx * 2.0) * 0.7;
   let reachProgress: number;
   if (actionFrameCounter === undefined) {
     reachProgress = 1.0;
@@ -1446,7 +1446,7 @@ export function drawYoshiTongueGrab(
   const frame = actionFrameCounter !== undefined ? actionFrameCounter : 22;
 
   // Slower, committal reach: jaws open, muscular tongue surges forward, clasps, then reels in
-  const maxReach = Math.max(halfWidth * 4.4, heightPx * 1.9);
+  const maxReach = Math.max(halfWidth * 4.4, heightPx * 1.9) * 0.7;
   let reachProgress: number;
   if (actionFrameCounter === undefined) {
     reachProgress = 1.0;
