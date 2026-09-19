@@ -1108,6 +1108,8 @@
         display: flex;
         min-height: 0;
         min-width: 0;
+        padding: 16px;
+        gap: 16px;
       }
       #homeShell[hidden] {
         display: none;
@@ -1190,8 +1192,10 @@
          Library View Layout
          ========================================================================= */
       #libraryView {
+        /* Outer inset now comes from #homeShell's own padding (it wraps
+           #librarySidebar and this pane); keeping padding here too would
+           double it on the top/right/bottom edges. */
         gap: 16px;
-        padding: 16px;
         overflow: hidden;
       }
       .library-sidebar {
@@ -5730,10 +5734,13 @@
       @media (max-width: 860px) {
         #homeShell {
           flex-direction: column;
+          padding: 12px;
         }
         #libraryView {
+          /* #homeShell already supplies the 12px outer inset on mobile -
+             see the base #homeShell/#libraryView rules above. */
           overflow-y: auto;
-          padding: 12px;
+          padding: 0;
           gap: 16px;
         }
         .library-sidebar {
@@ -5817,6 +5824,11 @@
           border: none;
           padding: 0;
           background: transparent;
+        }
+        /* Mobile keeps the existing per-session collapsible panels in the
+           game list below - the new session list is desktop-only. */
+        .session-sidebar-list {
+          display: none;
         }
         .library-main {
           padding-right: 0;

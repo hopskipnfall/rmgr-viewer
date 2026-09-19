@@ -217,6 +217,10 @@ export class LibraryViewController {
     this.isDemoMode = isDemo;
   }
 
+  public getIsDemoMode(): boolean {
+    return this.isDemoMode;
+  }
+
   public setIdentity(identity: Identity): void {
     this.identity = identity;
     this.render();

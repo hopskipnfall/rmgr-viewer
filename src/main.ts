@@ -397,7 +397,9 @@ function attachImportedSummaries(imported: GameSummary[]): void {
 async function handleImport(files: FileList | File[]): Promise<void> {
   if (!files || files.length === 0) return;
 
-  // Elements live inside the library sidebar (rendered dynamically)
+  // Elements are static markup in index.html's #homeShell/#librarySidebar
+  // (Task 4 moved this out of LibraryViewController's dynamically-rendered
+  // template).
   const libStatusEl = document.getElementById(
     "libLoadStatus",
   ) as HTMLSpanElement | null;
@@ -890,8 +892,15 @@ async function init(): Promise<void> {
     modalContainerEl,
     libraryController.getIdentity(),
     (identity) => {
-      saveIdentity(identity);
+      // Demo mode's placeholder identity must never overwrite the user's
+      // real saved one (mirrors LibraryViewController.persistIdentity's
+      // guard, which owned this write before the identity panel moved
+      // into HomeSidebarController).
+      if (!libraryController.getIsDemoMode()) {
+        saveIdentity(identity);
+      }
       libraryController.setIdentity(identity);
+      homeSidebarController.setData(libraryController.getSummaries(), identity);
     },
     (sessionId) => navigateToSession(sessionId),
   );
@@ -917,6 +926,10 @@ async function init(): Promise<void> {
     },
     (id) => {
       libraryController.removeSummary(id);
+      homeSidebarController.setData(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
       rerenderMatchupIfActive();
     },
     (session) => {
@@ -944,6 +957,10 @@ async function init(): Promise<void> {
     },
     (id) => {
       libraryController.removeSummary(id);
+      homeSidebarController.setData(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
     },
     (session) => {
       handleShowFailedEdgeGuards(session);
