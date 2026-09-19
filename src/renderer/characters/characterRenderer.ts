@@ -1465,6 +1465,7 @@ export function drawPlayer(
       joystick ? { x: joystick.stickX, y: joystick.stickY } : null,
       angleable,
       post.actionFrameCounter,
+      post.characterId,
     );
   }
 

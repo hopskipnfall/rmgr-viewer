@@ -2797,6 +2797,7 @@ export class StageRenderer {
     joystick?: { x: number; y: number } | null,
     canAngle?: boolean,
     actionFrameCounter?: number,
+    characterId?: number,
   ): void {
     drawAttackArc(
       this.ctx,
@@ -2810,6 +2811,7 @@ export class StageRenderer {
       joystick,
       canAngle,
       actionFrameCounter,
+      characterId,
     );
   }
 

@@ -1,5 +1,10 @@
 import type { AttackInfo } from "../common/index.js";
-import { hexToRgba } from "../common/index.js";
+import {
+  hexToRgba,
+  isSamusCharacter,
+  isLinkCharacter,
+  isYoshiCharacter,
+} from "../common/index.js";
 
 export function drawAttackArc(
   ctx: CanvasRenderingContext2D,
@@ -13,6 +18,7 @@ export function drawAttackArc(
   joystick?: { x: number; y: number } | null,
   canAngle?: boolean,
   actionFrameCounter?: number,
+  characterId?: number,
 ): void {
   const frame = actionFrameCounter !== undefined ? actionFrameCounter : 7;
   const baseRadius = Math.max(halfWidth, heightPx * 0.5);
@@ -420,6 +426,46 @@ export function drawAttackArc(
   }
 
   if (attack.type === "grab") {
+    if (characterId !== undefined && isSamusCharacter(characterId)) {
+      drawSamusGrappleBeam(
+        ctx,
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        actionFrameCounter,
+      );
+      return;
+    }
+    if (characterId !== undefined && isLinkCharacter(characterId)) {
+      drawLinkHookshot(
+        ctx,
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        actionFrameCounter,
+      );
+      return;
+    }
+    if (characterId !== undefined && isYoshiCharacter(characterId)) {
+      drawYoshiTongueGrab(
+        ctx,
+        x,
+        centerY,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        actionFrameCounter,
+      );
+      return;
+    }
+
     // Comically large Mickey Mouse-style cartoon gloved grabbing hand
     const dir = facingRight ? 1 : -1;
     const noseX = x + dir * halfWidth;
@@ -962,8 +1008,646 @@ export function drawAttackArc(
 }
 
 /**
- * Visualizes Captain Falcon's signature special moves:
- * - Falcon Punch (Neutral-B): Glowing fiery energy windup & massive forward flame strike cone.
- * - Falcon Dive (Up-B): Upward-angled grab reach jaws, explosive grab catch, and blast release.
- * - Falcon Kick (Down-B): Flaming thrust trail and glowing nose flame tip.
+ * Renders Samus's iconic Grapple Beam: an extended, slower electric plasma chain
+ * emitted from her arm cannon featuring an energy corona, segmented plasma nodes,
+ * crackling electric arcing, and a tripartite magnetic capture claw.
  */
+export function drawSamusGrappleBeam(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  centerY: number,
+  halfWidth: number,
+  heightPx: number,
+  facingRight: boolean,
+  color: string,
+  actionFrameCounter?: number,
+): void {
+  const dir = facingRight ? 1 : -1;
+  const originX = x + dir * (halfWidth * 0.95);
+  const originY = centerY - heightPx * 0.04;
+  const frame = actionFrameCounter !== undefined ? actionFrameCounter : 22;
+
+  // Slower, extended reach: extends out smoothly, dwells at peak, then retracts
+  const maxReach = Math.max(halfWidth * 5.0, heightPx * 2.2);
+  let reachProgress: number;
+  if (actionFrameCounter === undefined) {
+    reachProgress = 1.0;
+  } else if (frame < 6) {
+    reachProgress = 0.15 + 0.15 * (frame / 6);
+  } else if (frame <= 22) {
+    const t = (frame - 6) / 16;
+    reachProgress = 0.3 + 0.7 * (1 - Math.pow(1 - t, 2));
+  } else if (frame <= 32) {
+    reachProgress = 1.0;
+  } else {
+    const t = Math.min(1.0, (frame - 32) / 28);
+    reachProgress = Math.max(0.2, 1.0 - t * 0.8);
+  }
+
+  const reach = maxReach * reachProgress;
+  const tipX = originX + dir * reach;
+  const tipY = originY;
+
+  ctx.save();
+
+  // 1. Arm cannon muzzle flare & energy corona
+  const coronaR = Math.max(6, heightPx * 0.14);
+  const muzzleGrad = ctx.createRadialGradient(
+    originX,
+    originY,
+    1,
+    originX,
+    originY,
+    coronaR,
+  );
+  muzzleGrad.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+  muzzleGrad.addColorStop(0.4, "rgba(56, 189, 248, 0.85)");
+  muzzleGrad.addColorStop(1, "rgba(14, 165, 233, 0)");
+  ctx.beginPath();
+  ctx.arc(originX, originY, coronaR, 0, Math.PI * 2);
+  ctx.fillStyle = muzzleGrad;
+  ctx.fill();
+
+  // 2. High-voltage plasma beam core line
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(originX, originY);
+  ctx.lineTo(tipX, tipY);
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.45)";
+  ctx.lineWidth = 5.0;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(originX, originY);
+  ctx.lineTo(tipX, tipY);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2.0;
+  ctx.shadowColor = "#38bdf8";
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.restore();
+
+  // 3. Segmented diamond plasma chain nodes along the beam
+  const linkDist = 13;
+  const numLinks = Math.max(3, Math.floor(reach / linkDist));
+  for (let i = 1; i <= numLinks; i++) {
+    const t = i / (numLinks + 1);
+    const nodeX = originX + dir * (reach * t);
+    // Subtle electric vibration
+    const jitter = Math.sin(frame * 0.65 + i * 1.4) * 2.2;
+    const nodeY = originY + jitter;
+
+    // Diamond energy link node
+    ctx.save();
+    ctx.translate(nodeX, nodeY);
+    ctx.rotate(Math.PI / 4);
+
+    ctx.beginPath();
+    ctx.rect(-3.5, -3.5, 7, 7);
+    ctx.fillStyle = "#38bdf8";
+    ctx.shadowColor = "#0284c7";
+    ctx.shadowBlur = 6;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.rect(-1.8, -1.8, 3.6, 3.6);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.restore();
+
+    // Occasional transverse electric spark
+    if (i % 2 === 0) {
+      const sparkDir = i % 4 === 0 ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(nodeX, nodeY);
+      ctx.lineTo(nodeX + dir * 3, nodeY + sparkDir * 6);
+      ctx.lineTo(nodeX + dir * 7, nodeY + sparkDir * 3);
+      ctx.strokeStyle = "rgba(224, 242, 254, 0.85)";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    }
+  }
+
+  // 4. Tripartite electric grapple capture claw at the tip
+  ctx.save();
+  ctx.translate(tipX, tipY);
+  if (dir < 0) {
+    ctx.scale(-1, 1);
+  }
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Central emitter node
+  ctx.beginPath();
+  ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+  ctx.fillStyle = "#38bdf8";
+  ctx.shadowColor = "#38bdf8";
+  ctx.shadowBlur = 8;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+
+  // Upper claw prong curving forward and inward
+  ctx.beginPath();
+  ctx.moveTo(0, -3);
+  ctx.quadraticCurveTo(6, -11, 15, -7);
+  ctx.strokeStyle = "#38bdf8";
+  ctx.lineWidth = 2.8;
+  ctx.shadowColor = "#0284c7";
+  ctx.shadowBlur = 6;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(1, -3);
+  ctx.quadraticCurveTo(6, -10, 14, -7);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Lower claw prong curving forward and inward
+  ctx.beginPath();
+  ctx.moveTo(0, 3);
+  ctx.quadraticCurveTo(6, 11, 15, 7);
+  ctx.strokeStyle = "#38bdf8";
+  ctx.lineWidth = 2.8;
+  ctx.shadowColor = "#0284c7";
+  ctx.shadowBlur = 6;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(1, 3);
+  ctx.quadraticCurveTo(6, 10, 14, 7);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Center capture probe
+  ctx.beginPath();
+  ctx.moveTo(2, 0);
+  ctx.lineTo(13, 0);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2.0;
+  ctx.stroke();
+
+  // Energetic magnetic capture field arc connecting upper and lower claw tips
+  const pulseField = Math.sin(frame * 0.7) * 2;
+  ctx.beginPath();
+  ctx.arc(8, 0, 10 + pulseField, -Math.PI * 0.38, Math.PI * 0.38, false);
+  ctx.strokeStyle = "rgba(103, 232, 249, 0.9)";
+  ctx.lineWidth = 1.8;
+  ctx.shadowColor = "#67e8f9";
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+
+  // Accent port color aura
+  ctx.beginPath();
+  ctx.arc(6, 0, 14, -Math.PI * 0.45, Math.PI * 0.45, false);
+  ctx.strokeStyle = hexToRgba(color, 0.85);
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+
+  ctx.restore();
+  ctx.restore();
+}
+
+/**
+ * Renders Link's iconic Hookshot: an extended, slower heavy mechanical chain
+ * grapple with alternating flat oval and edge-on steel links, launcher spool housing,
+ * and a barbed triangular arrowhead spear tip.
+ */
+export function drawLinkHookshot(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  centerY: number,
+  halfWidth: number,
+  heightPx: number,
+  facingRight: boolean,
+  color: string,
+  actionFrameCounter?: number,
+): void {
+  const dir = facingRight ? 1 : -1;
+  const originX = x + dir * (halfWidth * 0.85);
+  const originY = centerY - heightPx * 0.02;
+  const frame = actionFrameCounter !== undefined ? actionFrameCounter : 22;
+
+  // Slower, extended reach: unspools outward, holds at apex, then retracts
+  const maxReach = Math.max(halfWidth * 4.6, heightPx * 2.0);
+  let reachProgress: number;
+  if (actionFrameCounter === undefined) {
+    reachProgress = 1.0;
+  } else if (frame < 5) {
+    reachProgress = 0.15 + 0.15 * (frame / 5);
+  } else if (frame <= 20) {
+    const t = (frame - 5) / 15;
+    reachProgress = 0.3 + 0.7 * (1 - Math.pow(1 - t, 2));
+  } else if (frame <= 30) {
+    reachProgress = 1.0;
+  } else {
+    const t = Math.min(1.0, (frame - 30) / 25);
+    reachProgress = Math.max(0.2, 1.0 - t * 0.8);
+  }
+
+  const reach = maxReach * reachProgress;
+  const tipX = originX + dir * reach;
+  const tipY = originY;
+
+  ctx.save();
+
+  // 1. Hookshot launcher barrel / spool housing
+  ctx.save();
+  ctx.translate(originX, originY);
+  if (dir < 0) {
+    ctx.scale(-1, 1);
+  }
+  ctx.beginPath();
+  ctx.rect(-8, -5, 10, 10);
+  ctx.fillStyle = "#334155";
+  ctx.strokeStyle = "#64748b";
+  ctx.lineWidth = 1.6;
+  ctx.fill();
+  ctx.stroke();
+
+  // Brass rivet bolt
+  ctx.beginPath();
+  ctx.arc(-3, 0, 2, 0, Math.PI * 2);
+  ctx.fillStyle = "#d97706";
+  ctx.fill();
+
+  // Launcher muzzle rim
+  ctx.beginPath();
+  ctx.ellipse(2, 0, 2.5, 5, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#94a3b8";
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // 2. Interlocking tempered steel chain links
+  const linkLength = 11;
+  const numLinks = Math.max(3, Math.floor(reach / linkLength));
+
+  for (let i = 1; i <= numLinks; i++) {
+    const t = i / (numLinks + 1);
+    const linkX = originX + dir * (reach * t);
+    // Subtle chain sag / wave vibration
+    const wave =
+      Math.sin(t * Math.PI) * (1.8 + Math.sin(frame * 0.35 + i * 0.4) * 0.8);
+    const linkY = originY + wave;
+
+    ctx.save();
+    ctx.translate(linkX, linkY);
+    if (dir < 0) {
+      ctx.scale(-1, 1);
+    }
+
+    if (i % 2 === 0) {
+      // Horizontal flat oval link
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 5.2, 3.2, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "#94a3b8";
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 1.4;
+      ctx.fill();
+      ctx.stroke();
+
+      // Hollow inner center
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 2.8, 1.2, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "#1e293b";
+      ctx.fill();
+
+      // Specular highlight on top edge
+      ctx.beginPath();
+      ctx.arc(0, -2.0, 3.5, Math.PI * 1.1, Math.PI * 1.9, false);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = 1.0;
+      ctx.stroke();
+    } else {
+      // Vertical connector link
+      ctx.beginPath();
+      if (typeof ctx.roundRect === "function") {
+        ctx.roundRect(-2.2, -3.8, 4.4, 7.6, 1.6);
+      } else {
+        ctx.rect(-2.2, -3.8, 4.4, 7.6);
+      }
+      ctx.fillStyle = "#64748b";
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1.4;
+      ctx.fill();
+      ctx.stroke();
+
+      // Specular glint
+      ctx.beginPath();
+      ctx.moveTo(-1, -2.5);
+      ctx.lineTo(-1, 2.5);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.lineWidth = 1.0;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 3. Barbed Hookshot arrowhead / spearhead at the tip
+  ctx.save();
+  ctx.translate(tipX, tipY);
+  if (dir < 0) {
+    ctx.scale(-1, 1);
+  }
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Rear mounting ring
+  ctx.beginPath();
+  ctx.rect(-3, -3.5, 4, 7);
+  ctx.fillStyle = "#475569";
+  ctx.strokeStyle = "#1e293b";
+  ctx.lineWidth = 1.4;
+  ctx.fill();
+  ctx.stroke();
+
+  // Iconic Zelda Hookshot head: triangular spearhead with backward-swept anchor barbs
+  ctx.beginPath();
+  ctx.moveTo(17, 0); // Sharp forward point
+  ctx.lineTo(2, -9); // Upper barb corner
+  ctx.lineTo(-2, -12); // Upper backward hook tip
+  ctx.lineTo(2, -3.5); // Upper barb underside notch
+  ctx.lineTo(2, 3.5); // Lower barb underside notch
+  ctx.lineTo(-2, 12); // Lower backward hook tip
+  ctx.lineTo(2, 9); // Lower barb corner
+  ctx.closePath();
+
+  ctx.fillStyle = "#cbd5e1";
+  ctx.strokeStyle = "#1e293b";
+  ctx.lineWidth = 1.8;
+  ctx.fill();
+  ctx.stroke();
+
+  // Chisel ridge bevel (upper facet catches highlight)
+  ctx.beginPath();
+  ctx.moveTo(17, 0);
+  ctx.lineTo(2, -9);
+  ctx.lineTo(-2, -12);
+  ctx.lineTo(2, -3.5);
+  ctx.lineTo(2, 0);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.fill();
+
+  // Center spine highlight
+  ctx.beginPath();
+  ctx.moveTo(2, 0);
+  ctx.lineTo(16, 0);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  // Star glint on the spear point
+  ctx.beginPath();
+  ctx.arc(17, 0, 2, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = "#ffffff";
+  ctx.shadowBlur = 6;
+  ctx.fill();
+
+  // Port color capture tension aura
+  ctx.beginPath();
+  ctx.arc(10, 0, 13, -Math.PI * 0.42, Math.PI * 0.42, false);
+  ctx.strokeStyle = hexToRgba(color, 0.8);
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+
+  ctx.restore();
+  ctx.restore();
+}
+
+/**
+ * Renders Yoshi's slower, extended tongue grapple grab:
+ * Distinct from Neutral-B Egg Lay (which is an upward arcing thin pink tongue with a round bulb),
+ * Yoshi's standard grab features a wide-open gaping jaw silhouette with visible mouth cavity,
+ * viscous saliva stretch filaments, a thick muscular segmented coral-crimson tongue with transverse
+ * muscular ribbing, and a prehensile curling grasping clasp at the tip with grab tension brackets.
+ */
+export function drawYoshiTongueGrab(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  centerY: number,
+  halfWidth: number,
+  heightPx: number,
+  facingRight: boolean,
+  color: string,
+  actionFrameCounter?: number,
+): void {
+  const dir = facingRight ? 1 : -1;
+  const mouthX = x + dir * (halfWidth * 0.65);
+  const mouthY = centerY - heightPx * 0.05;
+  const frame = actionFrameCounter !== undefined ? actionFrameCounter : 22;
+
+  // Slower, committal reach: jaws open, muscular tongue surges forward, clasps, then reels in
+  const maxReach = Math.max(halfWidth * 4.4, heightPx * 1.9);
+  let reachProgress: number;
+  if (actionFrameCounter === undefined) {
+    reachProgress = 1.0;
+  } else if (frame < 6) {
+    reachProgress = 0.15 + 0.15 * (frame / 6);
+  } else if (frame <= 20) {
+    const t = (frame - 6) / 14;
+    reachProgress = 0.3 + 0.7 * (1 - Math.pow(1 - t, 2));
+  } else if (frame <= 30) {
+    reachProgress = 1.0;
+  } else {
+    const t = Math.min(1.0, (frame - 30) / 25);
+    reachProgress = Math.max(0.2, 1.0 - t * 0.8);
+  }
+
+  const reach = maxReach * reachProgress;
+  const tipX = mouthX + dir * reach;
+  const tipY = mouthY + Math.sin(frame * 0.25) * 2;
+
+  ctx.save();
+
+  // 1. Wide Gaping Jaw / Maw Silhouette (Yoshi's jaws clamped wide open)
+  ctx.save();
+  ctx.translate(mouthX, mouthY);
+  if (dir < 0) {
+    ctx.scale(-1, 1);
+  }
+
+  // Dark crimson mouth interior cavity
+  ctx.beginPath();
+  ctx.ellipse(-2, 0, 9, 13, 0, -Math.PI * 0.5, Math.PI * 0.5, false);
+  ctx.fillStyle = "#881337"; // Deep burgundy buccal cavern
+  ctx.fill();
+
+  // Upper snout jaw rim (curling upward)
+  ctx.beginPath();
+  ctx.arc(-2, -8, 8, -Math.PI * 0.2, Math.PI * 0.5, false);
+  ctx.strokeStyle = "#16a34a"; // Yoshi green snout
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  // Lower jaw rim (dropping downward)
+  ctx.beginPath();
+  ctx.arc(-2, 8, 8, -Math.PI * 0.5, Math.PI * 0.2, false);
+  ctx.strokeStyle = "#f8fafc"; // Yoshi white underbelly jaw
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  // Toothless gum ridges
+  ctx.beginPath();
+  ctx.arc(-2, -5, 5, 0, Math.PI * 0.5, false);
+  ctx.strokeStyle = "#fecdd3";
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(-2, 5, 5, -Math.PI * 0.5, 0, false);
+  ctx.strokeStyle = "#fecdd3";
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  // 2. Viscous saliva stretch filaments bridging jaws to tongue
+  ctx.beginPath();
+  ctx.moveTo(-1, -7);
+  ctx.quadraticCurveTo(4, -4, 8, -1);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(-1, 7);
+  ctx.quadraticCurveTo(4, 4, 8, 1);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Saliva droplet beads
+  ctx.beginPath();
+  ctx.arc(3, -4, 1.2, 0, Math.PI * 2);
+  ctx.arc(3, 4, 1.2, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.fill();
+
+  ctx.restore();
+
+  // 3. Thick, muscular, segmented grappling tongue path
+  const midX = mouthX + dir * (reach * 0.5);
+  const midY = mouthY - 3;
+
+  // Base muscular stroke (deep coral-crimson, noticeably thicker than Neutral-B)
+  ctx.beginPath();
+  ctx.moveTo(mouthX, mouthY);
+  ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+  ctx.strokeStyle = "#e11d48"; // Rich coral-crimson muscle
+  ctx.lineWidth = 5.6;
+  ctx.lineCap = "round";
+  ctx.shadowColor = "#be123c";
+  ctx.shadowBlur = 6;
+  ctx.stroke();
+
+  // Inner flesh core
+  ctx.beginPath();
+  ctx.moveTo(mouthX, mouthY);
+  ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+  ctx.strokeStyle = "#fb7185";
+  ctx.lineWidth = 3.0;
+  ctx.stroke();
+
+  // Luminous wet specular highlight along upper edge
+  ctx.beginPath();
+  ctx.moveTo(mouthX, mouthY - 1.5);
+  ctx.quadraticCurveTo(midX, midY - 1.5, tipX, tipY - 1);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Transverse muscular striation / gripping ribbing bands
+  const numRibs = Math.max(3, Math.floor(reach / 9));
+  for (let i = 1; i <= numRibs; i++) {
+    const t = i / (numRibs + 1);
+    // Quadratic bezier point: B(t) = (1-t)^2 P0 + 2(1-t)t P1 + t^2 P2
+    const rx =
+      (1 - t) * (1 - t) * mouthX + 2 * (1 - t) * t * midX + t * t * tipX;
+    const ry =
+      (1 - t) * (1 - t) * mouthY + 2 * (1 - t) * t * midY + t * t * tipY;
+
+    ctx.beginPath();
+    ctx.moveTo(rx, ry - 3.0);
+    ctx.lineTo(rx, ry + 3.0);
+    ctx.strokeStyle = "#9f1239"; // Darker transverse muscle band
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+  }
+
+  // 4. Prehensile Grasping Clasp / Curling Fork Tip (distinct from Neutral-B round bulb)
+  ctx.save();
+  ctx.translate(tipX, tipY);
+  if (dir < 0) {
+    ctx.scale(-1, 1);
+  }
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Prehensile upper grasping lip curling forward & over
+  ctx.beginPath();
+  ctx.moveTo(-2, -2);
+  ctx.quadraticCurveTo(5, -7, 10, -5);
+  ctx.strokeStyle = "#e11d48";
+  ctx.lineWidth = 3.4;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(-1, -2);
+  ctx.quadraticCurveTo(5, -6.5, 9, -5);
+  ctx.strokeStyle = "#fb7185";
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  // Prehensile lower grasping lip curling forward & under
+  ctx.beginPath();
+  ctx.moveTo(-2, 2);
+  ctx.quadraticCurveTo(5, 7, 10, 5);
+  ctx.strokeStyle = "#e11d48";
+  ctx.lineWidth = 3.4;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(-1, 2);
+  ctx.quadraticCurveTo(5, 6.5, 9, 5);
+  ctx.strokeStyle = "#fb7185";
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  // Suction clasp pads at each tip
+  ctx.beginPath();
+  ctx.arc(10, -5, 2.2, 0, Math.PI * 2);
+  ctx.arc(10, 5, 2.2, 0, Math.PI * 2);
+  ctx.fillStyle = "#f43f5e";
+  ctx.fill();
+
+  // Wet gleam on pads
+  ctx.beginPath();
+  ctx.arc(9.5, -5.5, 0.9, 0, Math.PI * 2);
+  ctx.arc(9.5, 4.5, 0.9, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+
+  // Flying saliva droplet flicked from tip
+  ctx.beginPath();
+  ctx.arc(14, -2, 1.2, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.fill();
+
+  // 5. Grab Latch & Capture Brackets in player port color
+  ctx.beginPath();
+  ctx.arc(6, 0, 11, -Math.PI * 0.45, Math.PI * 0.45, false);
+  ctx.strokeStyle = hexToRgba(color, 0.9);
+  ctx.lineWidth = 2.0;
+  ctx.stroke();
+
+  ctx.restore();
+  ctx.restore();
+}

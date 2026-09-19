@@ -82,6 +82,9 @@ import {
   CHARGE_SHOT_LEVEL_SCALES,
   drawShieldBubble,
   drawAttackArc,
+  drawSamusGrappleBeam,
+  drawLinkHookshot,
+  drawYoshiTongueGrab,
   drawDeconflictedPauseHuds,
   drawComboEscapeHighlight,
   drawComboEscapeTextCallout,
@@ -5784,6 +5787,12 @@ describe("StageRenderer background themes", () => {
           arcCalls.push({ x, y, radius, startAngle, endAngle });
         },
         ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        quadraticCurveTo: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {},
         set strokeStyle(val: string) {
           currentStrokeStyle = val;
         },
@@ -6134,6 +6143,114 @@ describe("StageRenderer background themes", () => {
       // Has blade arcs and impact burst spark
       expect(slowCanvas.arcCalls.length).toBeGreaterThanOrEqual(2);
       expect(slowCanvas.lineToCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("renders Samus Grapple Beam as an extended electric plasma chain with capture claw", () => {
+      const mock = createMockAttackCanvas();
+      drawAttackArc(
+        mock.ctx,
+        100,
+        100,
+        15,
+        40,
+        true,
+        "#f59e0b",
+        { type: "grab", direction: "forward" },
+        null,
+        false,
+        22, // actionFrameCounter at peak
+        0x03, // Samus
+      );
+
+      // Has muzzle flare, plasma nodes, claw arcs, and capture field
+      expect(mock.arcCalls.length).toBeGreaterThanOrEqual(3);
+      expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(5);
+      // Draws line segments connecting cannon to tip
+      expect(mock.lineToCalls.length).toBeGreaterThanOrEqual(2);
+
+      // Directly invocable as standalone helper
+      const direct = createMockAttackCanvas();
+      drawSamusGrappleBeam(direct.ctx, 100, 100, 15, 40, true, "#38bdf8", 15);
+      expect(direct.strokeCalls.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("renders Link Hookshot as an extended steel linked chain with barbed arrowhead", () => {
+      const mock = createMockAttackCanvas();
+      drawAttackArc(
+        mock.ctx,
+        100,
+        100,
+        15,
+        40,
+        true,
+        "#10b981",
+        { type: "grab", direction: "forward" },
+        null,
+        false,
+        22, // actionFrameCounter at peak
+        0x05, // Link
+      );
+
+      // Has launcher spool, chain link highlights, and barbed spearhead
+      expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(5);
+      // Barbed arrowhead chisel point has lineTo path
+      expect(mock.lineToCalls.length).toBeGreaterThanOrEqual(5);
+
+      // Directly invocable as standalone helper
+      const direct = createMockAttackCanvas();
+      drawLinkHookshot(direct.ctx, 100, 100, 15, 40, true, "#10b981", 15);
+      expect(direct.strokeCalls.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("renders Yoshi tongue grab with gaping jaws, saliva stretch, muscular ribbed tongue, and prehensile clasp", () => {
+      const mock = createMockAttackCanvas();
+      drawAttackArc(
+        mock.ctx,
+        100,
+        100,
+        15,
+        40,
+        true,
+        "#10b981",
+        { type: "grab", direction: "forward" },
+        null,
+        false,
+        22, // actionFrameCounter at peak
+        0x06, // Yoshi
+      );
+
+      // Has mouth cavity, jaw arcs, saliva beads, suction cups, and grab latch aura
+      expect(mock.arcCalls.length).toBeGreaterThanOrEqual(5);
+      // Has muscular striation band lines
+      expect(mock.lineToCalls.length).toBeGreaterThanOrEqual(5);
+      expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(5);
+
+      // Directly invocable as standalone helper
+      const direct = createMockAttackCanvas();
+      drawYoshiTongueGrab(direct.ctx, 100, 100, 15, 40, true, "#10b981", 15);
+      expect(direct.strokeCalls.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("renders standard cartoon gloved hand for non-grapple characters (e.g. Mario)", () => {
+      const mock = createMockAttackCanvas();
+      drawAttackArc(
+        mock.ctx,
+        100,
+        100,
+        15,
+        40,
+        true,
+        "#ef4444",
+        { type: "grab", direction: "forward" },
+        null,
+        false,
+        7,
+        0x00, // Mario
+      );
+
+      // Has cartoon fingers, thumb, and grab snatch glow
+      expect(mock.arcCalls.length).toBeGreaterThanOrEqual(5);
+      expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(5);
     });
   });
 
