@@ -307,6 +307,39 @@ describe("YouTubeSyncController", () => {
   });
 });
 
+describe("globalPlaybackMode", () => {
+  it("defaults to canvas-muted and persists changes to localStorage", () => {
+    localStorage.removeItem(GLOBAL_VIEW_MODE_STORAGE_KEY);
+    expect(loadGlobalPlaybackMode()).toBe("canvas-muted");
+
+    saveGlobalPlaybackMode("video-pip");
+    expect(localStorage.getItem(GLOBAL_VIEW_MODE_STORAGE_KEY)).toBe(
+      "video-pip",
+    );
+    expect(loadGlobalPlaybackMode()).toBe("video-pip");
+
+    saveGlobalPlaybackMode("video-only");
+    expect(localStorage.getItem(GLOBAL_VIEW_MODE_STORAGE_KEY)).toBe(
+      "video-only",
+    );
+    expect(loadGlobalPlaybackMode()).toBe("video-only");
+
+    // Legacy "canvas" normalizes to "canvas-muted"
+    saveGlobalPlaybackMode("canvas");
+    expect(localStorage.getItem(GLOBAL_VIEW_MODE_STORAGE_KEY)).toBe(
+      "canvas-muted",
+    );
+    expect(loadGlobalPlaybackMode()).toBe("canvas-muted");
+
+    // Replay mode "canvas-muted"
+    saveGlobalPlaybackMode("canvas-muted");
+    expect(localStorage.getItem(GLOBAL_VIEW_MODE_STORAGE_KEY)).toBe(
+      "canvas-muted",
+    );
+    expect(loadGlobalPlaybackMode()).toBe("canvas-muted");
+  });
+});
+
 describe("isRealtimeSession", () => {
   it("detects real-time recording sessions", () => {
     const baseTime = new Date("2026-08-25T12:00:00Z");
