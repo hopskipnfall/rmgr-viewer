@@ -827,7 +827,8 @@ describe("getAttackInfo", () => {
       direction: "forward",
     }); // Link Hookshot pull
     expect(getAttackInfo(0x0e5, 0x05)).toBeNull(); // Link Boomerang throw (0x0e5) is not a grab
-    expect(getAttackInfo(0x0e5, 0x03)).toEqual({
+    expect(getAttackInfo(0x0e5, 0x03)).toBeNull(); // Samus bomb landing (0x0e5) is not a grab
+    expect(getAttackInfo(0x0a6, 0x03)).toEqual({
       type: "grab",
       direction: "forward",
     }); // Samus Grapple Beam grab

@@ -49,16 +49,13 @@ export function getAttackInfo(
     return { type: "dash-attack", direction: "forward" };
   }
 
-  // Grabs (standard + Samus grapple grab in Special 0x0e5)
+  // Grabs (standard 0x0a6/0x0a7/0x0a8)
   // Note: Link in 0x0a8 is holding an opponent (CatchWait); hookshot is retracted
   if (
     actionStateId === 0x0a6 ||
     actionStateId === 0x0a7 ||
     (actionStateId === 0x0a8 &&
-      !(characterId !== undefined && isLinkCharacter(characterId))) ||
-    (characterId !== undefined &&
-      isSamusCharacter(characterId) &&
-      actionStateId === 0x0e5)
+      !(characterId !== undefined && isLinkCharacter(characterId)))
   ) {
     return { type: "grab", direction: "forward" };
   }
