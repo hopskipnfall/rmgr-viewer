@@ -319,7 +319,6 @@ export class MatchViewController {
   private vodYoutubeLink: HTMLAnchorElement;
   private viewModePipBtn: HTMLButtonElement;
   private viewModeVideoBtn: HTMLButtonElement;
-  private viewModeCanvasBtn: HTMLButtonElement;
   private viewModeCanvasMutedBtn: HTMLButtonElement;
   private nudgeMinus1sBtn: HTMLButtonElement;
   private nudgeMinus1fBtn: HTMLButtonElement;
@@ -346,7 +345,7 @@ export class MatchViewController {
   private vodSyncBannerText: HTMLSpanElement;
   private syncSessionVideosBtn: HTMLButtonElement;
   private vodSyncBannerDismissBtn: HTMLButtonElement;
-  private currentVideoViewMode: VideoViewMode = "canvas";
+  private currentVideoViewMode: VideoViewMode = "canvas-muted";
   private sessionSummaries: GameSummary[] = [];
   private currentReplayId: string | null = null;
 
@@ -819,9 +818,6 @@ export class MatchViewController {
     ) as HTMLButtonElement;
     this.viewModeVideoBtn = document.getElementById(
       "viewModeVideoBtn",
-    ) as HTMLButtonElement;
-    this.viewModeCanvasBtn = document.getElementById(
-      "viewModeCanvasBtn",
     ) as HTMLButtonElement;
     this.viewModeCanvasMutedBtn = document.getElementById(
       "viewModeCanvasMutedBtn",
@@ -1302,9 +1298,6 @@ export class MatchViewController {
     this.viewModeVideoBtn.addEventListener("click", () => {
       this.youtubeSync.setViewMode("video-only");
     });
-    this.viewModeCanvasBtn.addEventListener("click", () => {
-      this.youtubeSync.setViewMode("canvas");
-    });
     this.viewModeCanvasMutedBtn.addEventListener("click", () => {
       this.youtubeSync.setViewMode("canvas-muted");
     });
@@ -1576,10 +1569,8 @@ export class MatchViewController {
           currentData.viewMode === "video-pip"
             ? "video-only"
             : currentData.viewMode === "video-only"
-              ? "canvas"
-              : currentData.viewMode === "canvas"
-                ? "canvas-muted"
-                : "video-pip";
+              ? "canvas-muted"
+              : "video-pip";
         this.youtubeSync.setViewMode(nextMode);
       }
       return;
@@ -1597,14 +1588,14 @@ export class MatchViewController {
       this.playback?.toggle();
     } else if (e.code === "ArrowLeft" || e.code === "KeyJ") {
       e.preventDefault();
-      if (this.currentVideoViewMode === "video-only") {
+      if (this.isYouTubeVideoActive()) {
         this.playback?.jumpBackward(60);
       } else {
         this.playback?.jumpBackwardAnimated(60);
       }
     } else if (e.code === "ArrowRight" || e.code === "KeyL") {
       e.preventDefault();
-      if (this.currentVideoViewMode === "video-only") {
+      if (this.isYouTubeVideoActive()) {
         this.playback?.jumpForward(60);
       } else {
         this.playback?.jumpForwardAnimated(60);
@@ -1787,8 +1778,6 @@ export class MatchViewController {
       this.viewModePipBtn.title = tr.youtubeViewModeVideoPip;
     if (this.viewModeVideoBtn)
       this.viewModeVideoBtn.title = tr.youtubeViewModeVideoOnly;
-    if (this.viewModeCanvasBtn)
-      this.viewModeCanvasBtn.title = tr.youtubeViewModeCanvasOnly;
     if (this.viewModeCanvasMutedBtn)
       this.viewModeCanvasMutedBtn.title = tr.youtubeViewModeCanvasMuted;
     if (this.nudgeMinus1sBtn)
@@ -4725,10 +4714,7 @@ export class MatchViewController {
     // A linked YouTube video with its own audio playing (any mode besides
     // "canvas-muted") would double up with these sound effects - skip all
     // of them entirely rather than fight for the user's ears.
-    const hasAudibleVideo =
-      this.youtubeSync.getLinkData() !== null &&
-      this.currentVideoViewMode !== "canvas-muted";
-    if (hasAudibleVideo) return;
+    if (this.isYouTubeVideoActive()) return;
 
     // Tied to playback actually reaching frame 1, not to loadMatch() - the
     // latter fires the instant a match is opened, before the user has even
@@ -5300,7 +5286,11 @@ export class MatchViewController {
     // tell youtubeSync about the downgrade, so the real stored preference
     // (and desktop's PiP view) is untouched.
     const isMobile = typeof window !== "undefined" && window.innerWidth <= 860;
-    const resolvedMode = isMobile && mode === "video-pip" ? "video-only" : mode;
+    const normalizedMode = mode === "canvas" ? "canvas-muted" : mode;
+    const resolvedMode =
+      isMobile && normalizedMode === "video-pip"
+        ? "video-only"
+        : normalizedMode;
 
     // Only reset which side is primary when actually entering PiP fresh -
     // resize-triggered re-resolution while already in PiP (see
@@ -5328,10 +5318,6 @@ export class MatchViewController {
       "active",
       resolvedMode === "video-only",
     );
-    this.viewModeCanvasBtn.classList.toggle(
-      "active",
-      resolvedMode === "canvas",
-    );
     this.viewModeCanvasMutedBtn.classList.toggle(
       "active",
       resolvedMode === "canvas-muted",
@@ -5355,9 +5341,13 @@ export class MatchViewController {
     this.resizeStageCanvas();
   }
 
+  private isYouTubeVideoActive(): boolean {
+    return this.youtubeSync.hasActiveVideo();
+  }
+
   private exitPipMode(): void {
     this.youtubeSync.setViewMode(
-      this.pipPrimary === "video" ? "video-only" : "canvas",
+      this.pipPrimary === "video" ? "video-only" : "canvas-muted",
     );
   }
 

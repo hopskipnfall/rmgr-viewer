@@ -1080,7 +1080,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     youtubeViewModeVideoPip: "Video + Mini 2D Overlay",
     youtubeViewModeVideoOnly: "Video Only",
     youtubeViewModeCanvasOnly: "Replay Only (audio still plays)",
-    youtubeViewModeCanvasMuted: "Replay Only (no video audio)",
+    youtubeViewModeCanvasMuted: "Replay Only",
     youtubeTogglePipBtnTitle: "Toggle mini overlay (p)",
     youtubeInvalidUrlError: "Please enter a valid YouTube video URL or ID.",
     videoAttachedBadge: "YouTube video linked",
@@ -1687,7 +1687,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     youtubeViewModeVideoPip: "動画 + ミニ2D画面",
     youtubeViewModeVideoOnly: "動画のみ",
     youtubeViewModeCanvasOnly: "リプレイのみ (音声あり)",
-    youtubeViewModeCanvasMuted: "リプレイのみ (音声なし)",
+    youtubeViewModeCanvasMuted: "リプレイのみ",
     youtubeTogglePipBtnTitle: "ミニ画面の切り替え (p)",
     youtubeInvalidUrlError:
       "有効なYouTubeのURLまたは動画IDを入力してください。",
