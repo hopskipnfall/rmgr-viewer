@@ -23,7 +23,7 @@ anything built here.
 
 ## The architectural issue this surfaces
 
-Today `librarySidebar` (Import + YOU panel) is rendered *inside*
+Today `librarySidebar` (Import + YOU panel) is rendered _inside_
 `LibraryViewController`'s own container (`libraryView.ts:151`), and
 `main.ts`'s router (`handleRouteChange`) hides that whole container when
 navigating to `#/session/:id`. A session list living in that sidebar would
@@ -40,6 +40,7 @@ unaffected - they keep today's full-bleed layout with no persistent
 sidebar, since this request is specifically about the home page.
 
 Rejected alternatives:
+
 - **Duplicate the sidebar inside `SessionViewController` too.** Avoids
   touching the router, but creates two places rendering "the session
   list" that can drift out of sync - the kind of duplication this
@@ -56,7 +57,7 @@ toggle (`index.html`'s `@media (max-width: 860px)`, `libraryView.ts`'s
 `LibraryViewController` keeps rendering today's collapsible per-session
 `GameList` panels exactly as now.
 
-This is a real branch in *what gets built*, not just CSS: one DOM tree is
+This is a real branch in _what gets built_, not just CSS: one DOM tree is
 active at a time, decided by `window.matchMedia("(min-width: 861px)")`
 plus a change listener, following the existing pattern in `theme.ts`
 (`theme.ts:92-97`, `window.matchMedia("(prefers-color-scheme: dark)")` +
@@ -107,7 +108,7 @@ render paths for the same data in sync.
 ## Right side (desktop)
 
 - **Default** (library route, or any home-experience route that isn't a
-  specific session): today's Overview content, *minus* the game list at
+  specific session): today's Overview content, _minus_ the game list at
   the bottom - filters, stats, matchups only. Browsing individual games
   now happens by opening a session from the sidebar.
 - **A session selected:** today's session page (`SessionViewController`),

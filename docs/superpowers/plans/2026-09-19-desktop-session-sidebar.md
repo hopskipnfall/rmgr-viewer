@@ -28,6 +28,7 @@
 ## File Structure
 
 **Create:**
+
 - `src/responsive.ts` - shared desktop/mobile breakpoint check + change listener.
 - `src/responsive.test.ts`
 - `src/library/sessionSidebarList.ts` - "This week"/"Older" grouping, row formatting, and the `SessionSidebarList` DOM component.
@@ -35,6 +36,7 @@
 - `src/library/homeSidebar.ts` - `HomeSidebarController`: owns `IdentityPanel`, the mobile toggle, and `SessionSidebarList`, mounted on the (now static) sidebar markup.
 
 **Modify:**
+
 - `index.html` - introduce `#homeShell` wrapping `#libraryView`/`#sessionView`; move the sidebar's markup out of `LibraryViewController`'s template into static HTML inside `#homeShell`; add the `#sessionSidebarListWrap` mount point; fix the one ID-scoped mobile CSS rule.
 - `src/library/libraryView.ts` - stop building/owning the sidebar (import zone, `IdentityPanel`, mobile toggle); gate the game list section on desktop vs mobile.
 - `src/main.ts` - construct `HomeSidebarController`; feed it library data; update `handleRouteChange` so the sidebar stays visible across library+session routes and hidden elsewhere; re-point the import-button delegated click listener onto the new persistent container; mark the sidebar's selected session row.
@@ -45,10 +47,12 @@
 ### Task 1: Responsive breakpoint utility
 
 **Files:**
+
 - Create: `src/responsive.ts`
 - Test: `src/responsive.test.ts`
 
 **Interfaces:**
+
 - Produces: `export function isDesktopWidth(): boolean` (true when `window.innerWidth >= 861`, false if `window`/`matchMedia` is unavailable - matches Node/test environments defaulting to "not desktop", i.e. the safer/simpler mobile path); `export function watchDesktopWidth(onChange: (isDesktop: boolean) => void): () => void` returning a cleanup function, following `theme.ts`'s `initTheme` listener-registration shape (`theme.ts:84-134`) including its legacy `addListener`/`removeListener` fallback for older `MediaQueryList` implementations.
 
 - [ ] **Step 1: Write the failing tests**
@@ -199,10 +203,12 @@ Report: "Task 1 done: responsive breakpoint utility."
 ### Task 2: Session grouping and row formatting (pure logic)
 
 **Files:**
+
 - Create: `src/library/sessionSidebarList.ts` (this task writes only the pure functions; Task 3 adds the DOM component to the same file)
 - Test: `src/library/sessionSidebarList.test.ts`
 
 **Interfaces:**
+
 - Consumes: `SessionGroup` (`src/data/session.ts:15`, fields used: `id`, `opponentName`, `startTime`, `wins`, `losses`).
 - Produces: `export interface RecencyGroups { readonly thisWeek: readonly SessionGroup[]; readonly older: readonly SessionGroup[]; }`; `export function groupSessionsByRecency(sessions: readonly SessionGroup[], now: Date): RecencyGroups`; `export function sessionOpponentLine(session: SessionGroup): string`; `export function sessionDateRecordLine(session: SessionGroup): string`.
 
@@ -262,7 +268,10 @@ describe("groupSessionsByRecency", () => {
   });
 
   it("sorts each group newest-first", () => {
-    const a = makeSession({ id: "a", startTime: new Date(now.getTime() - 1000) });
+    const a = makeSession({
+      id: "a",
+      startTime: new Date(now.getTime() - 1000),
+    });
     const b = makeSession({ id: "b", startTime: now });
     const { thisWeek } = groupSessionsByRecency([a, b], now);
     expect(thisWeek.map((s) => s.id)).toEqual(["b", "a"]);
@@ -371,10 +380,12 @@ Report: "Task 2 done: session recency grouping and row formatting."
 ### Task 3: SessionSidebarList DOM component
 
 **Files:**
+
 - Modify: `src/library/sessionSidebarList.ts` (add to the same file)
 - Modify: `src/library/sessionSidebarList.test.ts` (add to the same file)
 
 **Interfaces:**
+
 - Consumes: `groupSessionsByRecency`, `sessionOpponentLine`, `sessionDateRecordLine` (Task 2, same file); `navigateToSession` (`src/router.ts:110`); `t()` (`src/i18n.ts`) only if a translated label is needed (the two data lines are not translated strings, per Global Constraints).
 - Produces: `export class SessionSidebarList { constructor(container: HTMLElement, onSelectSession: (id: string) => void); setSessions(sessions: readonly SessionGroup[]): void; setSelectedSessionId(id: string | null): void; render(): void; }`.
 
@@ -388,7 +399,7 @@ DOM writes its own inline, purpose-built mock rather than sharing one
 that convention rather than introducing a new shared helper. This mock
 needs to be a little richer than `gameList.test.ts`'s (which never reads
 attributes back): `querySelector`/`querySelectorAll` need to return
-*stateful* fake elements - the same object on repeat queries for the same
+_stateful_ fake elements - the same object on repeat queries for the same
 selector - so a test can render, then read back what `render()` set on
 them (`aria-current`, click handlers).
 
@@ -450,8 +461,7 @@ function makeFakeContainer() {
     set innerHTML(value: string) {
       html = value;
       rowsById.clear();
-      const rowRe =
-        /data-session-id="([^"]+)"(\s+aria-current="page")?/g;
+      const rowRe = /data-session-id="([^"]+)"(\s+aria-current="page")?/g;
       let match: RegExpExecArray | null;
       while ((match = rowRe.exec(value))) {
         const el = makeFakeEl();
@@ -504,7 +514,9 @@ describe("SessionSidebarList", () => {
     list.render(new Date("2026-09-19T12:00:00Z"));
 
     (
-      container.querySelector('[data-session-id="clicked"]') as unknown as FakeEl
+      container.querySelector(
+        '[data-session-id="clicked"]',
+      ) as unknown as FakeEl
     ).dispatchEvent("click");
     expect(selected).toEqual(["clicked"]);
   });
@@ -624,53 +636,53 @@ Expected: PASS.
 In `index.html`'s `<style>` block, near `.library-sidebar`'s other rules (search for `.library-sidebar-content` around line 1199):
 
 ```css
-      .session-sidebar-list {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        padding-top: 8px;
-      }
-      .session-sidebar-group-label {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--text-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        margin: 8px 4px 4px;
-      }
-      .session-sidebar-row {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
-        width: 100%;
-        text-align: left;
-        padding: 8px 10px;
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: 6px;
-        color: var(--text);
-        font-family: inherit;
-        cursor: pointer;
-      }
-      .session-sidebar-row:hover {
-        background: var(--card-header-hover);
-      }
-      .session-sidebar-row[aria-current="page"] {
-        background: var(--accent-subtle);
-        border-color: var(--accent);
-      }
-      .session-sidebar-row-line1 {
-        font-size: 12px;
-        font-weight: 600;
-      }
-      .session-sidebar-row-line2 {
-        font-size: 11px;
-        color: var(--text-dim);
-      }
+.session-sidebar-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+}
+.session-sidebar-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 8px 4px 4px;
+}
+.session-sidebar-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+.session-sidebar-row:hover {
+  background: var(--card-header-hover);
+}
+.session-sidebar-row[aria-current="page"] {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+.session-sidebar-row-line1 {
+  font-size: 12px;
+  font-weight: 600;
+}
+.session-sidebar-row-line2 {
+  font-size: 11px;
+  color: var(--text-dim);
+}
 ```
 
 (Confirm `--accent-subtle`/`--card-header-hover`/`--text-dim` exist under `:root` before using them - they were established earlier in this project's header-nav and library-collapsible styling; if a name doesn't match, use whichever equivalent variable those existing rules use.)
@@ -688,9 +700,11 @@ Report: "Task 3 done: SessionSidebarList component with tests and styling."
 ### Task 4: index.html restructuring - persistent sidebar shell
 
 **Files:**
+
 - Modify: `index.html`
 
 **Interfaces:**
+
 - Produces: static markup with ids `#homeShell`, `#librarySidebar` (moved here from `LibraryViewController`'s template, content unchanged except a new `#sessionSidebarListWrap` mount point added inside `#librarySidebarContent`), `#libraryView` and `#sessionView` now nested inside `#homeShell` instead of being direct children of `<main>`.
 - Consumes: nothing new - this is a pure markup move.
 
@@ -703,70 +717,80 @@ Read `index.html` around line 6130 (`<main>`'s children) and line 151-200 of `sr
 In `index.html`, replace:
 
 ```html
-      <!-- Library View -->
-      <div id="libraryView" class="view-container"></div>
+<!-- Library View -->
+<div id="libraryView" class="view-container"></div>
 
-      <!-- Preview View -->
-      <div id="previewView" class="view-container" hidden></div>
+<!-- Preview View -->
+<div id="previewView" class="view-container" hidden></div>
 
-      <!-- Search View -->
-      <div id="searchView" class="view-container" hidden></div>
-      <div id="sessionView" class="view-container" hidden></div>
+<!-- Search View -->
+<div id="searchView" class="view-container" hidden></div>
+<div id="sessionView" class="view-container" hidden></div>
 ```
 
 with:
 
 ```html
-      <!-- Home shell: persistent sidebar (Import, YOU panel, session list) +
+<!-- Home shell: persistent sidebar (Import, YOU panel, session list) +
            swappable content pane (library overview or a session page).
            Stays mounted across the library <-> session routes; hidden
            entirely for every other route. Below the 860px breakpoint,
            #librarySidebar's content instead renders inline via the mobile
            toggle, matching today's behavior exactly - see the
            @media (max-width: 860px) block. -->
-      <div id="homeShell" class="home-shell">
-        <div id="librarySidebar" class="library-sidebar">
-          <div class="library-import-zone">
-            <div class="import-container" id="importContainer">
-              <button id="importBtn" class="btn-primary library-import-btn">+ Import replays</button>
-              <div id="importDropdownMenu" class="dropdown-menu library-import-dropdown" hidden>
-                <button id="importFilesBtn">Select files (.rmgr)</button>
-                <button id="importFolderBtn">Select folder</button>
-              </div>
-            </div>
-            <div id="libImportProgressWrap" class="import-progress-wrap" hidden>
-              <div class="import-progress-bar" id="libImportProgressBar"></div>
-              <span id="libImportProgressText"></span>
-            </div>
-            <span id="libLoadStatus" class="lib-load-status"></span>
-            <div id="libStaleBanner" class="stale-banner" hidden>
-              <span id="libStaleBannerText"></span>
-              <button id="libStaleBannerBtn"></button>
-            </div>
-          </div>
-          <button id="mobileSidebarToggle" class="mobile-sidebar-toggle" aria-expanded="false">
-            <div class="mobile-toggle-left">
-              <span class="mobile-toggle-icon">👤</span>
-              <span id="mobileIdentitySummary" class="mobile-toggle-name"></span>
-            </div>
-            <div class="mobile-toggle-right">
-              <span class="mobile-toggle-arrow">▾</span>
-            </div>
-          </button>
-          <div id="librarySidebarContent" class="library-sidebar-content">
-            <div id="identityCard" class="identity-card"></div>
-            <div id="sessionSidebarListWrap" class="session-sidebar-list"></div>
-          </div>
+<div id="homeShell" class="home-shell">
+  <div id="librarySidebar" class="library-sidebar">
+    <div class="library-import-zone">
+      <div class="import-container" id="importContainer">
+        <button id="importBtn" class="btn-primary library-import-btn">
+          + Import replays
+        </button>
+        <div
+          id="importDropdownMenu"
+          class="dropdown-menu library-import-dropdown"
+          hidden
+        >
+          <button id="importFilesBtn">Select files (.rmgr)</button>
+          <button id="importFolderBtn">Select folder</button>
         </div>
-        <div id="libraryView" class="view-container"></div>
-        <div id="sessionView" class="view-container" hidden></div>
       </div>
+      <div id="libImportProgressWrap" class="import-progress-wrap" hidden>
+        <div class="import-progress-bar" id="libImportProgressBar"></div>
+        <span id="libImportProgressText"></span>
+      </div>
+      <span id="libLoadStatus" class="lib-load-status"></span>
+      <div id="libStaleBanner" class="stale-banner" hidden>
+        <span id="libStaleBannerText"></span>
+        <button id="libStaleBannerBtn"></button>
+      </div>
+    </div>
+    <button
+      id="mobileSidebarToggle"
+      class="mobile-sidebar-toggle"
+      aria-expanded="false"
+    >
+      <div class="mobile-toggle-left">
+        <span class="mobile-toggle-icon">👤</span>
+        <span id="mobileIdentitySummary" class="mobile-toggle-name"></span>
+      </div>
+      <div class="mobile-toggle-right">
+        <span class="mobile-toggle-arrow">▾</span>
+      </div>
+    </button>
+    <div id="librarySidebarContent" class="library-sidebar-content">
+      <div id="identityCard" class="identity-card"></div>
+      <div id="sessionSidebarListWrap" class="session-sidebar-list"></div>
+    </div>
+  </div>
+  <div id="libraryView" class="view-container"></div>
+  <div id="sessionView" class="view-container" hidden></div>
+</div>
 
-      <!-- Preview View -->
-      <div id="previewView" class="view-container" hidden></div>
+<!-- Preview View -->
+<div id="previewView" class="view-container" hidden></div>
 
-      <!-- Search View -->
-      <div id="searchView" class="view-container" hidden></div>
+<!-- Search View -->
+<div id="searchView" class="view-container" hidden></div>
 ```
 
 Note `#sessionView` moved out of its old spot (next to `#searchView`) into `#homeShell`; don't leave a duplicate `#sessionView` behind.
@@ -776,39 +800,39 @@ Note `#sessionView` moved out of its old spot (next to `#searchView`) into `#hom
 Near `main { ... }` (around line 1093):
 
 ```css
-      #homeShell {
-        flex: 1;
-        display: flex;
-        min-height: 0;
-        min-width: 0;
-      }
-      #homeShell[hidden] {
-        display: none;
-      }
+#homeShell {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+#homeShell[hidden] {
+  display: none;
+}
 ```
 
 In the `@media (max-width: 860px)` block (around line 5674), replace:
 
 ```css
-        #libraryView {
-          flex-direction: column;
-          overflow-y: auto;
-          padding: 12px;
-          gap: 16px;
-        }
+#libraryView {
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 12px;
+  gap: 16px;
+}
 ```
 
 with:
 
 ```css
-        #homeShell {
-          flex-direction: column;
-        }
-        #libraryView {
-          overflow-y: auto;
-          padding: 12px;
-          gap: 16px;
-        }
+#homeShell {
+  flex-direction: column;
+}
+#libraryView {
+  overflow-y: auto;
+  padding: 12px;
+  gap: 16px;
+}
 ```
 
 (`flex-direction` moves to the new shell since `#librarySidebar` is no longer `#libraryView`'s child; `overflow-y`/`padding`/`gap` stay on `#libraryView` itself, unchanged from today.)
@@ -827,9 +851,11 @@ Report: "Task 4 done: index.html restructured with a persistent #homeShell sideb
 ### Task 5: HomeSidebarController
 
 **Files:**
+
 - Create: `src/library/homeSidebar.ts`
 
 **Interfaces:**
+
 - Consumes: `IdentityPanel` (`src/library/identityPanel.ts`, constructor `(container, modalContainer, identity, getSummaries, onIdentityChanged)`); `SessionSidebarList` (Task 3); `groupGamesIntoSessions` (`src/data/session.ts`); `watchDesktopWidth`/`isDesktopWidth` (Task 1); `GameSummary`, `Identity`.
 - Produces: `export class HomeSidebarController { constructor(container: HTMLElement, modalContainer: HTMLElement, identity: Identity, onIdentityChanged: (identity: Identity) => void, onSelectSession: (id: string) => void); setData(summaries: GameSummary[], identity: Identity): void; setSelectedSessionId(id: string | null): void; setDemoMode(isDemo: boolean): void; }`. Mirrors `LibraryViewController`'s existing `setDemoMode`/identity-update shape so `main.ts` can wire it the same way.
 
@@ -978,10 +1004,12 @@ Report: "Task 5 done: HomeSidebarController created (not yet wired into main.ts)
 ### Task 6: Trim LibraryViewController
 
 **Files:**
+
 - Modify: `src/library/libraryView.ts`
 - Create: `src/library/libraryView.test.ts` (none exists today - `ls src/library/*.test.ts` currently shows only `gameList.test.ts` - so the new desktop/mobile gating behavior needs its own test file from scratch, not an addition to an existing one)
 
 **Interfaces:**
+
 - Consumes: `isDesktopWidth`, `watchDesktopWidth` (Task 1).
 - Produces: `LibraryViewController`'s constructor **drops the `modalContainer` parameter entirely** - confirmed (`grep -n "modalContainer" src/library/libraryView.ts`) it has exactly one use today, passed straight to `new IdentityPanel(...)`, and that construction moves to `HomeSidebarController` (Task 5). New constructor signature:
   `constructor(container: HTMLElement, onSelectGame: (summary: GameSummary) => void, onShowFailedEdgeGuards: (session: SessionGroup) => void, onSelectMatchup: (myChar: number, oppChar: number) => void)`.
@@ -995,7 +1023,7 @@ skipped when `this.summaries` is empty (`hasSufficientGames` and the
 `filterBarEl.hidden = true` branches both short-circuit on zero games),
 so an empty-summaries render exercises the new gating logic in Task 6's
 Step 2 without needing a mock that handles every other branch. The mock
-below returns one shared generic fake element for *any* selector it
+below returns one shared generic fake element for _any_ selector it
 doesn't specifically care about, so calls like `.hidden = true` or
 `.innerHTML = ...` on parts of `render()` this test isn't checking don't
 throw.
@@ -1092,7 +1120,7 @@ confirms there's real behavior to build, not a vacuous test.
 In `libraryView.ts`, the constructor's `this.container.innerHTML` template (around line 150) currently builds both `#librarySidebar` and `#libraryMain`. Replace the whole template with just what was inside `#libraryMain` (the disclaimer banner, filter bar, stats/matchups `<details>`, game list wrap) - `#librarySidebar`'s markup is deleted here since Task 4 made it static HTML elsewhere:
 
 ```ts
-    this.container.innerHTML = `
+this.container.innerHTML = `
       <div id="libraryMain" class="library-main">
         <div id="disclaimerBanner" class="disclaimer-banner"></div>
         <div id="libraryFilterBar" class="library-filter-bar"></div>
@@ -1124,26 +1152,25 @@ Remove the `modalContainer` constructor parameter (per this task's Interfaces se
 In `render()`, at step 7 (the existing `// 7. Game List` block near the end, around line 815):
 
 ```ts
-    // 7. Game List - desktop drops this entirely (browsing games happens
-    // through a session's own page now, opened from the sidebar); mobile
-    // keeps it exactly as before this change.
-    const gameListWrapEl = this.container.querySelector<HTMLElement>(
-      "#gameListWrap",
-    );
-    if (isDesktopWidth()) {
-      if (gameListWrapEl) gameListWrapEl.hidden = true;
-    } else {
-      if (gameListWrapEl) gameListWrapEl.hidden = false;
-      const displayedSummaries = this.summaries.filter((s) =>
-        matchesFilters(s, this.identity, this.filters),
-      );
-      this.gameList.setSortOrder(this.sortOrder);
-      this.gameList.render(
-        displayedSummaries,
-        this.identity,
-        displayedSummaries.length,
-      );
-    }
+// 7. Game List - desktop drops this entirely (browsing games happens
+// through a session's own page now, opened from the sidebar); mobile
+// keeps it exactly as before this change.
+const gameListWrapEl =
+  this.container.querySelector<HTMLElement>("#gameListWrap");
+if (isDesktopWidth()) {
+  if (gameListWrapEl) gameListWrapEl.hidden = true;
+} else {
+  if (gameListWrapEl) gameListWrapEl.hidden = false;
+  const displayedSummaries = this.summaries.filter((s) =>
+    matchesFilters(s, this.identity, this.filters),
+  );
+  this.gameList.setSortOrder(this.sortOrder);
+  this.gameList.render(
+    displayedSummaries,
+    this.identity,
+    displayedSummaries.length,
+  );
+}
 ```
 
 Add the import: `import { isDesktopWidth, watchDesktopWidth } from "../responsive.js";`
@@ -1153,7 +1180,7 @@ Add the import: `import { isDesktopWidth, watchDesktopWidth } from "../responsiv
 In the constructor, after the existing field assignments, add a listener so resizing across 860px re-renders (showing/hiding the game list appropriately) without needing a manual refresh:
 
 ```ts
-    watchDesktopWidth(() => this.render());
+watchDesktopWidth(() => this.render());
 ```
 
 Place this after `this.gameList = new GameList(...)` (the constructor's last statement) so `this.gameList` exists before the first callback could fire.
@@ -1177,9 +1204,11 @@ Report: "Task 6 done: LibraryViewController no longer owns the sidebar (dropped 
 ### Task 7: Wire main.ts
 
 **Files:**
+
 - Modify: `src/main.ts`
 
 **Interfaces:**
+
 - Consumes: `HomeSidebarController` (Task 5); everything already imported (`libraryController`, `sessionController`, `navigateToSession`-adjacent routing).
 - Produces: no new public interfaces - this is composition root wiring.
 
@@ -1188,7 +1217,9 @@ Report: "Task 6 done: LibraryViewController no longer owns the sidebar (dropped 
 Near where `libraryController = new LibraryViewController(...)` is constructed (around line 855), add:
 
 ```ts
-const homeSidebarEl = document.getElementById("librarySidebar") as HTMLDivElement;
+const homeSidebarEl = document.getElementById(
+  "librarySidebar",
+) as HTMLDivElement;
 ```
 
 next to the other `const xEl = document.getElementById(...)` declarations at the top of the file (near `libraryViewEl`, line ~85), and construct the controller alongside `libraryController`:
@@ -1232,12 +1263,12 @@ Do this at every site the search finds - do not guess there's only one; `addSumm
 In `handleRouteChange`, the `route.view === "library"` branch (around line 641-646) currently does:
 
 ```ts
-    sessionViewEl.hidden = true;
-    matchupViewEl.hidden = true;
-    backToLibraryBtn.hidden = true;
+sessionViewEl.hidden = true;
+matchupViewEl.hidden = true;
+backToLibraryBtn.hidden = true;
 
-    libraryViewEl.hidden = false;
-    libraryController.render();
+libraryViewEl.hidden = false;
+libraryController.render();
 ```
 
 `#homeShell` wraps both `libraryViewEl` and `sessionViewEl` now (Task 4), so it must be shown whenever either of those routes is active, and hidden for every other route. Add `homeShellEl.hidden = false;` to this branch and the `route.view === "session"` branch (around line 707-717), and `homeShellEl.hidden = true;` to every other branch (`preview`, `search`, `match`, `matchup` - the same set of branches that already set `libraryViewEl.hidden = true` and `sessionViewEl.hidden = true`). Declare `const homeShellEl = document.getElementById("homeShell") as HTMLDivElement;` alongside `libraryViewEl`.
