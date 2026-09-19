@@ -32,10 +32,15 @@ export interface BombExplosionEvent {
   kind: number;
   radius: number;
   isBobOmb?: boolean;
+  isSamusBomb?: boolean;
   objectAddress?: number;
 }
 
 export const EXPLOSION_DURATION = 24;
+
+export function isSamusBombObject(linkId: number, kind: number): boolean {
+  return linkId === ItemLinkId.Weapon && kind === WPKind.SamusBomb;
+}
 
 export function isBombObject(linkId: number, kind: number): boolean {
   if (linkId === ItemLinkId.Item) {
@@ -70,6 +75,7 @@ export function extractBombExplosions(replay: Replay): BombExplosionEvent[] {
       kind: number;
       linkId: number;
       isBobOmb: boolean;
+      isSamusBomb: boolean;
     }
   >();
 
@@ -91,6 +97,7 @@ export function extractBombExplosions(replay: Replay): BombExplosionEvent[] {
           kind: item.kind,
           linkId: item.linkId,
           isBobOmb: item.kind === ITKind.BobOmb,
+          isSamusBomb: isSamusBombObject(item.linkId, item.kind),
         });
       }
     }
@@ -115,8 +122,9 @@ export function extractBombExplosions(replay: Replay): BombExplosionEvent[] {
             x: bomb.x,
             y: bomb.y,
             kind: bomb.kind,
-            radius: bomb.isBobOmb ? 44 : 36,
+            radius: bomb.isBobOmb ? 44 : bomb.isSamusBomb ? 28 : 36,
             isBobOmb: bomb.isBobOmb,
+            isSamusBomb: bomb.isSamusBomb,
             objectAddress: addr,
           });
         }
@@ -126,4 +134,13 @@ export function extractBombExplosions(replay: Replay): BombExplosionEvent[] {
   }
 
   return explosions;
+}
+
+/**
+ * Extracts only Samus Morph Ball Bomb explosion events across all frames of a replay.
+ */
+export function extractSamusBombExplosions(
+  replay: Replay,
+): BombExplosionEvent[] {
+  return extractBombExplosions(replay).filter((e) => e.isSamusBomb);
 }

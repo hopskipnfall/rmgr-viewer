@@ -4,6 +4,8 @@ import {
   EXPLOSION_DURATION,
   MARKER_TUNING_PX_PER_WORLD_UNIT,
 } from "../../common/index.js";
+import { drawSamusBombExplosionAt } from "./samusBombExplosions.js";
+export { drawSamusBombExplosionAt };
 
 /**
  * 3-Phase Bomb Explosion Visual:
@@ -18,7 +20,12 @@ export function drawBombExplosionAt(
   progress: number, // 0.0 to 1.0
   isBobOmb = false,
   baseRadius = 36,
+  isSamusBomb = false,
 ): void {
+  if (isSamusBomb) {
+    drawSamusBombExplosionAt(ctx, x, y, progress, baseRadius);
+    return;
+  }
   if (progress < 0 || progress > 1) return;
   ctx.save();
   const scale = (baseRadius / 36) * (isBobOmb ? 1.25 : 1.0);
@@ -206,6 +213,7 @@ export function drawBombExplosions(
         progress,
         exp.isBobOmb ?? false,
         exp.radius,
+        exp.isSamusBomb ?? false,
       );
 
       ctx.restore();

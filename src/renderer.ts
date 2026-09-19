@@ -61,6 +61,9 @@ import {
   drawItemObjects,
   drawBombExplosions,
   drawBombExplosionAt,
+  drawSamusBombExplosionAt,
+  drawEggExplosions,
+  drawEggExplosionAt,
   isChargingOrb,
   drawGenericItemDiamond,
   drawCustomWeaponShape,
@@ -175,6 +178,9 @@ import {
   computeLedgeGrabCandidates,
   type BombExplosionEvent,
   extractBombExplosions,
+  extractSamusBombExplosions,
+  type EggExplosionEvent,
+  extractEggExplosions,
   type QuickAttackPath,
 } from "./renderer/common/index.js";
 
@@ -773,6 +779,7 @@ export class StageRenderer {
       this.drawItemObjects(camera, frame.items ?? [], replay, frame, isPaused);
       if (replay && frameIndex !== undefined) {
         this.drawBombExplosions(camera, frameIndex, replay);
+        this.drawEggExplosions(camera, frameIndex, replay);
       }
       this.drawDeathDirectionFlashes(frame);
       this.drawLedgeGrabDots(camera, ledgeGrabCandidates);
@@ -869,8 +876,71 @@ export class StageRenderer {
     progress: number, // 0.0 to 1.0
     isBobOmb = false,
     baseRadius = 36,
+    isSamusBomb = false,
   ): void {
-    drawBombExplosionAt(ctx, x, y, progress, isBobOmb, baseRadius);
+    drawBombExplosionAt(ctx, x, y, progress, isBobOmb, baseRadius, isSamusBomb);
+  }
+
+  /**
+   * 4-Phase Samus Morph Ball Bomb Cybernetic Explosion Visual:
+   * Phase 1 (p: 0.0 - 0.40): Detonation energy flash, concentric neon-cyan shockwave rings & 4-way targeting reticle spokes.
+   * Phase 2 (p: 0.0 - 0.75): High-voltage electric lightning arcs & plasma sparks crackling radially.
+   * Phase 3 (p: 0.0 - 0.55): Searing spherical electric plasma energy core bursting outward.
+   * Phase 4 (p: 0.20 - 1.00): Ethereal ionized plasma vapor clouds cleanly dissipating (no dirty soot).
+   */
+  public drawSamusBombExplosionAt(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    progress: number, // 0.0 to 1.0
+    baseRadius = 28,
+  ): void {
+    drawSamusBombExplosionAt(ctx, x, y, progress, baseRadius);
+  }
+
+  public getSamusBombExplosions(replay: Replay): BombExplosionEvent[] {
+    return extractSamusBombExplosions(replay);
+  }
+
+  private eggExplosionsCache = new WeakMap<Replay, EggExplosionEvent[]>();
+
+  public getEggExplosions(replay: Replay): EggExplosionEvent[] {
+    let explosions = this.eggExplosionsCache.get(replay);
+    if (!explosions) {
+      explosions = extractEggExplosions(replay);
+      this.eggExplosionsCache.set(replay, explosions);
+    }
+    return explosions;
+  }
+
+  /**
+   * Renders all active egg explosions at the current frameIndex.
+   * Multiple simultaneous eggs are rendered independently with their own progress.
+   */
+  private drawEggExplosions(
+    camera: Camera,
+    frameIndex: number,
+    replay: Replay,
+  ): void {
+    const explosions = this.getEggExplosions(replay);
+    drawEggExplosions(this.ctx, camera, frameIndex, explosions);
+  }
+
+  /**
+   * 4-Phase Yoshi Egg Explosion Visual:
+   * Phase 1 (p: 0.0 - 0.30): Initial detonation crack flash, shockwave ring, sharp blast rays.
+   * Phase 2 (p: 0.0 - 0.75): Multi-colored Yoshi starbursts & sparkles shooting outward with speed trails.
+   * Phase 3 (p: 0.0 - 0.85): Jagged cream eggshell shards with green spots tumbling outward with gravity.
+   * Phase 4 (p: 0.15 - 1.00): Billowing soft yolk & cream vapor puffs expanding and gently rising before fading.
+   */
+  public drawEggExplosionAt(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    progress: number, // 0.0 to 1.0
+    baseRadius = 32,
+  ): void {
+    drawEggExplosionAt(ctx, x, y, progress, baseRadius);
   }
 
   private isChargingOrb(item: ItemUpdate, frame?: Frame): boolean {

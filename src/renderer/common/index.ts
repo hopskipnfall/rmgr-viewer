@@ -4,5 +4,6 @@ export * from "./characterSpecials.js";
 export * from "./attacks.js";
 export * from "./ledgeGrab.js";
 export * from "./bombEvents.js";
+export * from "./eggEvents.js";
 export * from "./quickAttack.js";
 export * from "./names.js";

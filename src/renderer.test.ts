@@ -68,6 +68,11 @@ import {
   LEDGE_GRAB_FADE_FRAMES,
   StageRenderer,
   extractBombExplosions,
+  extractSamusBombExplosions,
+  isSamusBombObject,
+  extractEggExplosions,
+  EGG_EXPLOSION_DURATION,
+  isEggThrowObject,
   CHARGE_SHOT_FULL_CHARGE_RADIUS_WORLD,
   CHARGE_SHOT_FULL_CHARGE_SCALE,
   CHARGE_SHOT_LEVEL_SCALES,
@@ -4224,6 +4229,406 @@ describe("StageRenderer background themes", () => {
       expect(
         explosions.find((e) => e.objectAddress === 0x80400000),
       ).toBeUndefined();
+    });
+  });
+
+  describe("Egg Throw Explosion Visual & Event Extraction", () => {
+    const createMockCanvas = () => {
+      const strokeCalls: number[] = [];
+      const fills: string[] = [];
+      const arcCalls: Array<{ x: number; y: number; radius: number }> = [];
+      const ellipseCalls: Array<{
+        x: number;
+        y: number;
+        radiusX: number;
+        radiusY: number;
+      }> = [];
+
+      const ctx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: (x: number, y: number, radius: number) => {
+          arcCalls.push({ x, y, radius });
+        },
+        ellipse: (x: number, y: number, radiusX: number, radiusY: number) => {
+          ellipseCalls.push({ x, y, radiusX, radiusY });
+        },
+        quadraticCurveTo: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {
+          strokeCalls.push(1);
+        },
+        createRadialGradient: () => ({
+          addColorStop: (_pos: number, color: string) => fills.push(color),
+        }),
+        createLinearGradient: () => ({
+          addColorStop: (_pos: number, color: string) => fills.push(color),
+        }),
+        setLineDash: () => {},
+        translate: () => {},
+        rotate: () => {},
+        scale: () => {},
+        clearRect: () => {},
+        measureText: (text: string) => ({ width: text.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+        shadowColor: "",
+        shadowBlur: 0,
+        globalAlpha: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      const fakeCanvas = {
+        getContext: () => ctx,
+        width: 800,
+        height: 600,
+      } as unknown as HTMLCanvasElement;
+
+      return { fakeCanvas, strokeCalls, fills, arcCalls, ellipseCalls };
+    };
+
+    it("isEggThrowObject accurately identifies Yoshi egg throw projectiles", () => {
+      expect(isEggThrowObject(ItemLinkId.Weapon, WPKind.EggThrow)).toBe(true);
+      expect(isEggThrowObject(ItemLinkId.Weapon, 0x05)).toBe(true);
+      expect(isEggThrowObject(ItemLinkId.Weapon, WPKind.SamusBomb)).toBe(false);
+      expect(isEggThrowObject(ItemLinkId.Item, ITKind.Bomb)).toBe(false);
+      expect(isEggThrowObject(ItemLinkId.Item, WPKind.EggThrow)).toBe(false);
+    });
+
+    it("extractEggExplosions detects single and multiple simultaneous egg throws exploding on disappearance", () => {
+      // Egg A: objectAddress 0x80500000 at (40, 120), frames 0..8, missing on frame 9 (detonates at frame 9)
+      // Egg B: objectAddress 0x80600000 at (-60, 180), frames 3..14, missing on frame 15 (detonates at frame 15)
+      // Egg C: objectAddress 0x80700000 at (0, 0), frames 0..20, stays active (no explosion)
+      // Egg D: objectAddress 0x80800000 falls below blast zone y = -4500, missing on frame 10 (no explosion event)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const frames: any[] = [];
+      for (let f = 0; f <= 20; f++) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const items: any[] = [];
+        if (f < 9) {
+          items.push({
+            kind: WPKind.EggThrow,
+            linkId: ItemLinkId.Weapon,
+            positionX: 40,
+            positionY: 120,
+            objectAddress: 0x80500000,
+            frame: f,
+          });
+        }
+        if (f >= 3 && f < 15) {
+          items.push({
+            kind: WPKind.EggThrow,
+            linkId: ItemLinkId.Weapon,
+            positionX: -60,
+            positionY: 180,
+            objectAddress: 0x80600000,
+            frame: f,
+          });
+        }
+        if (f <= 20) {
+          items.push({
+            kind: WPKind.EggThrow,
+            linkId: ItemLinkId.Weapon,
+            positionX: 0,
+            positionY: 0,
+            objectAddress: 0x80700000,
+            frame: f,
+          });
+        }
+        if (f < 10) {
+          items.push({
+            kind: WPKind.EggThrow,
+            linkId: ItemLinkId.Weapon,
+            positionX: 10,
+            positionY: -4500, // Deep below stage blast zone
+            objectAddress: 0x80800000,
+            frame: f,
+          });
+        }
+        // Non-egg weapon
+        items.push({
+          kind: WPKind.SamusBomb,
+          linkId: ItemLinkId.Weapon,
+          positionX: 100,
+          positionY: 50,
+          objectAddress: 0x80900000,
+          frame: f,
+        });
+
+        frames.push({ frame: f, ports: {}, items });
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const replay: any = {
+        header: { gameFamily: "smash64", schemaVersion: 1 },
+        matchSettings: { stageId: 0 },
+        frames,
+      };
+
+      const explosions = extractEggExplosions(replay);
+      expect(explosions).toHaveLength(2);
+
+      // Egg A explosion
+      const explosionA = explosions.find((e) => e.objectAddress === 0x80500000);
+      expect(explosionA).toBeDefined();
+      expect(explosionA!.startFrame).toBe(9);
+      expect(explosionA!.x).toBe(40);
+      expect(explosionA!.y).toBe(120);
+      expect(explosionA!.radius).toBe(32);
+
+      // Egg B explosion
+      const explosionB = explosions.find((e) => e.objectAddress === 0x80600000);
+      expect(explosionB).toBeDefined();
+      expect(explosionB!.startFrame).toBe(15);
+      expect(explosionB!.x).toBe(-60);
+      expect(explosionB!.y).toBe(180);
+
+      // Egg C did not disappear -> no explosion
+      expect(
+        explosions.find((e) => e.objectAddress === 0x80700000),
+      ).toBeUndefined();
+
+      // Egg D fell below blast zone -> no explosion
+      expect(
+        explosions.find((e) => e.objectAddress === 0x80800000),
+      ).toBeUndefined();
+
+      // Non-egg weapon not tracked
+      expect(
+        explosions.find((e) => e.objectAddress === 0x80900000),
+      ).toBeUndefined();
+    });
+
+    it("draws multi-phase egg explosion across progress levels without throwing", () => {
+      const { fakeCanvas } = createMockCanvas();
+      const renderer = new StageRenderer(fakeCanvas);
+      const ctx = fakeCanvas.getContext("2d")!;
+
+      // Phase 1 (crack flash & supersonic shockwave ring)
+      expect(() => {
+        renderer.drawEggExplosionAt(ctx, 120, 120, 0.1, 32);
+      }).not.toThrow();
+
+      // Phase 2 (starbursts & soft yolk clouds)
+      expect(() => {
+        renderer.drawEggExplosionAt(ctx, 120, 120, 0.45, 32);
+      }).not.toThrow();
+
+      // Phase 3/4 (tumbling eggshell shards with spots & dissipating cream puffs)
+      expect(() => {
+        renderer.drawEggExplosionAt(ctx, 120, 120, 0.85, 32);
+      }).not.toThrow();
+
+      // Bounds checks (< 0 and > 1 should be no-ops)
+      expect(() => {
+        renderer.drawEggExplosionAt(ctx, 120, 120, -0.1, 32);
+        renderer.drawEggExplosionAt(ctx, 120, 120, 1.1, 32);
+      }).not.toThrow();
+    });
+
+    it("caches egg explosions per replay instance on StageRenderer", () => {
+      const { fakeCanvas } = createMockCanvas();
+      const renderer = new StageRenderer(fakeCanvas);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const replay: any = {
+        header: { gameFamily: "smash64", schemaVersion: 1 },
+        matchSettings: { stageId: 0 },
+        frames: [],
+      };
+
+      const result1 = renderer.getEggExplosions(replay);
+      const result2 = renderer.getEggExplosions(replay);
+      expect(result1).toBe(result2);
+    });
+
+    it("has expected duration constant", () => {
+      expect(EGG_EXPLOSION_DURATION).toBe(22);
+    });
+  });
+
+  describe("Samus Morph Ball Bomb Cybernetic Explosion Visual & Event Extraction", () => {
+    const createMockCanvas = () => {
+      const strokeCalls: number[] = [];
+      const fills: string[] = [];
+      const arcCalls: Array<{ x: number; y: number; radius: number }> = [];
+      const ellipseCalls: Array<{
+        x: number;
+        y: number;
+        radiusX: number;
+        radiusY: number;
+      }> = [];
+
+      const ctx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: (x: number, y: number, radius: number) => {
+          arcCalls.push({ x, y, radius });
+        },
+        ellipse: (x: number, y: number, radiusX: number, radiusY: number) => {
+          ellipseCalls.push({ x, y, radiusX, radiusY });
+        },
+        quadraticCurveTo: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {
+          strokeCalls.push(1);
+        },
+        createRadialGradient: () => ({
+          addColorStop: (_pos: number, color: string) => fills.push(color),
+        }),
+        createLinearGradient: () => ({
+          addColorStop: (_pos: number, color: string) => fills.push(color),
+        }),
+        setLineDash: () => {},
+        translate: () => {},
+        rotate: () => {},
+        scale: () => {},
+        clearRect: () => {},
+        measureText: (text: string) => ({ width: text.length * 8 }),
+        fillText: () => {},
+        strokeText: () => {},
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+        shadowColor: "",
+        shadowBlur: 0,
+        globalAlpha: 1,
+      } as unknown as CanvasRenderingContext2D;
+
+      const fakeCanvas = {
+        getContext: () => ctx,
+        width: 800,
+        height: 600,
+      } as unknown as HTMLCanvasElement;
+
+      return { fakeCanvas, strokeCalls, fills, arcCalls, ellipseCalls };
+    };
+
+    it("isSamusBombObject accurately identifies Samus Morph Ball Bomb weapon objects", () => {
+      expect(isSamusBombObject(ItemLinkId.Weapon, WPKind.SamusBomb)).toBe(true);
+      expect(isSamusBombObject(ItemLinkId.Weapon, 0x03)).toBe(true);
+      expect(isSamusBombObject(ItemLinkId.Weapon, WPKind.EggThrow)).toBe(false);
+      expect(isSamusBombObject(ItemLinkId.Item, ITKind.Bomb)).toBe(false);
+    });
+
+    it("extractBombExplosions and extractSamusBombExplosions track Samus bombs with custom radius", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const frames: any[] = [];
+      for (let f = 0; f <= 15; f++) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const items: any[] = [];
+        // Samus bomb active frames 0..7, missing frame 8
+        if (f < 8) {
+          items.push({
+            kind: WPKind.SamusBomb,
+            linkId: ItemLinkId.Weapon,
+            positionX: 30,
+            positionY: 80,
+            objectAddress: 0x80a00000,
+            frame: f,
+          });
+        }
+        // Generic bomb active frames 0..11, missing frame 12
+        if (f < 12) {
+          items.push({
+            kind: ITKind.Bomb,
+            linkId: ItemLinkId.Item,
+            positionX: -40,
+            positionY: 90,
+            objectAddress: 0x80b00000,
+            frame: f,
+          });
+        }
+        frames.push({ frame: f, ports: {}, items });
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const replay: any = {
+        header: { gameFamily: "smash64", schemaVersion: 1 },
+        matchSettings: { stageId: 0 },
+        frames,
+      };
+
+      const allExplosions = extractBombExplosions(replay);
+      expect(allExplosions).toHaveLength(2);
+
+      const samusExplosion = allExplosions.find(
+        (e) => e.objectAddress === 0x80a00000,
+      );
+      expect(samusExplosion).toBeDefined();
+      expect(samusExplosion!.isSamusBomb).toBe(true);
+      expect(samusExplosion!.radius).toBe(28);
+      expect(samusExplosion!.startFrame).toBe(8);
+
+      const genericExplosion = allExplosions.find(
+        (e) => e.objectAddress === 0x80b00000,
+      );
+      expect(genericExplosion).toBeDefined();
+      expect(genericExplosion!.isSamusBomb).toBe(false);
+      expect(genericExplosion!.radius).toBe(36);
+
+      const samusOnly = extractSamusBombExplosions(replay);
+      expect(samusOnly).toHaveLength(1);
+      expect(samusOnly[0]!.objectAddress).toBe(0x80a00000);
+    });
+
+    it("draws multi-phase Samus bomb cybernetic explosion without throwing", () => {
+      const { fakeCanvas } = createMockCanvas();
+      const renderer = new StageRenderer(fakeCanvas);
+      const ctx = fakeCanvas.getContext("2d")!;
+
+      // Phase 1 (concentric cyan shockwave rings & reticle)
+      expect(() => {
+        renderer.drawSamusBombExplosionAt(ctx, 100, 100, 0.1, 28);
+      }).not.toThrow();
+
+      // Phase 2/3 (electric lightning arcs & glowing plasma sphere)
+      expect(() => {
+        renderer.drawSamusBombExplosionAt(ctx, 100, 100, 0.45, 28);
+      }).not.toThrow();
+
+      // Phase 4 (ethereal ionized plasma vapor dissipation)
+      expect(() => {
+        renderer.drawSamusBombExplosionAt(ctx, 100, 100, 0.85, 28);
+      }).not.toThrow();
+
+      // Bounds checks
+      expect(() => {
+        renderer.drawSamusBombExplosionAt(ctx, 100, 100, -0.1, 28);
+        renderer.drawSamusBombExplosionAt(ctx, 100, 100, 1.1, 28);
+      }).not.toThrow();
+
+      // Dispatch through drawBombExplosionAt with isSamusBomb
+      expect(() => {
+        renderer.drawBombExplosionAt(ctx, 100, 100, 0.3, false, 28, true);
+      }).not.toThrow();
+    });
+
+    it("getSamusBombExplosions queries Samus bomb explosions from replay", () => {
+      const { fakeCanvas } = createMockCanvas();
+      const renderer = new StageRenderer(fakeCanvas);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const replay: any = {
+        header: { gameFamily: "smash64", schemaVersion: 1 },
+        matchSettings: { stageId: 0 },
+        frames: [],
+      };
+
+      const result = renderer.getSamusBombExplosions(replay);
+      expect(Array.isArray(result)).toBe(true);
     });
   });
 
