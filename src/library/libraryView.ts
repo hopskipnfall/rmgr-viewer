@@ -14,19 +14,11 @@ import {
   hasActiveFilters,
   filterGameSummaries,
   aggregateFilteredGames,
-  computeRateDeltas,
-  computeOpponentCharacterBreakdown,
-  computeCharacterBaselines,
-  computeBaselineDeltas,
 } from "../data/aggregate.js";
-import { computeOpponentStrength } from "../data/opponentStrength.js";
-import { detectMainCharacter } from "../data/mainCharacter.js";
 import { isDesktopWidth, watchDesktopWidth } from "../responsive.js";
-import { StatCards } from "./statCards.js";
-import { BreakdownTable } from "./breakdownTable.js";
-import { MatchupPicker, computeMatchupRows } from "./matchupPicker.js";
+import { MatchupChipSelector } from "./matchupChipSelector.js";
+import { MatchupStatsView } from "./matchupStatsView.js";
 import { GameList } from "./gameList.js";
-import { NeutralScorePanel } from "./neutralScorePanel.js";
 import type { SessionGroup } from "../data/session.js";
 
 function matchesFilters(
@@ -106,11 +98,11 @@ export class LibraryViewController {
     oppCharacterId: "all",
   };
 
-  private statCards: StatCards;
-  private breakdownTable: BreakdownTable;
-  private matchupPicker: MatchupPicker;
+  private matchupChipSelector: MatchupChipSelector;
+  private matchupStatsView: MatchupStatsView;
+  private selectedMyChar: number | null = null;
+  private selectedOppChar: number | null = null;
   private gameList: GameList;
-  private neutralScorePanel: NeutralScorePanel;
 
   private onSelectGameCallback: (summary: GameSummary) => void;
   private onShowFailedEdgeGuardsCallback: (session: SessionGroup) => void;
@@ -148,45 +140,33 @@ export class LibraryViewController {
       <div id="libraryMain" class="library-main">
         <div id="disclaimerBanner" class="disclaimer-banner"></div>
         <div id="libraryFilterBar" class="library-filter-bar"></div>
-        <!-- Collapsed by default; built once here (sub-components re-render
-             inside), so an opened section stays open across re-renders. -->
-        <details id="overallStatsDetails" class="library-collapsible">
-          <summary id="overallHeader" class="overall-header"></summary>
-          <div id="neutralScoreWrap" class="neutral-score-wrap"></div>
-          <div id="statCardsWrap" class="stat-cards-wrap"></div>
-          <div id="breakdownWrap" class="breakdown-wrap"></div>
-        </details>
-        <details id="matchupPickerDetails" class="library-collapsible">
-          <summary class="breakdown-section-header"><h3 id="matchupPickerTitle"></h3></summary>
-          <div id="matchupPickerWrap" class="breakdown-wrap"></div>
-        </details>
+        <section id="matchupStatsSection" class="matchup-statistics-section">
+          <div id="matchupSelectorWrap" class="matchup-selector-wrap"></div>
+          <div id="matchupStatsWrap" class="matchup-stats-wrap"></div>
+        </section>
         <div id="gameListWrap" class="game-list-wrap"></div>
       </div>
     `;
 
-    const statCardsWrap = this.container.querySelector(
-      "#statCardsWrap",
+    const matchupSelectorWrap = this.container.querySelector(
+      "#matchupSelectorWrap",
     ) as HTMLElement;
-    const breakdownWrap = this.container.querySelector(
-      "#breakdownWrap",
-    ) as HTMLElement;
-    const matchupPickerWrap = this.container.querySelector(
-      "#matchupPickerWrap",
+    const matchupStatsWrap = this.container.querySelector(
+      "#matchupStatsWrap",
     ) as HTMLElement;
     const gameListWrap = this.container.querySelector(
       "#gameListWrap",
     ) as HTMLElement;
-    const neutralScoreWrap = this.container.querySelector(
-      "#neutralScoreWrap",
-    ) as HTMLElement;
 
-    this.statCards = new StatCards(statCardsWrap);
-    this.breakdownTable = new BreakdownTable(breakdownWrap);
-    this.matchupPicker = new MatchupPicker(
-      matchupPickerWrap,
-      (myChar, oppChar) => this.onSelectMatchupCallback(myChar, oppChar),
+    this.matchupStatsView = new MatchupStatsView(matchupStatsWrap);
+    this.matchupChipSelector = new MatchupChipSelector(
+      matchupSelectorWrap,
+      (myChar, oppChar) => {
+        this.selectedMyChar = myChar;
+        this.selectedOppChar = oppChar;
+        this.renderMatchupStats();
+      },
     );
-    this.neutralScorePanel = new NeutralScorePanel(neutralScoreWrap);
 
     this.gameList = new GameList(
       gameListWrap,
@@ -541,175 +521,62 @@ export class LibraryViewController {
     }
 
     // 3. Aggregation for all resolved games & filtered resolved games
+    // 3. Aggregation & Matchup Selection
     const allResolvedGames = filterGameSummaries(
       this.summaries,
       this.identity,
       {},
     );
-    const filteredResolvedGames = filterGameSummaries(
-      this.summaries,
-      this.identity,
-      this.filters,
-    );
 
-    const baselineRates = aggregateFilteredGames(allResolvedGames);
-    const filteredRates = aggregateFilteredGames(filteredResolvedGames);
-    const deltas = computeRateDeltas(filteredRates, baselineRates);
+    const pairs = allResolvedGames
+      .map(({ summary, yourPort, oppPort }) => {
+        const yourP = summary.ports.find((p) => p.port === yourPort);
+        const oppP = summary.ports.find((p) => p.port === oppPort);
+        return yourP && oppP
+          ? { myChar: yourP.characterId, oppChar: oppP.characterId }
+          : null;
+      })
+      .filter((p): p is { myChar: number; oppChar: number } => p !== null);
 
-    // 4. Overall Statistics (collapsed unless at least 2 games have a resolved identity)
-    const hasSufficientGames = allResolvedGames.length >= 2;
-    const overallHeaderEl = this.container.querySelector(
-      "#overallHeader",
-    ) as HTMLElement;
-    const statCardsWrapEl = this.container.querySelector(
-      "#statCardsWrap",
-    ) as HTMLElement;
-    const breakdownWrapEl = this.container.querySelector(
-      "#breakdownWrap",
-    ) as HTMLElement;
-    const matchupPickerWrapEl = this.container.querySelector(
-      "#matchupPickerWrap",
-    ) as HTMLElement;
-    const neutralScoreWrapEl = this.container.querySelector(
-      "#neutralScoreWrap",
-    ) as HTMLElement;
+    const availableMyChars = Array.from(new Set(pairs.map((p) => p.myChar)));
+    const getAvailableOppChars = (myChar: number) =>
+      Array.from(
+        new Set(pairs.filter((p) => p.myChar === myChar).map((p) => p.oppChar)),
+      );
 
-    const overallStatsDetailsEl = this.container.querySelector<HTMLElement>(
-      "#overallStatsDetails",
-    );
-    const matchupPickerDetailsEl = this.container.querySelector<HTMLElement>(
-      "#matchupPickerDetails",
-    );
-    if (overallStatsDetailsEl)
-      overallStatsDetailsEl.hidden = !hasSufficientGames;
-    if (matchupPickerDetailsEl) {
-      matchupPickerDetailsEl.hidden = !hasSufficientGames;
+    const myCharFrequencies = new Map<number, number>();
+    for (const p of pairs) {
+      myCharFrequencies.set(
+        p.myChar,
+        (myCharFrequencies.get(p.myChar) ?? 0) + 1,
+      );
     }
 
-    if (!hasSufficientGames) {
-      if (overallHeaderEl) overallHeaderEl.hidden = true;
-      if (statCardsWrapEl) statCardsWrapEl.hidden = true;
-      if (breakdownWrapEl) breakdownWrapEl.hidden = true;
-      if (matchupPickerWrapEl) matchupPickerWrapEl.hidden = true;
-      if (neutralScoreWrapEl) neutralScoreWrapEl.hidden = true;
-    } else {
-      if (overallHeaderEl) {
-        overallHeaderEl.hidden = false;
-        const headerText = isFiltered
-          ? tr.overallFilteredHeader(
-              filteredRates.totalGames,
-              baselineRates.totalGames,
-              filteredRates.dreamLandGames,
-            )
-          : tr.overallHeader(
-              baselineRates.totalGames,
-              baselineRates.dreamLandGames,
-            );
-        overallHeaderEl.innerHTML = `<h2>${escapeHtml(headerText)}</h2>`;
-      }
-      if (statCardsWrapEl) statCardsWrapEl.hidden = false;
-      if (breakdownWrapEl) breakdownWrapEl.hidden = false;
-      if (matchupPickerWrapEl) matchupPickerWrapEl.hidden = false;
-      if (neutralScoreWrapEl) neutralScoreWrapEl.hidden = false;
-
-      // 5. Stat Cards with comparative deltas when filtered
-      this.statCards.render(filteredRates, deltas, isFiltered);
-
-      // 6. Breakdown Table
-      const breakdownRows = computeOpponentCharacterBreakdown(
-        filteredResolvedGames,
-      );
-      this.breakdownTable.render(breakdownRows);
-
-      // 6a. Matchup picker (entry point into the per-matchup view). Uses
-      // allResolvedGames, not the filtered set, so it isn't affected by the
-      // sidebar's opponent/character dropdowns -- it's a standing index of
-      // every matchup the identity has actually played.
-      if (matchupPickerWrapEl) {
-        const matchupRows = computeMatchupRows(
-          allResolvedGames
-            .map(({ summary, yourPort, oppPort }) => {
-              const yourP = summary.ports.find((p) => p.port === yourPort);
-              const oppP = summary.ports.find((p) => p.port === oppPort);
-              return yourP && oppP
-                ? { yourCharId: yourP.characterId, oppCharId: oppP.characterId }
-                : null;
-            })
-            .filter(
-              (x): x is { yourCharId: number; oppCharId: number } => x !== null,
-            ),
-        );
-        this.matchupPicker.render(matchupRows);
-        const matchupTitleEl = this.container.querySelector(
-          "#matchupPickerTitle",
-        );
-        if (matchupTitleEl)
-          matchupTitleEl.textContent = tr.matchupsSectionTitle;
-        if (matchupPickerDetailsEl) {
-          matchupPickerDetailsEl.hidden = matchupRows.length === 0;
+    const getOppCharFrequencies = (myChar: number) => {
+      const oppFreq = new Map<number, number>();
+      for (const p of pairs) {
+        if (p.myChar === myChar) {
+          oppFreq.set(p.oppChar, (oppFreq.get(p.oppChar) ?? 0) + 1);
         }
       }
+      return oppFreq;
+    };
 
-      // 6b. Neutral Score panel (§6) — the driving statistic, symmetric and
-      // robust to the sandbagging problem. Defaults to Peer+Above opponents (§3.4).
-      //
-      // Character scoping for THIS PANEL ONLY: when the user hasn't picked a
-      // "My Character" filter, fall back to the auto-detected main character
-      // (§6.1) so the panel's own asymmetric deltas are meaningful. This must
-      // never mutate `this.filters` or reuse `filteredResolvedGames` — doing
-      // so previously hid every off-main-character game from the game list,
-      // stat cards, and breakdown table (most visibly the "experimentation"
-      // games against weaker opponents that are often played off-main).
-      const neutralCharId: number | "all" =
-        this.filters.yourCharacterId !== undefined &&
-        this.filters.yourCharacterId !== "all"
-          ? this.filters.yourCharacterId
-          : (detectMainCharacter(this.summaries, this.identity) ?? "all");
-      const neutralScopedGames = filterGameSummaries(
-        this.summaries,
-        this.identity,
-        {
-          ...this.filters,
-          yourCharacterId: neutralCharId,
-        },
-      );
-
-      const opponentStrengths = computeOpponentStrength(
-        this.summaries,
-        this.identity,
-      );
-      const neutralResolvedGames = this.includeExperimentation
-        ? neutralScopedGames
-        : neutralScopedGames.filter(({ summary, oppPort }) => {
-            const oppP = summary.ports.find((p) => p.port === oppPort);
-            const name = oppP?.playerName.trim();
-            const tier = name ? opponentStrengths.get(name)?.tier : undefined;
-            return tier === "peer" || tier === "above";
-          });
-      const excludedGamesCount =
-        neutralScopedGames.length - neutralResolvedGames.length;
-      const neutralRates = aggregateFilteredGames(neutralResolvedGames);
-      const baselines = computeCharacterBaselines(
-        this.summaries,
-        this.identity,
-      );
-      const baselineDeltas = computeBaselineDeltas(
-        neutralRates,
-        baselines,
-        neutralCharId,
-        this.filters.oppCharacterId ?? "all",
-      );
-      this.neutralScorePanel.render(
-        neutralRates,
-        baselineDeltas,
-        excludedGamesCount,
-        this.includeExperimentation,
-        (checked) => {
-          this.includeExperimentation = checked;
-          this.render();
-        },
-      );
+    const matchupStatsSection = this.container.querySelector<HTMLElement>(
+      "#matchupStatsSection",
+    );
+    if (matchupStatsSection) {
+      matchupStatsSection.hidden = availableMyChars.length === 0;
     }
+
+    this.matchupChipSelector.setData(
+      availableMyChars,
+      getAvailableOppChars,
+      false,
+      myCharFrequencies,
+      getOppCharFrequencies,
+    );
+    this.renderMatchupStats();
 
     // 7. Game List - desktop drops this entirely (browsing games happens
     // through a session's own page now, opened from the sidebar); mobile
@@ -730,6 +597,28 @@ export class LibraryViewController {
         displayedSummaries.length,
       );
     }
+  }
+
+  private renderMatchupStats(): void {
+    const statsWrap =
+      this.container.querySelector<HTMLElement>("#matchupStatsWrap");
+    if (!statsWrap) return;
+
+    if (this.selectedMyChar === null || this.selectedOppChar === null) {
+      statsWrap.innerHTML = "";
+      return;
+    }
+
+    const matchupGames = filterGameSummaries(this.summaries, this.identity, {
+      yourCharacterId: this.selectedMyChar,
+      oppCharacterId: this.selectedOppChar,
+    });
+    const rates = aggregateFilteredGames(matchupGames);
+    this.matchupStatsView.render(
+      this.selectedMyChar,
+      this.selectedOppChar,
+      rates,
+    );
   }
 }
 

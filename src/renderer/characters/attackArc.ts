@@ -57,6 +57,270 @@ export function drawAttackArc(
     return;
   }
 
+  if (attack.type === "getup-attack") {
+    // Missed-Tech Ground Get-Up Attack:
+    // Low sweeping twin scythes along the stage floor hitting front and back,
+    // with surface friction streaks, expanding energy ripples, and energetic sparks.
+    ctx.save();
+    const dir = facingRight ? 1 : -1;
+    const floorY = centerY + heightPx * 0.48; // Stage floor contact
+    const sweepRadius = Math.max(halfWidth * 1.5, heightPx * 0.7);
+
+    // Front sweep: active on early frames (frames 0..15)
+    // Back sweep: active on middle frames (frames 4..19)
+    const frontActive = frame >= 0 && frame <= 15;
+    const backActive = frame >= 4 && frame <= 19;
+
+    // 1. Ground contact shockwave ring (flat horizontal ellipse on stage floor)
+    const ringProgress = Math.min(1.0, (frame + 1) / 14);
+    const ringAlpha = Math.max(0, 1 - ringProgress);
+    if (ringAlpha > 0.05) {
+      ctx.beginPath();
+      ctx.ellipse(
+        x,
+        floorY,
+        sweepRadius * (0.6 + 0.8 * ringProgress),
+        Math.max(3, heightPx * 0.12 * (0.6 + 0.8 * ringProgress)),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = hexToRgba(color, 0.4 * ringAlpha);
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+    }
+
+    // 2. Front low-sweeping blade crescent (hits front first in N64)
+    if (frontActive) {
+      const frontProgress = Math.min(1.0, (frame + 1) / 7);
+      const frontEase = 1 - Math.pow(1 - frontProgress, 3);
+      const rFront = sweepRadius * (0.7 + 0.5 * frontEase);
+      const frontSpan = (70 * Math.PI) / 180;
+      const fCenter = facingRight
+        ? (30 * Math.PI) / 180
+        : (150 * Math.PI) / 180;
+      const fStart = fCenter - frontSpan / 2;
+      const fEnd = fCenter + frontSpan / 2;
+
+      // Trailing speed echo
+      ctx.beginPath();
+      ctx.arc(x, centerY + heightPx * 0.15, rFront * 0.82, fStart, fEnd);
+      ctx.strokeStyle = hexToRgba(color, 0.4);
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // Outer energetic cutting blade
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, centerY + heightPx * 0.15, rFront, fStart, fEnd);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4.2;
+      ctx.lineCap = "round";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.restore();
+
+      // White-hot core
+      ctx.beginPath();
+      ctx.arc(x, centerY + heightPx * 0.15, rFront, fStart + 0.08, fEnd - 0.08);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // Floor friction streak in front
+      const streakLen = rFront * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(x + dir * (halfWidth * 0.5), floorY);
+      ctx.lineTo(x + dir * (halfWidth * 0.5 + streakLen), floorY);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = "round";
+      ctx.stroke();
+    }
+
+    // 3. Back low-sweeping blade crescent (sweeps behind on frames 4..19)
+    if (backActive) {
+      const backProgress = Math.min(1.0, (frame - 3) / 7);
+      const backEase = 1 - Math.pow(1 - backProgress, 3);
+      const rBack = sweepRadius * (0.65 + 0.45 * backEase);
+      const backSpan = (65 * Math.PI) / 180;
+      const bCenter = facingRight
+        ? (150 * Math.PI) / 180
+        : (30 * Math.PI) / 180;
+      const bStart = bCenter - backSpan / 2;
+      const bEnd = bCenter + backSpan / 2;
+
+      // Trailing speed echo
+      ctx.beginPath();
+      ctx.arc(x, centerY + heightPx * 0.15, rBack * 0.82, bStart, bEnd);
+      ctx.strokeStyle = hexToRgba(color, 0.4);
+      ctx.lineWidth = 2.0;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // Outer energetic cutting blade
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, centerY + heightPx * 0.15, rBack, bStart, bEnd);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4.0;
+      ctx.lineCap = "round";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.restore();
+
+      // White-hot core
+      ctx.beginPath();
+      ctx.arc(x, centerY + heightPx * 0.15, rBack, bStart + 0.08, bEnd - 0.08);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // Floor friction streak behind
+      const streakLen = rBack * 0.55;
+      ctx.beginPath();
+      ctx.moveTo(x - dir * (halfWidth * 0.4), floorY);
+      ctx.lineTo(x - dir * (halfWidth * 0.4 + streakLen), floorY);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = "round";
+      ctx.stroke();
+    }
+
+    // 4. Upward friction sparks from floor during active sweep frames
+    if (frame >= 2 && frame <= 14) {
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = "round";
+      const sparkDir = frame < 8 ? dir : -dir;
+      const sparkOriginX = x + sparkDir * (halfWidth * 0.9);
+      for (let i = 0; i < 3; i++) {
+        const sx = sparkOriginX + sparkDir * (i * 5);
+        const sy = floorY;
+        const sparkAngle =
+          (sparkDir > 0 ? -1 : 1) * (0.35 + i * 0.25) - Math.PI / 2;
+        const len = 6 + i * 2;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(
+          sx + Math.cos(sparkAngle) * len,
+          sy + Math.sin(sparkAngle) * len,
+        );
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+    return;
+  }
+
+  if (attack.type === "ledge-attack") {
+    // Ledge Attack:
+    // Vaulting upward-and-forward slash cutting from the ledge lip onto the stage platform.
+    // Quick (<100%): agile, razor-sharp rising crescent with forward kinetic trails.
+    // Slow (>=100%): heavier dual-layer concussive crescent with windup pulse.
+    ctx.save();
+    const isSlow = attack.subType === "slow";
+    const sweepRadius = Math.max(halfWidth * 1.6, heightPx * 0.8);
+
+    // Timing & animation progress
+    const startupFrames = isSlow ? 4 : 2;
+    const activeFrames = isSlow ? 12 : 8;
+    const surgeProgress = Math.min(
+      1.0,
+      Math.max(0, frame - startupFrames + 1) / (activeFrames - startupFrames),
+    );
+    const surgeEase = 1 - Math.pow(1 - surgeProgress, 3);
+
+    // Rising cutting blade arc:
+    // Sweeping from below/at ledge lip upwards and into stage
+    const arcRadius = sweepRadius * (0.8 + 0.45 * surgeEase);
+    const centerAngle = facingRight ? -Math.PI * 0.2 : -Math.PI * 0.8;
+    const span = ((isSlow ? 100 : 85) * Math.PI) / 180;
+    const startAngle = centerAngle - span / 2;
+    const endAngle = centerAngle + span / 2;
+
+    if (isSlow) {
+      // Heavy dual-layer wedge fill
+      const innerRadius = arcRadius * 0.68;
+      ctx.beginPath();
+      ctx.arc(x, centerY, arcRadius, startAngle, endAngle);
+      ctx.arc(x, centerY, innerRadius, endAngle, startAngle, true);
+      ctx.closePath();
+      ctx.fillStyle = hexToRgba(color, 0.25);
+      ctx.fill();
+
+      // Heavy outer impact blade
+      ctx.beginPath();
+      ctx.arc(x, centerY, arcRadius, startAngle, endAngle);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 5.2;
+      ctx.lineCap = "round";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+
+      // White-hot core
+      ctx.beginPath();
+      ctx.arc(x, centerY, arcRadius, startAngle + 0.1, endAngle - 0.1);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // Concussive impact burst sparks at crest of blade on active frames
+      if (frame >= 4 && frame <= 14) {
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.lineWidth = 2.0;
+        ctx.lineCap = "round";
+        const sparkAngle = centerAngle;
+        const sx1 = x + Math.cos(sparkAngle) * arcRadius;
+        const sy1 = centerY + Math.sin(sparkAngle) * arcRadius;
+        const sx2 = x + Math.cos(sparkAngle) * (arcRadius + 14);
+        const sy2 = centerY + Math.sin(sparkAngle) * (arcRadius + 14);
+        ctx.beginPath();
+        ctx.moveTo(sx1, sy1);
+        ctx.lineTo(sx2, sy2);
+        ctx.stroke();
+      }
+    } else {
+      // Quick agile slash:
+      // Trailing speed echo
+      ctx.beginPath();
+      ctx.arc(x, centerY, arcRadius * 0.82, startAngle + 0.06, endAngle - 0.06);
+      ctx.strokeStyle = hexToRgba(color, 0.45);
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // Outer glowing blade
+      ctx.beginPath();
+      ctx.arc(x, centerY, arcRadius, startAngle, endAngle);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4.2;
+      ctx.lineCap = "round";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // White-hot inner core
+      ctx.beginPath();
+      ctx.arc(x, centerY, arcRadius, startAngle + 0.08, endAngle - 0.08);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.lineWidth = 2.0;
+      ctx.lineCap = "round";
+      ctx.stroke();
+    }
+
+    ctx.restore();
+    return;
+  }
+
   let centerAngle: number;
   if (attack.direction === "up") {
     centerAngle = -Math.PI / 2;

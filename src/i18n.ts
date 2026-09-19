@@ -219,6 +219,12 @@ export interface Translations {
   characterGroupNA: string;
   characterGroupJP: string;
   characterGroupRemix: string;
+  matchupGroupVanilla: string;
+  matchupGroupJapan: string;
+  matchupGroupRemix: string;
+  selectMyCharacter: string;
+  selectOpponentCharacter: string;
+  noMatchupGames: string;
   allGroups: string;
   overallHeader: (total: number, dl: number) => string;
   lowSampleWarning: string;
@@ -823,6 +829,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     characterGroupNA: "North America (Original 12)",
     characterGroupJP: "Japan (Original 12 J)",
     characterGroupRemix: "Remix Characters",
+    matchupGroupVanilla: "Vanilla Characters",
+    matchupGroupJapan: "Japan Characters",
+    matchupGroupRemix: "Remix Characters",
+    selectMyCharacter: "My character",
+    selectOpponentCharacter: "Opponent's character",
+    noMatchupGames: "No games recorded for this matchup.",
     allGroups: "All Character Groups",
     overallHeader: (tot, dl) =>
       `OVERALL · ${tot} game${tot !== 1 ? "s" : ""} · ${dl} on Dream Land`,
@@ -1440,6 +1452,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     characterGroupNA: "北米版 (オリジナル12)",
     characterGroupJP: "日本版 (オリジナル12 J)",
     characterGroupRemix: "Remix キャラクター",
+    matchupGroupVanilla: "Vanilla Characters",
+    matchupGroupJapan: "Japan Characters",
+    matchupGroupRemix: "Remix Characters",
+    selectMyCharacter: "自分のキャラクター",
+    selectOpponentCharacter: "相手のキャラクター",
+    noMatchupGames: "この対戦カードの対戦データはありません。",
     allGroups: "すべてのグループ",
     overallHeader: (tot, dl) => `全体 · 計${tot}試合 (プププランド: ${dl}試合)`,
     lowSampleWarning: "試行数少",

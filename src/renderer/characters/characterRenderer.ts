@@ -33,6 +33,9 @@ import {
   isTechRollState,
   isTechInPlaceState,
   isRollState,
+  isGetUpAttackState,
+  isLedgeAttackState,
+  isSlowLedgeAttackState,
   isTumbleState,
   isDownBoundState,
   isProneState,
@@ -166,7 +169,9 @@ import {
   createSilhouetteContext,
   getComboEscapeSilhouetteColors,
   getHitstunSilhouetteColors,
+  getInvincibleSilhouetteColors,
   drawComboEscapeTextCallout,
+  drawInvincibleSparkles,
 } from "./comboEscapeGapRenderer.js";
 import {
   drawReviveCloud,
@@ -186,6 +191,35 @@ export interface ShieldBreakEvent {
   worldX: number;
   worldY: number;
   characterId: number;
+}
+
+/**
+ * Returns true if the character is currently in an invulnerable or invincible state:
+ * - hurtboxState 2 (invincible) or 3 (intangible / invulnerable): dodges, rolls, ledge grab intangibility, tech, etc.
+ * - specialHitStatus 2 (respawn invincibility) or 3 (wall-bounce, egg trap)
+ * - isReviveState (on the revival angel platform)
+ * - within the 120-frame spawn invulnerability window post-revive drop in schema 1 replays
+ */
+export function isInvincibleOrInvulnerable(
+  post: {
+    actionStateId: number;
+    hurtboxState?: number;
+    specialHitStatus?: number;
+  },
+  framesSinceReviveExit?: number,
+): boolean {
+  if (post.hurtboxState === 2 || post.hurtboxState === 3) return true;
+  if (post.specialHitStatus === 2 || post.specialHitStatus === 3) return true;
+  if (isReviveState(post.actionStateId)) return true;
+  if (
+    post.specialHitStatus === undefined &&
+    framesSinceReviveExit !== undefined &&
+    framesSinceReviveExit >= 0 &&
+    framesSinceReviveExit < 120
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function drawPlayer(
@@ -210,6 +244,7 @@ export function drawPlayer(
     actionStateId: number;
     actionFrameCounter: number;
     hurtboxState?: number;
+    specialHitStatus?: number;
     comboHitCount?: number;
     hitstunCounter?: number;
     stocksRemaining: number;
@@ -308,7 +343,10 @@ export function drawPlayer(
   // Check attacks and specials for label offsets and rendering
   const attack = getAttackInfo(post.actionStateId, post.characterId);
   if (attack) {
-    if (attack.direction === "up" || attack.direction === "neutral") {
+    if (
+      attack.type !== "getup-attack" &&
+      (attack.direction === "up" || attack.direction === "neutral")
+    ) {
       const baseRadius = Math.max(halfWidth, heightPx * 0.5);
       const topRadius =
         attack.type === "smash" ? baseRadius * 2.2 : baseRadius * 1.55;
@@ -393,6 +431,8 @@ export function drawPlayer(
   const isTumble = isTumbleState(post.actionStateId);
   const isDownBound = isDownBoundState(post.actionStateId);
   const isProne = isProneState(post.actionStateId);
+  const isGetUpAttack = isGetUpAttackState(post.actionStateId);
+  const isLedgeAttack = isLedgeAttackState(post.actionStateId);
   const isInvulnerable =
     (isRoll || isTechInPlace || isProne) && post.hurtboxState === 0x03;
 
@@ -431,7 +471,7 @@ export function drawPlayer(
     perspectivePort !== undefined &&
     port !== perspectivePort;
 
-  if (isProne) {
+  if (isProne || isGetUpAttack) {
     labelY = y - 28;
   } else if (isDizzy) {
     labelY = Math.min(labelY, topY - 36);
@@ -465,13 +505,17 @@ export function drawPlayer(
 
   // Revival Cloud Platform: fighter stands on a fluffy cumulus cloud during Revive1 (0x007), Revive2 (0x008), and ReviveWait (0x009).
   // When departing, the cloud dissipates at the platform world position over CLOUD_DISSIPATE_FRAMES.
+  let framesSinceReviveExit: number | undefined;
   if (isReviveState(post.actionStateId)) {
     drawReviveCloud(ctx, x, y, halfWidth, post.actionFrameCounter, isLight);
   } else if (replay && frameIndex !== undefined && getMostRecentReviveExit) {
     const exit = getMostRecentReviveExit(replay, port, frameIndex);
     if (exit) {
-      const framesSinceExit = frameIndex - exit.exitFrame;
-      if (framesSinceExit >= 0 && framesSinceExit < CLOUD_DISSIPATE_FRAMES) {
+      framesSinceReviveExit = frameIndex - exit.exitFrame;
+      if (
+        framesSinceReviveExit >= 0 &&
+        framesSinceReviveExit < CLOUD_DISSIPATE_FRAMES
+      ) {
         const cloudScreen = camera.worldToScreen(exit.worldX, exit.worldY);
         const cloudSize = characterSize(exit.characterId);
         const cloudHalfWidth = camera.worldLengthToScreen(cloudSize.width) / 2;
@@ -480,7 +524,7 @@ export function drawPlayer(
           cloudScreen.x,
           cloudScreen.y,
           cloudHalfWidth,
-          framesSinceExit,
+          framesSinceReviveExit,
           isLight,
         );
       }
@@ -514,6 +558,46 @@ export function drawPlayer(
     // Flattened prone against stage floor at feet pivot (x, y)
     ctx.translate(x, y);
     ctx.scale(1.35, 0.35);
+    ctx.translate(-x, -y);
+  } else if (isGetUpAttack) {
+    // Low spinning sweep pose:
+    // Low crouched/flattened profile during active spin, then rising up to full stance during recovery
+    const squishY =
+      post.actionFrameCounter < 16
+        ? 0.45 + Math.sin(post.actionFrameCounter * 0.5) * 0.08
+        : 0.45 + 0.55 * Math.min(1.0, (post.actionFrameCounter - 16) / 10);
+    const stretchX =
+      post.actionFrameCounter < 16
+        ? 1.25
+        : 1.25 - 0.25 * Math.min(1.0, (post.actionFrameCounter - 16) / 10);
+    const spinAngle =
+      post.actionFrameCounter < 18
+        ? post.actionFrameCounter * 0.42 * (facingRight ? 1 : -1)
+        : 0;
+
+    ctx.translate(x, y);
+    ctx.scale(stretchX, squishY);
+    ctx.translate(-x, -y);
+
+    if (spinAngle !== 0) {
+      ctx.translate(x, centerY);
+      ctx.rotate(spinAngle);
+      ctx.translate(-x, -centerY);
+    }
+  } else if (isLedgeAttack) {
+    // Ledge vault lunge:
+    // Fighter vaults upward and inward onto the stage platform
+    const isSlow = isSlowLedgeAttackState(post.actionStateId);
+    const vaultDuration = isSlow ? 20 : 12;
+    const progress = Math.min(1.0, post.actionFrameCounter / vaultDuration);
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const dir = facingRight ? 1 : -1;
+    const vaultForward = dir * halfWidth * 0.6 * easeOut;
+    const vaultUp = -heightPx * 0.35 * Math.sin(progress * Math.PI);
+    const forwardTilt = dir * ((12 * Math.PI) / 180) * (1 - progress);
+
+    ctx.translate(x + vaultForward, y + vaultUp);
+    ctx.rotate(forwardTilt);
     ctx.translate(-x, -y);
   } else if (isIdleState(post.actionStateId)) {
     // Subtle organic breathing stance rhythm
@@ -606,18 +690,31 @@ export function drawPlayer(
   // Apply theme-adaptive silhouette proxy:
   // - Yellow silhouette when actionable during a combo gap
   // - Red silhouette when in hitstun or vulnerable stun (0x0a0 ShieldBreakDownBound, 0x0a4 Stun)
+  // - Silver silhouette when invulnerable or invincible (rolls, ledge grab intangibility, respawn platform/protection)
   const originalCtx = ctx;
   const isGapSilhouette = Boolean(comboEscapeState?.isActionableFrame);
   const isVulnerableStun = isVulnerableStunState(post.actionStateId);
   const isHitstunSilhouette = inHitstun || isVulnerableStun;
-  const isSilhouette = isGapSilhouette || isHitstunSilhouette;
+  const isInvincibleSilhouette =
+    !isEggEncasedState(post.actionStateId) &&
+    isInvincibleOrInvulnerable(post, framesSinceReviveExit);
+  const isSilhouette =
+    isGapSilhouette || isHitstunSilhouette || isInvincibleSilhouette;
   if (isSilhouette) {
     const silColors = isGapSilhouette
       ? getComboEscapeSilhouetteColors(backgroundTheme, isLight)
-      : getHitstunSilhouetteColors(backgroundTheme, isLight);
+      : isHitstunSilhouette
+        ? getHitstunSilhouetteColors(backgroundTheme, isLight)
+        : getInvincibleSilhouetteColors(backgroundTheme, isLight);
     ctx.save();
-    ctx.shadowColor = silColors.glow;
-    ctx.shadowBlur = 12;
+    if (isInvincibleSilhouette) {
+      const pulse = Math.sin(post.actionFrameCounter * 0.28);
+      ctx.shadowBlur = 20 + pulse * 5;
+      ctx.shadowColor = silColors.glow;
+    } else {
+      ctx.shadowColor = silColors.glow;
+      ctx.shadowBlur = 12;
+    }
     ctx = createSilhouetteContext(
       originalCtx,
       silColors.fill,
@@ -1324,6 +1421,17 @@ export function drawPlayer(
     }
   }
   ctx.restore(); // Closes the character sway/bob/tumble/prone transform
+
+  if (isInvincibleSilhouette) {
+    drawInvincibleSparkles(
+      ctx,
+      x,
+      centerY,
+      halfWidth,
+      heightPx,
+      post.actionFrameCounter,
+    );
+  }
 
   // Draw attack arc / grab on top (in front) of character body
   if (attack) {

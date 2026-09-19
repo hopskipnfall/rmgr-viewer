@@ -26,6 +26,15 @@ describe("characterIconUrl", () => {
   it("resolves Polygon/EU variants to their base fighter's icon", () => {
     expect(characterIconUrl(0x0e)).toBe(characterIconUrl(0x00)); // Polygon Mario
     expect(characterIconUrl(0x23)).toBe(characterIconUrl(0x05)); // Link (EU)
+    expect(characterIconUrl(0x0f)).toBe(characterIconUrl(0x01)); // Polygon Fox -> Fox
+  });
+
+  it("resolves Remix fighters to their own dedicated SVGs rather than base clone fighters", () => {
+    expect(characterIconUrl(0x1d)).toContain("falco.svg");
+    expect(characterIconUrl(0x1d)).not.toBe(characterIconUrl(0x01));
+    expect(characterIconUrl(0x1e)).toContain("ganondorf.svg");
+    expect(characterIconUrl(0x21)).toContain("wario.svg");
+    expect(characterIconUrl(0x20)).toContain("dr_mario.svg");
   });
 
   it("returns undefined for a character with no icon", () => {
@@ -49,6 +58,16 @@ describe("characterIconHtml", () => {
     // The <img> alt/title uses the flag too, e.g. "Mario 🇯🇵" (not "Mario (JP)").
     expect(html).toContain('title="Mario 🇯🇵"');
     expect(html).not.toContain("(JP)");
+  });
+
+  it("can suppress the flag badge when showBadge is false", () => {
+    const htmlObj = characterIconHtml(0x2a, "char-icon", { showBadge: false });
+    expect(htmlObj).toContain("mario.svg");
+    expect(htmlObj).not.toContain("char-icon-jp-badge");
+
+    const htmlBool = characterIconHtml(0x2a, "char-icon", false);
+    expect(htmlBool).toContain("mario.svg");
+    expect(htmlBool).not.toContain("char-icon-jp-badge");
   });
 
   it("falls back to the plain character name when there's no icon", () => {

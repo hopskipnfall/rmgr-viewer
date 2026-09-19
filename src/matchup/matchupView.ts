@@ -1,5 +1,6 @@
 import { t, type Translations } from "../i18n.js";
 import { characterName } from "../lookups.js";
+import { characterIconHtml } from "../characterIcons.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import type { Identity } from "../data/identity.js";
 import {
@@ -78,7 +79,7 @@ export class MatchupViewController {
     this.container.innerHTML = `
       <div class="matchup-view">
         <div class="matchup-header">
-          <h2>${escapeHtml(characterName(myChar))} ${escapeHtml(tr.matchupVs)} ${escapeHtml(characterName(oppChar))}</h2>
+          <h2>${characterIconHtml(myChar, "char-icon", { showBadge: false })} ${escapeHtml(characterName(myChar))} ${escapeHtml(tr.matchupVs)} ${characterIconHtml(oppChar, "char-icon", { showBadge: false })} ${escapeHtml(characterName(oppChar))}</h2>
           <div class="matchup-subheader">${rates.wins}-${rates.losses} &middot; ${rates.totalGames} ${tr.matchupGamesWord}</div>
         </div>
 

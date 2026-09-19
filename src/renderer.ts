@@ -761,6 +761,16 @@ export class StageRenderer {
                   isYoshiCharacter(portData.state.characterId)
                 ? 140
                 : undefined;
+          const effectiveHurtboxState =
+            portData.state.hurtboxState === 2 ||
+            portData.state.hurtboxState === 3
+              ? portData.state.hurtboxState
+              : portData.state.specialHitStatus === 2 ||
+                  portData.state.specialHitStatus === 3
+                ? portData.state.specialHitStatus
+                : isReviveState(portData.state.actionStateId)
+                  ? 2
+                  : portData.state.hurtboxState;
           pauseHudItems.push({
             x,
             y,
@@ -770,7 +780,7 @@ export class StageRenderer {
             posY: portData.state.positionY,
             tagColor,
             knockbackResist: armorForHud,
-            hurtboxState: portData.state.hurtboxState,
+            hurtboxState: effectiveHurtboxState,
           });
         }
         drawDeconflictedPauseHuds(this.ctx, pauseHudItems);
@@ -1310,6 +1320,7 @@ export class StageRenderer {
       actionStateId: number;
       actionFrameCounter: number;
       hurtboxState?: number;
+      specialHitStatus?: number;
       comboHitCount?: number;
       hitstunCounter?: number;
       stocksRemaining: number;

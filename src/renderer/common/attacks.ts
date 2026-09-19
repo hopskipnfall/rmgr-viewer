@@ -6,18 +6,39 @@ import {
 } from "./characterSpecials.js";
 
 export type AttackType =
-  "tilt" | "smash" | "aerial" | "jab" | "grab" | "dash-attack";
+  | "tilt"
+  | "smash"
+  | "aerial"
+  | "jab"
+  | "grab"
+  | "dash-attack"
+  | "getup-attack"
+  | "ledge-attack";
 export type AttackDirection = "up" | "down" | "forward" | "back" | "neutral";
 
 export interface AttackInfo {
   type: AttackType;
   direction: AttackDirection;
+  subType?: "quick" | "slow";
 }
 
 export function getAttackInfo(
   actionStateId: number,
   characterId?: number,
 ): AttackInfo | null {
+  // Ground Get-Up Attacks
+  if (actionStateId === 0x04f || actionStateId === 0x050) {
+    return { type: "getup-attack", direction: "neutral" };
+  }
+
+  // Ledge Attacks (0x05c/0x05e are climbing up from ledge; 0x05d/0x05f are active attack strikes)
+  if (actionStateId === 0x05d) {
+    return { type: "ledge-attack", direction: "forward", subType: "quick" };
+  }
+  if (actionStateId === 0x05f) {
+    return { type: "ledge-attack", direction: "forward", subType: "slow" };
+  }
+
   // Jabs
   if (actionStateId === 0x0be || actionStateId === 0x0bf) {
     return { type: "jab", direction: "forward" };

@@ -283,6 +283,40 @@ export function isRollForward(actionStateId: number): boolean {
   );
 }
 
+const GETUP_ATTACK_ACTION_STATES = new Set([
+  0x04f, // DownAttackD (Getup attack face down)
+  0x050, // DownAttackU (Getup attack face up)
+]);
+
+export function isGetUpAttackState(actionStateId: number): boolean {
+  return GETUP_ATTACK_ACTION_STATES.has(actionStateId);
+}
+
+const QUICK_LEDGE_ATTACK_ACTION_STATES = new Set([
+  0x05d, // CliffAttackQuick2 (< 100% active attack strike)
+]);
+
+const SLOW_LEDGE_ATTACK_ACTION_STATES = new Set([
+  0x05f, // CliffAttackSlow2 (>= 100% active attack strike)
+]);
+
+const LEDGE_ATTACK_ACTION_STATES = new Set([
+  ...QUICK_LEDGE_ATTACK_ACTION_STATES,
+  ...SLOW_LEDGE_ATTACK_ACTION_STATES,
+]);
+
+export function isLedgeAttackState(actionStateId: number): boolean {
+  return LEDGE_ATTACK_ACTION_STATES.has(actionStateId);
+}
+
+export function isQuickLedgeAttackState(actionStateId: number): boolean {
+  return QUICK_LEDGE_ATTACK_ACTION_STATES.has(actionStateId);
+}
+
+export function isSlowLedgeAttackState(actionStateId: number): boolean {
+  return SLOW_LEDGE_ATTACK_ACTION_STATES.has(actionStateId);
+}
+
 const CAPTURE_STATES = new Set([
   0x0ab, // CapturePull
   0x0ac, // CaptureWait

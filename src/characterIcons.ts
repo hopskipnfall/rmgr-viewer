@@ -66,8 +66,9 @@ const CHARACTER_ICON_FILENAMES: Partial<Record<number, string>> = {
  * caller with no fallback should just skip rendering an icon in that case.
  */
 export function characterIconUrl(characterId: number): string | undefined {
-  const resolvedId = VARIANT_TO_BASE_ID[characterId] ?? characterId;
-  const filename = CHARACTER_ICON_FILENAMES[resolvedId];
+  const filename =
+    CHARACTER_ICON_FILENAMES[characterId] ??
+    CHARACTER_ICON_FILENAMES[VARIANT_TO_BASE_ID[characterId] ?? characterId];
   return filename
     ? `${import.meta.env.BASE_URL}characters/${filename}.svg`
     : undefined;
@@ -87,16 +88,24 @@ export function characterIconUrl(characterId: number): string | undefined {
  * Falls back to the plain character name (no markup) if there's no icon
  * for this character (e.g. Master Hand).
  */
+export interface CharacterIconHtmlOptions {
+  showBadge?: boolean;
+}
+
 export function characterIconHtml(
   characterId: number,
   className = "char-icon",
+  options?: CharacterIconHtmlOptions | boolean,
 ): string {
   const url = characterIconUrl(characterId);
   const label = characterName(characterId);
   if (!url) return label;
 
-  const jpBadge = isJPOriginal12(characterId)
-    ? `<span class="char-icon-jp-badge" title="Japan version">🇯🇵</span>`
-    : "";
+  const showBadge =
+    typeof options === "boolean" ? options : (options?.showBadge ?? true);
+  const jpBadge =
+    showBadge && isJPOriginal12(characterId)
+      ? `<span class="char-icon-jp-badge" title="Japan version">🇯🇵</span>`
+      : "";
   return `<img class="${className}" src="${url}" alt="${label}" title="${label}" />${jpBadge}`;
 }
