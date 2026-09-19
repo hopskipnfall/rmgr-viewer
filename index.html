@@ -6164,7 +6164,7 @@
           position: sticky;
           top: -8px;
           z-index: 10;
-          background: #16181f;
+          background: var(--panel);
           border-top-left-radius: 8px;
           border-top-right-radius: 8px;
           box-shadow: 0 -16px 0 var(--bg);
@@ -6204,6 +6204,31 @@
             rgba(240, 249, 255, 0) 100%
           );
         }
+        [data-theme="light"] #perspectiveWidgetHeader,
+        [data-theme="light"] #matchStatsHeader,
+        [data-theme="light"] #neutralHeatmapHeader,
+        [data-theme="light"] #characterMetaHeader,
+        [data-theme="light"] #neutralHitsWidget .sidebar-header,
+        [data-theme="light"] .situation-widget-header,
+        [data-theme="light"] #logFilterHeader,
+        [data-theme="light"] #replayInfoHeader {
+          background: #ffffff;
+        }
+        [data-theme="light"] #perspectiveWidgetHeader::after,
+        [data-theme="light"] #matchStatsHeader::after,
+        [data-theme="light"] #neutralHeatmapHeader::after,
+        [data-theme="light"] #characterMetaHeader::after,
+        [data-theme="light"] #neutralHitsWidget .sidebar-header::after,
+        [data-theme="light"] .situation-widget-header::after,
+        [data-theme="light"] #logFilterHeader::after,
+        [data-theme="light"] #replayInfoHeader::after {
+          background: linear-gradient(
+            to bottom,
+            #ffffff 0%,
+            rgba(255, 255, 255, 0.85) 40%,
+            rgba(255, 255, 255, 0) 100%
+          );
+        }
         #frameLabel {
           display: none;
         }
@@ -6223,6 +6248,33 @@
             #f0f9ff 0%,
             rgba(240, 249, 255, 0.85) 40%,
             rgba(240, 249, 255, 0) 100%
+          );
+        }
+        :root:not([data-theme="dark"]) #perspectiveWidgetHeader,
+        :root:not([data-theme="dark"]) #matchStatsHeader,
+        :root:not([data-theme="dark"]) #neutralHeatmapHeader,
+        :root:not([data-theme="dark"]) #characterMetaHeader,
+        :root:not([data-theme="dark"]) #neutralHitsWidget .sidebar-header,
+        :root:not([data-theme="dark"]) .situation-widget-header,
+        :root:not([data-theme="dark"]) #logFilterHeader,
+        :root:not([data-theme="dark"]) #replayInfoHeader {
+          background: #ffffff;
+        }
+        :root:not([data-theme="dark"]) #perspectiveWidgetHeader::after,
+        :root:not([data-theme="dark"]) #matchStatsHeader::after,
+        :root:not([data-theme="dark"]) #neutralHeatmapHeader::after,
+        :root:not([data-theme="dark"]) #characterMetaHeader::after,
+        :root:not([data-theme="dark"])
+          #neutralHitsWidget
+          .sidebar-header::after,
+        :root:not([data-theme="dark"]) .situation-widget-header::after,
+        :root:not([data-theme="dark"]) #logFilterHeader::after,
+        :root:not([data-theme="dark"]) #replayInfoHeader::after {
+          background: linear-gradient(
+            to bottom,
+            #ffffff 0%,
+            rgba(255, 255, 255, 0.85) 40%,
+            rgba(255, 255, 255, 0) 100%
           );
         }
       }

@@ -522,10 +522,13 @@ export function getSamusSpecialType(
   if (actionStateId === 0x0de) {
     return "charge_shot_startup";
   }
-  // Neutral-B: Charging (holding the shot). 0x0df has the recorded Weapon
-  // object (WPKind.ChargeShot 0x02) drawn by drawItemObjects(), so no synthetic
-  // glowing ball is drawn for 0x0df.
-  if (actionStateId === 0x0dc || actionStateId === 0x0dd) {
+  // Neutral-B: Charging (holding the shot). 0x0df confirmed empirically to
+  // belong here (previously unmapped).
+  if (
+    actionStateId === 0x0dc ||
+    actionStateId === 0x0dd ||
+    actionStateId === 0x0df
+  ) {
     return "charge_shot";
   }
   // Neutral-B: Firing the charged shot while airborne - confirmed

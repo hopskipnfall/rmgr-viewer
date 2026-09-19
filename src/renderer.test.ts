@@ -1529,8 +1529,8 @@ describe("getSamusSpecialType", () => {
     expect(getSamusSpecialType(0x00, 0x0dc)).toBeNull(); // Mario
   });
 
-  it("returns null for 0x0df (charging - real weapon object 0x02 drawn by drawItemObjects instead of synthetic glowing ball)", () => {
-    expect(getSamusSpecialType(0x03, 0x0df)).toBeNull();
+  it("classifies 0x0df as charging (confirmed empirically, previously unmapped)", () => {
+    expect(getSamusSpecialType(0x03, 0x0df)).toBe("charge_shot");
   });
 
   it("classifies 0x0de as the charge-shot startup (drawing the arm cannon out), distinct from charging (confirmed empirically - previously misclassified as a firing animation)", () => {
