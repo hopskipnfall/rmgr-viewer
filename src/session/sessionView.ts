@@ -1,7 +1,6 @@
 import {
   aggregateFilteredGames,
   computeOpponentCharacterBreakdown,
-  computeRateDeltas,
   filterGameSummaries,
 } from "../data/aggregate.js";
 import type { GameSummary } from "../data/gameSummary.js";
@@ -10,7 +9,8 @@ import { groupGamesIntoSessions, type SessionGroup } from "../data/session.js";
 import { t } from "../i18n.js";
 import { BreakdownTable } from "../library/breakdownTable.js";
 import { GameList } from "../library/gameList.js";
-import { StatCards } from "../library/statCards.js";
+import { MatchupChipSelector } from "../library/matchupChipSelector.js";
+import { MatchupStatsView } from "../library/matchupStatsView.js";
 import { searchHash, type SearchRouteCriteria } from "../router.js";
 
 /** No filters: the base every quick search starts from. */
@@ -94,6 +94,8 @@ export class SessionViewController {
   private identity: Identity | null = null;
   private sessionId: string | null = null;
   private sortOrder: "newest" | "oldest" = "oldest";
+  private sessionSelectedMyChar: number | null = null;
+  private sessionSelectedOppChar: number | null = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -144,9 +146,6 @@ export class SessionViewController {
       sessionGameIds.has(r.summary.id),
     );
 
-    const sessionRates = aggregateFilteredGames(sessionResolved);
-    const baselineRates = aggregateFilteredGames(allResolved);
-    const deltas = computeRateDeltas(sessionRates, baselineRates);
     const breakdownRows = computeOpponentCharacterBreakdown(sessionResolved);
 
     const dateStr = `${session.startTime.toLocaleDateString()} ${formatClock(
@@ -184,7 +183,8 @@ export class SessionViewController {
         </section>
         <section class="session-page-section">
           <h3>${escapeHtml(tr.matchStats)}</h3>
-          <div id="sessionStatCards"></div>
+          <div id="sessionMatchupSelector" class="matchup-selector-wrap"></div>
+          <div id="sessionMatchupStats" class="matchup-stats-wrap"></div>
           <div id="sessionBreakdown"></div>
         </section>
         <section class="session-page-section">
@@ -194,9 +194,95 @@ export class SessionViewController {
       </div>
     `;
 
-    const cardsEl =
-      this.container.querySelector<HTMLElement>("#sessionStatCards");
-    if (cardsEl) new StatCards(cardsEl).render(sessionRates, deltas, true);
+    const selectorEl = this.container.querySelector<HTMLElement>(
+      "#sessionMatchupSelector",
+    );
+    const statsEl = this.container.querySelector<HTMLElement>(
+      "#sessionMatchupStats",
+    );
+
+    const pairs = sessionResolved
+      .map(({ summary, yourPort, oppPort }) => {
+        const yourP = summary.ports.find((p) => p.port === yourPort);
+        const oppP = summary.ports.find((p) => p.port === oppPort);
+        return yourP && oppP
+          ? { myChar: yourP.characterId, oppChar: oppP.characterId }
+          : null;
+      })
+      .filter((p): p is { myChar: number; oppChar: number } => p !== null);
+
+    const availableMyChars = Array.from(new Set(pairs.map((p) => p.myChar)));
+    const getAvailableOppChars = (myChar: number) =>
+      Array.from(
+        new Set(pairs.filter((p) => p.myChar === myChar).map((p) => p.oppChar)),
+      );
+
+    const myCharFrequencies = new Map<number, number>();
+    for (const p of pairs) {
+      myCharFrequencies.set(
+        p.myChar,
+        (myCharFrequencies.get(p.myChar) ?? 0) + 1,
+      );
+    }
+
+    const getOppCharFrequencies = (myChar: number) => {
+      const oppFreq = new Map<number, number>();
+      for (const p of pairs) {
+        if (p.myChar === myChar) {
+          oppFreq.set(p.oppChar, (oppFreq.get(p.oppChar) ?? 0) + 1);
+        }
+      }
+      return oppFreq;
+    };
+
+    if (selectorEl && statsEl) {
+      const statsView = new MatchupStatsView(statsEl);
+      const renderSessionStats = (
+        myChar: number | null,
+        oppChar: number | null,
+      ) => {
+        if (myChar === null || oppChar === null) {
+          statsEl.innerHTML = "";
+          return;
+        }
+        const matchupGames = sessionResolved.filter(
+          ({ summary, yourPort, oppPort }) => {
+            const yourP = summary.ports.find((p) => p.port === yourPort);
+            const oppP = summary.ports.find((p) => p.port === oppPort);
+            return (
+              yourP?.characterId === myChar && oppP?.characterId === oppChar
+            );
+          },
+        );
+        const rates = aggregateFilteredGames(matchupGames);
+        statsView.render(myChar, oppChar, rates);
+      };
+
+      const selector = new MatchupChipSelector(
+        selectorEl,
+        (myChar, oppChar) => {
+          this.sessionSelectedMyChar = myChar;
+          this.sessionSelectedOppChar = oppChar;
+          renderSessionStats(myChar, oppChar);
+        },
+      );
+
+      selector.setSelected(
+        this.sessionSelectedMyChar,
+        this.sessionSelectedOppChar,
+      );
+      selector.setData(
+        availableMyChars,
+        getAvailableOppChars,
+        true,
+        myCharFrequencies,
+        getOppCharFrequencies,
+      );
+      const sel = selector.getSelected();
+      this.sessionSelectedMyChar = sel.myChar;
+      this.sessionSelectedOppChar = sel.oppChar;
+      renderSessionStats(sel.myChar, sel.oppChar);
+    }
 
     const breakdownEl =
       this.container.querySelector<HTMLElement>("#sessionBreakdown");

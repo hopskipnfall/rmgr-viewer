@@ -36,6 +36,10 @@ import {
   isKirbyCharacter,
   isLandingState,
   isHeavyLandingState,
+  isGetUpAttackState,
+  isLedgeAttackState,
+  isQuickLedgeAttackState,
+  isSlowLedgeAttackState,
   isLinkCharacter,
   isLuigiCharacter,
   isMarioCharacter,
@@ -85,6 +89,9 @@ import {
   getComboGapBadgeColors,
   getComboEscapeSilhouetteColors,
   getHitstunSilhouetteColors,
+  getInvincibleSilhouetteColors,
+  isInvincibleOrInvulnerable,
+  drawInvincibleSparkles,
   createSilhouetteContext,
   isShieldDropState,
   isLightLandingState,
@@ -746,6 +753,41 @@ describe("isRollForward", () => {
   });
 });
 
+describe("isGetUpAttackState", () => {
+  it("identifies get-up attacks correctly", () => {
+    expect(isGetUpAttackState(0x04f)).toBe(true); // DownAttackD
+    expect(isGetUpAttackState(0x050)).toBe(true); // DownAttackU
+
+    expect(isGetUpAttackState(0x045)).toBe(false); // DownStandD
+    expect(isGetUpAttackState(0x00a)).toBe(false); // Idle
+  });
+});
+
+describe("isLedgeAttackState", () => {
+  it("identifies quick and slow active ledge attack strikes correctly", () => {
+    // 0x05c and 0x05e are climbing up from the ledge (no attack yet)
+    expect(isLedgeAttackState(0x05c)).toBe(false); // CliffAttackQuick1
+    expect(isLedgeAttackState(0x05e)).toBe(false); // CliffAttackSlow1
+
+    // 0x05d and 0x05f are when the attack strike actually happens
+    expect(isLedgeAttackState(0x05d)).toBe(true); // CliffAttackQuick2
+    expect(isLedgeAttackState(0x05f)).toBe(true); // CliffAttackSlow2
+
+    expect(isQuickLedgeAttackState(0x05c)).toBe(false);
+    expect(isQuickLedgeAttackState(0x05d)).toBe(true);
+    expect(isQuickLedgeAttackState(0x05e)).toBe(false);
+    expect(isQuickLedgeAttackState(0x05f)).toBe(false);
+
+    expect(isSlowLedgeAttackState(0x05e)).toBe(false);
+    expect(isSlowLedgeAttackState(0x05f)).toBe(true);
+    expect(isSlowLedgeAttackState(0x05c)).toBe(false);
+    expect(isSlowLedgeAttackState(0x05d)).toBe(false);
+
+    expect(isLedgeAttackState(0x055)).toBe(false); // CliffWait
+    expect(isLedgeAttackState(0x058)).toBe(false); // CliffRollQuick
+  });
+});
+
 describe("getAttackInfo", () => {
   it("identifies jab attacks correctly", () => {
     expect(getAttackInfo(0x0be)).toEqual({
@@ -852,6 +894,24 @@ describe("getAttackInfo", () => {
       type: "dash-attack",
       direction: "forward",
     }); // DashAttack
+    expect(getAttackInfo(0x04f)).toEqual({
+      type: "getup-attack",
+      direction: "neutral",
+    }); // DownAttackD
+    expect(getAttackInfo(0x050)).toEqual({
+      type: "getup-attack",
+      direction: "neutral",
+    }); // DownAttackU
+    expect(getAttackInfo(0x05d)).toEqual({
+      type: "ledge-attack",
+      direction: "forward",
+      subType: "quick",
+    }); // CliffAttackQuick2 (active strike)
+    expect(getAttackInfo(0x05f)).toEqual({
+      type: "ledge-attack",
+      direction: "forward",
+      subType: "slow",
+    }); // CliffAttackSlow2 (active strike)
   });
 
   it("returns null for non-attack states", () => {
@@ -859,6 +919,8 @@ describe("getAttackInfo", () => {
     expect(getAttackInfo(0x0db)).toBeNull(); // LandingAirX
     expect(getAttackInfo(0x099)).toBeNull(); // Shield
     expect(getAttackInfo(0x0ab)).toBeNull(); // CapturePull
+    expect(getAttackInfo(0x05c)).toBeNull(); // CliffAttackQuick1 (climbing up from ledge)
+    expect(getAttackInfo(0x05e)).toBeNull(); // CliffAttackSlow1 (climbing up from ledge >=100%)
   });
 });
 
@@ -5695,6 +5757,7 @@ describe("StageRenderer background themes", () => {
         ) => {
           arcCalls.push({ x, y, radius, startAngle, endAngle });
         },
+        ellipse: () => {},
         set strokeStyle(val: string) {
           currentStrokeStyle = val;
         },
@@ -5978,6 +6041,73 @@ describe("StageRenderer background themes", () => {
       expect(r7).toBeCloseTo(15 * 1.7, 1);
       // Has trailing echo arc
       expect(frame7.arcCalls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("renders getup-attack with dual ground sweeping crescents and floor friction streaks", () => {
+      const getupCanvas = createMockAttackCanvas();
+      drawAttackArc(
+        getupCanvas.ctx,
+        100,
+        100,
+        12,
+        36,
+        true,
+        "#3b82f6",
+        { type: "getup-attack", direction: "neutral" },
+        null,
+        false,
+        6,
+      );
+
+      // Has active front and back arc sweeps
+      expect(getupCanvas.arcCalls.length).toBeGreaterThanOrEqual(2);
+      // Has floor friction streaks and sparks (moveTo/lineTo)
+      expect(getupCanvas.moveToCalls.length).toBeGreaterThanOrEqual(2);
+      expect(getupCanvas.lineToCalls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("renders quick ledge attack with rising vault slash and kinetic trails", () => {
+      const quickCanvas = createMockAttackCanvas();
+      drawAttackArc(
+        quickCanvas.ctx,
+        100,
+        100,
+        12,
+        36,
+        true,
+        "#10b981",
+        { type: "ledge-attack", direction: "forward", subType: "quick" },
+        null,
+        false,
+        4,
+      );
+
+      // Has blade arcs (speed echo, outer blade, inner core) without odd vertical lines
+      expect(quickCanvas.arcCalls.length).toBeGreaterThanOrEqual(2);
+      expect(quickCanvas.lineToCalls.length).toBe(0);
+    });
+
+    it("renders slow ledge attack with heavy dual-layer crescent wedge and burst sparks", () => {
+      const slowCanvas = createMockAttackCanvas();
+      drawAttackArc(
+        slowCanvas.ctx,
+        100,
+        100,
+        12,
+        36,
+        true,
+        "#f59e0b",
+        { type: "ledge-attack", direction: "forward", subType: "slow" },
+        null,
+        false,
+        8,
+      );
+
+      // Has wedge fill
+      expect(slowCanvas.fillCalls.length).toBeGreaterThanOrEqual(1);
+      // Has blade arcs and impact burst spark
+      expect(slowCanvas.arcCalls.length).toBeGreaterThanOrEqual(2);
+      expect(slowCanvas.lineToCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -6561,6 +6691,80 @@ describe("StageRenderer background themes", () => {
 
       const light = getHitstunSilhouetteColors("mountain", true);
       expect(light.fill).toBe("rgba(220, 38, 38, 0.95)");
+    });
+
+    it("resolves brilliant glowing silver silhouette colors for invulnerable/invincible fighters", () => {
+      const dark = getInvincibleSilhouetteColors("grid", false);
+      expect(dark.fill).toBe("rgba(240, 246, 255, 0.98)");
+      expect(dark.stroke).toBe("#ffffff");
+      expect(dark.glow).toBe("rgba(224, 242, 254, 1.0)");
+
+      const light = getInvincibleSilhouetteColors("mountain", true);
+      expect(light.fill).toBe("rgba(218, 228, 240, 0.98)");
+      expect(light.stroke).toBe("#ffffff");
+      expect(light.glow).toBe("rgba(148, 163, 184, 0.9)");
+    });
+
+    it("identifies invulnerable or invincible states correctly with isInvincibleOrInvulnerable", () => {
+      expect(
+        isInvincibleOrInvulnerable({ actionStateId: 0x00a, hurtboxState: 1 }),
+      ).toBe(false);
+      expect(
+        isInvincibleOrInvulnerable({ actionStateId: 0x00a, hurtboxState: 2 }),
+      ).toBe(true);
+      expect(
+        isInvincibleOrInvulnerable({ actionStateId: 0x09c, hurtboxState: 3 }),
+      ).toBe(true);
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x00a,
+          hurtboxState: 1,
+          specialHitStatus: 2,
+        }),
+      ).toBe(true);
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x00a,
+          specialHitStatus: 3,
+        }),
+      ).toBe(true);
+      expect(isInvincibleOrInvulnerable({ actionStateId: 0x009 })).toBe(true);
+      expect(isInvincibleOrInvulnerable({ actionStateId: 0x00a }, 50)).toBe(
+        true,
+      );
+      expect(isInvincibleOrInvulnerable({ actionStateId: 0x00a }, 130)).toBe(
+        false,
+      );
+    });
+
+    it("drawInvincibleSparkles renders shining starlight glints", () => {
+      let fillCount = 0;
+      let shadowColor = "";
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        translate: () => {},
+        rotate: () => {},
+        beginPath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        closePath: () => {},
+        fill: () => {
+          fillCount++;
+        },
+        fillStyle: "",
+        set shadowColor(val: string) {
+          shadowColor = val;
+        },
+        get shadowColor() {
+          return shadowColor;
+        },
+        shadowBlur: 0,
+      } as unknown as CanvasRenderingContext2D;
+
+      drawInvincibleSparkles(fakeCtx, 100, 200, 20, 40, 10);
+      expect(fillCount).toBeGreaterThan(0);
+      expect(shadowColor).toContain("224, 242, 254");
     });
 
     it("resolves theme-adaptive silhouette colors", () => {
@@ -7319,6 +7523,93 @@ describe("StageRenderer background themes", () => {
       );
 
       expect(fillStyles).toContain("rgba(239, 68, 68, 0.95)");
+    });
+
+    it("renders brilliant silver silhouette proxy when character is invincible or invulnerable", () => {
+      const fillStyles: string[] = [];
+      const strokeStyles: string[] = [];
+      const fakeCtx = {
+        save: () => {},
+        restore: () => {},
+        beginPath: () => {},
+        closePath: () => {},
+        moveTo: () => {},
+        lineTo: () => {},
+        arc: () => {},
+        ellipse: () => {},
+        roundRect: () => {},
+        fill: () => {},
+        stroke: () => {},
+        fillText: () => {},
+        strokeText: () => {},
+        measureText: () => ({ width: 40 }),
+        translate: () => {},
+        rotate: () => {},
+        scale: () => {},
+        drawImage: () => {},
+        clip: () => {},
+        setLineDash: () => {},
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+        createRadialGradient: () => ({ addColorStop: () => {} }),
+        shadowColor: "",
+        shadowBlur: 0,
+        font: "",
+        lineWidth: 1,
+        get fillStyle() {
+          return "";
+        },
+        set fillStyle(val: string) {
+          fillStyles.push(val);
+        },
+        get strokeStyle() {
+          return "";
+        },
+        set strokeStyle(val: string) {
+          strokeStyles.push(val);
+        },
+      } as unknown as CanvasRenderingContext2D;
+
+      const fakeCanvas = {
+        getContext: () => fakeCtx,
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // RollF (0x09c) with hurtboxState = 3 -> intangible/invulnerable -> silver silhouette
+      renderer["drawPlayer"](
+        fakeCamera,
+        0,
+        {
+          positionX: 50,
+          positionY: 100,
+          facingDirection: 1,
+          damagePercent: 0,
+          characterId: 0x02,
+          actionStateId: 0x09c, // RollF
+          actionFrameCounter: 10,
+          hurtboxState: 3,
+          stocksRemaining: 4,
+          jumpsRemaining: 2,
+        },
+        null,
+        null,
+        0,
+        false,
+        null,
+        false,
+        null,
+      );
+
+      expect(fillStyles).toContain("rgba(240, 246, 255, 0.98)");
+      expect(strokeStyles).toContain("#ffffff");
     });
 
     it("displays Invincible / Invulnerable tags in pause HUD based on hurtboxState", () => {

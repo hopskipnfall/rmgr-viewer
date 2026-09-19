@@ -119,6 +119,29 @@ export function getHitstunSilhouetteColors(
 }
 
 /**
+ * Resolves silver/chrome silhouette colors for invulnerable or invincible fighters:
+ * - Dark themes: luminous liquid platinum silver with pure white specular contours and radiant starlight cyan-silver glow
+ * - Light/day themes: sleek polished platinum silver with pure white contour and crisp silver glow for sky contrast
+ */
+export function getInvincibleSilhouetteColors(
+  _theme: BackgroundTheme,
+  isLight: boolean,
+): ComboEscapeSilhouetteColors {
+  if (isLight) {
+    return {
+      fill: "rgba(218, 228, 240, 0.98)",
+      stroke: "#ffffff",
+      glow: "rgba(148, 163, 184, 0.9)",
+    };
+  }
+  return {
+    fill: "rgba(240, 246, 255, 0.98)",
+    stroke: "#ffffff",
+    glow: "rgba(224, 242, 254, 1.0)",
+  };
+}
+
+/**
  * Creates a transparent proxy around CanvasRenderingContext2D that intercepts all fillStyle
  * and strokeStyle mutations, locking them to the active silhouette colors.
  * This turns all drawn polygon geometry for any character model into a solid, crisp silhouette.
@@ -265,5 +288,61 @@ export function drawComboEscapeTextCallout(
   ctx.shadowBlur = 5;
   ctx.fillText(text, pillX, pillY);
 
+  ctx.restore();
+}
+
+/**
+ * Draws shining silver diamond sparkles / glints around an invincible or invulnerable character.
+ */
+export function drawInvincibleSparkles(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  centerY: number,
+  halfWidth: number,
+  heightPx: number,
+  frameCounter: number,
+): void {
+  ctx.save();
+  const glints = [
+    { phase: 0, relX: -0.65, relY: -0.4, scale: 1.0 },
+    { phase: 1.8, relX: 0.6, relY: -0.25, scale: 0.85 },
+    { phase: 3.5, relX: -0.3, relY: 0.35, scale: 0.95 },
+    { phase: 5.0, relX: 0.45, relY: 0.4, scale: 0.75 },
+  ];
+  for (let i = 0; i < glints.length; i++) {
+    const g = glints[i]!;
+    const cycle = (frameCounter * 0.14 + g.phase) % (Math.PI * 2);
+    const sparkleAlpha = Math.max(0, Math.sin(cycle));
+    if (sparkleAlpha <= 0.08) continue;
+    const sx = x + g.relX * halfWidth * 1.35;
+    const sy = centerY + g.relY * heightPx * 0.5;
+    const size = (3.5 + sparkleAlpha * 3.5) * g.scale;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(frameCounter * 0.08 + g.phase);
+    ctx.fillStyle = `rgba(255, 255, 255, ${sparkleAlpha * 0.95})`;
+    ctx.shadowColor = "rgba(224, 242, 254, 0.95)";
+    ctx.shadowBlur = 8;
+
+    // 4-point star sparkle
+    ctx.beginPath();
+    ctx.moveTo(0, -size);
+    ctx.lineTo(size * 0.22, 0);
+    ctx.lineTo(0, size);
+    ctx.lineTo(-size * 0.22, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(-size, 0);
+    ctx.lineTo(0, size * 0.22);
+    ctx.lineTo(size, 0);
+    ctx.lineTo(0, -size * 0.22);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
   ctx.restore();
 }
