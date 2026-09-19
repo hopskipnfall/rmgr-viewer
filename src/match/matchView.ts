@@ -1,8 +1,10 @@
 import {
   getSeatedPorts,
+  getRemixSettingValueName,
   type Frame,
   type PortIndex,
   type Replay,
+  type RemixSettingField,
 } from "@rmg-k/rmgr";
 import { Camera } from "../camera.js";
 import { ControllerPad } from "../controllerPad.js";
@@ -32,6 +34,11 @@ import { characterSize } from "../characterSizes.js";
 import { sessionNeighbors } from "../data/sessionNavigation.js";
 import { characterIconUrl } from "../characterIcons.js";
 import { ActionStateId, characterName } from "../lookups.js";
+import {
+  remixSettingFieldLabel,
+  REMIX_GAMEPLAY_SETTING_FIELD_ORDER,
+  REMIX_STAGE_SETTING_FIELD_ORDER,
+} from "../remixSettingsLabels.js";
 import {
   DREAM_LAND_STAGE_ID,
   stageBlastZone,
@@ -308,6 +315,15 @@ export class MatchViewController {
   private replayInfoSize: HTMLSpanElement;
   private replayInfoVideoLabel: HTMLSpanElement;
   private replayInfoVideoValue: HTMLSpanElement;
+  private replayInfoRngSeedRow: HTMLDivElement;
+  private replayInfoRngSeedLabel: HTMLSpanElement;
+  private replayInfoRngSeed: HTMLSpanElement;
+  private replayInfoRemixSettingsDetails: HTMLDetailsElement;
+  private replayInfoRemixSettingsHeading: HTMLElement;
+  private replayInfoGameplaySettingsSubheading: HTMLElement;
+  private replayInfoGameplaySettingsRows: HTMLDivElement;
+  private replayInfoStageSettingsSubheading: HTMLElement;
+  private replayInfoStageSettingsRows: HTMLDivElement;
   private replayInfoCollapsed = false;
 
   private youtubeSync: YouTubeSyncController;
@@ -796,6 +812,33 @@ export class MatchViewController {
     this.replayInfoVideoValue = document.getElementById(
       "replayInfoVideoValue",
     ) as HTMLSpanElement;
+    this.replayInfoRngSeedRow = document.getElementById(
+      "replayInfoRngSeedRow",
+    ) as HTMLDivElement;
+    this.replayInfoRngSeedLabel = document.getElementById(
+      "replayInfoRngSeedLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoRngSeed = document.getElementById(
+      "replayInfoRngSeed",
+    ) as HTMLSpanElement;
+    this.replayInfoRemixSettingsDetails = document.getElementById(
+      "replayInfoRemixSettingsDetails",
+    ) as HTMLDetailsElement;
+    this.replayInfoRemixSettingsHeading = document.getElementById(
+      "replayInfoRemixSettingsHeading",
+    ) as HTMLElement;
+    this.replayInfoGameplaySettingsSubheading = document.getElementById(
+      "replayInfoGameplaySettingsSubheading",
+    ) as HTMLElement;
+    this.replayInfoGameplaySettingsRows = document.getElementById(
+      "replayInfoGameplaySettingsRows",
+    ) as HTMLDivElement;
+    this.replayInfoStageSettingsSubheading = document.getElementById(
+      "replayInfoStageSettingsSubheading",
+    ) as HTMLElement;
+    this.replayInfoStageSettingsRows = document.getElementById(
+      "replayInfoStageSettingsRows",
+    ) as HTMLDivElement;
 
     this.youtubePlayerWrap = document.getElementById(
       "youtubePlayerWrap",
@@ -1759,6 +1802,17 @@ export class MatchViewController {
       this.replayInfoSizeLabel.textContent = tr.replayInfoSizeLabel;
     if (this.replayInfoVideoLabel)
       this.replayInfoVideoLabel.textContent = tr.youtubeVideoTitle;
+    if (this.replayInfoRngSeedLabel)
+      this.replayInfoRngSeedLabel.textContent = tr.replayInfoRngSeedLabel;
+    if (this.replayInfoRemixSettingsHeading)
+      this.replayInfoRemixSettingsHeading.textContent =
+        tr.replayInfoRemixSettingsHeading;
+    if (this.replayInfoGameplaySettingsSubheading)
+      this.replayInfoGameplaySettingsSubheading.textContent =
+        tr.replayInfoGameplaySettingsSubheading;
+    if (this.replayInfoStageSettingsSubheading)
+      this.replayInfoStageSettingsSubheading.textContent =
+        tr.replayInfoStageSettingsSubheading;
     if (this.videoUrlInput)
       this.videoUrlInput.placeholder = tr.youtubeVideoUrlPlaceholder;
     if (this.videoLinkSaveBtn)
@@ -4952,7 +5006,7 @@ export class MatchViewController {
     this.replayInfoDateLocal.textContent = localStr;
     this.replayInfoDateLocal.title = `UTC: ${d.toISOString().replace(".000Z", "Z").replace("T", " ")}`;
 
-    const { header, frames, matchEnd } = loaded.replay;
+    const { header, frames, matchEnd, matchSettings } = loaded.replay;
     const tr = t();
 
     if (this.replayInfoGoodName) {
@@ -5000,6 +5054,44 @@ export class MatchViewController {
       const compStr = formatBytes(comp);
       const uncompStr = formatBytes(uncomp);
       this.replayInfoSize.textContent = `${compStr} (${tr.replayInfoUncompressedSize(uncompStr)})`;
+    }
+
+    // RNG seed + Remix Toggles.asm settings - recorder schema 3+ only
+    // (RMGR_SPEC.md §5.1/§5.1.1/§5.1.2); absent on older files, so hide
+    // both rather than showing an empty/placeholder value.
+    if (this.replayInfoRngSeedRow) {
+      const hasSeed = matchSettings?.rngSeed !== undefined;
+      this.replayInfoRngSeedRow.hidden = !hasSeed;
+      if (hasSeed && this.replayInfoRngSeed) {
+        this.replayInfoRngSeed.textContent = String(matchSettings.rngSeed);
+      }
+    }
+    if (this.replayInfoRemixSettingsDetails) {
+      const gameplaySettings = matchSettings?.gameplaySettings;
+      const stageSettings = matchSettings?.stageSettings;
+      const hasSettings =
+        gameplaySettings !== undefined && stageSettings !== undefined;
+      this.replayInfoRemixSettingsDetails.hidden = !hasSettings;
+      if (hasSettings) {
+        const settingRow = (field: RemixSettingField, value: number) => `
+          <div class="replay-info-row">
+            <span class="replay-info-label">${escapeHtml(remixSettingFieldLabel(field))}</span>
+            <span class="replay-info-value">${escapeHtml(getRemixSettingValueName(field, value))}</span>
+          </div>
+        `;
+        if (this.replayInfoGameplaySettingsRows) {
+          this.replayInfoGameplaySettingsRows.innerHTML =
+            REMIX_GAMEPLAY_SETTING_FIELD_ORDER.map((field) =>
+              settingRow(field, gameplaySettings[field]),
+            ).join("");
+        }
+        if (this.replayInfoStageSettingsRows) {
+          this.replayInfoStageSettingsRows.innerHTML =
+            REMIX_STAGE_SETTING_FIELD_ORDER.map((field) =>
+              settingRow(field, stageSettings[field]),
+            ).join("");
+        }
+      }
     }
 
     this.updateVideoSyncUI(this.youtubeSync.getLinkData());
