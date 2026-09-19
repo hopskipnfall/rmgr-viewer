@@ -2795,20 +2795,22 @@ const KIRBY_FINAL_CUTTER_DY: readonly number[] = [
 ];
 
 /**
- * KNOWN LIMITATION, found via this file's own reachability sweep (not real-corpus validation):
- * holding the stick toward the target for this move's unusually long total duration (wait-for-peak
- * + 60-frame curve + gravity tail -- much longer than any other character's special here) can
- * overshoot horizontally past the ledge while Kirby is still well above landing height, especially
- * from a starting position close to center where a fresh jump is available (the jump's own peak
- * can put Final Cutter's curve entirely above y=0, so the curve's net-zero vertical motion never
- * produces a landing crossing before x has already drifted out of range). This can spuriously
- * return "dead" from positions no real recovery situation would ever start at -- classify() is
- * only ever called after isOutsideZone (edgeGuard.ts) is already true, which requires roughly
- * |x| >= 2916, well outside where this was observed (near x=0). Not fixed: doing so properly would
- * need either a real per-frame stick-release strategy (not given by the source research this move
- * is based on) or a search over when to stop holding the stick, disproportionate effort for a
- * limitation that doesn't reach the real input domain. Flagged here rather than silently working
- * around it.
+ * KNOWN LIMITATION, found via this file's own reachability sweep and confirmed against real
+ * corpus data 2026-09-19: holding the stick toward the target for this move's unusually long
+ * total duration (wait-for-peak + 60-frame curve + gravity tail -- much longer than any other
+ * character's special here) can overshoot horizontally past the ledge while Kirby is still well
+ * above landing height, especially from a starting position close to center where a fresh jump
+ * is available (the jump's own peak can put Final Cutter's curve entirely above y=0, so the
+ * curve's net-zero vertical motion never produces a landing crossing before x has already
+ * drifted out of range). This can spuriously return "no path found" from positions a real
+ * recovery situation does start at -- the original assumption here, that classify()'s
+ * |x| >= 2916 gate (edgeGuard.ts's isOutsideZone) kept this out of the real input domain, was
+ * wrong (see 260918170220-nue-somei-14.rmgr, frame 3527, x roughly -3659 to -4297). Not fixed:
+ * doing so properly would need either a real per-frame stick-release strategy (not given by the
+ * source research this move is based on) or a search over when to stop holding the stick.
+ * Instead, classify()'s Kirby dispatch below reports "not-implemented" rather than "dead" when
+ * this function finds no path, the same treatment given to Falcon's similarly-unverified dive
+ * curve.
  */
 function kirbySimulateFinalCutterAndBeyond(
   x0: number,
@@ -3317,15 +3319,27 @@ function classifyImpl(
       return toRecoveryVerdict(outcomes);
     }
     case CHAR_KIRBY:
-    case CHAR_KIRBY_JP:
+    case CHAR_KIRBY_JP: {
       // Closed-form wait-for-peak, no search needed (see the section header above for why --
       // Y is fully discarded by root motion regardless of activation timing, so only starting
       // position from the jump's provable peak matters). Facing-independent, unverified against
       // source for Kirby specifically -- see section header.
       if (jumpsRemaining > 1) return null;
-      return toRecoveryVerdict(
-        kirbyRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
-      );
+      const outcomes = kirbyRecoveryOutcomes(x, y, vx, vy, jumpsRemaining);
+      // kirbySimulateFinalCutterAndBeyond's own doc comment flags a known overshoot limitation
+      // in the post-curve "ordinary gravity" fallback that can spuriously report no path found,
+      // but claimed classify()'s |x| >= 2916 gate (edgeGuard.ts's isOutsideZone) kept real
+      // gameplay out of the affected range. Confirmed false 2026-09-19 against a real recording
+      // (260918170220-nue-somei-14.rmgr, frame 3527, x roughly -3659 to -4297, well past that
+      // gate): the search found no ledge/stage path and the model defaulted that to "dead" via
+      // toRecoveryVerdict, even though Kirby plainly recovered in the real recorded frames that
+      // follow. Same fix as Falcon's dive curve above: report the uncertainty honestly instead
+      // of asserting a death that may not be real. A found path is unaffected.
+      if (!outcomes.canReachStage && !outcomes.canReachLedge) {
+        return "not-implemented";
+      }
+      return toRecoveryVerdict(outcomes);
+    }
     default:
       return null;
   }
