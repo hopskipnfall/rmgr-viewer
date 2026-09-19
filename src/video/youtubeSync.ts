@@ -1,7 +1,44 @@
-// "canvas" = Replay with background YouTube audio still playing ("Replay 🔊").
-// "canvas-muted" = Replay only, YouTube playback fully stopped, no audio ("Replay 🔇").
+// "canvas-muted" = 2D replay only, YouTube playback fully stopped, no video/audio ("Replay").
+// "video-only" = Full YouTube video.
+// "video-pip" = Video with mini 2D replay overlay.
+// ("canvas" is deprecated and normalized to "canvas-muted").
 export type VideoViewMode =
-  "video-pip" | "video-only" | "canvas" | "canvas-muted";
+  "video-pip" | "video-only" | "canvas-muted" | "canvas";
+
+export const GLOBAL_VIEW_MODE_STORAGE_KEY = "rmgr_video_playback_mode";
+
+/**
+ * Loads the global playback mode preference from localStorage.
+ * Defaults to "canvas-muted" ("Replay").
+ */
+export function loadGlobalPlaybackMode(): VideoViewMode {
+  if (typeof localStorage === "undefined") return "canvas-muted";
+  try {
+    const raw = localStorage.getItem(GLOBAL_VIEW_MODE_STORAGE_KEY);
+    if (raw === "video-pip" || raw === "video-only" || raw === "canvas-muted") {
+      return raw;
+    }
+    if (raw === "canvas") {
+      return "canvas-muted";
+    }
+  } catch {
+    // Ignore localStorage read errors
+  }
+  return "canvas-muted";
+}
+
+/**
+ * Saves the global playback mode preference to localStorage.
+ */
+export function saveGlobalPlaybackMode(mode: VideoViewMode): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const normalized: VideoViewMode = mode === "canvas" ? "canvas-muted" : mode;
+    localStorage.setItem(GLOBAL_VIEW_MODE_STORAGE_KEY, normalized);
+  } catch {
+    // Ignore localStorage write errors
+  }
+}
 
 export interface VideoLinkData {
   videoId: string;
@@ -187,14 +224,16 @@ export function loadVideoLink(replayId: string): VideoLinkData | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PREFIX + replayId);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as VideoLinkData;
+    const parsed = JSON.parse(raw) as Partial<VideoLinkData> & {
+      viewMode?: string;
+    };
     if (parsed && typeof parsed.videoId === "string") {
       return {
         videoId: parsed.videoId,
         url: parsed.url || `https://www.youtube.com/watch?v=${parsed.videoId}`,
         offsetSeconds:
           typeof parsed.offsetSeconds === "number" ? parsed.offsetSeconds : 0,
-        viewMode: parsed.viewMode || "canvas-muted",
+        viewMode: loadGlobalPlaybackMode(),
         // Preserve as-is (including absent/undefined) rather than
         // defaulting here - isOffsetManual()'s own "absent means manual"
         // logic is the single source of truth for that default.
@@ -213,7 +252,14 @@ export function loadVideoLink(replayId: string): VideoLinkData | null {
 export function saveVideoLink(replayId: string, data: VideoLinkData): void {
   if (!replayId || !data.videoId) return;
   try {
-    localStorage.setItem(STORAGE_KEY_PREFIX + replayId, JSON.stringify(data));
+    if (data.viewMode) {
+      saveGlobalPlaybackMode(data.viewMode);
+    }
+    const viewMode = loadGlobalPlaybackMode();
+    localStorage.setItem(
+      STORAGE_KEY_PREFIX + replayId,
+      JSON.stringify({ ...data, viewMode }),
+    );
   } catch {
     // Ignore localStorage write errors
   }
@@ -385,7 +431,7 @@ export function recomputeInferredOffsets(
   allGames: readonly SessionGameInfo[],
   videoId: string,
   url: string,
-  defaultViewMode: VideoViewMode,
+  defaultViewMode: VideoViewMode = loadGlobalPlaybackMode(),
 ): { updatedCount: number } {
   const withLinks = allGames.map((game) => ({
     game,
@@ -647,7 +693,8 @@ export class YouTubeSyncController {
 
     const saved = loadVideoLink(replayId);
     if (saved) {
-      this.setLinkData(saved, false);
+      const preferredMode = loadGlobalPlaybackMode();
+      this.setLinkData({ ...saved, viewMode: preferredMode }, false);
     } else {
       this.unloadVideo();
     }
@@ -666,10 +713,20 @@ export class YouTubeSyncController {
   }
 
   public setLinkData(data: VideoLinkData | null, persist = true): void {
-    this.linkData = data;
+    if (data) {
+      const normalized: VideoViewMode =
+        data.viewMode === "canvas" ? "canvas-muted" : data.viewMode;
+      this.linkData = { ...data, viewMode: normalized };
+      if (persist) {
+        saveGlobalPlaybackMode(normalized);
+      }
+    } else {
+      this.linkData = null;
+    }
+
     if (persist && this.currentReplayId) {
-      if (data) {
-        saveVideoLink(this.currentReplayId, data);
+      if (this.linkData) {
+        saveVideoLink(this.currentReplayId, this.linkData);
       } else {
         deleteVideoLink(this.currentReplayId);
       }
@@ -689,28 +746,30 @@ export class YouTubeSyncController {
         this.createOrUpdatePlayer();
       }
     } else {
-      this.onViewModeChange("canvas");
+      this.onViewModeChange("canvas-muted");
       this.destroyPlayer();
     }
   }
 
   public setViewMode(mode: VideoViewMode): void {
+    const normalized: VideoViewMode = mode === "canvas" ? "canvas-muted" : mode;
+    saveGlobalPlaybackMode(normalized);
     if (!this.linkData) return;
-    this.linkData = { ...this.linkData, viewMode: mode };
+    this.linkData = { ...this.linkData, viewMode: normalized };
     if (this.currentReplayId) {
       saveVideoLink(this.currentReplayId, this.linkData);
     }
-    if (mode === "canvas-muted") {
-      // Leaving any video-involved mode for Replay 🔇: tear the player
+    if (normalized === "canvas-muted") {
+      // Leaving any video-involved mode for Replay: tear the player
       // down entirely rather than just pausing it - see createOrUpdatePlayer()'s
       // doc comment for why "paused but still there" isn't good enough.
       this.destroyPlayer();
     } else if (!this.player) {
-      // Coming FROM Replay 🔇 (no player exists yet) into a video-involved
+      // Coming FROM Replay (no player exists yet) into a video-involved
       // mode - create it now, lazily.
       this.createOrUpdatePlayer();
     }
-    this.onViewModeChange(mode);
+    this.onViewModeChange(normalized);
     this.onLinkDataChange(this.linkData);
   }
 
@@ -1080,7 +1139,7 @@ export class YouTubeSyncController {
     this.stopSyncLoop();
     this.destroyPlayer();
     this.onLinkDataChange(null);
-    this.onViewModeChange("canvas");
+    this.onViewModeChange("canvas-muted");
   }
 
   public destroy(): void {

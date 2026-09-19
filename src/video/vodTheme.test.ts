@@ -86,7 +86,6 @@ describe("VOD panel light mode styles", () => {
       "vodWidgetHeader",
       "vodWidgetBody",
       "vodModeLabel",
-      "viewModeCanvasBtn",
       "viewModeCanvasMutedBtn",
       "viewModeVideoBtn",
       "viewModePipBtn",

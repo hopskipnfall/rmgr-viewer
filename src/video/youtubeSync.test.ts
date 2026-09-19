@@ -17,6 +17,9 @@ import {
   clearVideoOffsetOverride,
   unlinkVideoFromSession,
   YouTubeSyncController,
+  loadGlobalPlaybackMode,
+  saveGlobalPlaybackMode,
+  GLOBAL_VIEW_MODE_STORAGE_KEY,
   type VideoLinkData,
   type VideoViewMode,
   type SessionGameInfo,
@@ -174,7 +177,7 @@ describe("localStorage persistence", () => {
 
 describe("YouTubeSyncController", () => {
   it("initializes and updates link data and view modes", () => {
-    let modeState: VideoViewMode = "canvas";
+    let modeState: VideoViewMode = "canvas-muted";
     let linkState: VideoLinkData | null = null;
     const currentFrame = 120;
 
@@ -212,20 +215,19 @@ describe("YouTubeSyncController", () => {
     controller.nudgeOffset(1, currentFrame);
     expect(controller.getLinkData()?.offsetSeconds).toBe(11);
 
-    // Change view mode
+    // Change view mode to YouTube (video-only)
     controller.setViewMode("video-only");
     expect(controller.getLinkData()?.viewMode).toBe("video-only");
     expect(modeState).toBe("video-only");
     expect(controller.hasActiveVideo()).toBe(true);
 
-    // Canvas with audio ("Replay 🔊")
+    // Legacy "canvas" normalizes to "canvas-muted" ("Replay")
     controller.setViewMode("canvas");
-    expect(controller.getLinkData()?.viewMode).toBe("canvas");
-    expect(modeState).toBe("canvas");
-    expect(controller.hasActiveVideo()).toBe(true);
+    expect(controller.getLinkData()?.viewMode).toBe("canvas-muted");
+    expect(modeState).toBe("canvas-muted");
+    expect(controller.hasActiveVideo()).toBe(false);
 
-    // Replay 🔇: distinct from Replay 🔊 ("canvas"), no player crash without
-    // a real YT player attached in this test environment.
+    // Replay mode: "canvas-muted"
     controller.setViewMode("canvas-muted");
     expect(controller.getLinkData()?.viewMode).toBe("canvas-muted");
     expect(modeState).toBe("canvas-muted");
@@ -234,9 +236,74 @@ describe("YouTubeSyncController", () => {
     // Unload
     controller.unloadVideo();
     expect(controller.getLinkData()).toBeNull();
-    expect(modeState).toBe("canvas");
+    expect(modeState).toBe("canvas-muted");
     expect(linkState).toBeNull();
     expect(controller.hasActiveVideo()).toBe(false);
+  });
+
+  it("persists playback mode globally and applies it when another replay is played", () => {
+    let modeState: VideoViewMode = "canvas-muted";
+    const controller = new YouTubeSyncController(
+      "testContainer",
+      () => 0,
+      () => {},
+      () => {},
+      (m: VideoViewMode) => {
+        modeState = m;
+      },
+      () => {},
+    );
+
+    // Replay 1 has a linked video
+    saveVideoLink("replay-game-1", {
+      videoId: "video1",
+      url: "https://www.youtube.com/watch?v=video1",
+      offsetSeconds: 0,
+      viewMode: "canvas-muted",
+    });
+
+    // Replay 2 also has a linked video
+    saveVideoLink("replay-game-2", {
+      videoId: "video2",
+      url: "https://www.youtube.com/watch?v=video2",
+      offsetSeconds: 10,
+      viewMode: "canvas-muted",
+    });
+
+    // Loading game 1 starts with the global default ("canvas-muted" / Replay)
+    controller.setReplay("replay-game-1");
+    expect(modeState).toBe("canvas-muted");
+    expect(loadGlobalPlaybackMode()).toBe("canvas-muted");
+
+    // User changes playback mode on game 1 to "YouTube" ("video-only")
+    controller.setViewMode("video-only");
+    expect(modeState).toBe("video-only");
+    expect(loadGlobalPlaybackMode()).toBe("video-only");
+
+    // When another replay with a video is played, it automatically uses the new preference!
+    controller.setReplay("replay-game-2");
+    expect(modeState).toBe("video-only");
+    expect(controller.getLinkData()?.viewMode).toBe("video-only");
+
+    // User changes mode on game 2 to "PiP" ("video-pip")
+    controller.setViewMode("video-pip");
+    expect(modeState).toBe("video-pip");
+    expect(loadGlobalPlaybackMode()).toBe("video-pip");
+
+    // Switching back to game 1 now also opens in "PiP"
+    controller.setReplay("replay-game-1");
+    expect(modeState).toBe("video-pip");
+    expect(controller.getLinkData()?.viewMode).toBe("video-pip");
+
+    // Switching to Replay mode
+    controller.setViewMode("canvas-muted");
+    expect(modeState).toBe("canvas-muted");
+    expect(loadGlobalPlaybackMode()).toBe("canvas-muted");
+
+    // Next game opens in Replay mode
+    controller.setReplay("replay-game-2");
+    expect(modeState).toBe("canvas-muted");
+    expect(controller.getLinkData()?.viewMode).toBe("canvas-muted");
   });
 });
 
