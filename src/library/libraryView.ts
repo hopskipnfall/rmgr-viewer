@@ -351,7 +351,13 @@ export class LibraryViewController {
     ) as HTMLElement;
     const isFiltered = hasActiveFilters(this.filters);
 
-    if (filterBarEl) {
+    if (filterBarEl && isDesktopWidth()) {
+      // Desktop has no filter bar - the sidebar replaces it, so stats and
+      // matchup breakdown below just show unfiltered numbers (this.filters
+      // stays at its default "all" state since we never wire up its
+      // controls here).
+      filterBarEl.hidden = true;
+    } else if (filterBarEl) {
       const opponentNamesSet = new Set<string>();
       const myCharsSet = new Set<number>();
       const oppCharsSet = new Set<number>();
