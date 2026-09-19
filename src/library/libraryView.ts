@@ -165,6 +165,7 @@ export class LibraryViewController {
         this.selectedMyChar = myChar;
         this.selectedOppChar = oppChar;
         this.renderMatchupStats();
+        this.renderGameList();
       },
     );
 
@@ -576,27 +577,22 @@ export class LibraryViewController {
       myCharFrequencies,
       getOppCharFrequencies,
     );
+    const sel = this.matchupChipSelector.getSelected();
+    this.selectedMyChar = sel.myChar;
+    this.selectedOppChar = sel.oppChar;
     this.renderMatchupStats();
+    this.renderGameList();
+  }
 
-    // 7. Game List - desktop drops this entirely (browsing games happens
-    // through a session's own page now, opened from the sidebar); mobile
-    // keeps it exactly as before this change.
-    const gameListWrapEl =
-      this.container.querySelector<HTMLElement>("#gameListWrap");
-    if (isDesktopWidth()) {
-      if (gameListWrapEl) gameListWrapEl.hidden = true;
-    } else {
-      if (gameListWrapEl) gameListWrapEl.hidden = false;
-      const displayedSummaries = this.summaries.filter((s) =>
-        matchesFilters(s, this.identity, this.filters),
-      );
-      this.gameList.setSortOrder(this.sortOrder);
-      this.gameList.render(
-        displayedSummaries,
-        this.identity,
-        displayedSummaries.length,
-      );
-    }
+  public setSelectedMatchup(
+    myChar: number | null,
+    oppChar: number | null,
+  ): void {
+    this.selectedMyChar = myChar;
+    this.selectedOppChar = oppChar;
+    this.matchupChipSelector.setSelected(myChar, oppChar);
+    this.renderMatchupStats();
+    this.renderGameList();
   }
 
   private renderMatchupStats(): void {
@@ -618,6 +614,49 @@ export class LibraryViewController {
       this.selectedMyChar,
       this.selectedOppChar,
       rates,
+    );
+  }
+
+  private renderGameList(): void {
+    const gameListWrapEl =
+      this.container.querySelector<HTMLElement>("#gameListWrap");
+    if (!gameListWrapEl) return;
+
+    if (this.selectedMyChar === null) {
+      if (isDesktopWidth()) {
+        gameListWrapEl.hidden = true;
+        gameListWrapEl.innerHTML = "";
+      } else {
+        gameListWrapEl.hidden = false;
+        const displayedSummaries = this.summaries.filter((s) =>
+          matchesFilters(s, this.identity, this.filters),
+        );
+        this.gameList.setSortOrder(this.sortOrder);
+        this.gameList.render(
+          displayedSummaries,
+          this.identity,
+          displayedSummaries.length,
+        );
+      }
+      return;
+    }
+
+    gameListWrapEl.hidden = false;
+    const filterCriteria: FilterCriteria = {
+      yourCharacterId: this.selectedMyChar,
+      oppCharacterId:
+        this.selectedOppChar !== null ? this.selectedOppChar : "all",
+    };
+
+    const displayedSummaries = this.summaries.filter((s) =>
+      matchesFilters(s, this.identity, filterCriteria),
+    );
+
+    this.gameList.setSortOrder(this.sortOrder);
+    this.gameList.render(
+      displayedSummaries,
+      this.identity,
+      displayedSummaries.length,
     );
   }
 }

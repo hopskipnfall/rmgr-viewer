@@ -107,23 +107,14 @@ function createMockContainer() {
       if (selector.includes(".opp-char-stage")) {
         return innerHtml.includes("opp-char-stage") ? {} : null;
       }
-      if (
-        selector.includes("data-stage='my'") &&
-        selector.includes("data-char-id='9'")
-      ) {
+      const stageMatch = /data-stage=['"](\w+)['"]/.exec(selector);
+      const charMatch = /data-char-id=['"](\d+)['"]/.exec(selector);
+      if (stageMatch && charMatch) {
         return (
           buttons.find(
-            (b) => b.dataset.stage === "my" && b.dataset.charId === "9",
-          ) ?? null
-        );
-      }
-      if (
-        selector.includes("data-stage='opp'") &&
-        selector.includes("data-char-id='1'")
-      ) {
-        return (
-          buttons.find(
-            (b) => b.dataset.stage === "opp" && b.dataset.charId === "1",
+            (b) =>
+              b.dataset.stage === stageMatch[1] &&
+              b.dataset.charId === charMatch[1],
           ) ?? null
         );
       }
@@ -258,5 +249,37 @@ describe("MatchupChipSelector", () => {
     );
     // There is no separate badge span, only the clean name with single flag
     expect(container.innerHTML).not.toContain("char-icon-jp-badge");
+  });
+
+  it("allows deselecting opponent character and my character chips by clicking them again", () => {
+    const container = createMockContainer();
+    const onSelectionChange = vi.fn();
+    const selector = new MatchupChipSelector(container, onSelectionChange);
+
+    const availableMy = [9]; // Pikachu
+    const getOpp = () => [0, 1]; // Mario, Fox
+    selector.setData(availableMy, getOpp);
+
+    // Select Pikachu (9)
+    const pikaBtn = container.querySelector(
+      ".character-chip[data-stage='my'][data-char-id='9']",
+    ) as unknown as MockButton;
+    pikaBtn.click();
+    expect(onSelectionChange).toHaveBeenCalledWith(9, null);
+
+    // Select Mario (0)
+    const marioBtn = container.querySelector(
+      ".character-chip[data-stage='opp'][data-char-id='0']",
+    ) as unknown as MockButton;
+    marioBtn.click();
+    expect(onSelectionChange).toHaveBeenLastCalledWith(9, 0);
+
+    // Click Mario (0) again: deselects opponent character
+    marioBtn.click();
+    expect(onSelectionChange).toHaveBeenLastCalledWith(9, null);
+
+    // Click Pikachu (9) again: deselects my character and clears selection
+    pikaBtn.click();
+    expect(onSelectionChange).toHaveBeenLastCalledWith(null, null);
   });
 });
