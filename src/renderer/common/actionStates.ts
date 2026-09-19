@@ -1,3 +1,5 @@
+import { isYoshiCharacter } from "./characterSpecials.js";
+
 const SHIELD_ACTION_STATES = new Set([
   0x098, // ShieldOn
   0x099, // Shield
@@ -11,6 +13,24 @@ export function isShieldState(actionStateId: number): boolean {
 
 export function isShieldStunState(actionStateId: number): boolean {
   return actionStateId === 0x09b;
+}
+
+/**
+ * Checks whether Yoshi is in the invincible startup window of his shield.
+ * In Super Smash Bros. 64, Yoshi is invincible (not invulnerable) for the first 2 frames
+ * of entering shield (ShieldOn 0x098, actionFrameCounter < 2).
+ */
+export function isYoshiShieldInvincibleState(
+  characterId?: number,
+  actionStateId?: number,
+  actionFrameCounter?: number,
+): boolean {
+  if (characterId === undefined || actionStateId === undefined) return false;
+  if (!isYoshiCharacter(characterId)) return false;
+  if (actionStateId === 0x098) {
+    return actionFrameCounter === undefined || actionFrameCounter < 2;
+  }
+  return false;
 }
 
 export function isSpecialState(actionStateId: number): boolean {

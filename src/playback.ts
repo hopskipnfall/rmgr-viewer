@@ -138,35 +138,17 @@ export class PlaybackController {
     if (this.frameCount === 0) return;
 
     if (this.fastForwardAnim !== null) {
-      // If the player presses an arrow key while that animation is going on,
-      // snap immediately to that point.
+      // If the player presses an arrow key while fast-forwarding or fast-rewinding,
+      // further subtract/add deltaFrames (e.g. 1 second) to the target time.
       const activeAnim = this.fastForwardAnim;
-      const isSameDirection =
-        (deltaFrames > 0 && activeAnim.targetFrame >= activeAnim.startFrame) ||
-        (deltaFrames < 0 && activeAnim.targetFrame <= activeAnim.startFrame);
+      const wasPlaying = activeAnim.wasPlaying;
+      const newTarget = Math.max(
+        0,
+        Math.min(this.frameCount - 1, activeAnim.targetFrame + deltaFrames),
+      );
 
-      if (isSameDirection) {
-        // Jump directly to that animation's destination point
-        const target = activeAnim.targetFrame;
-        const wasPlaying = activeAnim.wasPlaying;
+      if (newTarget === this.index) {
         this.cancelAnimatedJump();
-        this.index = target;
-        if (wasPlaying) {
-          this.playing = true;
-          this.lastTimestampMs = performance.now();
-          this.accumulatedMs = 0;
-          this.rafHandle = requestAnimationFrame(this.tick);
-        }
-        this.onChange(this.index, this.playing, "jump");
-        return;
-      } else {
-        // Opposite direction: jump immediately in the new direction
-        const wasPlaying = activeAnim.wasPlaying;
-        this.cancelAnimatedJump();
-        const newTarget = Math.max(
-          0,
-          Math.min(this.frameCount - 1, this.index + deltaFrames),
-        );
         this.index = newTarget;
         if (wasPlaying) {
           this.playing = true;
@@ -177,6 +159,23 @@ export class PlaybackController {
         this.onChange(this.index, this.playing, "jump");
         return;
       }
+
+      const startFrame = this.index;
+      const targetFrame = newTarget;
+      const distance = Math.abs(targetFrame - startFrame);
+      const scaledDuration = Math.min(
+        durationMs,
+        Math.max(50, (distance / Math.abs(deltaFrames || 60)) * durationMs),
+      );
+
+      this.fastForwardAnim = {
+        startFrame,
+        targetFrame,
+        startTime: performance.now(),
+        durationMs: scaledDuration,
+        wasPlaying,
+      };
+      return;
     }
 
     const startFrame = this.index;

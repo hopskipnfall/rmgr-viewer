@@ -19,6 +19,8 @@ export function drawShieldBubble(
   frameCounter: number,
   shieldHealth?: number,
   isPaused?: boolean,
+  isInvincible?: boolean,
+  isLight?: boolean,
 ): void {
   // Full health defaults to 55 (Smash 64 standard max shield health)
   const health = shieldHealth !== undefined ? shieldHealth : 55;
@@ -30,12 +32,17 @@ export function drawShieldBubble(
   const baseRadius = unscaledRadius * radiusScale;
 
   // Color & stress escalation tiers
+  // - Invincible: Luminous liquid platinum silver
   // - Critical (<= 11 HP): High-contrast flashing red/white strobe (one hit away from break)
   // - Low (12-25 HP): Deep warning crimson
   // - Medium (26-41 HP): Warm amber / orange
   // - High (>= 42 HP): Standard player port color
   let shieldColor = color;
-  if (health <= 11) {
+  if (isInvincible) {
+    shieldColor = isLight
+      ? "rgba(218, 228, 240, 0.98)"
+      : "rgba(240, 246, 255, 0.98)";
+  } else if (health <= 11) {
     shieldColor = frameCounter % 8 < 4 ? "#ffffff" : "#ef4444";
   } else if (health <= 25) {
     shieldColor = "#dc2626";
@@ -69,10 +76,17 @@ export function drawShieldBubble(
       cy,
       radius,
     );
-    grad.addColorStop(0, "rgba(255, 255, 255, 0.45)");
-    grad.addColorStop(0.5, hexToRgba(shieldColor, 0.55));
-    grad.addColorStop(0.85, hexToRgba(shieldColor, 0.8));
-    grad.addColorStop(1, "rgba(255, 255, 255, 0.95)");
+    if (isInvincible) {
+      grad.addColorStop(0, "rgba(255, 255, 255, 0.7)");
+      grad.addColorStop(0.5, "rgba(240, 246, 255, 0.85)");
+      grad.addColorStop(0.85, "rgba(224, 242, 254, 0.95)");
+      grad.addColorStop(1, "rgba(255, 255, 255, 1.0)");
+    } else {
+      grad.addColorStop(0, "rgba(255, 255, 255, 0.45)");
+      grad.addColorStop(0.5, hexToRgba(shieldColor, 0.55));
+      grad.addColorStop(0.85, hexToRgba(shieldColor, 0.8));
+      grad.addColorStop(1, "rgba(255, 255, 255, 0.95)");
+    }
 
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -83,10 +97,18 @@ export function drawShieldBubble(
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = health <= 11 ? shieldColor : "#ffffff";
+    ctx.strokeStyle = isInvincible
+      ? "#ffffff"
+      : health <= 11
+        ? shieldColor
+        : "#ffffff";
     ctx.lineWidth = 3.5;
-    ctx.shadowColor = shieldColor;
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = isInvincible
+      ? isLight
+        ? "rgba(148, 163, 184, 0.95)"
+        : "rgba(224, 242, 254, 1.0)"
+      : shieldColor;
+    ctx.shadowBlur = isInvincible ? 16 : 12;
     ctx.stroke();
     ctx.restore();
 
@@ -119,10 +141,24 @@ export function drawShieldBubble(
       cy,
       radius,
     );
-    grad.addColorStop(0, hexToRgba(shieldColor, 0.28));
-    grad.addColorStop(0.65, hexToRgba(shieldColor, 0.45));
-    grad.addColorStop(0.88, hexToRgba(shieldColor, 0.72));
-    grad.addColorStop(1, hexToRgba(shieldColor, 0.95));
+    if (isInvincible) {
+      if (isLight) {
+        grad.addColorStop(0, "rgba(255, 255, 255, 0.65)");
+        grad.addColorStop(0.55, "rgba(226, 232, 240, 0.75)");
+        grad.addColorStop(0.85, "rgba(203, 213, 225, 0.90)");
+        grad.addColorStop(1, "rgba(241, 245, 249, 0.98)");
+      } else {
+        grad.addColorStop(0, "rgba(255, 255, 255, 0.70)");
+        grad.addColorStop(0.55, "rgba(240, 246, 255, 0.80)");
+        grad.addColorStop(0.85, "rgba(224, 242, 254, 0.92)");
+        grad.addColorStop(1, "rgba(255, 255, 255, 1.0)");
+      }
+    } else {
+      grad.addColorStop(0, hexToRgba(shieldColor, 0.28));
+      grad.addColorStop(0.65, hexToRgba(shieldColor, 0.45));
+      grad.addColorStop(0.88, hexToRgba(shieldColor, 0.72));
+      grad.addColorStop(1, hexToRgba(shieldColor, 0.95));
+    }
 
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -133,53 +169,74 @@ export function drawShieldBubble(
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = hexToRgba(shieldColor, 0.95);
-    ctx.lineWidth = health <= 25 ? 3.5 : 3;
-    ctx.shadowColor = shieldColor;
-    ctx.shadowBlur = health <= 25 ? 12 + Math.sin(frameCounter * 0.6) * 4 : 10;
+    ctx.strokeStyle = isInvincible ? "#ffffff" : hexToRgba(shieldColor, 0.95);
+    ctx.lineWidth = isInvincible ? 3.5 : health <= 25 ? 3.5 : 3;
+    ctx.shadowColor = isInvincible
+      ? isLight
+        ? "rgba(148, 163, 184, 0.95)"
+        : "rgba(224, 242, 254, 1.0)"
+      : shieldColor;
+    ctx.shadowBlur = isInvincible
+      ? 18 + Math.sin(frameCounter * 0.28) * 4
+      : health <= 25
+        ? 12 + Math.sin(frameCounter * 0.6) * 4
+        : 10;
     ctx.stroke();
     ctx.restore();
 
     // 3. Inner concentric forcefield ring shimmer
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 0.76, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = isInvincible
+      ? "rgba(255, 255, 255, 0.45)"
+      : "rgba(255, 255, 255, 0.25)";
+    ctx.lineWidth = isInvincible ? 1.4 : 1.2;
     ctx.stroke();
 
     // 4. Glossy glass specular reflection arc on upper-left rim
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 0.85, -Math.PI * 0.85, -Math.PI * 0.35, false);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = isInvincible ? "#ffffff" : "rgba(255, 255, 255, 0.8)";
+    ctx.lineWidth = isInvincible ? 3 : 2.5;
     ctx.lineCap = "round";
     ctx.shadowColor = "#ffffff";
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = isInvincible ? 8 : 6;
     ctx.stroke();
 
     // Secondary smaller specular glint at bottom-right rim
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 0.85, Math.PI * 0.25, Math.PI * 0.45, false);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
-    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = isInvincible
+      ? "rgba(255, 255, 255, 0.65)"
+      : "rgba(255, 255, 255, 0.45)";
+    ctx.lineWidth = isInvincible ? 2 : 1.8;
     ctx.lineCap = "round";
     ctx.stroke();
     ctx.restore();
   }
 
   // 5. Glass micro-cracks under severe stress (health <= 25)
-  if (health <= 25) {
+  if (!isInvincible && health <= 25) {
     const crackCount = health <= 11 ? 4 : 2;
     drawMicroCracks(ctx, cx, cy, radius, crackCount);
   }
 
   // 6. Perimeter arc ring gauge showing remaining health fraction
-  drawPerimeterGauge(ctx, cx, cy, radius, health, healthRatio, frameCounter);
+  drawPerimeterGauge(
+    ctx,
+    cx,
+    cy,
+    radius,
+    health,
+    healthRatio,
+    frameCounter,
+    isInvincible,
+  );
 
   // 7. Paused HUD status badge (exact numbers without cluttering active 60 FPS play)
   if (isPaused) {
-    drawShieldPausedBadge(ctx, cx, cy - radius - 8, health);
+    drawShieldPausedBadge(ctx, cx, cy - radius - 8, health, isInvincible);
   }
 
   ctx.restore();
@@ -264,6 +321,7 @@ function drawPerimeterGauge(
   health: number,
   healthRatio: number,
   frameCounter: number,
+  isInvincible?: boolean,
 ): void {
   const gaugeRadius = radius + 2.5;
 
@@ -279,7 +337,9 @@ function drawPerimeterGauge(
     const endAngle = startAngle + Math.PI * 2 * healthRatio;
 
     let gaugeColor = "#22c55e"; // Healthy green
-    if (health <= 11) {
+    if (isInvincible) {
+      gaugeColor = "#ffffff";
+    } else if (health <= 11) {
       gaugeColor = frameCounter % 8 < 4 ? "#ffffff" : "#ef4444";
     } else if (health <= 25) {
       gaugeColor = "#ef4444";
@@ -294,7 +354,7 @@ function drawPerimeterGauge(
     ctx.lineWidth = 2.4;
     ctx.lineCap = "round";
     ctx.shadowColor = gaugeColor;
-    ctx.shadowBlur = 4;
+    ctx.shadowBlur = isInvincible ? 6 : 4;
     ctx.stroke();
     ctx.restore();
   }
@@ -308,12 +368,16 @@ function drawShieldPausedBadge(
   cx: number,
   badgeY: number,
   health: number,
+  isInvincible?: boolean,
 ): void {
   ctx.save();
-  const isCritical = health <= 11;
-  const text = `🛡️ ${Math.round(health)}/55`;
-  const tierColor =
-    health <= 11
+  const isCritical = !isInvincible && health <= 11;
+  const text = isInvincible
+    ? `🛡️ Invincible • ${Math.round(health)}/55`
+    : `🛡️ ${Math.round(health)}/55`;
+  const tierColor = isInvincible
+    ? "#ffffff"
+    : health <= 11
       ? "#ef4444"
       : health <= 25
         ? "#ef4444"

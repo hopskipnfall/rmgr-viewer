@@ -82,6 +82,9 @@ import {
   CHARGE_SHOT_LEVEL_SCALES,
   drawShieldBubble,
   drawAttackArc,
+  drawSamusGrappleBeam,
+  drawLinkHookshot,
+  drawYoshiTongueGrab,
   drawDeconflictedPauseHuds,
   drawComboEscapeHighlight,
   drawComboEscapeTextCallout,
@@ -91,6 +94,7 @@ import {
   getHitstunSilhouetteColors,
   getInvincibleSilhouetteColors,
   isInvincibleOrInvulnerable,
+  isYoshiShieldInvincibleState,
   drawInvincibleSparkles,
   createSilhouetteContext,
   isShieldDropState,
@@ -813,11 +817,18 @@ describe("getAttackInfo", () => {
       type: "grab",
       direction: "forward",
     }); // GrabWait
-    expect(getAttackInfo(0x0e5, 0x05)).toEqual({
+    expect(getAttackInfo(0x0a8, 0x05)).toBeNull(); // Link holding opponent (CatchWait) has retracted hookshot, no grab animation
+    expect(getAttackInfo(0x0a6, 0x05)).toEqual({
       type: "grab",
       direction: "forward",
     }); // Link Hookshot grab
-    expect(getAttackInfo(0x0e5, 0x03)).toEqual({
+    expect(getAttackInfo(0x0a7, 0x05)).toEqual({
+      type: "grab",
+      direction: "forward",
+    }); // Link Hookshot pull
+    expect(getAttackInfo(0x0e5, 0x05)).toBeNull(); // Link Boomerang throw (0x0e5) is not a grab
+    expect(getAttackInfo(0x0e5, 0x03)).toBeNull(); // Samus bomb landing (0x0e5) is not a grab
+    expect(getAttackInfo(0x0a6, 0x03)).toEqual({
       type: "grab",
       direction: "forward",
     }); // Samus Grapple Beam grab
@@ -5709,6 +5720,31 @@ describe("StageRenderer background themes", () => {
       const stunRadius = stun.arcCalls[0]!.radius;
       expect(stunRadius).toBeLessThan(22); // Less than full base with pulse
     });
+
+    it("renders silver/white invincible shield with invincible badge when isInvincible is true", () => {
+      const inv = createMockShieldCanvas();
+      drawShieldBubble(
+        inv.ctx,
+        100,
+        100,
+        10,
+        30,
+        "#3b82f6",
+        false,
+        0,
+        10, // low health
+        true, // isPaused
+        true, // isInvincible
+        false, // isLight
+      );
+      // No micro cracks should be rendered despite health <= 25
+      expect(inv.lineToCalls.length).toBe(0);
+      // Specular white rim and gauge
+      expect(inv.strokeStyles).toContain("#ffffff");
+      // Paused badge text says Invincible
+      expect(inv.textCalls.length).toBe(1);
+      expect(inv.textCalls[0]!.text).toBe("🛡️ Invincible • 10/55");
+    });
   });
 
   describe("Animated Attack Arcs (Aerial vs Smash Differentiation)", () => {
@@ -5758,6 +5794,12 @@ describe("StageRenderer background themes", () => {
           arcCalls.push({ x, y, radius, startAngle, endAngle });
         },
         ellipse: () => {},
+        rect: () => {},
+        roundRect: () => {},
+        quadraticCurveTo: () => {},
+        translate: () => {},
+        scale: () => {},
+        rotate: () => {},
         set strokeStyle(val: string) {
           currentStrokeStyle = val;
         },
@@ -6108,6 +6150,114 @@ describe("StageRenderer background themes", () => {
       // Has blade arcs and impact burst spark
       expect(slowCanvas.arcCalls.length).toBeGreaterThanOrEqual(2);
       expect(slowCanvas.lineToCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("renders Samus Grapple Beam as an extended electric plasma chain with capture claw", () => {
+      const mock = createMockAttackCanvas();
+      drawAttackArc(
+        mock.ctx,
+        100,
+        100,
+        15,
+        40,
+        true,
+        "#f59e0b",
+        { type: "grab", direction: "forward" },
+        null,
+        false,
+        22, // actionFrameCounter at peak
+        0x03, // Samus
+      );
+
+      // Has muzzle flare, plasma nodes, claw arcs, and capture field
+      expect(mock.arcCalls.length).toBeGreaterThanOrEqual(3);
+      expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(5);
+      // Draws line segments connecting cannon to tip
+      expect(mock.lineToCalls.length).toBeGreaterThanOrEqual(2);
+
+      // Directly invocable as standalone helper
+      const direct = createMockAttackCanvas();
+      drawSamusGrappleBeam(direct.ctx, 100, 100, 15, 40, true, "#38bdf8", 15);
+      expect(direct.strokeCalls.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("renders Link Hookshot as an extended steel linked chain with barbed arrowhead", () => {
+      const mock = createMockAttackCanvas();
+      drawAttackArc(
+        mock.ctx,
+        100,
+        100,
+        15,
+        40,
+        true,
+        "#10b981",
+        { type: "grab", direction: "forward" },
+        null,
+        false,
+        22, // actionFrameCounter at peak
+        0x05, // Link
+      );
+
+      // Has launcher spool, chain link highlights, and barbed spearhead
+      expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(5);
+      // Barbed arrowhead chisel point has lineTo path
+      expect(mock.lineToCalls.length).toBeGreaterThanOrEqual(5);
+
+      // Directly invocable as standalone helper
+      const direct = createMockAttackCanvas();
+      drawLinkHookshot(direct.ctx, 100, 100, 15, 40, true, "#10b981", 15);
+      expect(direct.strokeCalls.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("renders Yoshi tongue grab with gaping jaws, saliva stretch, muscular ribbed tongue, and prehensile clasp", () => {
+      const mock = createMockAttackCanvas();
+      drawAttackArc(
+        mock.ctx,
+        100,
+        100,
+        15,
+        40,
+        true,
+        "#10b981",
+        { type: "grab", direction: "forward" },
+        null,
+        false,
+        22, // actionFrameCounter at peak
+        0x06, // Yoshi
+      );
+
+      // Has mouth cavity, jaw arcs, saliva beads, suction cups, and grab latch aura
+      expect(mock.arcCalls.length).toBeGreaterThanOrEqual(5);
+      // Has muscular striation band lines
+      expect(mock.lineToCalls.length).toBeGreaterThanOrEqual(5);
+      expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(5);
+
+      // Directly invocable as standalone helper
+      const direct = createMockAttackCanvas();
+      drawYoshiTongueGrab(direct.ctx, 100, 100, 15, 40, true, "#10b981", 15);
+      expect(direct.strokeCalls.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("renders standard cartoon gloved hand for non-grapple characters (e.g. Mario)", () => {
+      const mock = createMockAttackCanvas();
+      drawAttackArc(
+        mock.ctx,
+        100,
+        100,
+        15,
+        40,
+        true,
+        "#ef4444",
+        { type: "grab", direction: "forward" },
+        null,
+        false,
+        7,
+        0x00, // Mario
+      );
+
+      // Has cartoon fingers, thumb, and grab snatch glow
+      expect(mock.arcCalls.length).toBeGreaterThanOrEqual(5);
+      expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(5);
     });
   });
 
@@ -6735,6 +6885,42 @@ describe("StageRenderer background themes", () => {
       expect(isInvincibleOrInvulnerable({ actionStateId: 0x00a }, 130)).toBe(
         false,
       );
+
+      // Yoshi shield startup (ShieldOn 0x098, frames 0 and 1) is invincible
+      expect(isYoshiShieldInvincibleState(0x06, 0x098, 0)).toBe(true);
+      expect(isYoshiShieldInvincibleState(0x06, 0x098, 1)).toBe(true);
+      expect(isYoshiShieldInvincibleState(0x06, 0x098, 2)).toBe(false);
+      expect(isYoshiShieldInvincibleState(0x06, 0x099, 0)).toBe(false);
+      expect(isYoshiShieldInvincibleState(0x00, 0x098, 0)).toBe(false);
+
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x098,
+          characterId: 0x06,
+          actionFrameCounter: 0,
+        }),
+      ).toBe(true);
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x098,
+          characterId: 0x06,
+          actionFrameCounter: 1,
+        }),
+      ).toBe(true);
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x098,
+          characterId: 0x06,
+          actionFrameCounter: 2,
+        }),
+      ).toBe(false);
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x098,
+          characterId: 0x00,
+          actionFrameCounter: 0,
+        }),
+      ).toBe(false);
     });
 
     it("drawInvincibleSparkles renders shining starlight glints", () => {

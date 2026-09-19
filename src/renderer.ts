@@ -162,6 +162,7 @@ import {
   isKirbyCharacter,
   isJigglypuffCharacter,
   isYoshiCharacter,
+  isYoshiShieldInvincibleState,
   type FalconSpecialType,
   type PikachuSpecialType,
   type FoxSpecialType,
@@ -770,7 +771,13 @@ export class StageRenderer {
                 ? portData.state.specialHitStatus
                 : isReviveState(portData.state.actionStateId)
                   ? 2
-                  : portData.state.hurtboxState;
+                  : isYoshiShieldInvincibleState(
+                        portData.state.characterId,
+                        portData.state.actionStateId,
+                        portData.state.actionFrameCounter,
+                      )
+                    ? 2
+                    : portData.state.hurtboxState;
           pauseHudItems.push({
             x,
             y,
@@ -1503,6 +1510,8 @@ export class StageRenderer {
     frameCounter: number,
     shieldHealth?: number,
     isPaused?: boolean,
+    isInvincible?: boolean,
+    isLight?: boolean,
   ): void {
     drawShieldBubble(
       this.ctx,
@@ -1515,6 +1524,8 @@ export class StageRenderer {
       frameCounter,
       shieldHealth,
       isPaused,
+      isInvincible,
+      isLight,
     );
   }
 
@@ -2786,6 +2797,7 @@ export class StageRenderer {
     joystick?: { x: number; y: number } | null,
     canAngle?: boolean,
     actionFrameCounter?: number,
+    characterId?: number,
   ): void {
     drawAttackArc(
       this.ctx,
@@ -2799,6 +2811,7 @@ export class StageRenderer {
       joystick,
       canAngle,
       actionFrameCounter,
+      characterId,
     );
   }
 

@@ -65,6 +65,7 @@ import {
   isJigglypuffCharacter,
   isFoxCharacter,
   isYoshiCharacter,
+  isYoshiShieldInvincibleState,
   isDonkeyKongCharacter,
   isLinkCharacter,
   isNessCharacter,
@@ -203,6 +204,8 @@ export interface ShieldBreakEvent {
 export function isInvincibleOrInvulnerable(
   post: {
     actionStateId: number;
+    characterId?: number;
+    actionFrameCounter?: number;
     hurtboxState?: number;
     specialHitStatus?: number;
   },
@@ -211,6 +214,15 @@ export function isInvincibleOrInvulnerable(
   if (post.hurtboxState === 2 || post.hurtboxState === 3) return true;
   if (post.specialHitStatus === 2 || post.specialHitStatus === 3) return true;
   if (isReviveState(post.actionStateId)) return true;
+  if (
+    isYoshiShieldInvincibleState(
+      post.characterId,
+      post.actionStateId,
+      post.actionFrameCounter,
+    )
+  ) {
+    return true;
+  }
   if (
     post.specialHitStatus === undefined &&
     framesSinceReviveExit !== undefined &&
@@ -1453,6 +1465,7 @@ export function drawPlayer(
       joystick ? { x: joystick.stickX, y: joystick.stickY } : null,
       angleable,
       post.actionFrameCounter,
+      post.characterId,
     );
   }
 
@@ -1612,6 +1625,13 @@ export function drawPlayer(
   }
 
   if (shielding) {
+    const isShieldInvincible =
+      isInvincibleSilhouette ||
+      isYoshiShieldInvincibleState(
+        post.characterId,
+        post.actionStateId,
+        post.actionFrameCounter,
+      );
     drawShieldBubble(
       ctx,
       x,
@@ -1623,6 +1643,8 @@ export function drawPlayer(
       post.actionFrameCounter,
       post.shieldHealth,
       isPaused,
+      isShieldInvincible,
+      isLight,
     );
   } else {
     // Shield Break Pop Animation:
@@ -1899,6 +1921,20 @@ export function drawPlayer(
             isYoshiCharacter(post.characterId)
           ? 140
           : undefined;
+    const effectiveHurtboxState =
+      post.hurtboxState === 2 || post.hurtboxState === 3
+        ? post.hurtboxState
+        : post.specialHitStatus === 2 || post.specialHitStatus === 3
+          ? post.specialHitStatus
+          : isReviveState(post.actionStateId)
+            ? 2
+            : isYoshiShieldInvincibleState(
+                  post.characterId,
+                  post.actionStateId,
+                  post.actionFrameCounter,
+                )
+              ? 2
+              : post.hurtboxState;
     drawPlayerStateInfo(
       ctx,
       x,
@@ -1909,6 +1945,8 @@ export function drawPlayer(
       post.positionY,
       tagColor,
       armorForHud,
+      8,
+      effectiveHurtboxState,
     );
   }
 

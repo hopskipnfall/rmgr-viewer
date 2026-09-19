@@ -280,6 +280,10 @@ export class MatchupChipSelector {
         btn.addEventListener("click", () => {
           const charId = Number(btn.dataset.charId);
           if (this.selectedMyChar === charId) {
+            this.selectedMyChar = null;
+            this.selectedOppChar = null;
+            this.render();
+            this.onSelectionChange(null, null);
             return;
           }
           this.selectedMyChar = charId;
@@ -304,7 +308,11 @@ export class MatchupChipSelector {
       .forEach((btn) => {
         btn.addEventListener("click", () => {
           const charId = Number(btn.dataset.charId);
-          this.selectedOppChar = charId;
+          if (this.selectedOppChar === charId) {
+            this.selectedOppChar = null;
+          } else {
+            this.selectedOppChar = charId;
+          }
           this.render();
           this.onSelectionChange(this.selectedMyChar, this.selectedOppChar);
         });

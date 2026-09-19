@@ -268,7 +268,14 @@ export const COMMON_STATES: StateOption[] = [
   { id: 0x0cf, name: "USmash", category: "attack" },
   { id: 0x0d0, name: "DSmash", category: "attack" },
   { id: 0x0d1, name: "Nair", category: "attack" },
-  { id: 0x0a6, name: "Grab", category: "attack" },
+  {
+    id: 0x0a6,
+    name: "Grab",
+    category: "attack",
+    visualized: true,
+    visualizedDesc:
+      "Cartoon Gloved Hand / Chain Hookshot / Grapple Beam / Muscular Tongue Grab",
+  },
   {
     id: 0x0a9,
     name: "Grabbed",
