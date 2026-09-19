@@ -84,8 +84,14 @@ export function drawSamusBombExplosionAt(
 
       const sx = x + Math.cos(angle) * dist;
       const sy = y + Math.sin(angle) * dist;
-      const mx = x + Math.cos(angle) * (dist - trailLen * 0.5) + Math.sin(angle * 2) * (3 * scale);
-      const my = y + Math.sin(angle) * (dist - trailLen * 0.5) - Math.cos(angle * 2) * (3 * scale);
+      const mx =
+        x +
+        Math.cos(angle) * (dist - trailLen * 0.5) +
+        Math.sin(angle * 2) * (3 * scale);
+      const my =
+        y +
+        Math.sin(angle) * (dist - trailLen * 0.5) -
+        Math.cos(angle * 2) * (3 * scale);
       const tx = x + Math.cos(angle) * Math.max(0, dist - trailLen);
       const ty = y + Math.sin(angle) * Math.max(0, dist - trailLen);
 
@@ -106,7 +112,13 @@ export function drawSamusBombExplosionAt(
 
       // Glowing plasma spark head
       ctx.beginPath();
-      ctx.arc(sx, sy, Math.max(0.8, 2.2 * scale * (1 - arcProgress * 0.6)), 0, Math.PI * 2);
+      ctx.arc(
+        sx,
+        sy,
+        Math.max(0.8, 2.2 * scale * (1 - arcProgress * 0.6)),
+        0,
+        Math.PI * 2,
+      );
       ctx.fillStyle = `rgba(255, 255, 255, ${arcAlpha})`;
       ctx.shadowColor = "#38bdf8";
       ctx.shadowBlur = 6 * arcAlpha;

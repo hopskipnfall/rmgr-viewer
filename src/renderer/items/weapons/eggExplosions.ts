@@ -217,11 +217,12 @@ export function drawEggExplosionAt(
   // 4. Flying Eggshell Shards (Cream shell fragments with Yoshi green spots, 0.0 - 0.85)
   if (progress < 0.85) {
     const shardProgress = progress / 0.85;
-    const shardAlpha = progress < 0.6 ? 1 : Math.max(0, 1 - (progress - 0.6) / 0.25);
+    const shardAlpha =
+      progress < 0.6 ? 1 : Math.max(0, 1 - (progress - 0.6) / 0.25);
     const shardCount = 8;
 
     for (let i = 0; i < shardCount; i++) {
-      const angle = (i * Math.PI * 2) / shardCount + (i * 0.35);
+      const angle = (i * Math.PI * 2) / shardCount + i * 0.35;
       const speed = 0.75 + ((i * 5) % 4) * 0.18;
       const dist = (6 + shardProgress * speed * 68) * scale;
       // Slight downward parabolic gravity arc
@@ -229,7 +230,8 @@ export function drawEggExplosionAt(
       const sx = x + Math.cos(angle) * dist;
       const sy = y + Math.sin(angle) * dist + dy;
       // Tumbling rotation
-      const tumble = angle + shardProgress * (4 + (i % 3) * 2) * (i % 2 === 0 ? 1 : -1);
+      const tumble =
+        angle + shardProgress * (4 + (i % 3) * 2) * (i % 2 === 0 ? 1 : -1);
 
       ctx.save();
       ctx.translate(sx, sy);
@@ -301,13 +303,7 @@ export function drawEggExplosions(
       ctx.scale(markerScale, markerScale);
       ctx.translate(-x, -y);
 
-      drawEggExplosionAt(
-        ctx,
-        x,
-        y,
-        progress,
-        exp.radius,
-      );
+      drawEggExplosionAt(ctx, x, y, progress, exp.radius);
 
       ctx.restore();
     }
