@@ -5306,6 +5306,47 @@
         word-break: break-all;
         line-height: 1.4;
       }
+      .replay-info-remix-settings[hidden] {
+        display: none !important;
+      }
+      .replay-info-remix-settings summary {
+        cursor: pointer;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .replay-info-remix-settings summary:hover {
+        color: var(--text);
+      }
+      .replay-info-remix-settings-group {
+        margin-top: 8px;
+      }
+      .replay-info-remix-settings-group h4 {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0 0 4px;
+      }
+      .replay-info-remix-settings-group .replay-info-row {
+        flex-direction: row;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 2px 0;
+      }
+      .replay-info-remix-settings-group .replay-info-label {
+        text-transform: none;
+        letter-spacing: normal;
+        font-weight: 400;
+        color: var(--text);
+      }
+      .replay-info-remix-settings-group .replay-info-value {
+        text-align: right;
+        word-break: normal;
+      }
       .project-file-status {
         color: var(--text-dim);
         font-size: 11px;
@@ -7350,6 +7391,37 @@
                     </button>
                   </span>
                 </div>
+                <div class="replay-info-row" id="replayInfoRngSeedRow" hidden>
+                  <span class="replay-info-label" id="replayInfoRngSeedLabel"
+                    >RNG Seed</span
+                  >
+                  <span id="replayInfoRngSeed" class="replay-info-value"
+                    >—</span
+                  >
+                </div>
+                <!-- Remix's 31 Gameplay + 8 Stage Toggles.asm settings (recorder
+                     schema 3+, RMGR_SPEC.md §5.1.1/§5.1.2) - a fixed but large
+                     field set, so unlike the rows above (each written by hand),
+                     these are generated in matchView.ts's renderReplayInfo() from
+                     src/remixSettingsLabels.ts's field-order lists. Hidden
+                     entirely for schema <3 files, which carry no settings data. -->
+                <details
+                  id="replayInfoRemixSettingsDetails"
+                  class="replay-info-remix-settings"
+                  hidden
+                >
+                  <summary id="replayInfoRemixSettingsHeading">
+                    Remix Settings
+                  </summary>
+                  <div class="replay-info-remix-settings-group">
+                    <h4 id="replayInfoGameplaySettingsSubheading">Gameplay</h4>
+                    <div id="replayInfoGameplaySettingsRows"></div>
+                  </div>
+                  <div class="replay-info-remix-settings-group">
+                    <h4 id="replayInfoStageSettingsSubheading">Stage</h4>
+                    <div id="replayInfoStageSettingsRows"></div>
+                  </div>
+                </details>
               </div>
             </section>
           </aside>
