@@ -91,6 +91,7 @@ import {
   getHitstunSilhouetteColors,
   getInvincibleSilhouetteColors,
   isInvincibleOrInvulnerable,
+  isYoshiShieldInvincibleState,
   drawInvincibleSparkles,
   createSilhouetteContext,
   isShieldDropState,
@@ -5709,6 +5710,31 @@ describe("StageRenderer background themes", () => {
       const stunRadius = stun.arcCalls[0]!.radius;
       expect(stunRadius).toBeLessThan(22); // Less than full base with pulse
     });
+
+    it("renders silver/white invincible shield with invincible badge when isInvincible is true", () => {
+      const inv = createMockShieldCanvas();
+      drawShieldBubble(
+        inv.ctx,
+        100,
+        100,
+        10,
+        30,
+        "#3b82f6",
+        false,
+        0,
+        10, // low health
+        true, // isPaused
+        true, // isInvincible
+        false, // isLight
+      );
+      // No micro cracks should be rendered despite health <= 25
+      expect(inv.lineToCalls.length).toBe(0);
+      // Specular white rim and gauge
+      expect(inv.strokeStyles).toContain("#ffffff");
+      // Paused badge text says Invincible
+      expect(inv.textCalls.length).toBe(1);
+      expect(inv.textCalls[0]!.text).toBe("🛡️ Invincible • 10/55");
+    });
   });
 
   describe("Animated Attack Arcs (Aerial vs Smash Differentiation)", () => {
@@ -6735,6 +6761,42 @@ describe("StageRenderer background themes", () => {
       expect(isInvincibleOrInvulnerable({ actionStateId: 0x00a }, 130)).toBe(
         false,
       );
+
+      // Yoshi shield startup (ShieldOn 0x098, frames 0 and 1) is invincible
+      expect(isYoshiShieldInvincibleState(0x06, 0x098, 0)).toBe(true);
+      expect(isYoshiShieldInvincibleState(0x06, 0x098, 1)).toBe(true);
+      expect(isYoshiShieldInvincibleState(0x06, 0x098, 2)).toBe(false);
+      expect(isYoshiShieldInvincibleState(0x06, 0x099, 0)).toBe(false);
+      expect(isYoshiShieldInvincibleState(0x00, 0x098, 0)).toBe(false);
+
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x098,
+          characterId: 0x06,
+          actionFrameCounter: 0,
+        }),
+      ).toBe(true);
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x098,
+          characterId: 0x06,
+          actionFrameCounter: 1,
+        }),
+      ).toBe(true);
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x098,
+          characterId: 0x06,
+          actionFrameCounter: 2,
+        }),
+      ).toBe(false);
+      expect(
+        isInvincibleOrInvulnerable({
+          actionStateId: 0x098,
+          characterId: 0x00,
+          actionFrameCounter: 0,
+        }),
+      ).toBe(false);
     });
 
     it("drawInvincibleSparkles renders shining starlight glints", () => {
