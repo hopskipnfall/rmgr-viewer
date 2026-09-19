@@ -196,46 +196,69 @@ describe("PlaybackController", () => {
       expect(onChange).toHaveBeenLastCalledWith(40, false, "jump");
     });
 
-    it("snaps immediately to target when arrow key in same direction is pressed during animation", () => {
+    it("adds 1 second to target time and continues fast-forwarding when forward arrow key is pressed during animation", () => {
       const onChange = vi.fn();
       const controller = new PlaybackController(200, onChange);
       controller.seek(10);
       onChange.mockClear();
 
-      // Start jump from 10 towards 70
+      // Start jump from 10 towards 70 (+1s)
       controller.jumpForwardAnimated(60);
       advanceTime(40);
       const intermediateFrame = controller.currentIndex;
       expect(intermediateFrame).toBeGreaterThan(10);
       expect(intermediateFrame).toBeLessThan(70);
 
-      // Pressing forward again interrupts and immediately jumps to target 70
+      // Pressing forward again extends target to 130 (+2s total) and keeps animating
       controller.jumpForwardAnimated(60);
+      expect(controller.isAnimatingJump).toBe(true);
+
+      // Advance to completion
+      advanceTime(210);
       expect(controller.isAnimatingJump).toBe(false);
-      expect(controller.currentIndex).toBe(70);
-      expect(onChange).toHaveBeenLastCalledWith(70, false, "jump");
+      expect(controller.currentIndex).toBe(130);
+      expect(onChange).toHaveBeenLastCalledWith(130, false, "jump");
     });
 
-    it("immediately jumps in opposite direction when opposite arrow key is pressed during animation", () => {
+    it("subtracts 1 second from target time and continues animating when opposite arrow key is pressed during animation", () => {
       const onChange = vi.fn();
       const controller = new PlaybackController(200, onChange);
       controller.seek(100);
       onChange.mockClear();
 
-      // Start jump forward towards 160
+      // Start jump forward towards 160 (+1s)
       controller.jumpForwardAnimated(60);
       advanceTime(40);
-      const intermediate = controller.currentIndex; // ~126
+      const intermediate = controller.currentIndex; // ~122
+      expect(intermediate).toBeGreaterThan(100);
+      expect(intermediate).toBeLessThan(160);
 
-      // Press backward: immediately jumps 60 frames back from current position
+      // Press backward: target becomes 160 - 60 = 100
       controller.jumpBackwardAnimated(60);
+      expect(controller.isAnimatingJump).toBe(true);
+
+      // Advance to completion: smoothly animates back to 100
+      advanceTime(210);
       expect(controller.isAnimatingJump).toBe(false);
-      expect(controller.currentIndex).toBe(intermediate - 60);
-      expect(onChange).toHaveBeenLastCalledWith(
-        intermediate - 60,
-        false,
-        "jump",
-      );
+      expect(controller.currentIndex).toBe(100);
+      expect(onChange).toHaveBeenLastCalledWith(100, false, "jump");
+    });
+
+    it("cumulatively adds multiple seconds to target when pressed multiple times in fast succession", () => {
+      const onChange = vi.fn();
+      const controller = new PlaybackController(500, onChange);
+      controller.seek(0);
+      onChange.mockClear();
+
+      controller.jumpForwardAnimated(60);
+      controller.jumpForwardAnimated(60);
+      controller.jumpForwardAnimated(60);
+      expect(controller.isAnimatingJump).toBe(true);
+
+      advanceTime(210);
+      expect(controller.isAnimatingJump).toBe(false);
+      expect(controller.currentIndex).toBe(180);
+      expect(onChange).toHaveBeenLastCalledWith(180, false, "jump");
     });
 
     it("resumes playing from target when animated jump finishes while playing", () => {
