@@ -172,7 +172,6 @@ export class SessionViewController {
           <p class="session-page-meta">
             <span>${escapeHtml(dateStr)}</span>
             <span>${escapeHtml(tr.sessionRecord(session.wins, session.losses))}</span>
-            <span>${escapeHtml(tr.sessionGames(session.games.length))}</span>
           </p>
         </section>
         <section class="session-page-section">
@@ -189,7 +188,7 @@ export class SessionViewController {
           <div id="sessionBreakdown"></div>
         </section>
         <section class="session-page-section">
-          <h3>${escapeHtml(tr.sessionGamesHeading)}</h3>
+          <h3>${escapeHtml(tr.sessionGames(session.games.length))}</h3>
           <div id="sessionGameListWrap" class="game-list-wrap"></div>
         </section>
       </div>
