@@ -191,6 +191,7 @@ export interface Translations {
   importReplays: string;
   importFiles: string;
   importFolder: string;
+  sidebarStatistics: string;
   staleBanner: (count: number) => string;
   reimportFolder: string;
   importDuplicatesSkipped: (count: number) => string;
@@ -788,6 +789,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     importReplays: "Import replays",
     importFiles: "Select files (.rmgr)",
     importFolder: "Select folder",
+    sidebarStatistics: "Statistics",
     staleBanner: (count) =>
       `${count} game${count === 1 ? " was" : "s were"} analyzed with an older version and need${count === 1 ? "s" : ""} re-import.`,
     reimportFolder: "Re-import folder",
@@ -1404,6 +1406,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     importReplays: "リプレイの読み込み",
     importFiles: "ファイルを選択 (.rmgr)",
     importFolder: "フォルダを選択",
+    sidebarStatistics: "統計",
     staleBanner: (count) =>
       `${count}件のゲームは古いバージョンで解析されています。再インポートしてください。`,
     reimportFolder: "フォルダを再インポート",

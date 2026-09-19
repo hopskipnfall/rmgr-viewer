@@ -1103,6 +1103,17 @@
         min-height: 0;
         min-width: 0;
       }
+      #homeShell {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+        min-width: 0;
+        padding: 16px;
+        gap: 16px;
+      }
+      #homeShell[hidden] {
+        display: none;
+      }
 
       /* =========================================================================
          Search View Layout
@@ -1181,8 +1192,10 @@
          Library View Layout
          ========================================================================= */
       #libraryView {
+        /* Outer inset now comes from #homeShell's own padding (it wraps
+           #librarySidebar and this pane); keeping padding here too would
+           double it on the top/right/bottom edges. */
         gap: 16px;
-        padding: 16px;
         overflow: hidden;
       }
       .library-sidebar {
@@ -1270,6 +1283,91 @@
       }
       .filter-actions button {
         width: 100%;
+      }
+      .session-sidebar-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding-top: 8px;
+      }
+      .session-sidebar-group-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin: 8px 4px 4px;
+      }
+      .session-sidebar-row {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        width: 100%;
+        text-align: left;
+        padding: 8px 10px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        color: var(--text);
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .session-sidebar-row:hover {
+        background: var(--card-header-hover);
+      }
+      .session-sidebar-row[aria-current="page"] {
+        background: var(--accent-subtle);
+        border-color: var(--accent);
+      }
+      .session-sidebar-row-line1 {
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .session-sidebar-row-line2 {
+        font-size: 11px;
+        color: var(--text-dim);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+      }
+      .session-sidebar-row-date {
+        white-space: nowrap;
+      }
+      /* Sits above the session list, styled like a session row (same
+         width/padding rhythm) but its selected state reuses the header
+         nav links' filled "you are here" treatment (see
+         .header-nav-link[aria-current="page"]) rather than the session
+         row's outline treatment, since it's a top-level nav destination
+         rather than a list item. */
+      .sidebar-statistics-link {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        text-align: left;
+        padding: 8px 10px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          background-color 0.12s,
+          color 0.12s;
+      }
+      .sidebar-statistics-link:hover {
+        background: var(--card-header-hover);
+      }
+      .sidebar-statistics-link[aria-current="page"] {
+        background: var(--accent);
+        color: #fff;
       }
 
       .library-main {
@@ -5849,10 +5947,15 @@
 
       /* Narrow / responsive layout */
       @media (max-width: 860px) {
-        #libraryView {
+        #homeShell {
           flex-direction: column;
-          overflow-y: auto;
           padding: 12px;
+        }
+        #libraryView {
+          /* #homeShell already supplies the 12px outer inset on mobile -
+             see the base #homeShell/#libraryView rules above. */
+          overflow-y: auto;
+          padding: 0;
           gap: 16px;
         }
         .library-sidebar {
@@ -5936,6 +6039,11 @@
           border: none;
           padding: 0;
           background: transparent;
+        }
+        /* Mobile keeps the existing per-session collapsible panels in the
+           game list below - the new session list is desktop-only. */
+        .session-sidebar-list {
+          display: none;
         }
         .library-main {
           padding-right: 0;
@@ -6382,15 +6490,74 @@
     />
 
     <main>
-      <!-- Library View -->
-      <div id="libraryView" class="view-container"></div>
+      <!-- Home shell: persistent sidebar (Import, YOU panel, session list) +
+           swappable content pane (library overview or a session page).
+           Stays mounted across the library <-> session routes; hidden
+           entirely for every other route. Below the 860px breakpoint,
+           #librarySidebar's content instead renders inline via the mobile
+           toggle, matching today's behavior exactly - see the
+           @media (max-width: 860px) block. -->
+      <div id="homeShell" class="home-shell">
+        <div id="librarySidebar" class="library-sidebar">
+          <div class="library-import-zone">
+            <div class="import-container" id="importContainer">
+              <button id="importBtn" class="btn-primary library-import-btn">
+                + Import replays
+              </button>
+              <div
+                id="importDropdownMenu"
+                class="dropdown-menu library-import-dropdown"
+                hidden
+              >
+                <button id="importFilesBtn">Select files (.rmgr)</button>
+                <button id="importFolderBtn">Select folder</button>
+              </div>
+            </div>
+            <div id="libImportProgressWrap" class="import-progress-wrap" hidden>
+              <div class="import-progress-bar" id="libImportProgressBar"></div>
+              <span id="libImportProgressText"></span>
+            </div>
+            <span id="libLoadStatus" class="lib-load-status"></span>
+            <div id="libStaleBanner" class="stale-banner" hidden>
+              <span id="libStaleBannerText"></span>
+              <button id="libStaleBannerBtn"></button>
+            </div>
+          </div>
+          <button
+            id="mobileSidebarToggle"
+            class="mobile-sidebar-toggle"
+            aria-expanded="false"
+          >
+            <div class="mobile-toggle-left">
+              <span class="mobile-toggle-icon">👤</span>
+              <span
+                id="mobileIdentitySummary"
+                class="mobile-toggle-name"
+              ></span>
+            </div>
+            <div class="mobile-toggle-right">
+              <span class="mobile-toggle-arrow">▾</span>
+            </div>
+          </button>
+          <div id="librarySidebarContent" class="library-sidebar-content">
+            <div id="identityCard" class="identity-card"></div>
+            <button
+              id="sidebarStatisticsLink"
+              class="sidebar-statistics-link"
+              type="button"
+            ></button>
+            <div id="sessionSidebarListWrap" class="session-sidebar-list"></div>
+          </div>
+        </div>
+        <div id="libraryView" class="view-container"></div>
+        <div id="sessionView" class="view-container" hidden></div>
+      </div>
 
       <!-- Preview View -->
       <div id="previewView" class="view-container" hidden></div>
 
       <!-- Search View -->
       <div id="searchView" class="view-container" hidden></div>
-      <div id="sessionView" class="view-container" hidden></div>
 
       <!-- Matchup View -->
       <div

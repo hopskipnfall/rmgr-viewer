@@ -12,6 +12,7 @@ import {
   navigateToMatch,
   navigateToMatchup,
   navigateToSearch,
+  navigateToSession,
   onRoute,
   type Route,
   type SearchRouteCriteria,
@@ -54,6 +55,7 @@ import {
 } from "./data/libraryStore.js";
 import { MatchViewController } from "./match/matchView.js";
 import { LibraryViewController } from "./library/libraryView.js";
+import { HomeSidebarController } from "./library/homeSidebar.js";
 import { MatchupViewController } from "./matchup/matchupView.js";
 import { CharacterPreviewController } from "./preview/characterPreview.js";
 import {
@@ -83,6 +85,10 @@ import {
 
 // DOM Elements
 const libraryViewEl = document.getElementById("libraryView") as HTMLDivElement;
+const homeShellEl = document.getElementById("homeShell") as HTMLDivElement;
+const homeSidebarEl = document.getElementById(
+  "librarySidebar",
+) as HTMLDivElement;
 const previewViewEl = document.getElementById("previewView") as HTMLDivElement;
 const matchViewEl = document.getElementById("matchView") as HTMLDivElement;
 const searchViewEl = document.getElementById("searchView") as HTMLDivElement;
@@ -228,6 +234,7 @@ const shortcutsClose = document.getElementById(
 // Controllers
 let matchController: MatchViewController;
 let libraryController: LibraryViewController;
+let homeSidebarController: HomeSidebarController;
 let previewController: CharacterPreviewController;
 let searchController: SearchViewController;
 let sessionController: SessionViewController;
@@ -325,6 +332,7 @@ function applyLanguage(lang: Language): void {
     langSelect.value = lang;
   }
   libraryController?.updateTranslations();
+  homeSidebarController?.updateTranslations();
   matchController?.updateStaticTranslations();
   rerenderMatchupIfActive();
 }
@@ -377,6 +385,10 @@ function attachImportedSummaries(imported: GameSummary[]): void {
   }
   if (added.length > 0) {
     libraryController.addSummaries(added);
+    homeSidebarController.setData(
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
   } else {
     libraryController.render();
   }
@@ -385,7 +397,9 @@ function attachImportedSummaries(imported: GameSummary[]): void {
 async function handleImport(files: FileList | File[]): Promise<void> {
   if (!files || files.length === 0) return;
 
-  // Elements live inside the library sidebar (rendered dynamically)
+  // Elements are static markup in index.html's #homeShell/#librarySidebar
+  // (Task 4 moved this out of LibraryViewController's dynamically-rendered
+  // template).
   const libStatusEl = document.getElementById(
     "libLoadStatus",
   ) as HTMLSpanElement | null;
@@ -642,7 +656,9 @@ async function handleRouteChange(route: Route): Promise<void> {
     matchupViewEl.hidden = true;
     backToLibraryBtn.hidden = true;
 
+    homeShellEl.hidden = false;
     libraryViewEl.hidden = false;
+    homeSidebarController.setSelectedSessionId(null);
     libraryController.render();
   } else if (route.view === "preview") {
     currentMatchSummary = null;
@@ -658,6 +674,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     // The header nav's Library link covers this; keeping both showed two
     // Library buttons side by side.
     backToLibraryBtn.hidden = true;
+    homeShellEl.hidden = true;
 
     previewController.activate();
   } else if (route.view === "search") {
@@ -674,6 +691,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     // The header nav's Library link covers this; keeping both showed two
     // Library buttons side by side.
     backToLibraryBtn.hidden = true;
+    homeShellEl.hidden = true;
 
     searchViewEl.hidden = false;
     sessionViewEl.hidden = true;
@@ -711,7 +729,9 @@ async function handleRouteChange(route: Route): Promise<void> {
     // Library buttons side by side.
     backToLibraryBtn.hidden = true;
 
+    homeShellEl.hidden = false;
     sessionViewEl.hidden = false;
+    homeSidebarController.setSelectedSessionId(route.id);
     sessionController.setData(
       libraryController.getSummaries(),
       libraryController.getIdentity(),
@@ -739,6 +759,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     // The header nav's Library link covers this; keeping both showed two
     // Library buttons side by side.
     backToLibraryBtn.hidden = true;
+    homeShellEl.hidden = true;
 
     try {
       const loaded = await loadReplayForSummary(summary);
@@ -825,6 +846,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     // The header nav's Library link covers this; keeping both showed two
     // Library buttons side by side.
     backToLibraryBtn.hidden = true;
+    homeShellEl.hidden = true;
 
     matchupViewEl.hidden = false;
     matchupController.render(
@@ -854,7 +876,6 @@ async function init(): Promise<void> {
 
   libraryController = new LibraryViewController(
     libraryViewEl,
-    modalContainerEl,
     (selectedSummary) => {
       navigateToMatch(selectedSummary.id);
     },
@@ -864,6 +885,25 @@ async function init(): Promise<void> {
     (myChar, oppChar) => {
       navigateToMatchup(myChar, oppChar);
     },
+  );
+
+  homeSidebarController = new HomeSidebarController(
+    homeSidebarEl,
+    modalContainerEl,
+    libraryController.getIdentity(),
+    (identity) => {
+      // Demo mode's placeholder identity must never overwrite the user's
+      // real saved one (mirrors LibraryViewController.persistIdentity's
+      // guard, which owned this write before the identity panel moved
+      // into HomeSidebarController).
+      if (!libraryController.getIsDemoMode()) {
+        saveIdentity(identity);
+      }
+      libraryController.setIdentity(identity);
+      homeSidebarController.setData(libraryController.getSummaries(), identity);
+    },
+    (sessionId) => navigateToSession(sessionId),
+    () => navigateToLibrary(),
   );
 
   libraryController.setPersistenceHooks({
@@ -887,6 +927,10 @@ async function init(): Promise<void> {
     },
     (id) => {
       libraryController.removeSummary(id);
+      homeSidebarController.setData(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
       rerenderMatchupIfActive();
     },
     (session) => {
@@ -914,6 +958,10 @@ async function init(): Promise<void> {
     },
     (id) => {
       libraryController.removeSummary(id);
+      homeSidebarController.setData(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
     },
     (session) => {
       handleShowFailedEdgeGuards(session);
@@ -952,9 +1000,10 @@ async function init(): Promise<void> {
     if (id) navigateToMatch(id);
   });
 
-  // Import button controls (delegated on libraryViewEl — elements live inside the
-  // dynamically-rendered library sidebar and may be re-created on render)
-  libraryViewEl.addEventListener("click", (e) => {
+  // Import button controls (delegated on homeSidebarEl — elements live inside
+  // the persistent #librarySidebar shell, a sibling of libraryViewEl inside
+  // #homeShell, not a descendant of it)
+  homeSidebarEl.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     const importDropdownMenu = document.getElementById(
       "importDropdownMenu",
@@ -1183,6 +1232,10 @@ async function init(): Promise<void> {
     if (persisted.summaries.length > 0 || persisted.staleEntries.length > 0) {
       hasPersistedLibrary = true;
       libraryController.addSummaries(persisted.summaries);
+      homeSidebarController.setData(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
     }
   } catch (err) {
     console.warn(
@@ -1229,8 +1282,13 @@ async function init(): Promise<void> {
 
   if (demoSummaries.length > 0) {
     libraryController.setDemoMode(true);
+    homeSidebarController.setDemoMode(true);
     libraryController.setIdentity(createDefaultIdentity("George"));
     libraryController.addSummaries(demoSummaries);
+    homeSidebarController.setData(
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
   }
 
   // 3b. Seed the default YouTube sync link for the 12CB session recorded on

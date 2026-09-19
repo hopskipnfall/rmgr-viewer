@@ -112,6 +112,7 @@ export class GameList {
   private container: HTMLElement;
   private sortOrder: "newest" | "oldest" = "newest";
   private groupBySession = true;
+  private showGroupToggle = true;
   /**
    * Sessions the user expanded (true) or collapsed (false) this page load.
    * Any other session follows the default: only the most recent is open.
@@ -149,6 +150,10 @@ export class GameList {
 
   public setGroupBySession(group: boolean): void {
     this.groupBySession = group;
+  }
+
+  public setShowGroupToggle(show: boolean): void {
+    this.showGroupToggle = show;
   }
 
   public render(
@@ -203,14 +208,18 @@ export class GameList {
       <div class="game-list-header">
         <h3>${escapeHtml(listHeader)}</h3>
         <div class="game-list-controls">
-          <select id="gameGroupSelect" aria-label="${escapeHtml(tr.groupBySession)}">
+          ${
+            this.showGroupToggle
+              ? `<select id="gameGroupSelect" aria-label="${escapeHtml(tr.groupBySession)}">
             <option value="session" ${this.groupBySession ? "selected" : ""}>
               ${escapeHtml(tr.groupBySession)}
             </option>
             <option value="flat" ${!this.groupBySession ? "selected" : ""}>
               ${escapeHtml(tr.flatList)}
             </option>
-          </select>
+          </select>`
+              : ""
+          }
           <select id="gameSortSelect" aria-label="${escapeHtml(tr.sortNewestFirst)}">
             <option value="newest" ${this.sortOrder === "newest" ? "selected" : ""}>
               ${escapeHtml(tr.sortNewestFirst)}
