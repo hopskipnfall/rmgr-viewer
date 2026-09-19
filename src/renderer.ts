@@ -61,6 +61,7 @@ import {
   drawItemObjects,
   drawBombExplosions,
   drawBombExplosionAt,
+  drawSamusBombExplosionAt,
   drawEggExplosions,
   drawEggExplosionAt,
   isChargingOrb,
@@ -177,6 +178,7 @@ import {
   computeLedgeGrabCandidates,
   type BombExplosionEvent,
   extractBombExplosions,
+  extractSamusBombExplosions,
   type EggExplosionEvent,
   extractEggExplosions,
   type QuickAttackPath,
@@ -874,8 +876,30 @@ export class StageRenderer {
     progress: number, // 0.0 to 1.0
     isBobOmb = false,
     baseRadius = 36,
+    isSamusBomb = false,
   ): void {
-    drawBombExplosionAt(ctx, x, y, progress, isBobOmb, baseRadius);
+    drawBombExplosionAt(ctx, x, y, progress, isBobOmb, baseRadius, isSamusBomb);
+  }
+
+  /**
+   * 4-Phase Samus Morph Ball Bomb Cybernetic Explosion Visual:
+   * Phase 1 (p: 0.0 - 0.40): Detonation energy flash, concentric neon-cyan shockwave rings & 4-way targeting reticle spokes.
+   * Phase 2 (p: 0.0 - 0.75): High-voltage electric lightning arcs & plasma sparks crackling radially.
+   * Phase 3 (p: 0.0 - 0.55): Searing spherical electric plasma energy core bursting outward.
+   * Phase 4 (p: 0.20 - 1.00): Ethereal ionized plasma vapor clouds cleanly dissipating (no dirty soot).
+   */
+  public drawSamusBombExplosionAt(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    progress: number, // 0.0 to 1.0
+    baseRadius = 28,
+  ): void {
+    drawSamusBombExplosionAt(ctx, x, y, progress, baseRadius);
+  }
+
+  public getSamusBombExplosions(replay: Replay): BombExplosionEvent[] {
+    return extractSamusBombExplosions(replay);
   }
 
   private eggExplosionsCache = new WeakMap<Replay, EggExplosionEvent[]>();
