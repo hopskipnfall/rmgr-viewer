@@ -61,21 +61,21 @@ describe("groupSessionsByRecency", () => {
 });
 
 describe("sessionOpponentLine", () => {
-  it("prefixes the opponent name(s) with 'with '", () => {
+  it("returns the opponent name(s) with no prefix", () => {
     expect(sessionOpponentLine(makeSession({ opponentName: "Harold" }))).toBe(
-      "with Harold",
+      "Harold",
     );
   });
 
   it("lists every other lobby member for a rotation session", () => {
     expect(
       sessionOpponentLine(makeSession({ opponentName: "Harold, Nue" })),
-    ).toBe("with Harold, Nue");
+    ).toBe("Harold, Nue");
   });
 });
 
 describe("sessionDateRecordLine", () => {
-  it("includes the date and the W-L record", () => {
+  it("returns the date only (record is rendered as a separate pill)", () => {
     const line = sessionDateRecordLine(
       makeSession({
         startTime: new Date("2026-09-15T12:00:00Z"),
@@ -83,12 +83,13 @@ describe("sessionDateRecordLine", () => {
         losses: 1,
       }),
     );
-    expect(line).toContain("3");
-    expect(line).toContain("1");
+    expect(line).toBe(new Date("2026-09-15T12:00:00Z").toLocaleDateString());
+    expect(line).not.toContain("3");
   });
 });
 
 import { SessionSidebarList } from "./sessionSidebarList.js";
+import type { TwelveCharacterBattle } from "../data/twelveCharacterBattle.js";
 
 /** A minimal fake element: enough for SessionSidebarList's render() to
  * write innerHTML, walk rows, and set attributes/listeners - not a real
@@ -217,5 +218,59 @@ describe("SessionSidebarList", () => {
       '[data-session-id="s1"]',
     ) as unknown as FakeEl | null;
     expect(row?.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("renders a colored W-L record pill and duration on line 2", () => {
+    const container = makeFakeContainer();
+    const session = makeSession({ id: "s1", wins: 3, losses: 1 });
+
+    const list = new SessionSidebarList(container, () => {});
+    list.setSessions([session]);
+    list.render(new Date("2026-09-19T12:00:00Z"));
+
+    expect(container.innerHTML).toContain("session-stat-pill");
+    expect(container.innerHTML).toContain("record-positive");
+    expect(container.innerHTML).toContain("3W");
+    expect(container.innerHTML).toContain("1L");
+    expect(container.innerHTML).toContain("session-duration");
+    expect(container.innerHTML).not.toContain("with Harold");
+  });
+
+  it("renders a 12CB pill when the session has 12-character battles", () => {
+    const container = makeFakeContainer();
+    const battle: TwelveCharacterBattle = {
+      id: "cb1",
+      games: [],
+      startTime: new Date("2026-09-15T12:00:00Z"),
+      endTime: new Date("2026-09-15T12:05:00Z"),
+      yourSummary: null,
+      oppSummary: null,
+      winner: "you",
+      winnerName: "Me",
+      winnerRemainingCharacters: 2,
+      winnerRemainingStocks: 1,
+      isComplete: true,
+    };
+    const session = makeSession({
+      id: "s1",
+      twelveCharacterBattles: [battle],
+    });
+
+    const list = new SessionSidebarList(container, () => {});
+    list.setSessions([session]);
+    list.render(new Date("2026-09-19T12:00:00Z"));
+
+    expect(container.innerHTML).toContain("session-12cb-pill");
+  });
+
+  it("does not render a 12CB pill when the session has none", () => {
+    const container = makeFakeContainer();
+    const session = makeSession({ id: "s1" });
+
+    const list = new SessionSidebarList(container, () => {});
+    list.setSessions([session]);
+    list.render(new Date("2026-09-19T12:00:00Z"));
+
+    expect(container.innerHTML).not.toContain("session-12cb-pill");
   });
 });
