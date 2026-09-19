@@ -118,4 +118,17 @@ export class HomeSidebarController {
     this.sessionList.setSelectedSessionId(id);
     this.sessionList.render();
   }
+
+  public updateTranslations(): void {
+    const tr = t();
+    const importBtn =
+      this.container.querySelector<HTMLButtonElement>("#importBtn");
+    const importFilesBtn =
+      this.container.querySelector<HTMLButtonElement>("#importFilesBtn");
+    const importFolderBtn =
+      this.container.querySelector<HTMLButtonElement>("#importFolderBtn");
+    if (importBtn) importBtn.textContent = `+ ${tr.importReplays}`;
+    if (importFilesBtn) importFilesBtn.textContent = tr.importFiles;
+    if (importFolderBtn) importFolderBtn.textContent = tr.importFolder;
+  }
 }
