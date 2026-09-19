@@ -21,7 +21,7 @@ import {
 } from "../data/aggregate.js";
 import { computeOpponentStrength } from "../data/opponentStrength.js";
 import { detectMainCharacter } from "../data/mainCharacter.js";
-import { IdentityPanel } from "./identityPanel.js";
+import { isDesktopWidth, watchDesktopWidth } from "../responsive.js";
 import { StatCards } from "./statCards.js";
 import { BreakdownTable } from "./breakdownTable.js";
 import { MatchupPicker, computeMatchupRows } from "./matchupPicker.js";
@@ -106,14 +106,12 @@ export class LibraryViewController {
     oppCharacterId: "all",
   };
 
-  private identityPanel: IdentityPanel;
   private statCards: StatCards;
   private breakdownTable: BreakdownTable;
   private matchupPicker: MatchupPicker;
   private gameList: GameList;
   private neutralScorePanel: NeutralScorePanel;
 
-  private mobileSidebarExpanded = false;
   private onSelectGameCallback: (summary: GameSummary) => void;
   private onShowFailedEdgeGuardsCallback: (session: SessionGroup) => void;
   private onSelectMatchupCallback: (myChar: number, oppChar: number) => void;
@@ -135,7 +133,6 @@ export class LibraryViewController {
 
   constructor(
     container: HTMLElement,
-    modalContainer: HTMLElement,
     onSelectGame: (summary: GameSummary) => void,
     onShowFailedEdgeGuards: (session: SessionGroup) => void,
     onSelectMatchup: (myChar: number, oppChar: number) => void,
@@ -148,38 +145,6 @@ export class LibraryViewController {
 
     // Create sub-component mount points inside container
     this.container.innerHTML = `
-      <div id="librarySidebar" class="library-sidebar">
-        <div class="library-import-zone">
-          <div class="import-container" id="importContainer">
-            <button id="importBtn" class="btn-primary library-import-btn">+ Import replays</button>
-            <div id="importDropdownMenu" class="dropdown-menu library-import-dropdown" hidden>
-              <button id="importFilesBtn">Select files (.rmgr)</button>
-              <button id="importFolderBtn">Select folder</button>
-            </div>
-          </div>
-          <div id="libImportProgressWrap" class="import-progress-wrap" hidden>
-            <div class="import-progress-bar" id="libImportProgressBar"></div>
-            <span id="libImportProgressText"></span>
-          </div>
-          <span id="libLoadStatus" class="lib-load-status"></span>
-          <div id="libStaleBanner" class="stale-banner" hidden>
-            <span id="libStaleBannerText"></span>
-            <button id="libStaleBannerBtn"></button>
-          </div>
-        </div>
-        <button id="mobileSidebarToggle" class="mobile-sidebar-toggle" aria-expanded="false">
-          <div class="mobile-toggle-left">
-            <span class="mobile-toggle-icon">👤</span>
-            <span id="mobileIdentitySummary" class="mobile-toggle-name"></span>
-          </div>
-          <div class="mobile-toggle-right">
-            <span class="mobile-toggle-arrow">▾</span>
-          </div>
-        </button>
-        <div id="librarySidebarContent" class="library-sidebar-content">
-          <div id="identityCard" class="identity-card"></div>
-        </div>
-      </div>
       <div id="libraryMain" class="library-main">
         <div id="disclaimerBanner" class="disclaimer-banner"></div>
         <div id="libraryFilterBar" class="library-filter-bar"></div>
@@ -199,32 +164,6 @@ export class LibraryViewController {
       </div>
     `;
 
-    const mobileSidebarToggle = this.container.querySelector(
-      "#mobileSidebarToggle",
-    ) as HTMLButtonElement;
-    const librarySidebarContent = this.container.querySelector(
-      "#librarySidebarContent",
-    ) as HTMLElement;
-
-    mobileSidebarToggle?.addEventListener("click", () => {
-      this.mobileSidebarExpanded = !this.mobileSidebarExpanded;
-      mobileSidebarToggle.classList.toggle(
-        "expanded",
-        this.mobileSidebarExpanded,
-      );
-      mobileSidebarToggle.setAttribute(
-        "aria-expanded",
-        String(this.mobileSidebarExpanded),
-      );
-      librarySidebarContent?.classList.toggle(
-        "expanded",
-        this.mobileSidebarExpanded,
-      );
-    });
-
-    const identityCard = this.container.querySelector(
-      "#identityCard",
-    ) as HTMLElement;
     const statCardsWrap = this.container.querySelector(
       "#statCardsWrap",
     ) as HTMLElement;
@@ -240,18 +179,6 @@ export class LibraryViewController {
     const neutralScoreWrap = this.container.querySelector(
       "#neutralScoreWrap",
     ) as HTMLElement;
-
-    this.identityPanel = new IdentityPanel(
-      identityCard,
-      modalContainer,
-      this.identity,
-      () => this.summaries,
-      (newIdentity) => {
-        this.identity = newIdentity;
-        this.persistIdentity();
-        this.render();
-      },
-    );
 
     this.statCards = new StatCards(statCardsWrap);
     this.breakdownTable = new BreakdownTable(breakdownWrap);
@@ -280,6 +207,8 @@ export class LibraryViewController {
         this.onShowFailedEdgeGuardsCallback(session);
       },
     );
+
+    watchDesktopWidth(() => this.render());
   }
 
   private isDemoMode = false;
@@ -290,7 +219,6 @@ export class LibraryViewController {
 
   public setIdentity(identity: Identity): void {
     this.identity = identity;
-    this.identityPanel.setIdentity(this.identity);
     this.render();
   }
 
@@ -308,7 +236,6 @@ export class LibraryViewController {
         this.isDemoMode = false;
         // Back to the user's own saved identity (empty if they never set one).
         this.identity = loadIdentity();
-        this.identityPanel.setIdentity(this.identity);
       }
     }
 
@@ -339,10 +266,6 @@ export class LibraryViewController {
 
   public getSummaryById(id: string): GameSummary | undefined {
     return this.summaries.find((s) => s.id === id);
-  }
-
-  public openOnboardingModal(): void {
-    this.identityPanel.openModal(this.summaries);
   }
 
   public selectPlayerPerspective(
@@ -381,7 +304,6 @@ export class LibraryViewController {
           this.persistence?.perspective(s.id, null);
         }
       }
-      this.identityPanel.setIdentity(this.identity);
       this.persistIdentity();
     } else {
       // Fallback for unnamed ports: toggle manual override
@@ -399,7 +321,6 @@ export class LibraryViewController {
   }
 
   public updateTranslations(): void {
-    this.identityPanel.render();
     this.render();
     this.updateImportZoneTranslations();
   }
@@ -432,24 +353,6 @@ export class LibraryViewController {
         )}</p>
         <p>${tr.disclaimerFormat}</p>
       `;
-    }
-
-    // 1. Identity panel
-    this.identityPanel.setIdentity(this.identity);
-
-    // Update mobile sidebar toggle summary
-    const mobileIdSummaryEl = this.container.querySelector(
-      "#mobileIdentitySummary",
-    ) as HTMLElement;
-    if (mobileIdSummaryEl) {
-      const aliases = Array.from(this.identity.aliases);
-      if (aliases.length > 0) {
-        mobileIdSummaryEl.textContent = aliases.join(", ");
-        mobileIdSummaryEl.classList.remove("not-selected");
-      } else {
-        mobileIdSummaryEl.textContent = tr.noNamesSelected;
-        mobileIdSummaryEl.classList.add("not-selected");
-      }
     }
 
     // 2. Filter Bar
@@ -812,16 +715,25 @@ export class LibraryViewController {
       );
     }
 
-    // 7. Game List - displays filtered games with interactive player perspective choice
-    const displayedSummaries = this.summaries.filter((s) =>
-      matchesFilters(s, this.identity, this.filters),
-    );
-    this.gameList.setSortOrder(this.sortOrder);
-    this.gameList.render(
-      displayedSummaries,
-      this.identity,
-      displayedSummaries.length,
-    );
+    // 7. Game List - desktop drops this entirely (browsing games happens
+    // through a session's own page now, opened from the sidebar); mobile
+    // keeps it exactly as before this change.
+    const gameListWrapEl =
+      this.container.querySelector<HTMLElement>("#gameListWrap");
+    if (isDesktopWidth()) {
+      if (gameListWrapEl) gameListWrapEl.hidden = true;
+    } else {
+      if (gameListWrapEl) gameListWrapEl.hidden = false;
+      const displayedSummaries = this.summaries.filter((s) =>
+        matchesFilters(s, this.identity, this.filters),
+      );
+      this.gameList.setSortOrder(this.sortOrder);
+      this.gameList.render(
+        displayedSummaries,
+        this.identity,
+        displayedSummaries.length,
+      );
+    }
   }
 }
 
