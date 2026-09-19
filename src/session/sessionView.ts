@@ -249,6 +249,7 @@ export class SessionViewController {
         this.onShowFailedEdgeGuards,
       );
       gameList.setGroupBySession(false);
+      gameList.setShowGroupToggle(false);
       gameList.setSortOrder(this.sortOrder);
       const games = [...session.games];
       gameList.render(games, this.identity, games.length);
