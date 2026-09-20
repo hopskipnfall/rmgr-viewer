@@ -291,6 +291,22 @@ export class MatchViewController {
   private combosCollapsed = false;
   private diCollapsed = false;
   private diEvents: HitDIResult[] = [];
+  private cameraWidgetTitleEl: HTMLHeadingElement;
+  private cameraCollapseBtn: HTMLButtonElement;
+  private cameraPanelBodyEl: HTMLElement;
+  private cameraLockBtn: HTMLButtonElement;
+  private cameraControls: HTMLElement;
+  private cameraZoomOutBtn: HTMLButtonElement;
+  private cameraZoomInBtn: HTMLButtonElement;
+  private cameraZoomSlider: HTMLInputElement;
+  private cameraPanUpBtn: HTMLButtonElement;
+  private cameraPanLeftBtn: HTMLButtonElement;
+  private cameraPanRightBtn: HTMLButtonElement;
+  private cameraPanDownBtn: HTMLButtonElement;
+  private cameraPanResetBtn: HTMLButtonElement;
+  /** True while dragging the stage canvas to pan (mousedown -> mousemove* -> mouseup). */
+  private cameraDragging = false;
+
   private replayInfoWidget: HTMLElement;
   private replayInfoCollapseBtn: HTMLButtonElement;
   private replayInfoHeaderTitle: HTMLHeadingElement;
@@ -739,6 +755,111 @@ export class MatchViewController {
       "diWidgetTitle",
     ) as HTMLHeadingElement;
     this.diList = document.getElementById("diList") as HTMLDivElement;
+
+    this.cameraWidgetTitleEl = document.getElementById(
+      "cameraWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.cameraCollapseBtn = document.getElementById(
+      "cameraCollapseBtn",
+    ) as HTMLButtonElement;
+    this.cameraPanelBodyEl = document.getElementById(
+      "cameraPanelBody",
+    ) as HTMLElement;
+    this.cameraLockBtn = document.getElementById(
+      "cameraLockBtn",
+    ) as HTMLButtonElement;
+    this.cameraControls = document.getElementById(
+      "cameraControls",
+    ) as HTMLElement;
+    this.cameraZoomOutBtn = document.getElementById(
+      "cameraZoomOutBtn",
+    ) as HTMLButtonElement;
+    this.cameraZoomInBtn = document.getElementById(
+      "cameraZoomInBtn",
+    ) as HTMLButtonElement;
+    this.cameraZoomSlider = document.getElementById(
+      "cameraZoomSlider",
+    ) as HTMLInputElement;
+    this.cameraPanUpBtn = document.getElementById(
+      "cameraPanUpBtn",
+    ) as HTMLButtonElement;
+    this.cameraPanLeftBtn = document.getElementById(
+      "cameraPanLeftBtn",
+    ) as HTMLButtonElement;
+    this.cameraPanRightBtn = document.getElementById(
+      "cameraPanRightBtn",
+    ) as HTMLButtonElement;
+    this.cameraPanDownBtn = document.getElementById(
+      "cameraPanDownBtn",
+    ) as HTMLButtonElement;
+    this.cameraPanResetBtn = document.getElementById(
+      "cameraPanResetBtn",
+    ) as HTMLButtonElement;
+    this.cameraCollapseBtn.addEventListener("click", () => {
+      const collapsed = this.cameraCollapseBtn.classList.toggle("collapsed");
+      this.cameraPanelBodyEl.hidden = collapsed;
+      this.cameraCollapseBtn.setAttribute("aria-expanded", String(!collapsed));
+    });
+    this.cameraLockBtn.addEventListener("click", () => {
+      this.toggleCameraLock();
+    });
+    this.cameraZoomOutBtn.addEventListener("click", () => {
+      this.camera.setZoomLevel(this.camera.getZoomLevel() / 1.2);
+      this.syncCameraZoomSlider();
+      this.rerenderCurrentFrame();
+    });
+    this.cameraZoomInBtn.addEventListener("click", () => {
+      this.camera.setZoomLevel(this.camera.getZoomLevel() * 1.2);
+      this.syncCameraZoomSlider();
+      this.rerenderCurrentFrame();
+    });
+    this.cameraZoomSlider.addEventListener("input", () => {
+      this.camera.setZoomLevel(Number(this.cameraZoomSlider.value));
+      this.rerenderCurrentFrame();
+    });
+    const panStep = (dx: number, dy: number) => {
+      this.camera.panByViewFraction(dx, dy);
+      this.rerenderCurrentFrame();
+    };
+    this.cameraPanUpBtn.addEventListener("click", () => panStep(0, 0.15));
+    this.cameraPanLeftBtn.addEventListener("click", () => panStep(-0.15, 0));
+    this.cameraPanRightBtn.addEventListener("click", () => panStep(0.15, 0));
+    this.cameraPanDownBtn.addEventListener("click", () => panStep(0, -0.15));
+    this.cameraPanResetBtn.addEventListener("click", () => {
+      this.recenterCamera();
+    });
+    this.stageCanvas.addEventListener("mousedown", (e) => {
+      if (!this.camera.isLocked()) return;
+      e.preventDefault();
+      this.cameraDragging = true;
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!this.cameraDragging) return;
+      // movementX/Y (not offsetX/Y, which are relative to whatever element
+      // the cursor happens to be over) is the raw pixel delta since the
+      // last mousemove - exactly what a drag-to-pan needs, and this
+      // listener is on window so dragging isn't clipped to the canvas.
+      this.camera.panByScreenDelta(e.movementX, e.movementY);
+      this.rerenderCurrentFrame();
+    });
+    window.addEventListener("mouseup", () => {
+      this.cameraDragging = false;
+    });
+    this.stageCanvas.addEventListener(
+      "wheel",
+      (e) => {
+        if (!this.camera.isLocked()) return;
+        e.preventDefault();
+        const rect = this.stageCanvas.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        this.camera.zoomAtScreenPoint(factor, screenX, screenY);
+        this.syncCameraZoomSlider();
+        this.rerenderCurrentFrame();
+      },
+      { passive: false },
+    );
 
     this.replayInfoWidget = document.getElementById(
       "replayInfoWidget",
@@ -1668,6 +1789,27 @@ export class MatchViewController {
         tr.twelveCharacterBattleTitle,
       );
     }
+    if (this.cameraWidgetTitleEl) {
+      this.cameraWidgetTitleEl.textContent = tr.cameraWidgetTitle;
+    }
+    if (this.cameraCollapseBtn) {
+      this.cameraCollapseBtn.title = tr.situationCollapseTitle(
+        tr.cameraWidgetTitle,
+      );
+    }
+    if (this.cameraLockBtn) this.updateCameraLockUI();
+    if (this.cameraZoomOutBtn)
+      this.cameraZoomOutBtn.title = tr.cameraZoomOutTitle;
+    if (this.cameraZoomInBtn) this.cameraZoomInBtn.title = tr.cameraZoomInTitle;
+    if (this.cameraPanUpBtn) this.cameraPanUpBtn.title = tr.cameraPanUpTitle;
+    if (this.cameraPanLeftBtn)
+      this.cameraPanLeftBtn.title = tr.cameraPanLeftTitle;
+    if (this.cameraPanRightBtn)
+      this.cameraPanRightBtn.title = tr.cameraPanRightTitle;
+    if (this.cameraPanDownBtn)
+      this.cameraPanDownBtn.title = tr.cameraPanDownTitle;
+    if (this.cameraPanResetBtn)
+      this.cameraPanResetBtn.title = tr.cameraPanResetTitle;
     if (this.twelveCbPrevMatchLabel) {
       this.twelveCbPrevMatchLabel.textContent = tr.twelveCbPrevMatch;
     }
@@ -1899,6 +2041,56 @@ export class MatchViewController {
         this.renderFrame(this.lastFrame, currIdx, true);
       }
     }
+  }
+
+  /** Forces the current frame to redraw immediately - used by the Camera panel's controls, which change what's visible without necessarily advancing playback. */
+  private rerenderCurrentFrame(): void {
+    if (this.lastFrame === undefined) return;
+    this.renderFrame(this.lastFrame, this.playback?.currentIndex ?? 0, true);
+  }
+
+  /**
+   * Camera panel (see index.html's #cameraWidget): manual pan/zoom, only
+   * possible while locked (Camera.lockView()) - normal player-tracking
+   * framing would otherwise fight any manual adjustment every frame.
+   */
+  private toggleCameraLock(): void {
+    if (this.camera.isLocked()) {
+      this.camera.unlockView();
+    } else {
+      this.camera.lockView();
+    }
+    this.updateCameraLockUI();
+    this.rerenderCurrentFrame();
+  }
+
+  private updateCameraLockUI(): void {
+    const tr = t();
+    const locked = this.camera.isLocked();
+    this.cameraLockBtn.textContent = locked
+      ? tr.cameraLockBtnActive
+      : tr.cameraLockBtn;
+    this.cameraLockBtn.classList.toggle("active", locked);
+    this.cameraControls.hidden = !locked;
+    this.stageCanvas.classList.toggle("camera-pannable", locked);
+    if (locked) this.syncCameraZoomSlider();
+  }
+
+  private syncCameraZoomSlider(): void {
+    this.cameraZoomSlider.value = String(this.camera.getZoomLevel());
+  }
+
+  /**
+   * Snaps back to wherever normal player-tracking would currently frame the
+   * match (briefly unlocking so update() recomputes it, then re-locking),
+   * clearing any manual pan/zoom without leaving lock mode entirely.
+   */
+  private recenterCamera(): void {
+    if (!this.camera.isLocked()) return;
+    this.camera.unlockView();
+    this.rerenderCurrentFrame();
+    this.camera.lockView();
+    this.syncCameraZoomSlider();
   }
 
   private updatePlayerPanelColors(): void {
