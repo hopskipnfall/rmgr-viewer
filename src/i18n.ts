@@ -453,6 +453,10 @@ export interface Translations {
   replayInfoEndReasonAborted: string;
   replayInfoSizeLabel: string;
   replayInfoUncompressedSize: (uncompressed: string) => string;
+  replayInfoRngSeedLabel: string;
+  replayInfoRemixSettingsHeading: string;
+  replayInfoGameplaySettingsSubheading: string;
+  replayInfoStageSettingsSubheading: string;
   finalStocksDetail: (stocks: number) => string;
   gameResultWin: (winnerStocks: number) => string;
   gameResultLoss: (winnerStocks: number) => string;
@@ -1072,6 +1076,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoEndReasonAborted: "Aborted",
     replayInfoSizeLabel: "Size",
     replayInfoUncompressedSize: (u) => `${u} uncompressed`,
+    replayInfoRngSeedLabel: "RNG Seed",
+    replayInfoRemixSettingsHeading: "Remix Settings",
+    replayInfoGameplaySettingsSubheading: "Gameplay",
+    replayInfoStageSettingsSubheading: "Stage",
     finalStocksDetail: (stocks) => `Stocks Remaining: ${stocks}`,
     gameResultWin: (stocks) => `W · ${stocks} left`,
     gameResultLoss: (stocks) => `L · ${stocks} left`,
@@ -1686,6 +1694,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoEndReasonAborted: "ノーコンテスト（中断）",
     replayInfoSizeLabel: "サイズ",
     replayInfoUncompressedSize: (u) => `解凍後: ${u}`,
+    replayInfoRngSeedLabel: "乱数シード",
+    replayInfoRemixSettingsHeading: "Remix設定",
+    replayInfoGameplaySettingsSubheading: "ゲームプレイ",
+    replayInfoStageSettingsSubheading: "ステージ",
     finalStocksDetail: (stocks) => `残ストック: ${stocks}`,
     gameResultWin: (stocks) => `勝 · 残${stocks}`,
     gameResultLoss: (stocks) => `敗 · 残${stocks}`,
