@@ -955,6 +955,15 @@ async function init(): Promise<void> {
     },
     (summary, port) => {
       libraryController.selectPlayerPerspective(summary, port);
+      homeSidebarController.setData(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
+      sessionController.setData(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
+      sessionController.render();
     },
     (id) => {
       libraryController.removeSummary(id);
@@ -962,6 +971,11 @@ async function init(): Promise<void> {
         libraryController.getSummaries(),
         libraryController.getIdentity(),
       );
+      sessionController.setData(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
+      sessionController.render();
     },
     (session) => {
       handleShowFailedEdgeGuards(session);
