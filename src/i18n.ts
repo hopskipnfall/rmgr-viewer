@@ -360,6 +360,9 @@ export interface Translations {
   situationOpenBadge: string;
   noSituations: string;
   situationCollapseTitle: (name: string) => string;
+  edgeGuardReviewModeBtn: string;
+  edgeGuardReviewModeBtnActive: string;
+  edgeGuardReviewModeTitle: string;
 
   // Classifier-aware recovery/edge-guard breakdown (see
   // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md)
@@ -979,6 +982,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationOpenBadge: "…",
     noSituations: "None in this replay.",
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
+    edgeGuardReviewModeBtn: "🎥 Review Mode",
+    edgeGuardReviewModeBtnActive: "🎥 Exit Review Mode",
+    edgeGuardReviewModeTitle:
+      "Lock the camera on a wide view of the side platform through the blast zone, mirroring any left-side action to the right, for consistent edge-guard review. Click again to leave.",
 
     recoveryContestableLabel: "Recovery (contestable only)",
     edgeGuardEffectivenessLabel: "Edge Guard Effectiveness",
@@ -1602,6 +1609,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationOpenBadge: "…",
     noSituations: "このリプレイには該当なし。",
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
+    edgeGuardReviewModeBtn: "🎥 レビューモード",
+    edgeGuardReviewModeBtnActive: "🎥 レビューモード終了",
+    edgeGuardReviewModeTitle:
+      "カメラをサイド台からブラストゾーンまでの広い視野に固定し、左側で起きた復帰阻止を右側に反転して表示します。もう一度クリックで終了。",
 
     recoveryContestableLabel: "復帰(拮抗状況のみ)",
     edgeGuardEffectivenessLabel: "復帰阻止の有効度",

@@ -42,6 +42,7 @@ import {
 import {
   DREAM_LAND_STAGE_ID,
   stageBlastZone,
+  stageGeometry,
   stageHeatmapBounds,
 } from "../stageGeometry.js";
 import { t, getLanguage } from "../i18n.js";
@@ -236,6 +237,8 @@ export class MatchViewController {
   private edgeGuardCollapseBtn: HTMLButtonElement;
   private edgeGuardWidgetTitleEl: HTMLHeadingElement;
   private edgeGuardList: HTMLDivElement;
+  private edgeGuardReviewModeBtn: HTMLButtonElement;
+  private edgeGuardReviewModeEnabled = false;
   private ledgeGetupWidget: HTMLElement;
   private ledgeGetupCollapseBtn: HTMLButtonElement;
   private ledgeGetupWidgetTitleEl: HTMLHeadingElement;
@@ -638,6 +641,12 @@ export class MatchViewController {
     this.edgeGuardList = document.getElementById(
       "edgeGuardList",
     ) as HTMLDivElement;
+    this.edgeGuardReviewModeBtn = document.getElementById(
+      "edgeGuardReviewModeBtn",
+    ) as HTMLButtonElement;
+    this.edgeGuardReviewModeBtn.addEventListener("click", () => {
+      this.toggleEdgeGuardReviewMode();
+    });
 
     this.ledgeGetupWidget = document.getElementById(
       "ledgeGetupWidget",
@@ -1712,6 +1721,7 @@ export class MatchViewController {
       this.edgeGuardCollapseBtn.title = tr.situationCollapseTitle(
         tr.edgeGuardWidgetTitle,
       );
+    if (this.edgeGuardReviewModeBtn) this.updateEdgeGuardReviewModeUI();
     if (this.ledgeGetupWidgetTitleEl)
       this.ledgeGetupWidgetTitleEl.textContent = tr.ledgeGetupWidgetTitle;
     if (this.ledgeGetupCollapseBtn)
@@ -1901,6 +1911,52 @@ export class MatchViewController {
     }
   }
 
+  /**
+   * Edge-guard review mode: locks the camera on a wide, fixed view of the
+   * right side platform through the right blast zone (see camera.ts's
+   * lockView()), and mirrors any left-side action to the right for the
+   * duration (see renderFrame()'s per-frame setMirrorX() call). Toggled by
+   * edgeGuardReviewModeBtn - only shown for Dream Land, the only stage with
+   * platform/blast-zone geometry (stageGeometry.ts).
+   */
+  private toggleEdgeGuardReviewMode(): void {
+    this.edgeGuardReviewModeEnabled = !this.edgeGuardReviewModeEnabled;
+    if (this.edgeGuardReviewModeEnabled) {
+      const stageId = this.currentReplay?.matchSettings?.stageId;
+      const rightPlatform = stageGeometry(stageId)?.find(
+        (p) => p.kind === "platform" && p.leftX > 0,
+      );
+      const blastZone = stageBlastZone(stageId);
+      if (rightPlatform && blastZone) {
+        this.camera.lockView(rightPlatform.leftX, blastZone.rightX, 0);
+      } else {
+        // No geometry for this stage (shouldn't happen - the button is
+        // hidden outside Dream Land) - bail out rather than lock onto a
+        // meaningless view with no way to escape it.
+        this.edgeGuardReviewModeEnabled = false;
+      }
+    } else {
+      this.camera.unlockView();
+    }
+    this.updateEdgeGuardReviewModeUI();
+    if (this.lastFrame !== undefined) {
+      const currIdx = this.playback?.currentIndex ?? 0;
+      this.renderFrame(this.lastFrame, currIdx, true);
+    }
+  }
+
+  private updateEdgeGuardReviewModeUI(): void {
+    const tr = t();
+    this.edgeGuardReviewModeBtn.textContent = this.edgeGuardReviewModeEnabled
+      ? tr.edgeGuardReviewModeBtnActive
+      : tr.edgeGuardReviewModeBtn;
+    this.edgeGuardReviewModeBtn.title = tr.edgeGuardReviewModeTitle;
+    this.edgeGuardReviewModeBtn.classList.toggle(
+      "active",
+      this.edgeGuardReviewModeEnabled,
+    );
+  }
+
   private updatePlayerPanelColors(): void {
     for (const panel of this.panels) {
       panel.panelEl.style.setProperty(
@@ -1995,6 +2051,25 @@ export class MatchViewController {
         );
       }
     }
+    if (this.edgeGuardReviewModeEnabled) {
+      // Whichever seated player is currently further from center decides
+      // which side is "the action" this frame - mirror everything to the
+      // right if that's the left side. See camera.ts's lockView() doc
+      // comment for why the fixed view only covers the right half.
+      let furthestX: number | null = null;
+      for (const panel of this.panels) {
+        const post = frame?.ports[panel.port]?.state;
+        if (!post) continue;
+        if (
+          furthestX === null ||
+          Math.abs(post.positionX) > Math.abs(furthestX)
+        ) {
+          furthestX = post.positionX;
+        }
+      }
+      this.camera.setMirrorX(furthestX !== null && furthestX < 0);
+    }
+
     this.camera.update(
       targets,
       snap || this.stageRenderer.isQuickAttackOverlayActive(),
@@ -3228,6 +3303,10 @@ export class MatchViewController {
       this.edgeGuardWidget.hidden = true;
       this.ledgeGetupWidget.hidden = true;
       this.ledgeTrapWidget.hidden = true;
+      this.edgeGuardReviewModeBtn.hidden = true;
+      // The button that's the only way out of review mode just got hidden -
+      // leave the mode rather than strand the camera locked.
+      if (this.edgeGuardReviewModeEnabled) this.toggleEdgeGuardReviewMode();
       return;
     }
 
@@ -3235,6 +3314,7 @@ export class MatchViewController {
     this.edgeGuardWidget.hidden = false;
     this.ledgeGetupWidget.hidden = false;
     this.ledgeTrapWidget.hidden = false;
+    this.edgeGuardReviewModeBtn.hidden = false;
 
     interface EdgeSituationRecord {
       enteredFrameIndex: number;

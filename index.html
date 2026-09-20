@@ -4496,8 +4496,30 @@
       .situation-widget-header {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         padding: 8px 12px;
         border-bottom: 1px solid var(--panel-border);
+      }
+      .edge-guard-review-mode-btn {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: transparent;
+        border: 1px solid var(--panel-border);
+        border-radius: 5px;
+        padding: 3px 8px;
+        font-size: 11px;
+        color: var(--text-dim);
+        cursor: pointer;
+      }
+      .edge-guard-review-mode-btn:hover {
+        color: var(--text);
+        border-color: var(--text-dim);
+      }
+      .edge-guard-review-mode-btn.active {
+        background: var(--accent-subtle);
+        border-color: var(--accent);
+        color: var(--accent);
       }
       .situation-collapse-btn {
         display: flex;
@@ -7205,6 +7227,14 @@
                   <h2 id="edgeGuardWidgetTitle" class="situation-widget-title">
                     Edge Guard
                   </h2>
+                </button>
+                <button
+                  id="edgeGuardReviewModeBtn"
+                  class="edge-guard-review-mode-btn"
+                  type="button"
+                  hidden
+                >
+                  🎥 Review Mode
                 </button>
               </div>
               <div id="edgeGuardList" class="situation-list"></div>

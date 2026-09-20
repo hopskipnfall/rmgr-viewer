@@ -62,10 +62,12 @@ export function getWeaponInfo(
   item: ItemUpdate,
   frame?: Frame,
   replay?: Replay | null,
+  /** Edge-guard review mode - see Camera.isMirrored(). Flips the returned draw direction the same way a mirrored character's facing gets flipped. */
+  mirrored = false,
 ): { isLuigi: boolean; dir: number } {
   let isLuigi = false;
   let dir = 1;
-  if (!replay) return { isLuigi, dir };
+  if (!replay) return { isLuigi, dir: mirrored ? -dir : dir };
 
   const seated = getSeatedPorts(replay);
   const luigiPorts = seated.filter((p) =>
@@ -123,7 +125,7 @@ export function getWeaponInfo(
     }
   }
 
-  return { isLuigi, dir };
+  return { isLuigi, dir: mirrored ? -dir : dir };
 }
 
 /**

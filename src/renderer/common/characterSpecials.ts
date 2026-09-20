@@ -182,6 +182,8 @@ export function getFoxFlightAngle(
   frameIndex?: number,
   port?: PortIndex,
   post?: { positionX: number; positionY: number; facingDirection: 1 | -1 },
+  /** Edge-guard review mode - see Camera.isMirrored(). dx is a world-space delta, so mirroring negates it same as it would negate the two raw positions it's computed from. */
+  mirrored = false,
 ): number | null {
   if (!replay || frameIndex === undefined || port === undefined || !post) {
     return null;
@@ -225,7 +227,7 @@ export function getFoxFlightAngle(
     if (Math.hypot(dx, dy) > 0.001) {
       // In world coords: +Y is UP, -Y is DOWN.
       // In screen canvas: +Y is DOWN, -Y is UP.
-      return Math.atan2(-dy, dx);
+      return Math.atan2(-dy, mirrored ? -dx : dx);
     }
   }
 

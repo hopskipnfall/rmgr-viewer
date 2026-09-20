@@ -304,7 +304,7 @@ export function drawPlayer(
   // Smooth 3D-like yaw rotation around the vertical axis during turnaround (0 -> pi radians)
   // Every frame within the turn state is an intermediate distorted phase between +100% and -100%.
   // Frame 0: ~90% (initial turn inward) ... Midway: 0% (edge-on) ... Last Turn frame: ~90% (finishing turn) ... Next state: 100%
-  let effectiveDir = post.facingDirection;
+  let effectiveDir: number = post.facingDirection;
   if (turning) {
     const turnTotalFrames = post.actionStateId === 0x013 ? 5 : 6;
     const progress = Math.min(
@@ -319,6 +319,11 @@ export function drawPlayer(
       effectiveDir = post.facingDirection * turnScale;
     }
   }
+  // Edge-guard review mode's left/right mirroring (Camera.isMirrored())
+  // flips world-space X automatically inside worldToScreen(), but a
+  // character's drawn orientation isn't a coordinate - it has to be
+  // flipped here too.
+  if (camera.isMirrored()) effectiveDir = -effectiveDir;
   const facingRight = effectiveDir >= 0;
 
   const size = characterSize(post.characterId);
@@ -382,7 +387,7 @@ export function drawPlayer(
   const foxSpecial = getFoxSpecialType(post.characterId, post.actionStateId);
   const flightAngle =
     foxSpecial === "firefox_fly"
-      ? getFoxFlightAngle(replay, frameIndex, port, post)
+      ? getFoxFlightAngle(replay, frameIndex, port, post, camera.isMirrored())
       : null;
   if (
     foxSpecial === "shine_start" ||

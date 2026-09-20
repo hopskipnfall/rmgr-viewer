@@ -71,7 +71,12 @@ export function drawItemObjects(
     ctx.scale(markerScale, markerScale);
     ctx.translate(-x, -y);
     const spinAngle = item.frame * 0.45;
-    const { isLuigi, dir } = getWeaponInfo(item, frame, replay);
+    const { isLuigi, dir } = getWeaponInfo(
+      item,
+      frame,
+      replay,
+      camera.isMirrored(),
+    );
     const drewCustomShape = isWeapon
       ? drawCustomWeaponShape(
           ctx,

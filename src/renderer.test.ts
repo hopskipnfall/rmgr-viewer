@@ -2256,6 +2256,7 @@ describe("StageRenderer background themes", () => {
     const fakeCamera = {
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
     };
 
     const platform = {
@@ -2413,6 +2414,7 @@ describe("StageRenderer background themes", () => {
     const fakeCamera = {
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       groundScreenY: () => 400,
     };
 
@@ -2470,6 +2472,7 @@ describe("StageRenderer background themes", () => {
     const fakeCamera = {
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       groundScreenY: () => 400,
     };
 
@@ -2525,6 +2528,7 @@ describe("StageRenderer background themes", () => {
     const fakeCamera = {
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       groundScreenY: () => 400,
     };
 
@@ -3341,6 +3345,7 @@ describe("StageRenderer background themes", () => {
     const fakeCamera = {
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       groundScreenY: () => 400,
     };
 
@@ -3396,6 +3401,7 @@ describe("StageRenderer background themes", () => {
     const fakeCamera = {
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       groundScreenY: () => 400,
     };
 
@@ -3460,6 +3466,7 @@ describe("StageRenderer background themes", () => {
     const fakeCamera = {
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       groundScreenY: () => 400,
     };
 
@@ -3584,6 +3591,7 @@ describe("StageRenderer background themes", () => {
     const fakeCamera = {
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       groundScreenY: () => 400,
     };
     renderer["drawPlayer"](fakeCamera, 0, {
@@ -3632,6 +3640,7 @@ describe("StageRenderer background themes", () => {
       // worldToScreen simply returns world coordinates directly for precise tracking
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       groundScreenY: () => groundY,
     };
 
@@ -3678,6 +3687,7 @@ describe("StageRenderer background themes", () => {
     const fakeCamera = {
       worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
       worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -3731,6 +3741,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       };
 
       return { fakeCanvas, fakeCamera, fills, strokes };
@@ -4007,6 +4018,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       };
 
       return { fakeCanvas, fakeCamera, textCalls };
@@ -4805,6 +4817,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
       };
 
       return {
@@ -6353,6 +6366,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -6441,6 +6455,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -6529,6 +6544,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -7084,6 +7100,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -7295,6 +7312,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -7365,6 +7383,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -7441,6 +7460,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -7508,6 +7528,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -7680,6 +7701,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -7766,6 +7788,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -7950,6 +7973,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -8158,6 +8182,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -8273,6 +8298,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 
@@ -8385,6 +8411,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: 540 - wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 540,
       };
 
@@ -8621,6 +8648,7 @@ describe("StageRenderer background themes", () => {
       const fakeCamera = {
         worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
         worldLengthToScreen: (len: number) => len,
+      isMirrored: () => false,
         groundScreenY: () => 400,
       };
 

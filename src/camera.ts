@@ -19,6 +19,12 @@
  * frame, or instantly (snapped) right after a scrub/step/seek, since
  * there's no preceding motion to smooth from and a slow catch-up pan would
  * just look broken while paused.
+ *
+ * The one exception is edge-guard review mode (lockView()/unlockView()):
+ * a deliberately fixed, non-tracking view for comparing edge guards
+ * consistently, with optional left/right mirroring (setMirrorX()) so
+ * action on either side of the stage renders the same way. See
+ * matchView.ts's edgeGuardReviewModeBtn.
  */
 export class Camera {
   private canvasWidth: number;
@@ -34,6 +40,21 @@ export class Camera {
   private offsetX = 0;
   private offsetY = 0;
 
+  /**
+   * Edge-guard review mode (see matchView.ts's edgeGuardReviewModeBtn):
+   * `locked` freezes the view - update() becomes a no-op so the normal
+   * player-tracking framing can't override it - and `mirrorX` reflects
+   * world-space X across 0 for every projected point, so action on the
+   * stage's left half renders as if it were on the right. Both are always
+   * false outside review mode.
+   */
+  private locked = false;
+  private mirrorX = false;
+  /** The lockView() inputs, re-applied on resize() while locked so the fixed view keeps exactly filling the canvas across aspect-ratio changes. */
+  private lockedMinX = 0;
+  private lockedMaxX = 0;
+  private lockedCenterY = 0;
+
   /** Never frame tighter than this world-unit span, so characters near each other or a single player doesn't zoom in absurdly close. */
   private static readonly MIN_SPAN = 1400;
   private static readonly PADDING_FRACTION = 0.3;
@@ -48,7 +69,50 @@ export class Camera {
   resize(canvasWidth: number, canvasHeight: number): void {
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
+    if (this.locked) {
+      // Re-derive the vertical span from the new aspect ratio so the fixed
+      // view keeps exactly filling the canvas instead of letterboxing.
+      this.lockView(this.lockedMinX, this.lockedMaxX, this.lockedCenterY);
+      return;
+    }
     this.rescale();
+  }
+
+  /**
+   * Locks the view to a fixed horizontal world-space span, vertically
+   * centered on `centerY`, with the vertical span derived from the current
+   * canvas aspect ratio so the frame is exactly filled (no letterboxing)
+   * rather than picking an arbitrary height. Stays fixed - update() is a
+   * no-op - until unlockView() is called. See matchView.ts's
+   * edgeGuardReviewModeBtn for the one caller.
+   */
+  lockView(minX: number, maxX: number, centerY: number): void {
+    this.lockedMinX = minX;
+    this.lockedMaxX = maxX;
+    this.lockedCenterY = centerY;
+    const worldW = Math.max(maxX - minX, 1);
+    const worldH = worldW * (this.canvasHeight / this.canvasWidth);
+    this.setView(minX, maxX, centerY - worldH / 2, centerY + worldH / 2);
+    this.locked = true;
+  }
+
+  /** Leaves the fixed view locked by lockView() and clears any mirroring - update() resumes normal player-tracking framing on the next call. */
+  unlockView(): void {
+    this.locked = false;
+    this.mirrorX = false;
+  }
+
+  isLocked(): boolean {
+    return this.locked;
+  }
+
+  /** Only meaningful while locked - see lockView()'s doc comment. */
+  setMirrorX(mirror: boolean): void {
+    this.mirrorX = mirror;
+  }
+
+  isMirrored(): boolean {
+    return this.mirrorX;
   }
 
   /**
@@ -63,6 +127,7 @@ export class Camera {
     positions: ReadonlyArray<{ x: number; y: number }>,
     snap: boolean,
   ): void {
+    if (this.locked) return;
     if (positions.length === 0) {
       if (!this.hasView) {
         // Nothing to frame yet and no prior view - fall back to a plausible default so worldToScreen() still returns sane values.
@@ -134,8 +199,9 @@ export class Camera {
   }
 
   worldToScreen(x: number, y: number): { x: number; y: number } {
+    const px = this.mirrorX ? -x : x;
     return {
-      x: this.offsetX + (x - this.viewMinX) * this.scale,
+      x: this.offsetX + (px - this.viewMinX) * this.scale,
       y: this.canvasHeight - (this.offsetY + (y - this.viewMinY) * this.scale),
     };
   }
@@ -152,8 +218,9 @@ export class Camera {
 
   /** Inverse of worldToScreen - screen pixel coordinates back to world space. */
   screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
+    const px = this.viewMinX + (screenX - this.offsetX) / this.scale;
     return {
-      x: this.viewMinX + (screenX - this.offsetX) / this.scale,
+      x: this.mirrorX ? -px : px,
       y:
         this.viewMinY +
         (this.canvasHeight - screenY - this.offsetY) / this.scale,
