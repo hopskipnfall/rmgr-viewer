@@ -3283,6 +3283,12 @@
           box-shadow 0.2s ease,
           border-color 0.2s ease;
       }
+      #stage.camera-pannable {
+        cursor: grab;
+      }
+      #stage.camera-pannable:active {
+        cursor: grabbing;
+      }
       #stageWrap.mode-video #stage,
       #stageWrap.mode-video-only #stage {
         display: none !important;
@@ -4525,6 +4531,109 @@
       }
       .situation-collapse-btn:hover .situation-widget-title {
         color: var(--text);
+      }
+      .camera-panel-body {
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .camera-lock-btn {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--panel-border);
+        background: var(--btn-secondary-bg);
+        color: var(--text-dim);
+        cursor: pointer;
+        transition:
+          background 0.12s,
+          border-color 0.12s,
+          color 0.12s;
+      }
+      .camera-lock-btn:hover {
+        background: var(--btn-secondary-hover);
+        color: var(--text);
+      }
+      .camera-lock-btn.active {
+        background: var(--accent-subtle);
+        border-color: var(--accent);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .camera-controls[hidden] {
+        display: none !important;
+      }
+      .camera-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .camera-zoom-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .camera-zoom-btn {
+        width: 22px;
+        height: 22px;
+        line-height: 1;
+        border-radius: 5px;
+        border: 1px solid var(--panel-border);
+        background: var(--btn-secondary-bg);
+        color: var(--text-dim);
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .camera-zoom-btn:hover {
+        background: var(--btn-secondary-hover);
+        color: var(--text);
+      }
+      #cameraZoomSlider {
+        flex: 1;
+      }
+      .camera-pan-dpad {
+        display: grid;
+        grid-template-columns: repeat(3, 28px);
+        grid-template-rows: repeat(3, 28px);
+        gap: 2px;
+        justify-content: center;
+      }
+      .camera-pan-btn {
+        border-radius: 5px;
+        border: 1px solid var(--panel-border);
+        background: var(--btn-secondary-bg);
+        color: var(--text-dim);
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .camera-pan-btn:hover {
+        background: var(--btn-secondary-hover);
+        color: var(--text);
+      }
+      .pan-up {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      .pan-left {
+        grid-column: 1;
+        grid-row: 2;
+      }
+      .pan-reset {
+        grid-column: 2;
+        grid-row: 2;
+      }
+      .pan-right {
+        grid-column: 3;
+        grid-row: 2;
+      }
+      .pan-down {
+        grid-column: 2;
+        grid-row: 3;
       }
       .situation-list {
         display: flex;
@@ -7178,6 +7287,99 @@
                 </button>
               </div>
               <div id="combosList" class="situation-list"></div>
+            </section>
+            <section id="cameraWidget" class="situation-widget" hidden>
+              <div class="situation-widget-header">
+                <button
+                  id="cameraCollapseBtn"
+                  class="situation-collapse-btn"
+                  title="Collapse / expand Camera"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="cameraWidgetTitle" class="situation-widget-title">
+                    Camera
+                  </h2>
+                </button>
+              </div>
+              <div id="cameraPanelBody" class="camera-panel-body">
+                <button
+                  id="cameraLockBtn"
+                  class="camera-lock-btn"
+                  type="button"
+                >
+                  🔓 Lock Camera
+                </button>
+                <div id="cameraControls" class="camera-controls" hidden>
+                  <div class="camera-zoom-row">
+                    <button
+                      id="cameraZoomOutBtn"
+                      class="camera-zoom-btn"
+                      type="button"
+                      title="Zoom out"
+                    >
+                      −
+                    </button>
+                    <input
+                      id="cameraZoomSlider"
+                      type="range"
+                      min="0.2"
+                      max="8"
+                      step="0.1"
+                      value="1"
+                    />
+                    <button
+                      id="cameraZoomInBtn"
+                      class="camera-zoom-btn"
+                      type="button"
+                      title="Zoom in"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div class="camera-pan-dpad">
+                    <button
+                      id="cameraPanUpBtn"
+                      class="camera-pan-btn pan-up"
+                      type="button"
+                      title="Pan up"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      id="cameraPanLeftBtn"
+                      class="camera-pan-btn pan-left"
+                      type="button"
+                      title="Pan left"
+                    >
+                      ◀
+                    </button>
+                    <button
+                      id="cameraPanResetBtn"
+                      class="camera-pan-btn pan-reset"
+                      type="button"
+                      title="Recenter"
+                    >
+                      ⊙
+                    </button>
+                    <button
+                      id="cameraPanRightBtn"
+                      class="camera-pan-btn pan-right"
+                      type="button"
+                      title="Pan right"
+                    >
+                      ▶
+                    </button>
+                    <button
+                      id="cameraPanDownBtn"
+                      class="camera-pan-btn pan-down"
+                      type="button"
+                      title="Pan down"
+                    >
+                      ▼
+                    </button>
+                  </div>
+                </div>
+              </div>
             </section>
             <section id="recoveryWidget" class="situation-widget" hidden>
               <div class="situation-widget-header">

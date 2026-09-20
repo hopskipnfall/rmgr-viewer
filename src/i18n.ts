@@ -361,6 +361,18 @@ export interface Translations {
   noSituations: string;
   situationCollapseTitle: (name: string) => string;
 
+  // Camera panel (manual pan/zoom/lock)
+  cameraWidgetTitle: string;
+  cameraLockBtn: string;
+  cameraLockBtnActive: string;
+  cameraZoomOutTitle: string;
+  cameraZoomInTitle: string;
+  cameraPanUpTitle: string;
+  cameraPanLeftTitle: string;
+  cameraPanRightTitle: string;
+  cameraPanDownTitle: string;
+  cameraPanResetTitle: string;
+
   // Classifier-aware recovery/edge-guard breakdown (see
   // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md)
   recoveryContestableLabel: string;
@@ -979,6 +991,17 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationOpenBadge: "…",
     noSituations: "None in this replay.",
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
+
+    cameraWidgetTitle: "Camera",
+    cameraLockBtn: "🔓 Lock Camera",
+    cameraLockBtnActive: "🔒 Unlock Camera",
+    cameraZoomOutTitle: "Zoom out",
+    cameraZoomInTitle: "Zoom in",
+    cameraPanUpTitle: "Pan up",
+    cameraPanLeftTitle: "Pan left",
+    cameraPanRightTitle: "Pan right",
+    cameraPanDownTitle: "Pan down",
+    cameraPanResetTitle: "Recenter",
 
     recoveryContestableLabel: "Recovery (contestable only)",
     edgeGuardEffectivenessLabel: "Edge Guard Effectiveness",
@@ -1602,6 +1625,17 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationOpenBadge: "…",
     noSituations: "このリプレイには該当なし。",
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
+
+    cameraWidgetTitle: "カメラ",
+    cameraLockBtn: "🔓 カメラを固定",
+    cameraLockBtnActive: "🔒 固定を解除",
+    cameraZoomOutTitle: "ズームアウト",
+    cameraZoomInTitle: "ズームイン",
+    cameraPanUpTitle: "上へ移動",
+    cameraPanLeftTitle: "左へ移動",
+    cameraPanRightTitle: "右へ移動",
+    cameraPanDownTitle: "下へ移動",
+    cameraPanResetTitle: "中央に戻す",
 
     recoveryContestableLabel: "復帰(拮抗状況のみ)",
     edgeGuardEffectivenessLabel: "復帰阻止の有効度",
