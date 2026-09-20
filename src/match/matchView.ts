@@ -291,6 +291,7 @@ export class MatchViewController {
   private combosCollapsed = false;
   private diCollapsed = false;
   private diEvents: HitDIResult[] = [];
+  private cameraWidget: HTMLElement;
   private cameraWidgetTitleEl: HTMLHeadingElement;
   private cameraCollapseBtn: HTMLButtonElement;
   private cameraPanelBodyEl: HTMLElement;
@@ -756,6 +757,7 @@ export class MatchViewController {
     ) as HTMLHeadingElement;
     this.diList = document.getElementById("diList") as HTMLDivElement;
 
+    this.cameraWidget = document.getElementById("cameraWidget") as HTMLElement;
     this.cameraWidgetTitleEl = document.getElementById(
       "cameraWidgetTitle",
     ) as HTMLHeadingElement;
@@ -1797,7 +1799,7 @@ export class MatchViewController {
         tr.cameraWidgetTitle,
       );
     }
-    if (this.cameraLockBtn) this.updateCameraLockUI();
+    if (this.cameraLockBtn && this.camera) this.updateCameraLockUI();
     if (this.cameraZoomOutBtn)
       this.cameraZoomOutBtn.title = tr.cameraZoomOutTitle;
     if (this.cameraZoomInBtn) this.cameraZoomInBtn.title = tr.cameraZoomInTitle;
@@ -5119,6 +5121,7 @@ export class MatchViewController {
       this.qaOverlayExitBtn.hidden = true;
     }
     this.camera = new Camera(width, height);
+    this.updateCameraLockUI();
 
     this.buildPlayerPanels(replay);
     this.buildPerspectiveToggle(replay);
@@ -5181,9 +5184,11 @@ export class MatchViewController {
   private renderReplayInfo(loaded: LoadedReplay | null): void {
     if (!loaded) {
       this.replayInfoWidget.hidden = true;
+      this.cameraWidget.hidden = true;
       return;
     }
     this.replayInfoWidget.hidden = false;
+    this.cameraWidget.hidden = false;
     this.replayInfoFileName.textContent = loaded.sourceName;
     this.replayInfoFileName.title = loaded.sourceName;
 
