@@ -855,7 +855,15 @@ export class MatchViewController {
         const rect = this.stageCanvas.getBoundingClientRect();
         const screenX = e.clientX - rect.left;
         const screenY = e.clientY - rect.top;
-        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        // A flat factor per wheel event (the previous approach) ignores how
+        // much was actually scrolled - a trackpad fires many small events
+        // per gesture where a mouse wheel fires few large ones, so a flat
+        // 10%/event compounded far too fast on a trackpad. Scale instead by
+        // deltaY's own magnitude (clamped so one freak large delta can't
+        // jump zoom too far), exponentially so it composes smoothly across
+        // many small events without overshooting.
+        const clampedDeltaY = Math.max(-100, Math.min(100, e.deltaY));
+        const factor = Math.exp(-clampedDeltaY * 0.0015);
         this.camera.zoomAtScreenPoint(factor, screenX, screenY);
         this.syncCameraZoomSlider();
         this.rerenderCurrentFrame();
