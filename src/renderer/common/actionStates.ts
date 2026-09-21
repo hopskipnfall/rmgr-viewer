@@ -177,6 +177,22 @@ export function isDashAttackState(actionStateId: number): boolean {
   return actionStateId === 0x0c0;
 }
 
+export function isDtiltState(actionStateId: number): boolean {
+  return actionStateId === 0x0c9;
+}
+
+export function isDsmashState(actionStateId: number): boolean {
+  return actionStateId === 0x0d0;
+}
+
+export function isFsmashState(actionStateId: number): boolean {
+  return actionStateId >= 0x0ca && actionStateId <= 0x0ce;
+}
+
+export function isUsmashState(actionStateId: number): boolean {
+  return actionStateId === 0x0cf;
+}
+
 const TEETER_ACTION_STATES = new Set([
   0x023, // Teeter
   0x024, // TeeterStart

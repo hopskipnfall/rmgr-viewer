@@ -22,6 +22,10 @@ import {
   isBowserCharacter,
   isCrouchState,
   isDashAttackState,
+  isDtiltState,
+  isDsmashState,
+  isFsmashState,
+  isUsmashState,
   isDeadState,
   isDizzyState,
   isDonkeyKongCharacter,
@@ -1409,6 +1413,17 @@ describe("Tech and Roll state helpers", () => {
     // Dash attack (0x0c0)
     expect(isDashAttackState(0x0c0)).toBe(true);
     expect(isDashAttackState(0x00a)).toBe(false);
+
+    // Grounded tilts & smashes helpers
+    expect(isDtiltState(0x0c9)).toBe(true);
+    expect(isDtiltState(0x0c1)).toBe(false);
+    expect(isDsmashState(0x0d0)).toBe(true);
+    expect(isDsmashState(0x0ca)).toBe(false);
+    expect(isFsmashState(0x0ca)).toBe(true);
+    expect(isFsmashState(0x0ce)).toBe(true);
+    expect(isFsmashState(0x0cf)).toBe(false);
+    expect(isUsmashState(0x0cf)).toBe(true);
+    expect(isUsmashState(0x0d0)).toBe(false);
   });
 });
 
@@ -6201,6 +6216,194 @@ describe("StageRenderer background themes", () => {
       expect(frame7.arcCalls.length).toBeGreaterThanOrEqual(2);
     });
 
+    it("renders Dsmash with bidirectional split sweeps hugging the floor on both sides, dual wedge fills, and sparks", () => {
+      const dsmash = createMockAttackCanvas();
+      drawAttackArc(
+        dsmash.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "smash", direction: "down" },
+        null,
+        false,
+        6,
+      );
+
+      // Has front and back wedge fills (> 0)
+      expect(dsmash.fillCalls.length).toBeGreaterThanOrEqual(2);
+      // Outer blade lineWidth 5.2 (> aerial 4.8)
+      const maxLineWidth = Math.max(
+        ...dsmash.strokeCalls.map((s) => s.lineWidth),
+      );
+      expect(maxLineWidth).toBeGreaterThanOrEqual(5.0);
+      // Floor sparks and friction streaks
+      expect(dsmash.lineToCalls.length).toBeGreaterThanOrEqual(4);
+      // Peak radius reaches smash scale
+      const maxRadius = Math.max(...dsmash.arcCalls.map((a) => a.radius));
+      expect(maxRadius).toBeGreaterThan(15 * 2.0);
+    });
+
+    it("renders Usmash with vertical launch streaks leaping from canopy crest and ground stomp dust", () => {
+      const usmash = createMockAttackCanvas();
+      drawAttackArc(
+        usmash.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "smash", direction: "up" },
+        null,
+        false,
+        6,
+      );
+
+      // Has wedge fill
+      expect(usmash.fillCalls.length).toBeGreaterThan(0);
+      // Has vertical launch streaks shooting upwards (sy2 < sy1)
+      expect(usmash.lineToCalls.length).toBeGreaterThanOrEqual(3);
+      // Has outer blade with lineWidth 5.5
+      const maxLineWidth = Math.max(
+        ...usmash.strokeCalls.map((s) => s.lineWidth),
+      );
+      expect(maxLineWidth).toBeCloseTo(5.5, 1);
+    });
+
+    it("renders Fsmash with heavy forward crescent, floor friction streak, and dissolving white core during endlag", () => {
+      const active = createMockAttackCanvas();
+      drawAttackArc(
+        active.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "smash", direction: "forward" },
+        null,
+        false,
+        6,
+      );
+
+      const endlag = createMockAttackCanvas();
+      drawAttackArc(
+        endlag.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "smash", direction: "forward" },
+        null,
+        false,
+        18,
+      );
+
+      // Active has white core and floor friction streak
+      expect(
+        active.strokeCalls.some(
+          (s) => s.strokeStyle === "rgba(255, 255, 255, 0.95)",
+        ),
+      ).toBe(true);
+      expect(active.lineToCalls.length).toBeGreaterThanOrEqual(1);
+
+      // Endlag dissolves white core
+      expect(
+        endlag.strokeCalls.some(
+          (s) => s.strokeStyle === "rgba(255, 255, 255, 0.95)",
+        ),
+      ).toBe(false);
+    });
+
+    it("renders Dtilt with ground-skimming forward ankle sweep, floor friction streak, and ground dust puff", () => {
+      const dtilt = createMockAttackCanvas();
+      drawAttackArc(
+        dtilt.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#ef4444",
+        { type: "tilt", direction: "down" },
+        null,
+        false,
+        4,
+      );
+
+      // Primary outer arc is arc index 1
+      const outerArc = dtilt.arcCalls[1]!;
+      // Center angle of sweep is low forward grazing (around 14° = ~0.24 rad), NOT straight down into floor (PI/2 = 1.57 rad)
+      const centerRad = (outerArc.startAngle! + outerArc.endAngle!) / 2;
+      expect(centerRad).toBeCloseTo((14 * Math.PI) / 180, 1);
+      expect(centerRad).not.toBeCloseTo(Math.PI / 2, 1);
+
+      // Floor friction streak along stage floor
+      expect(dtilt.lineToCalls.length).toBeGreaterThanOrEqual(1);
+      // Floor dust puff fill
+      expect(dtilt.fillCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("renders grounded tilts with mid-blade luminous core band and dissolves white core during endlag", () => {
+      const active = createMockAttackCanvas();
+      drawAttackArc(
+        active.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#ef4444",
+        { type: "tilt", direction: "forward" },
+        null,
+        false,
+        4,
+      );
+
+      // Mid-blade luminous core band is index 2, positioned between echo and outer radius
+      const echoArc = active.arcCalls[0]!;
+      const outerArc = active.arcCalls[1]!;
+      const midArc = active.arcCalls[2]!;
+      expect(midArc.radius).toBeCloseTo(
+        (echoArc.radius + outerArc.radius) / 2,
+        1,
+      );
+
+      // Active has white core
+      expect(
+        active.strokeCalls.some(
+          (s) => s.strokeStyle === "rgba(255, 255, 255, 0.85)",
+        ),
+      ).toBe(true);
+
+      const endlag = createMockAttackCanvas();
+      drawAttackArc(
+        endlag.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#ef4444",
+        { type: "tilt", direction: "forward" },
+        null,
+        false,
+        12,
+      );
+
+      // Endlag dissolves white core
+      expect(
+        endlag.strokeCalls.some(
+          (s) => s.strokeStyle === "rgba(255, 255, 255, 0.85)",
+        ),
+      ).toBe(false);
+    });
+
     it("renders getup-attack with dual ground sweeping crescents and floor friction streaks", () => {
       const getupCanvas = createMockAttackCanvas();
       drawAttackArc(
@@ -6514,6 +6717,111 @@ describe("StageRenderer background themes", () => {
       expect(jumpSquatScale).toBeDefined();
       expect(jumpSquatScale!.sy).toBeLessThan(0.75); // Vertical squash
       expect(jumpSquatScale!.sx).toBeGreaterThan(1.15); // Horizontal stretch
+    });
+
+    it("applies dynamic body transforms for Dtilt/Dsmash crouch, Fsmash lunge, and Usmash stretch in drawPlayer", () => {
+      const scales: { sx: number; sy: number }[] = [];
+      const rotates: number[] = [];
+      const fakeCanvas = {
+        getContext: () => ({
+          save: () => {},
+          restore: () => {},
+          beginPath: () => {},
+          closePath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          arc: () => {},
+          ellipse: () => {},
+          roundRect: () => {},
+          clip: () => {},
+          translate: () => {},
+          scale: (sx: number, sy: number) => {
+            scales.push({ sx, sy });
+          },
+          rotate: (angle: number) => {
+            rotates.push(angle);
+          },
+          createRadialGradient: () => ({ addColorStop: () => {} }),
+          fill: () => {},
+          stroke: () => {},
+          fillText: () => {},
+          measureText: () => ({ width: 20 }),
+          set fillStyle(_: string) {},
+          set strokeStyle(_: string) {},
+          set lineWidth(_: number) {},
+          set font(_: string) {},
+          set textAlign(_: string) {},
+          set textBaseline(_: string) {},
+        }),
+        width: 960,
+        height: 540,
+      } as unknown as HTMLCanvasElement;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (StageRenderer as any)(fakeCanvas);
+      const fakeCamera = {
+        worldToScreen: (wx: number, wy: number) => ({ x: wx, y: wy }),
+        worldLengthToScreen: (len: number) => len,
+        groundScreenY: () => 400,
+      };
+
+      // 1. Dtilt (0x0c9): crouch scale (1.15, 0.78)
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 0,
+        positionY: 0,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x01, // Fox
+        actionStateId: 0x0c9, // Dtilt
+        actionFrameCounter: 3,
+        stocksRemaining: 4,
+        jumpsRemaining: 1,
+      });
+      expect(scales.some((s) => s.sx === 1.15 && s.sy === 0.78)).toBe(true);
+
+      // 2. Dsmash (0x0d0): crouch scale (1.15, 0.78)
+      scales.length = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 0,
+        positionY: 0,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x01, // Fox
+        actionStateId: 0x0d0, // Dsmash
+        actionFrameCounter: 5,
+        stocksRemaining: 4,
+        jumpsRemaining: 1,
+      });
+      expect(scales.some((s) => s.sx === 1.15 && s.sy === 0.78)).toBe(true);
+
+      // 3. Fsmash (0x0ca): forward lunge rotation during surge (frame 6)
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 0,
+        positionY: 0,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x01, // Fox
+        actionStateId: 0x0ca, // Fsmash
+        actionFrameCounter: 6,
+        stocksRemaining: 4,
+        jumpsRemaining: 1,
+      });
+      expect(rotates.some((r) => r > 0.05)).toBe(true);
+
+      // 4. Usmash (0x0cf): upward recoil stretch during launch (frame 6)
+      scales.length = 0;
+      renderer["drawPlayer"](fakeCamera, 0, {
+        positionX: 0,
+        positionY: 0,
+        facingDirection: 1,
+        damagePercent: 0,
+        characterId: 0x01, // Fox
+        actionStateId: 0x0cf, // Usmash
+        actionFrameCounter: 6,
+        stocksRemaining: 4,
+        jumpsRemaining: 1,
+      });
+      expect(scales.some((s) => s.sy > 1.05 && s.sx < 0.98)).toBe(true);
     });
 
     it("renders metallic silver armor with gold outline and includes armor KB in HUD for Yoshi during double jump", () => {

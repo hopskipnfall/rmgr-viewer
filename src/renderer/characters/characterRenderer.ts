@@ -51,6 +51,10 @@ import {
   isWalkState,
   isDashOrRunState,
   isDashAttackState,
+  isDtiltState,
+  isDsmashState,
+  isFsmashState,
+  isUsmashState,
   isCrouchState,
   isJumpSquatState,
   isShieldDropState,
@@ -495,6 +499,11 @@ export function drawPlayer(
     labelY = (y - 28) * (1 - t) + labelY * t;
   } else if (isDashAttackState(post.actionStateId)) {
     labelY = labelY + 6;
+  } else if (
+    isDtiltState(post.actionStateId) ||
+    isDsmashState(post.actionStateId)
+  ) {
+    labelY = labelY + 8;
   } else if (isDizzy) {
     labelY = Math.min(labelY, topY - 36);
   }
@@ -701,6 +710,31 @@ export function drawPlayer(
     ctx.translate(x, y);
     ctx.scale(scaleX, scaleY);
     ctx.rotate(slideLean);
+    ctx.translate(-x, -y);
+  } else if (
+    isDtiltState(post.actionStateId) ||
+    isDsmashState(post.actionStateId)
+  ) {
+    // Low crouching stance for down-tilt and down-smash along stage floor
+    ctx.translate(x, y);
+    ctx.scale(1.15, 0.78);
+    ctx.translate(-x, -y);
+  } else if (isFsmashState(post.actionStateId)) {
+    // Forward smash: forward lunge commitment during surge phase
+    const dir = facingRight ? 1 : -1;
+    const f = post.actionFrameCounter;
+    const lunge =
+      f >= 3 && f <= 12 ? Math.sin(((f - 3) / 9) * Math.PI) * 0.12 : 0;
+    ctx.translate(x, y);
+    ctx.rotate(dir * lunge);
+    ctx.translate(-x, -y);
+  } else if (isUsmashState(post.actionStateId)) {
+    // Up smash: upward recoil stretch during launch
+    const f = post.actionFrameCounter;
+    const stretch =
+      f >= 3 && f <= 10 ? Math.sin(((f - 3) / 7) * Math.PI) * 0.1 : 0;
+    ctx.translate(x, y);
+    ctx.scale(1.0 - stretch * 0.5, 1.0 + stretch);
     ctx.translate(-x, -y);
   } else if (isCrouchState(post.actionStateId)) {
     // Compressed crouch stance
