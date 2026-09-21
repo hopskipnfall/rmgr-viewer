@@ -832,6 +832,11 @@ describe("getAttackInfo", () => {
       type: "grab",
       direction: "forward",
     }); // Samus Grapple Beam grab
+    expect(getAttackInfo(0x0a7, 0x03)).toEqual({
+      type: "grab",
+      direction: "forward",
+    }); // Samus Grapple Beam pull
+    expect(getAttackInfo(0x0a8, 0x03)).toBeNull(); // Samus holding opponent (CatchWait) has retracted grapple beam, no grab animation
   });
 
   it("identifies tilt attacks correctly", () => {
