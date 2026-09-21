@@ -62,6 +62,7 @@ import {
   isSpecialState,
   isTauntState,
   isTechInPlaceState,
+  isGroundTechInPlaceState,
   isTechRollState,
   isTumbleState,
   isTurnState,
@@ -1394,7 +1395,15 @@ describe("Tech and Roll state helpers", () => {
 
     // Tech in place
     expect(isTechInPlaceState(0x051)).toBe(true); // Tech
+    expect(isTechInPlaceState(0x04b)).toBe(true); // TechWall
+    expect(isTechInPlaceState(0x04c)).toBe(true); // TechCeil
     expect(isTechInPlaceState(0x049)).toBe(false); // TechF
+
+    // Ground tech in place (0x051)
+    expect(isGroundTechInPlaceState(0x051)).toBe(true); // Tech ground in place
+    expect(isGroundTechInPlaceState(0x04b)).toBe(false); // TechWall
+    expect(isGroundTechInPlaceState(0x04c)).toBe(false); // TechCeil
+    expect(isGroundTechInPlaceState(0x049)).toBe(false); // TechF
   });
 });
 

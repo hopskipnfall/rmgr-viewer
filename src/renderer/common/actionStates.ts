@@ -210,6 +210,10 @@ export function isTechInPlaceState(actionStateId: number): boolean {
   return TECH_IN_PLACE_ACTION_STATES.has(actionStateId);
 }
 
+export function isGroundTechInPlaceState(actionStateId: number): boolean {
+  return actionStateId === 0x051;
+}
+
 export function isAnyTechState(actionStateId: number): boolean {
   return isTechRollState(actionStateId) || isTechInPlaceState(actionStateId);
 }

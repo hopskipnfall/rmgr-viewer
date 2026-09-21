@@ -32,6 +32,7 @@ import {
   getJigglypuffSpecialType,
   isTechRollState,
   isTechInPlaceState,
+  isGroundTechInPlaceState,
   isRollState,
   isGetUpAttackState,
   isLedgeAttackState,
@@ -485,6 +486,12 @@ export function drawPlayer(
 
   if (isProne || isGetUpAttack) {
     labelY = y - 28;
+  } else if (
+    isGroundTechInPlaceState(post.actionStateId) &&
+    post.actionFrameCounter <= 10
+  ) {
+    const t = Math.min(1.0, post.actionFrameCounter / 10);
+    labelY = (y - 28) * (1 - t) + labelY * t;
   } else if (isDizzy) {
     labelY = Math.min(labelY, topY - 36);
   }
@@ -566,6 +573,49 @@ export function drawPlayer(
     ctx.translate(x, centerY);
     ctx.rotate(spinAngle);
     ctx.translate(-x, -centerY);
+  } else if (isGroundTechInPlaceState(post.actionStateId)) {
+    // Ground tech in place (0x051):
+    // 3-phase breakfall recovery:
+    // Phase 1 (f = 0..5): Impact absorption / slap flat against stage floor
+    // Phase 2 (f = 6..13): Dynamic kip-up pop, snapping feet under with upward hop & stretch
+    // Phase 3 (f = 14..20): Landing settle back into neutral standing stance
+    const f = post.actionFrameCounter;
+    let scaleX: number;
+    let scaleY: number;
+    let hopY: number;
+    let tilt: number;
+    const dir = facingRight ? 1 : -1;
+
+    if (f <= 5) {
+      // Floor impact slap: flat against floor
+      const progress = f / 5;
+      scaleY = 0.38 + 0.12 * progress; // 0.38 -> 0.50
+      scaleX = 1.38 - 0.12 * progress; // 1.38 -> 1.26
+      hopY = 0;
+      tilt = dir * 0.08 * (1 - progress * 0.5);
+    } else if (f <= 13) {
+      // Explosive kip-up / spring off the deck
+      const t = (f - 5) / 8; // 0 -> 1
+      const ease = Math.sin(t * (Math.PI / 2));
+      scaleY = 0.5 + 0.58 * ease; // 0.50 -> 1.08
+      scaleX = 1.26 - 0.32 * ease; // 1.26 -> 0.94
+      hopY = -Math.sin(t * Math.PI) * Math.min(6, heightPx * 0.1);
+      tilt = dir * 0.04 * (1 - t);
+    } else {
+      // Settle from kip-up into stance (f >= 14)
+      const t = Math.min(1.0, (f - 13) / 7); // 0 -> 1
+      scaleY = 1.08 - 0.08 * t; // 1.08 -> 1.0
+      scaleX = 0.94 + 0.06 * t; // 0.94 -> 1.0
+      hopY = 0;
+      tilt = 0;
+    }
+
+    ctx.translate(x, y + hopY);
+    ctx.scale(scaleX, scaleY);
+    if (tilt !== 0) {
+      ctx.rotate(tilt);
+    }
+    ctx.translate(-x, -y);
   } else if (isProne) {
     // Flattened prone against stage floor at feet pivot (x, y)
     ctx.translate(x, y);
@@ -1764,6 +1814,7 @@ export function drawPlayer(
         halfWidth,
         post.actionFrameCounter,
         isOpponent,
+        true,
       );
     }
     drawTechRollSpeedLines(
