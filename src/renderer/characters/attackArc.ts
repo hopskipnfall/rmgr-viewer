@@ -620,88 +620,165 @@ export function drawAttackArc(
   }
 
   if (attack.type === "dash-attack") {
-    // Dash Attack: dynamic low-to-ground forward sliding thrust wave with speed trails
+    // Dash Attack: dynamic sweeping ground-slide crescent wave with billowing slide dust & kinetic sparks
     ctx.save();
     const dir = facingRight ? 1 : -1;
-    const frontX = x + dir * (halfWidth * 1.5);
-    const startX = x - dir * (halfWidth * 0.4);
-    const bottomY = centerY + heightPx * 0.45;
-    const midY = centerY + heightPx * 0.15;
-    const topY = centerY - heightPx * 0.2;
+    const floorY = centerY + heightPx * 0.48; // Stage floor contact level
+    const progress = Math.min(1.0, (frame + 1) / 10);
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const fadeOut = frame > 12 ? Math.max(0, 1 - (frame - 12) / 14) : 1.0;
 
-    // 1. Triple sliding speed streak lines along the ground / lower body
-    const trailLevels = [
+    if (fadeOut <= 0) {
+      ctx.restore();
+      return;
+    }
+
+    // 1. Billowing ground slide friction dust plumes behind sliding feet
+    const dustPuffs = [
+      { offsetDist: halfWidth * 0.7, r: 4.5, yOff: -3, alphaMul: 0.7 },
       {
-        y: bottomY,
-        xStart: startX - dir * (halfWidth * 0.8),
-        xEnd: frontX - dir * (halfWidth * 0.2),
-        w: 2.5,
-        alpha: 0.8,
+        offsetDist: halfWidth * 1.1 + progress * 6,
+        r: 3.5,
+        yOff: -5,
+        alphaMul: 0.55,
       },
       {
-        y: midY,
-        xStart: startX - dir * (halfWidth * 0.5),
-        xEnd: frontX - dir * (halfWidth * 0.4),
-        w: 2.0,
-        alpha: 0.65,
-      },
-      {
-        y: topY,
-        xStart: startX - dir * (halfWidth * 0.2),
-        xEnd: frontX - dir * (halfWidth * 0.7),
-        w: 1.5,
-        alpha: 0.5,
+        offsetDist: halfWidth * 1.5 + progress * 10,
+        r: 2.5,
+        yOff: -6,
+        alphaMul: 0.4,
       },
     ];
-
-    for (const t of trailLevels) {
+    for (const puff of dustPuffs) {
+      const px = x - dir * puff.offsetDist;
+      const py = floorY + puff.yOff;
       ctx.beginPath();
-      ctx.moveTo(t.xStart, t.y);
-      ctx.lineTo(t.xEnd, t.y);
-      ctx.strokeStyle = `rgba(255, 255, 255, ${t.alpha})`;
-      ctx.lineWidth = t.w;
+      ctx.arc(px, py, puff.r, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba("#e2e8f0", puff.alphaMul * fadeOut);
+      ctx.fill();
+    }
+
+    // 2. Trailing curved kinetic speed ribbons (aerodynamic slipstream along the slide path)
+    const slipstreams = [
+      { yRatio: 0.42, startOff: -0.9, endOff: 0.6, w: 2.4, alpha: 0.65 },
+      { yRatio: 0.15, startOff: -0.6, endOff: 1.1, w: 1.8, alpha: 0.5 },
+      { yRatio: -0.15, startOff: -0.3, endOff: 0.8, w: 1.4, alpha: 0.35 },
+    ];
+    for (const s of slipstreams) {
+      const sy = centerY + heightPx * s.yRatio;
+      const sx = x + dir * (halfWidth * s.startOff);
+      const ex = x + dir * (halfWidth * (s.endOff * easeOut));
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo((sx + ex) / 2, sy - 2, ex, sy);
+      ctx.strokeStyle = hexToRgba(color, s.alpha * fadeOut);
+      ctx.lineWidth = s.w;
       ctx.lineCap = "round";
       ctx.stroke();
 
-      // Outer glow on trail
-      ctx.beginPath();
-      ctx.moveTo(t.xStart, t.y);
-      ctx.lineTo(t.xEnd, t.y);
-      ctx.strokeStyle = hexToRgba(color, t.alpha * 0.6);
-      ctx.lineWidth = t.w + 2;
-      ctx.stroke();
+      // White core on lowest / main friction streak
+      if (s.w > 2) {
+        ctx.beginPath();
+        ctx.moveTo(sx + dir * 4, sy);
+        ctx.lineTo(ex - dir * 2, sy);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * fadeOut})`;
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
+      }
     }
 
-    // 2. Translucent forward-lunging energy wedge
+    // 3. Sweeping ground-slide crescent wave (expansive forward curved cutting blade)
+    // Starts near the sliding base on the stage floor, arcs forward and swoops upward
+    const reachX = halfWidth * (1.2 + 0.7 * easeOut);
+    const tipX = x + dir * reachX;
+    const tipY = centerY - heightPx * 0.12;
+    const baseFloorX = x + dir * (halfWidth * 0.2);
+    const baseFloorY = floorY - 2;
+    const tailX = x - dir * (halfWidth * 0.4);
+    const tailY = floorY - heightPx * 0.18;
+
+    // Translucent crescent body fill
     ctx.beginPath();
-    ctx.moveTo(startX, bottomY);
-    ctx.lineTo(frontX, midY);
-    ctx.lineTo(x + dir * (halfWidth * 0.5), topY);
+    ctx.moveTo(baseFloorX, baseFloorY);
+    // Outer leading edge curve: sweeps from floor up to the forward tip
+    ctx.bezierCurveTo(
+      x + dir * (reachX * 0.7),
+      floorY + 2,
+      tipX + dir * 6,
+      centerY + heightPx * 0.2,
+      tipX,
+      tipY,
+    );
+    // Inner trailing edge curve: scoops back inward to the tail
+    ctx.bezierCurveTo(
+      x + dir * (reachX * 0.4),
+      centerY + heightPx * 0.05,
+      tailX + dir * (halfWidth * 0.3),
+      floorY - heightPx * 0.1,
+      tailX,
+      tailY,
+    );
+    // Close base back to baseFloorX
+    ctx.quadraticCurveTo(
+      (tailX + baseFloorX) / 2,
+      floorY,
+      baseFloorX,
+      baseFloorY,
+    );
     ctx.closePath();
-    ctx.fillStyle = hexToRgba(color, 0.28);
+    ctx.fillStyle = hexToRgba(color, 0.28 * fadeOut);
     ctx.fill();
 
-    // 3. Sharp dynamic leading slash blade (forward chevron)
+    // 4. Vibrant outer cutting blade stroke along the leading edge
     ctx.beginPath();
-    ctx.moveTo(x + dir * (halfWidth * 0.5), topY);
-    ctx.lineTo(frontX, midY);
-    ctx.lineTo(x + dir * (halfWidth * 0.1), bottomY);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 4.0;
+    ctx.moveTo(baseFloorX, baseFloorY);
+    ctx.bezierCurveTo(
+      x + dir * (reachX * 0.7),
+      floorY + 2,
+      tipX + dir * 6,
+      centerY + heightPx * 0.2,
+      tipX,
+      tipY,
+    );
+    ctx.strokeStyle = hexToRgba(color, 0.9 * fadeOut);
+    ctx.lineWidth = 3.8;
     ctx.lineCap = "round";
-    ctx.lineJoin = "round";
     ctx.shadowColor = color;
     ctx.shadowBlur = 10;
     ctx.stroke();
 
-    // 4. White-hot leading edge core
+    // 5. White-hot leading razor edge core
     ctx.beginPath();
-    ctx.moveTo(x + dir * (halfWidth * 0.5), topY + 2);
-    ctx.lineTo(frontX - dir * 1, midY);
-    ctx.lineTo(x + dir * (halfWidth * 0.1), bottomY - 1);
-    ctx.strokeStyle = "#ffffff";
+    ctx.moveTo(baseFloorX + dir * 2, baseFloorY - 1);
+    ctx.bezierCurveTo(
+      x + dir * (reachX * 0.7),
+      floorY,
+      tipX + dir * 4,
+      centerY + heightPx * 0.2,
+      tipX - dir * 1,
+      tipY + 1,
+    );
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.95 * fadeOut})`;
     ctx.lineWidth = 1.8;
     ctx.stroke();
+
+    // 6. Kinetic impact sparks leaping from the floor strike zone
+    const sparkCount = 4;
+    for (let i = 0; i < sparkCount; i++) {
+      const sparkT = (i + 1) / (sparkCount + 1);
+      const sparkX =
+        tipX * sparkT +
+        (baseFloorX + dir * (halfWidth * 0.6)) * (1 - sparkT) +
+        dir * (i * 3 * easeOut);
+      const sparkY =
+        tipY * sparkT + baseFloorY * (1 - sparkT) - (i % 2 === 0 ? 4 : -2);
+      ctx.beginPath();
+      ctx.arc(sparkX, sparkY, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * fadeOut})`;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+      ctx.fill();
+    }
 
     ctx.restore();
     return;

@@ -21,6 +21,7 @@ import {
   START_NAME_SOLID_FRAMES,
   isBowserCharacter,
   isCrouchState,
+  isDashAttackState,
   isDeadState,
   isDizzyState,
   isDonkeyKongCharacter,
@@ -1404,6 +1405,10 @@ describe("Tech and Roll state helpers", () => {
     expect(isGroundTechInPlaceState(0x04b)).toBe(false); // TechWall
     expect(isGroundTechInPlaceState(0x04c)).toBe(false); // TechCeil
     expect(isGroundTechInPlaceState(0x049)).toBe(false); // TechF
+
+    // Dash attack (0x0c0)
+    expect(isDashAttackState(0x0c0)).toBe(true);
+    expect(isDashAttackState(0x00a)).toBe(false);
   });
 });
 
@@ -5811,6 +5816,7 @@ describe("StageRenderer background themes", () => {
         rect: () => {},
         roundRect: () => {},
         quadraticCurveTo: () => {},
+        bezierCurveTo: () => {},
         translate: () => {},
         scale: () => {},
         rotate: () => {},
@@ -6272,6 +6278,30 @@ describe("StageRenderer background themes", () => {
       // Has cartoon fingers, thumb, and grab snatch glow
       expect(mock.arcCalls.length).toBeGreaterThanOrEqual(5);
       expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("draws dash-attack with sweeping crescent wave, slide dust plumes, and kinetic sparks", () => {
+      const mock = createMockAttackCanvas();
+      drawAttackArc(
+        mock.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "dash-attack", direction: "forward" },
+        null,
+        false,
+        5,
+      );
+
+      // Arc calls include ground slide friction dust puffs + floor sparks
+      expect(mock.arcCalls.length).toBeGreaterThanOrEqual(5);
+      // Fills include dust puffs and crescent body
+      expect(mock.fillCalls.length).toBeGreaterThanOrEqual(2);
+      // Strokes include outer cutting blade, white-hot core, and slipstreams
+      expect(mock.strokeCalls.length).toBeGreaterThanOrEqual(3);
     });
   });
 

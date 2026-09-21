@@ -50,6 +50,7 @@ import {
   isIdleState,
   isWalkState,
   isDashOrRunState,
+  isDashAttackState,
   isCrouchState,
   isJumpSquatState,
   isShieldDropState,
@@ -492,6 +493,8 @@ export function drawPlayer(
   ) {
     const t = Math.min(1.0, post.actionFrameCounter / 10);
     labelY = (y - 28) * (1 - t) + labelY * t;
+  } else if (isDashAttackState(post.actionStateId)) {
+    labelY = labelY + 6;
   } else if (isDizzy) {
     labelY = Math.min(labelY, topY - 36);
   }
@@ -686,6 +689,19 @@ export function drawPlayer(
     ctx.translate(x, y);
     ctx.rotate(runLean);
     ctx.translate(-x, -y + runBounce);
+  } else if (isDashAttackState(post.actionStateId)) {
+    // Dash attack: aggressive low sliding lunge / tackle along the ground
+    const dir = facingRight ? 1 : -1;
+    const f = post.actionFrameCounter;
+    // Strong forward lean during initial slide (frames 0..15), easing as friction slows the fighter (frames 16..30)
+    const slideIntensity = f < 16 ? 1.0 : Math.max(0, 1.0 - (f - 16) / 14);
+    const slideLean = dir * (0.24 * slideIntensity + 0.05); // ~14-16 deg forward lean
+    const scaleY = 1.0 - 0.15 * slideIntensity; // Drop low to the ground
+    const scaleX = 1.0 + 0.12 * slideIntensity; // Stretched along ground plane
+    ctx.translate(x, y);
+    ctx.scale(scaleX, scaleY);
+    ctx.rotate(slideLean);
+    ctx.translate(-x, -y);
   } else if (isCrouchState(post.actionStateId)) {
     // Compressed crouch stance
     ctx.translate(x, y);

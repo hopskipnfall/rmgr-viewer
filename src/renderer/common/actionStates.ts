@@ -173,6 +173,10 @@ export function isDashOrRunState(actionStateId: number): boolean {
   return DASH_RUN_ACTION_STATES.has(actionStateId);
 }
 
+export function isDashAttackState(actionStateId: number): boolean {
+  return actionStateId === 0x0c0;
+}
+
 const TEETER_ACTION_STATES = new Set([
   0x023, // Teeter
   0x024, // TeeterStart
