@@ -32,6 +32,7 @@ import {
   getJigglypuffSpecialType,
   isTechRollState,
   isTechInPlaceState,
+  isGroundTechInPlaceState,
   isRollState,
   isGetUpAttackState,
   isLedgeAttackState,
@@ -49,6 +50,11 @@ import {
   isIdleState,
   isWalkState,
   isDashOrRunState,
+  isDashAttackState,
+  isDtiltState,
+  isDsmashState,
+  isFsmashState,
+  isUsmashState,
   isCrouchState,
   isJumpSquatState,
   isShieldDropState,
@@ -485,6 +491,19 @@ export function drawPlayer(
 
   if (isProne || isGetUpAttack) {
     labelY = y - 28;
+  } else if (
+    isGroundTechInPlaceState(post.actionStateId) &&
+    post.actionFrameCounter <= 10
+  ) {
+    const t = Math.min(1.0, post.actionFrameCounter / 10);
+    labelY = (y - 28) * (1 - t) + labelY * t;
+  } else if (isDashAttackState(post.actionStateId)) {
+    labelY = labelY + 6;
+  } else if (
+    isDtiltState(post.actionStateId) ||
+    isDsmashState(post.actionStateId)
+  ) {
+    labelY = labelY + 8;
   } else if (isDizzy) {
     labelY = Math.min(labelY, topY - 36);
   }
@@ -566,6 +585,49 @@ export function drawPlayer(
     ctx.translate(x, centerY);
     ctx.rotate(spinAngle);
     ctx.translate(-x, -centerY);
+  } else if (isGroundTechInPlaceState(post.actionStateId)) {
+    // Ground tech in place (0x051):
+    // 3-phase breakfall recovery:
+    // Phase 1 (f = 0..5): Impact absorption / slap flat against stage floor
+    // Phase 2 (f = 6..13): Dynamic kip-up pop, snapping feet under with upward hop & stretch
+    // Phase 3 (f = 14..20): Landing settle back into neutral standing stance
+    const f = post.actionFrameCounter;
+    let scaleX: number;
+    let scaleY: number;
+    let hopY: number;
+    let tilt: number;
+    const dir = facingRight ? 1 : -1;
+
+    if (f <= 5) {
+      // Floor impact slap: flat against floor
+      const progress = f / 5;
+      scaleY = 0.38 + 0.12 * progress; // 0.38 -> 0.50
+      scaleX = 1.38 - 0.12 * progress; // 1.38 -> 1.26
+      hopY = 0;
+      tilt = dir * 0.08 * (1 - progress * 0.5);
+    } else if (f <= 13) {
+      // Explosive kip-up / spring off the deck
+      const t = (f - 5) / 8; // 0 -> 1
+      const ease = Math.sin(t * (Math.PI / 2));
+      scaleY = 0.5 + 0.58 * ease; // 0.50 -> 1.08
+      scaleX = 1.26 - 0.32 * ease; // 1.26 -> 0.94
+      hopY = -Math.sin(t * Math.PI) * Math.min(6, heightPx * 0.1);
+      tilt = dir * 0.04 * (1 - t);
+    } else {
+      // Settle from kip-up into stance (f >= 14)
+      const t = Math.min(1.0, (f - 13) / 7); // 0 -> 1
+      scaleY = 1.08 - 0.08 * t; // 1.08 -> 1.0
+      scaleX = 0.94 + 0.06 * t; // 0.94 -> 1.0
+      hopY = 0;
+      tilt = 0;
+    }
+
+    ctx.translate(x, y + hopY);
+    ctx.scale(scaleX, scaleY);
+    if (tilt !== 0) {
+      ctx.rotate(tilt);
+    }
+    ctx.translate(-x, -y);
   } else if (isProne) {
     // Flattened prone against stage floor at feet pivot (x, y)
     ctx.translate(x, y);
@@ -636,6 +698,44 @@ export function drawPlayer(
     ctx.translate(x, y);
     ctx.rotate(runLean);
     ctx.translate(-x, -y + runBounce);
+  } else if (isDashAttackState(post.actionStateId)) {
+    // Dash attack: aggressive low sliding lunge / tackle along the ground
+    const dir = facingRight ? 1 : -1;
+    const f = post.actionFrameCounter;
+    // Strong forward lean during initial slide (frames 0..15), easing as friction slows the fighter (frames 16..30)
+    const slideIntensity = f < 16 ? 1.0 : Math.max(0, 1.0 - (f - 16) / 14);
+    const slideLean = dir * (0.24 * slideIntensity + 0.05); // ~14-16 deg forward lean
+    const scaleY = 1.0 - 0.15 * slideIntensity; // Drop low to the ground
+    const scaleX = 1.0 + 0.12 * slideIntensity; // Stretched along ground plane
+    ctx.translate(x, y);
+    ctx.scale(scaleX, scaleY);
+    ctx.rotate(slideLean);
+    ctx.translate(-x, -y);
+  } else if (
+    isDtiltState(post.actionStateId) ||
+    isDsmashState(post.actionStateId)
+  ) {
+    // Low crouching stance for down-tilt and down-smash along stage floor
+    ctx.translate(x, y);
+    ctx.scale(1.15, 0.78);
+    ctx.translate(-x, -y);
+  } else if (isFsmashState(post.actionStateId)) {
+    // Forward smash: forward lunge commitment during surge phase
+    const dir = facingRight ? 1 : -1;
+    const f = post.actionFrameCounter;
+    const lunge =
+      f >= 3 && f <= 12 ? Math.sin(((f - 3) / 9) * Math.PI) * 0.12 : 0;
+    ctx.translate(x, y);
+    ctx.rotate(dir * lunge);
+    ctx.translate(-x, -y);
+  } else if (isUsmashState(post.actionStateId)) {
+    // Up smash: upward recoil stretch during launch
+    const f = post.actionFrameCounter;
+    const stretch =
+      f >= 3 && f <= 10 ? Math.sin(((f - 3) / 7) * Math.PI) * 0.1 : 0;
+    ctx.translate(x, y);
+    ctx.scale(1.0 - stretch * 0.5, 1.0 + stretch);
+    ctx.translate(-x, -y);
   } else if (isCrouchState(post.actionStateId)) {
     // Compressed crouch stance
     ctx.translate(x, y);
@@ -1764,6 +1864,7 @@ export function drawPlayer(
         halfWidth,
         post.actionFrameCounter,
         isOpponent,
+        true,
       );
     }
     drawTechRollSpeedLines(

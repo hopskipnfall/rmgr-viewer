@@ -24,8 +24,12 @@ export function drawAttackArc(
   const baseRadius = Math.max(halfWidth, heightPx * 0.5);
 
   if (attack.type === "aerial" && attack.direction === "neutral") {
-    // Nair: 360-degree expanding aerodynamic ring with concentric trailing echo ripple
+    // Nair: 360-degree rotating 4-vane aerodynamic cyclone / turbine vortex with concentric trailing echo ripple
     // Outward expansion in frames 0-6 (7 frames of travel), then sustained at peak reach with energized shimmer
+    const isEndlag = frame >= 9;
+    const activeAlpha = isEndlag
+      ? Math.max(0.4, 1.0 - (frame - 8) * 0.045)
+      : 1.0;
     const progress = Math.min(1.0, (frame + 1) / 7);
     const easeOut = 1 - Math.pow(1 - progress, 3);
     const startRadius = baseRadius * 0.75;
@@ -39,7 +43,7 @@ export function drawAttackArc(
     const echoRadius = Math.max(baseRadius * 0.7, radius * 0.82);
     ctx.beginPath();
     ctx.arc(x, centerY, echoRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = hexToRgba(color, 0.45);
+    ctx.strokeStyle = hexToRgba(color, 0.45 * activeAlpha);
     ctx.lineWidth = 2.4;
     ctx.stroke();
 
@@ -47,19 +51,67 @@ export function drawAttackArc(
     ctx.save();
     ctx.beginPath();
     ctx.arc(x, centerY, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = hexToRgba(color, 0.95 * activeAlpha);
     ctx.lineWidth = 4.2;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = isEndlag ? 4 : 10;
     ctx.stroke();
     ctx.restore();
 
-    // Crisp white-hot inner core
-    ctx.beginPath();
-    ctx.arc(x, centerY, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
-    ctx.lineWidth = 2.0;
-    ctx.stroke();
+    // 3. Four rotating aerodynamic cyclone vanes / turbine blades (unmistakable spinning vortex, distinct from shields)
+    const spinAngle = frame * 0.22;
+    for (let i = 0; i < 4; i++) {
+      const vaneAngle = spinAngle + (i * Math.PI) / 2;
+      const innerX = x + Math.cos(vaneAngle - 0.32) * echoRadius;
+      const innerY = centerY + Math.sin(vaneAngle - 0.32) * echoRadius;
+      const outerX = x + Math.cos(vaneAngle) * (radius + (isEndlag ? 0 : 2));
+      const outerY =
+        centerY + Math.sin(vaneAngle) * (radius + (isEndlag ? 0 : 2));
+      const ctrlX =
+        x + Math.cos(vaneAngle - 0.12) * ((echoRadius + radius) / 2);
+      const ctrlY =
+        centerY + Math.sin(vaneAngle - 0.12) * ((echoRadius + radius) / 2);
+
+      ctx.beginPath();
+      ctx.moveTo(innerX, innerY);
+      ctx.quadraticCurveTo(ctrlX, ctrlY, outerX, outerY);
+      ctx.strokeStyle = hexToRgba(color, 0.75 * activeAlpha);
+      ctx.lineWidth = 2.6;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      if (!isEndlag) {
+        // White-hot tip along each rotating vane
+        ctx.beginPath();
+        ctx.moveTo(ctrlX, ctrlY);
+        ctx.lineTo(outerX, outerY);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+
+        // Tangential kinetic spark streak at perimeter tip
+        const sparkAngle = vaneAngle + 0.08;
+        const sx = x + Math.cos(sparkAngle) * (radius + 1.5);
+        const sy = centerY + Math.sin(sparkAngle) * (radius + 1.5);
+        const ex = x + Math.cos(sparkAngle + 0.05) * (radius + 2.5);
+        const ey = centerY + Math.sin(sparkAngle + 0.05) * (radius + 2.5);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+      }
+    }
+
+    // 4. White-hot outer rim core (dissolves during endlag)
+    if (!isEndlag) {
+      ctx.beginPath();
+      ctx.arc(x, centerY, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+    }
     return;
   }
 
@@ -620,88 +672,165 @@ export function drawAttackArc(
   }
 
   if (attack.type === "dash-attack") {
-    // Dash Attack: dynamic low-to-ground forward sliding thrust wave with speed trails
+    // Dash Attack: dynamic sweeping ground-slide crescent wave with billowing slide dust & kinetic sparks
     ctx.save();
     const dir = facingRight ? 1 : -1;
-    const frontX = x + dir * (halfWidth * 1.5);
-    const startX = x - dir * (halfWidth * 0.4);
-    const bottomY = centerY + heightPx * 0.45;
-    const midY = centerY + heightPx * 0.15;
-    const topY = centerY - heightPx * 0.2;
+    const floorY = centerY + heightPx * 0.48; // Stage floor contact level
+    const progress = Math.min(1.0, (frame + 1) / 10);
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const fadeOut = frame > 12 ? Math.max(0, 1 - (frame - 12) / 14) : 1.0;
 
-    // 1. Triple sliding speed streak lines along the ground / lower body
-    const trailLevels = [
+    if (fadeOut <= 0) {
+      ctx.restore();
+      return;
+    }
+
+    // 1. Billowing ground slide friction dust plumes behind sliding feet
+    const dustPuffs = [
+      { offsetDist: halfWidth * 0.7, r: 4.5, yOff: -3, alphaMul: 0.7 },
       {
-        y: bottomY,
-        xStart: startX - dir * (halfWidth * 0.8),
-        xEnd: frontX - dir * (halfWidth * 0.2),
-        w: 2.5,
-        alpha: 0.8,
+        offsetDist: halfWidth * 1.1 + progress * 6,
+        r: 3.5,
+        yOff: -5,
+        alphaMul: 0.55,
       },
       {
-        y: midY,
-        xStart: startX - dir * (halfWidth * 0.5),
-        xEnd: frontX - dir * (halfWidth * 0.4),
-        w: 2.0,
-        alpha: 0.65,
-      },
-      {
-        y: topY,
-        xStart: startX - dir * (halfWidth * 0.2),
-        xEnd: frontX - dir * (halfWidth * 0.7),
-        w: 1.5,
-        alpha: 0.5,
+        offsetDist: halfWidth * 1.5 + progress * 10,
+        r: 2.5,
+        yOff: -6,
+        alphaMul: 0.4,
       },
     ];
-
-    for (const t of trailLevels) {
+    for (const puff of dustPuffs) {
+      const px = x - dir * puff.offsetDist;
+      const py = floorY + puff.yOff;
       ctx.beginPath();
-      ctx.moveTo(t.xStart, t.y);
-      ctx.lineTo(t.xEnd, t.y);
-      ctx.strokeStyle = `rgba(255, 255, 255, ${t.alpha})`;
-      ctx.lineWidth = t.w;
+      ctx.arc(px, py, puff.r, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba("#e2e8f0", puff.alphaMul * fadeOut);
+      ctx.fill();
+    }
+
+    // 2. Trailing curved kinetic speed ribbons (aerodynamic slipstream along the slide path)
+    const slipstreams = [
+      { yRatio: 0.42, startOff: -0.9, endOff: 0.6, w: 2.4, alpha: 0.65 },
+      { yRatio: 0.15, startOff: -0.6, endOff: 1.1, w: 1.8, alpha: 0.5 },
+      { yRatio: -0.15, startOff: -0.3, endOff: 0.8, w: 1.4, alpha: 0.35 },
+    ];
+    for (const s of slipstreams) {
+      const sy = centerY + heightPx * s.yRatio;
+      const sx = x + dir * (halfWidth * s.startOff);
+      const ex = x + dir * (halfWidth * (s.endOff * easeOut));
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo((sx + ex) / 2, sy - 2, ex, sy);
+      ctx.strokeStyle = hexToRgba(color, s.alpha * fadeOut);
+      ctx.lineWidth = s.w;
       ctx.lineCap = "round";
       ctx.stroke();
 
-      // Outer glow on trail
-      ctx.beginPath();
-      ctx.moveTo(t.xStart, t.y);
-      ctx.lineTo(t.xEnd, t.y);
-      ctx.strokeStyle = hexToRgba(color, t.alpha * 0.6);
-      ctx.lineWidth = t.w + 2;
-      ctx.stroke();
+      // White core on lowest / main friction streak
+      if (s.w > 2) {
+        ctx.beginPath();
+        ctx.moveTo(sx + dir * 4, sy);
+        ctx.lineTo(ex - dir * 2, sy);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * fadeOut})`;
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
+      }
     }
 
-    // 2. Translucent forward-lunging energy wedge
+    // 3. Sweeping ground-slide crescent wave (expansive forward curved cutting blade)
+    // Starts near the sliding base on the stage floor, arcs forward and swoops upward
+    const reachX = halfWidth * (1.2 + 0.7 * easeOut);
+    const tipX = x + dir * reachX;
+    const tipY = centerY - heightPx * 0.12;
+    const baseFloorX = x + dir * (halfWidth * 0.2);
+    const baseFloorY = floorY - 2;
+    const tailX = x - dir * (halfWidth * 0.4);
+    const tailY = floorY - heightPx * 0.18;
+
+    // Translucent crescent body fill
     ctx.beginPath();
-    ctx.moveTo(startX, bottomY);
-    ctx.lineTo(frontX, midY);
-    ctx.lineTo(x + dir * (halfWidth * 0.5), topY);
+    ctx.moveTo(baseFloorX, baseFloorY);
+    // Outer leading edge curve: sweeps from floor up to the forward tip
+    ctx.bezierCurveTo(
+      x + dir * (reachX * 0.7),
+      floorY + 2,
+      tipX + dir * 6,
+      centerY + heightPx * 0.2,
+      tipX,
+      tipY,
+    );
+    // Inner trailing edge curve: scoops back inward to the tail
+    ctx.bezierCurveTo(
+      x + dir * (reachX * 0.4),
+      centerY + heightPx * 0.05,
+      tailX + dir * (halfWidth * 0.3),
+      floorY - heightPx * 0.1,
+      tailX,
+      tailY,
+    );
+    // Close base back to baseFloorX
+    ctx.quadraticCurveTo(
+      (tailX + baseFloorX) / 2,
+      floorY,
+      baseFloorX,
+      baseFloorY,
+    );
     ctx.closePath();
-    ctx.fillStyle = hexToRgba(color, 0.28);
+    ctx.fillStyle = hexToRgba(color, 0.28 * fadeOut);
     ctx.fill();
 
-    // 3. Sharp dynamic leading slash blade (forward chevron)
+    // 4. Vibrant outer cutting blade stroke along the leading edge
     ctx.beginPath();
-    ctx.moveTo(x + dir * (halfWidth * 0.5), topY);
-    ctx.lineTo(frontX, midY);
-    ctx.lineTo(x + dir * (halfWidth * 0.1), bottomY);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 4.0;
+    ctx.moveTo(baseFloorX, baseFloorY);
+    ctx.bezierCurveTo(
+      x + dir * (reachX * 0.7),
+      floorY + 2,
+      tipX + dir * 6,
+      centerY + heightPx * 0.2,
+      tipX,
+      tipY,
+    );
+    ctx.strokeStyle = hexToRgba(color, 0.9 * fadeOut);
+    ctx.lineWidth = 3.8;
     ctx.lineCap = "round";
-    ctx.lineJoin = "round";
     ctx.shadowColor = color;
     ctx.shadowBlur = 10;
     ctx.stroke();
 
-    // 4. White-hot leading edge core
+    // 5. White-hot leading razor edge core
     ctx.beginPath();
-    ctx.moveTo(x + dir * (halfWidth * 0.5), topY + 2);
-    ctx.lineTo(frontX - dir * 1, midY);
-    ctx.lineTo(x + dir * (halfWidth * 0.1), bottomY - 1);
-    ctx.strokeStyle = "#ffffff";
+    ctx.moveTo(baseFloorX + dir * 2, baseFloorY - 1);
+    ctx.bezierCurveTo(
+      x + dir * (reachX * 0.7),
+      floorY,
+      tipX + dir * 4,
+      centerY + heightPx * 0.2,
+      tipX - dir * 1,
+      tipY + 1,
+    );
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.95 * fadeOut})`;
     ctx.lineWidth = 1.8;
     ctx.stroke();
+
+    // 6. Kinetic impact sparks leaping from the floor strike zone
+    const sparkCount = 4;
+    for (let i = 0; i < sparkCount; i++) {
+      const sparkT = (i + 1) / (sparkCount + 1);
+      const sparkX =
+        tipX * sparkT +
+        (baseFloorX + dir * (halfWidth * 0.6)) * (1 - sparkT) +
+        dir * (i * 3 * easeOut);
+      const sparkY =
+        tipY * sparkT + baseFloorY * (1 - sparkT) - (i % 2 === 0 ? 4 : -2);
+      ctx.beginPath();
+      ctx.arc(sparkX, sparkY, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * fadeOut})`;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+      ctx.fill();
+    }
 
     ctx.restore();
     return;
@@ -722,7 +851,12 @@ export function drawAttackArc(
 
   if (attack.type === "aerial") {
     // Directional aerial attacks (Fair, Bair, Uair, Dair):
-    // Fast, agile, aerodynamic razor slash with expansive 7-frame outward sweep and glowing trail
+    // Fast, agile, aerodynamic razor slash with multi-layered luminous blade ribbon,
+    // move-specific angular spans, threat-level timing, and kinetic accents.
+    const isEndlag = frame >= 9;
+    const activeAlpha = isEndlag
+      ? Math.max(0.42, 1.0 - (frame - 8) * 0.045)
+      : 1.0;
     const progress = Math.min(1.0, (frame + 1) / 7);
     const easeOut = 1 - Math.pow(1 - progress, 3);
     const startRadius = baseRadius * 0.75;
@@ -733,7 +867,22 @@ export function drawAttackArc(
       frame >= 7 ? Math.sin((frame - 7) * 0.4) * (baseRadius * 0.035) : 0;
     const radius = currentRadius + pulse;
 
-    const span = (85 * Math.PI) / 180;
+    // Move-specific angular spans:
+    // Fair: Expansive forward sweep (95°)
+    // Bair: Compact punchy high-impact crescent (75°)
+    // Uair: Upward canopy dome (90°)
+    // Dair: Downward spike / drill wedge (80°)
+    let span: number;
+    if (attack.direction === "forward") {
+      span = (95 * Math.PI) / 180;
+    } else if (attack.direction === "back") {
+      span = (75 * Math.PI) / 180;
+    } else if (attack.direction === "up") {
+      span = (90 * Math.PI) / 180;
+    } else {
+      span = (80 * Math.PI) / 180;
+    }
+
     const startAngle = effectiveCenter - span / 2;
     const endAngle = effectiveCenter + span / 2;
 
@@ -741,7 +890,7 @@ export function drawAttackArc(
     const echoRadius = Math.max(baseRadius * 0.7, radius * 0.82);
     ctx.beginPath();
     ctx.arc(x, centerY, echoRadius, startAngle + 0.08, endAngle - 0.08);
-    ctx.strokeStyle = hexToRgba(color, 0.5);
+    ctx.strokeStyle = hexToRgba(color, 0.5 * activeAlpha);
     ctx.lineWidth = 2.4;
     ctx.lineCap = "round";
     ctx.stroke();
@@ -750,13 +899,25 @@ export function drawAttackArc(
     ctx.save();
     ctx.beginPath();
     ctx.arc(x, centerY, radius, startAngle, endAngle);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 4.2;
+    ctx.strokeStyle = hexToRgba(color, 0.95 * activeAlpha);
+    ctx.lineWidth = attack.direction === "back" ? 4.8 : 4.2;
     ctx.lineCap = "round";
     ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = isEndlag ? 4 : 10;
     ctx.stroke();
     ctx.restore();
+
+    // 3. Mid-blade luminous core band (bridges outer arc & echo arc for solid silhouette readability without fill)
+    const midRadius = (echoRadius + radius) / 2;
+    ctx.beginPath();
+    ctx.arc(x, centerY, midRadius, startAngle + 0.05, endAngle - 0.05);
+    ctx.strokeStyle = hexToRgba(
+      color,
+      (attack.direction === "back" ? 0.55 : 0.42) * activeAlpha,
+    );
+    ctx.lineWidth = 3.0;
+    ctx.lineCap = "round";
+    ctx.stroke();
 
     if (hasStickAngle) {
       // Angled direction is significantly brighter in the direction of the joystick
@@ -768,7 +929,7 @@ export function drawAttackArc(
       ctx.save();
       const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 22);
       flareGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
-      flareGrad.addColorStop(0.35, hexToRgba(color, 0.92));
+      flareGrad.addColorStop(0.35, hexToRgba(color, 0.92 * activeAlpha));
       flareGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
       ctx.fillStyle = flareGrad;
       ctx.beginPath();
@@ -787,25 +948,99 @@ export function drawAttackArc(
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 4.8;
       ctx.shadowColor = color;
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = isEndlag ? 6 : 14;
       ctx.lineCap = "round";
       ctx.stroke();
       ctx.restore();
     } else {
-      // 3. Inner white highlight core
-      ctx.beginPath();
-      ctx.arc(x, centerY, radius, startAngle + 0.08, endAngle - 0.08);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
-      ctx.lineWidth = 2.0;
-      ctx.lineCap = "round";
-      ctx.stroke();
+      // 4. Inner white highlight core (bright during active frames, dims during endlag)
+      if (!isEndlag) {
+        ctx.beginPath();
+        ctx.arc(x, centerY, radius, startAngle + 0.08, endAngle - 0.08);
+        ctx.strokeStyle =
+          attack.direction === "back"
+            ? "rgba(255, 255, 255, 0.96)"
+            : "rgba(255, 255, 255, 0.88)";
+        ctx.lineWidth = attack.direction === "back" ? 2.4 : 2.0;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+    }
+
+    // 5. Move-specific kinetic accents during active frames
+    if (!isEndlag) {
+      if (attack.direction === "down") {
+        // Dair: 3 downward velocity streaks beneath the downward spike arc
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        for (let i = -1; i <= 1; i++) {
+          const streakX = x + i * (halfWidth * 0.45);
+          const streakY = centerY + radius * 0.72;
+          ctx.beginPath();
+          ctx.moveTo(streakX, streakY);
+          ctx.lineTo(streakX, streakY + 8 + (i === 0 ? 3 : 0));
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else if (attack.direction === "up") {
+        // Uair: aerodynamic lift crown curve over the top of the canopy
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x, centerY, radius + 3.5, startAngle + 0.22, endAngle - 0.22);
+        ctx.strokeStyle = hexToRgba(color, 0.6);
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        ctx.restore();
+      } else if (attack.direction === "back") {
+        // Bair: dual kinetic impact sparks at rear apex
+        ctx.save();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        for (const angleOff of [-0.15, 0.15]) {
+          const sx = x + Math.cos(effectiveCenter + angleOff) * (radius + 2);
+          const sy =
+            centerY + Math.sin(effectiveCenter + angleOff) * (radius + 2);
+          ctx.beginPath();
+          ctx.moveTo(sx - 1.5, sy);
+          ctx.lineTo(sx + 1.5, sy);
+          ctx.moveTo(sx, sy - 1.5);
+          ctx.lineTo(sx, sy + 1.5);
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else if (attack.direction === "forward") {
+        // Fair: forward cutting tip spark crosslet
+        ctx.save();
+        const tipAngle = effectiveCenter + (facingRight ? -0.1 : 0.1);
+        const tipSparkX = x + Math.cos(tipAngle) * (radius + 2);
+        const tipSparkY = centerY + Math.sin(tipAngle) * (radius + 2);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(tipSparkX - 2, tipSparkY);
+        ctx.lineTo(tipSparkX + 2, tipSparkY);
+        ctx.moveTo(tipSparkX, tipSparkY - 2);
+        ctx.lineTo(tipSparkX, tipSparkY + 2);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   } else if (attack.type === "smash") {
-    // Smash attack: slow, heavy, massive dual-layer energy crescent with concussive power
+    // Smash attack: slow, heavy, massive energy crescents with concussive power
     // Multi-phase animation:
     // - Gather phase (frame < 3): dense compact crescent close to body
-    // - Concussive surge phase (frame 3..8): expands heavily outward to peak reach
+    // - Concussive surge phase (frame 3..8): expands heavily outward to peak reach (2.3 * baseRadius)
     // - Sustained impact / recovery phase (frame >= 9): holds full wide crescent throughout endlag
+    const isEndlag = frame >= 15;
+    const activeAlpha = isEndlag
+      ? Math.max(0.4, 1.0 - (frame - 14) * 0.045)
+      : 1.0;
+
     let radiusOuter: number;
     let radiusInner: number;
 
@@ -826,6 +1061,273 @@ export function drawAttackArc(
       radiusInner = baseRadius * 1.5 + deepHum * 0.5;
     }
 
+    if (attack.direction === "down") {
+      // Down Smash: low-to-the-ground bidirectional split sweeps hugging the stage floor on both sides
+      // (Fox split kick, Mario breakdance, Pikachu tail sweep, Falcon double sweep)
+      // Heavy dual wedge fills, outer cutting blades, white-hot cores, concussive floor sparks, and friction dust
+      const dir = facingRight ? 1 : -1;
+      const floorY = centerY + heightPx * 0.48;
+      const arcCenterY = centerY + heightPx * 0.12;
+
+      // 1. Stage floor ground pressure shockwave ring
+      const ringProgress = Math.min(1.0, (frame + 1) / 12);
+      const ringAlpha = Math.max(0, 1 - ringProgress);
+      if (ringAlpha > 0.05) {
+        ctx.beginPath();
+        ctx.ellipse(
+          x,
+          floorY,
+          radiusOuter * 0.8,
+          Math.max(3, heightPx * 0.12),
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.strokeStyle = hexToRgba(color, 0.4 * ringAlpha);
+        ctx.lineWidth = 2.0;
+        ctx.stroke();
+      }
+
+      // Front low sweep angles (grazing forward along floor)
+      const fSpan = (76 * Math.PI) / 180;
+      const fCenter = facingRight
+        ? (18 * Math.PI) / 180
+        : (162 * Math.PI) / 180;
+      const fStart = fCenter - fSpan / 2;
+      const fEnd = fCenter + fSpan / 2;
+
+      // Back low sweep angles (grazing backward along floor)
+      const bSpan = (72 * Math.PI) / 180;
+      const bCenter = facingRight
+        ? (162 * Math.PI) / 180
+        : (18 * Math.PI) / 180;
+      const bStart = bCenter - bSpan / 2;
+      const bEnd = bCenter + bSpan / 2;
+
+      // Front Sweep:
+      // 2. Translucent wedge fill front
+      ctx.beginPath();
+      ctx.arc(x, arcCenterY, radiusOuter, fStart, fEnd);
+      ctx.arc(x, arcCenterY, radiusInner, fEnd, fStart, true);
+      ctx.closePath();
+      ctx.fillStyle = hexToRgba(color, 0.28 * activeAlpha);
+      ctx.fill();
+
+      // 3. Heavy outer glowing impact blade front
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, arcCenterY, radiusOuter, fStart, fEnd);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 5.2;
+      ctx.lineCap = "round";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = isEndlag ? 4 : 12;
+      ctx.stroke();
+      ctx.restore();
+
+      // 4. White-hot core front (dissolves on endlag)
+      if (!isEndlag) {
+        ctx.beginPath();
+        ctx.arc(x, arcCenterY, radiusOuter, fStart + 0.08, fEnd - 0.08);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+
+      // 5. Trailing inner speed line front
+      ctx.beginPath();
+      ctx.arc(x, arcCenterY, radiusInner, fStart + 0.1, fEnd - 0.1);
+      ctx.strokeStyle = hexToRgba(color, 0.65 * activeAlpha);
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // Back Sweep:
+      // 6. Translucent wedge fill back
+      const rOuterBack = radiusOuter * 0.92;
+      const rInnerBack = radiusInner * 0.92;
+      ctx.beginPath();
+      ctx.arc(x, arcCenterY, rOuterBack, bStart, bEnd);
+      ctx.arc(x, arcCenterY, rInnerBack, bEnd, bStart, true);
+      ctx.closePath();
+      ctx.fillStyle = hexToRgba(color, 0.24 * activeAlpha);
+      ctx.fill();
+
+      // 7. Heavy outer glowing impact blade back
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, arcCenterY, rOuterBack, bStart, bEnd);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4.8;
+      ctx.lineCap = "round";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = isEndlag ? 4 : 10;
+      ctx.stroke();
+      ctx.restore();
+
+      // 8. White-hot core back (dissolves on endlag)
+      if (!isEndlag) {
+        ctx.beginPath();
+        ctx.arc(x, arcCenterY, rOuterBack, bStart + 0.08, bEnd - 0.08);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+        ctx.lineWidth = 2.0;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+
+      // 9. Trailing inner speed line back
+      ctx.beginPath();
+      ctx.arc(x, arcCenterY, rInnerBack, bStart + 0.1, bEnd - 0.1);
+      ctx.strokeStyle = hexToRgba(color, 0.6 * activeAlpha);
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // 10. Floor friction streaks front and back
+      const frontStreakLen = radiusOuter * 0.55;
+      ctx.beginPath();
+      ctx.moveTo(x + dir * (halfWidth * 0.5), floorY);
+      ctx.lineTo(x + dir * (halfWidth * 0.5 + frontStreakLen), floorY);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.85 * activeAlpha})`;
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      const backStreakLen = rOuterBack * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x - dir * (halfWidth * 0.5), floorY);
+      ctx.lineTo(x - dir * (halfWidth * 0.5 + backStreakLen), floorY);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.75 * activeAlpha})`;
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // 11. Concussive floor sparks during active impact frames (3..14)
+      if (frame >= 3 && frame <= 14) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 1.8;
+        ctx.lineCap = "round";
+        for (const side of [1, -1]) {
+          const sparkOriginX = x + side * dir * (halfWidth * 0.9);
+          for (let i = 0; i < 2; i++) {
+            const sx = sparkOriginX + side * dir * (i * 6);
+            const sy = floorY;
+            const sparkAngle =
+              (side * dir > 0 ? -1 : 1) * (0.35 + i * 0.3) - Math.PI / 2;
+            const len = 7 + i * 3;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(
+              sx + Math.cos(sparkAngle) * len,
+              sy + Math.sin(sparkAngle) * len,
+            );
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+
+      // 12. Lateral dust puffs under feet
+      const dustPuffFrontX = x + dir * (halfWidth * 0.9);
+      const dustPuffBackX = x - dir * (halfWidth * 0.9);
+      for (const dpx of [dustPuffFrontX, dustPuffBackX]) {
+        ctx.beginPath();
+        ctx.arc(dpx, floorY - 3, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba("#e2e8f0", 0.6 * activeAlpha);
+        ctx.fill();
+      }
+
+      return;
+    }
+
+    if (attack.direction === "up") {
+      // Up Smash: explosive vertical launch dome canopy with upward energy streaks and ground stomp dust
+      const span = (115 * Math.PI) / 180;
+      const startAngle = effectiveCenter - span / 2;
+      const endAngle = effectiveCenter + span / 2;
+
+      // 1. Translucent energy wedge fill
+      ctx.beginPath();
+      ctx.arc(x, centerY, radiusOuter, startAngle, endAngle);
+      ctx.arc(x, centerY, radiusInner, endAngle, startAngle, true);
+      ctx.closePath();
+      ctx.fillStyle = hexToRgba(color, 0.28 * activeAlpha);
+      ctx.fill();
+
+      // 2. Heavy outer glowing impact blade
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, centerY, radiusOuter, startAngle, endAngle);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 5.5;
+      ctx.lineCap = "round";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = isEndlag ? 4 : 12;
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. Bright intense white energy core (dissolves on endlag)
+      if (!isEndlag) {
+        ctx.beginPath();
+        ctx.arc(x, centerY, radiusOuter, startAngle + 0.1, endAngle - 0.1);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 2.4;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+
+      // 4. Trailing inner speed line
+      ctx.beginPath();
+      ctx.arc(x, centerY, radiusInner, startAngle + 0.15, endAngle - 0.15);
+      ctx.strokeStyle = hexToRgba(color, 0.65 * activeAlpha);
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      // 5. Upward vertical launch energy streaks leaping from canopy crest on active frames (3..12)
+      if (frame >= 3 && frame <= 12) {
+        ctx.save();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.0;
+        ctx.lineCap = "round";
+        const launchAngles = [
+          effectiveCenter - 0.28,
+          effectiveCenter,
+          effectiveCenter + 0.28,
+        ];
+        const launchLen = baseRadius * 0.45;
+        for (const la of launchAngles) {
+          const sx = x + Math.cos(la) * radiusOuter;
+          const sy = centerY + Math.sin(la) * radiusOuter;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx, sy - launchLen);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Ground stomp foot shockwave dust at feet
+        const floorY = centerY + heightPx * 0.48;
+        for (const side of [-1, 1]) {
+          ctx.beginPath();
+          ctx.arc(
+            x + side * (halfWidth * 0.8),
+            floorY - 2,
+            3.2,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fillStyle = hexToRgba("#e2e8f0", 0.55 * activeAlpha);
+          ctx.fill();
+        }
+      }
+
+      return;
+    }
+
+    // Forward Smash (or angled forward smash)
     const span = (110 * Math.PI) / 180;
     const startAngle = effectiveCenter - span / 2;
     const endAngle = effectiveCenter + span / 2;
@@ -835,7 +1337,7 @@ export function drawAttackArc(
     ctx.arc(x, centerY, radiusOuter, startAngle, endAngle);
     ctx.arc(x, centerY, radiusInner, endAngle, startAngle, true);
     ctx.closePath();
-    ctx.fillStyle = hexToRgba(color, 0.28);
+    ctx.fillStyle = hexToRgba(color, 0.28 * activeAlpha);
     ctx.fill();
 
     // 2. Heavy outer glowing impact blade
@@ -846,7 +1348,7 @@ export function drawAttackArc(
     ctx.lineWidth = 5.5;
     ctx.lineCap = "round";
     ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = isEndlag ? 4 : 12;
     ctx.stroke();
     ctx.restore();
 
@@ -860,7 +1362,7 @@ export function drawAttackArc(
       ctx.save();
       const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 24);
       flareGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
-      flareGrad.addColorStop(0.35, hexToRgba(color, 0.95));
+      flareGrad.addColorStop(0.35, hexToRgba(color, 0.95 * activeAlpha));
       flareGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
       ctx.fillStyle = flareGrad;
       ctx.beginPath();
@@ -880,24 +1382,26 @@ export function drawAttackArc(
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 6.5;
       ctx.shadowColor = "#ffffff";
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = isEndlag ? 6 : 16;
       ctx.lineCap = "round";
       ctx.stroke();
       ctx.restore();
     } else {
-      // 3. Bright intense white energy core
-      ctx.beginPath();
-      ctx.arc(x, centerY, radiusOuter, startAngle + 0.1, endAngle - 0.1);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-      ctx.lineWidth = 2.4;
-      ctx.lineCap = "round";
-      ctx.stroke();
+      // 3. Bright intense white energy core (dissolves during endlag)
+      if (!isEndlag) {
+        ctx.beginPath();
+        ctx.arc(x, centerY, radiusOuter, startAngle + 0.1, endAngle - 0.1);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 2.4;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
     }
 
     // 4. Trailing inner speed line
     ctx.beginPath();
     ctx.arc(x, centerY, radiusInner, startAngle + 0.15, endAngle - 0.15);
-    ctx.strokeStyle = hexToRgba(color, 0.65);
+    ctx.strokeStyle = hexToRgba(color, 0.65 * activeAlpha);
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.stroke();
@@ -924,10 +1428,24 @@ export function drawAttackArc(
         ctx.lineTo(sx2, sy2);
         ctx.stroke();
       }
+
+      // Front foot friction streak on stage floor
+      const dir = facingRight ? 1 : -1;
+      const floorY = centerY + heightPx * 0.48;
+      ctx.beginPath();
+      ctx.moveTo(x + dir * (halfWidth * 0.3), floorY);
+      ctx.lineTo(x + dir * (halfWidth * 0.3 + baseRadius * 0.55), floorY);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
       ctx.restore();
     }
   } else {
-    // Grounded Tilts: crisp, sharp direct slash arc with 7-frame outward sweep and trailing echo
+    // Grounded Tilts: crisp, sharp direct slash arc with 7-frame outward sweep, mid-blade ribbon, and trailing echo
+    const isEndlag = frame >= 8;
+    const activeAlpha = isEndlag
+      ? Math.max(0.42, 1.0 - (frame - 7) * 0.05)
+      : 1.0;
     const progress = Math.min(1.0, (frame + 1) / 7);
     const easeOut = 1 - Math.pow(1 - progress, 3);
     const startRadius = baseRadius * 0.7;
@@ -937,42 +1455,70 @@ export function drawAttackArc(
       frame >= 7 ? Math.sin((frame - 7) * 0.35) * (baseRadius * 0.025) : 0;
     const effectiveRadius = radius + pulse;
 
-    const span = (82 * Math.PI) / 180;
-    const startAngle = effectiveCenter - span / 2;
-    const endAngle = effectiveCenter + span / 2;
+    const dir = facingRight ? 1 : -1;
+    const floorY = centerY + heightPx * 0.48;
 
-    // 1. Trailing speed echo arc
+    // Angle and span tailored by direction:
+    // Dtilt: Low-grazing forward ankle sweep along the stage floor plane
+    // Utilt: Upward canopy dome
+    // Ftilt: Forward slash
+    let tiltCenter: number;
+    let span: number;
+    if (attack.direction === "down") {
+      tiltCenter = facingRight ? (14 * Math.PI) / 180 : (166 * Math.PI) / 180;
+      span = (78 * Math.PI) / 180;
+    } else if (attack.direction === "up") {
+      tiltCenter = -Math.PI / 2;
+      span = (92 * Math.PI) / 180;
+    } else {
+      tiltCenter = effectiveCenter;
+      span = (82 * Math.PI) / 180;
+    }
+
+    const startAngle = tiltCenter - span / 2;
+    const endAngle = tiltCenter + span / 2;
+
+    // 1. Trailing speed echo arc (arc index 0)
     const echoRadius = Math.max(baseRadius * 0.65, effectiveRadius * 0.82);
     ctx.beginPath();
     ctx.arc(x, centerY, echoRadius, startAngle + 0.08, endAngle - 0.08);
-    ctx.strokeStyle = hexToRgba(color, 0.45);
+    ctx.strokeStyle = hexToRgba(color, 0.45 * activeAlpha);
     ctx.lineWidth = 2.0;
     ctx.lineCap = "round";
     ctx.stroke();
 
-    // 2. Outer slash arc in player's color with glowing edge
+    // 2. Primary outer slash arc in player's color with glowing edge (arc index 1)
     ctx.save();
     ctx.beginPath();
     ctx.arc(x, centerY, effectiveRadius, startAngle, endAngle);
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = hexToRgba(color, 0.95 * activeAlpha);
     ctx.lineWidth = 4.0;
     ctx.lineCap = "round";
     ctx.shadowColor = color;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = isEndlag ? 3 : 8;
     ctx.stroke();
     ctx.restore();
+
+    // 3. Mid-blade luminous core band (arc index 2, bridges outer arc & echo arc for solid silhouette readability)
+    const midRadius = (echoRadius + effectiveRadius) / 2;
+    ctx.beginPath();
+    ctx.arc(x, centerY, midRadius, startAngle + 0.05, endAngle - 0.05);
+    ctx.strokeStyle = hexToRgba(color, 0.42 * activeAlpha);
+    ctx.lineWidth = 2.8;
+    ctx.lineCap = "round";
+    ctx.stroke();
 
     if (hasStickAngle) {
       // Angled direction is significantly brighter in the direction of the joystick
       const highlightAngle =
-        effectiveCenter + (facingRight ? -1 : 1) * (tiltFactor * (span * 0.28));
+        tiltCenter + (facingRight ? -1 : 1) * (tiltFactor * (span * 0.28));
       const hx = x + Math.cos(highlightAngle) * effectiveRadius;
       const hy = centerY + Math.sin(highlightAngle) * effectiveRadius;
 
       ctx.save();
       const flareGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 20);
       flareGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
-      flareGrad.addColorStop(0.35, hexToRgba(color, 0.9));
+      flareGrad.addColorStop(0.35, hexToRgba(color, 0.9 * activeAlpha));
       flareGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
       ctx.fillStyle = flareGrad;
       ctx.beginPath();
@@ -991,18 +1537,80 @@ export function drawAttackArc(
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 4.4;
       ctx.shadowColor = color;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = isEndlag ? 4 : 12;
       ctx.lineCap = "round";
       ctx.stroke();
       ctx.restore();
     } else {
-      // 3. Inner white highlight core
-      ctx.beginPath();
-      ctx.arc(x, centerY, effectiveRadius, startAngle + 0.08, endAngle - 0.08);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-      ctx.lineWidth = 1.8;
-      ctx.lineCap = "round";
-      ctx.stroke();
+      // 4. Inner white highlight core (dissolves during endlag)
+      if (!isEndlag) {
+        ctx.beginPath();
+        ctx.arc(
+          x,
+          centerY,
+          effectiveRadius,
+          startAngle + 0.08,
+          endAngle - 0.08,
+        );
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+        ctx.lineWidth = 1.8;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+    }
+
+    // 5. Direction-specific grounded tilt accents during active frames
+    if (!isEndlag) {
+      if (attack.direction === "down") {
+        // Dtilt: floor friction streak + ground dust puff along stage floor plane
+        ctx.save();
+        const streakLen = effectiveRadius * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x + dir * (halfWidth * 0.5), floorY);
+        ctx.lineTo(x + dir * (halfWidth * 0.5 + streakLen), floorY);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(x + dir * (halfWidth * 0.8), floorY - 2.5, 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba("#e2e8f0", 0.65 * activeAlpha);
+        ctx.fill();
+        ctx.restore();
+      } else if (attack.direction === "up") {
+        // Utilt: aerodynamic lift crown curve
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(
+          x,
+          centerY,
+          effectiveRadius + 3.0,
+          startAngle + 0.2,
+          endAngle - 0.2,
+        );
+        ctx.strokeStyle = hexToRgba(color, 0.55 * activeAlpha);
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        ctx.restore();
+      } else if (attack.direction === "forward") {
+        // Ftilt: forward cutting tip spark crosslet
+        ctx.save();
+        const tipAngle = tiltCenter + (facingRight ? -0.1 : 0.1);
+        const tipSparkX = x + Math.cos(tipAngle) * (effectiveRadius + 2);
+        const tipSparkY = centerY + Math.sin(tipAngle) * (effectiveRadius + 2);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(tipSparkX - 2, tipSparkY);
+        ctx.lineTo(tipSparkX + 2, tipSparkY);
+        ctx.moveTo(tipSparkX, tipSparkY - 2);
+        ctx.lineTo(tipSparkX, tipSparkY + 2);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   }
 }

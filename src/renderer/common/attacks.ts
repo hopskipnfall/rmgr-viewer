@@ -50,12 +50,15 @@ export function getAttackInfo(
   }
 
   // Grabs (standard 0x0a6/0x0a7/0x0a8)
-  // Note: Link in 0x0a8 is holding an opponent (CatchWait); hookshot is retracted
+  // Note: Link and Samus in 0x0a8 are holding an opponent (CatchWait); grapple/hookshot is retracted
   if (
     actionStateId === 0x0a6 ||
     actionStateId === 0x0a7 ||
     (actionStateId === 0x0a8 &&
-      !(characterId !== undefined && isLinkCharacter(characterId)))
+      !(
+        characterId !== undefined &&
+        (isLinkCharacter(characterId) || isSamusCharacter(characterId))
+      ))
   ) {
     return { type: "grab", direction: "forward" };
   }

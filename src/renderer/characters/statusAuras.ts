@@ -194,6 +194,7 @@ export function drawTechBreakfall(
   halfWidth: number,
   frameCounter: number,
   isOpponent: boolean,
+  isRoll: boolean = false,
 ): void {
   const progress = Math.min(frameCounter / 16, 1);
   const alpha = 1 - progress;
@@ -212,7 +213,41 @@ export function drawTechBreakfall(
   ctx.shadowBlur = 8;
   ctx.stroke();
 
-  // 2. Rising green/cyan tech recovery sparks
+  // 2. Ground impact dust puffs during slap (frames 0..4)
+  if (frameCounter <= 4) {
+    const dustAlpha = (1 - frameCounter / 5) * 0.7;
+    const dustOffset = halfWidth * 0.8 + frameCounter * 3;
+    ctx.fillStyle = resolveColor("#e0f2fe", isOpponent, dustAlpha);
+    // Left puff
+    ctx.beginPath();
+    ctx.arc(x - dustOffset, y - 2, 2.5, 0, Math.PI * 2);
+    ctx.arc(x - dustOffset + 3, y - 4, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    // Right puff
+    ctx.beginPath();
+    ctx.arc(x + dustOffset, y - 2, 2.5, 0, Math.PI * 2);
+    ctx.arc(x + dustOffset - 3, y - 4, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 3. Upward recovery streaks during kip-up rise on tech-in-place (frames 6..12)
+  if (!isRoll && frameCounter >= 6 && frameCounter <= 12) {
+    const riseProgress = (frameCounter - 6) / 6;
+    const streakAlpha = Math.sin(riseProgress * Math.PI) * 0.65;
+    ctx.strokeStyle = resolveColor("#38bdf8", isOpponent, streakAlpha);
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 3; i++) {
+      const lineX = x + (i - 1) * (halfWidth * 0.55);
+      const bottom = y - 4 - riseProgress * 6;
+      const top = bottom - 10 - (i % 2) * 4;
+      ctx.beginPath();
+      ctx.moveTo(lineX, bottom);
+      ctx.lineTo(lineX, top);
+      ctx.stroke();
+    }
+  }
+
+  // 4. Rising green/cyan tech recovery sparks
   for (let i = 0; i < 4; i++) {
     const sparkX = x + (i - 1.5) * (halfWidth * 0.8);
     const sparkY = y - progress * 22 - (i % 2) * 4;
