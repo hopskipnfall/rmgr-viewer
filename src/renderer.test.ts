@@ -6044,6 +6044,102 @@ describe("StageRenderer background themes", () => {
       const r0 = frame0.arcCalls[1]!.radius;
       const r4 = frame4.arcCalls[1]!.radius;
       expect(r0).toBeLessThan(r4);
+
+      // Nair has rotating cyclone turbine vanes with white-hot tips and kinetic spark streaks on active frames
+      const whiteStrokes = frame4.strokeCalls.filter(
+        (s) =>
+          s.strokeStyle === "#ffffff" ||
+          s.strokeStyle === "rgba(255, 255, 255, 0.9)" ||
+          s.strokeStyle === "rgba(255, 255, 255, 0.88)",
+      );
+      expect(whiteStrokes.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it("tailors directional aerial spans and mid-blade ribbons by direction (Fair, Bair, Uair, Dair)", () => {
+      const directions: {
+        dir: "forward" | "back" | "up" | "down";
+        expectedDeg: number;
+      }[] = [
+        { dir: "forward", expectedDeg: 95 },
+        { dir: "back", expectedDeg: 75 },
+        { dir: "up", expectedDeg: 90 },
+        { dir: "down", expectedDeg: 80 },
+      ];
+
+      for (const { dir, expectedDeg } of directions) {
+        const mock = createMockAttackCanvas();
+        drawAttackArc(
+          mock.ctx,
+          100,
+          100,
+          10,
+          30,
+          true,
+          "#3b82f6",
+          { type: "aerial", direction: dir },
+          null,
+          false,
+          5,
+        );
+
+        // Primary outer arc is index 1
+        const outerArc = mock.arcCalls[1]!;
+        const spanRad = outerArc.endAngle! - outerArc.startAngle!;
+        const spanDeg = (spanRad * 180) / Math.PI;
+        expect(spanDeg).toBeCloseTo(expectedDeg, 1);
+
+        // Mid-blade luminous core band is index 2, positioned between echo and outer radius
+        const echoArc = mock.arcCalls[0]!;
+        const midArc = mock.arcCalls[2]!;
+        expect(midArc.radius).toBeCloseTo(
+          (echoArc.radius + outerArc.radius) / 2,
+          1,
+        );
+      }
+    });
+
+    it("dissolves white-hot razor core during aerial endlag to signal whiff / cooldown", () => {
+      const active = createMockAttackCanvas();
+      drawAttackArc(
+        active.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "aerial", direction: "forward" },
+        null,
+        false,
+        5,
+      );
+
+      const endlag = createMockAttackCanvas();
+      drawAttackArc(
+        endlag.ctx,
+        100,
+        100,
+        10,
+        30,
+        true,
+        "#3b82f6",
+        { type: "aerial", direction: "forward" },
+        null,
+        false,
+        18,
+      );
+
+      // Active has white razor core stroke
+      const activeHasWhite = active.strokeCalls.some(
+        (s) => s.strokeStyle === "rgba(255, 255, 255, 0.88)",
+      );
+      expect(activeHasWhite).toBe(true);
+
+      // Endlag dissolves the white razor core
+      const endlagHasWhite = endlag.strokeCalls.some(
+        (s) => s.strokeStyle === "rgba(255, 255, 255, 0.88)",
+      );
+      expect(endlagHasWhite).toBe(false);
     });
 
     it("defaults cleanly to peak reach when actionFrameCounter is undefined", () => {
