@@ -98,6 +98,17 @@ export class MatchupViewController {
           ${statCard(tr.nhPerStockCol, fmtHits(rates.neutralHitsPerStock, rates.stocksTaken, tr), "")}
         </div>
 
+        <div class="matchup-workshop-banner">
+          <a href="#/matchup/${myChar}/${oppChar}/workshop" class="matchup-workshop-btn" id="matchupWorkshopBtn">
+            <span class="matchup-workshop-btn-icon">🎯</span>
+            <span class="matchup-workshop-btn-text">
+              <span class="matchup-workshop-btn-title">${escapeHtml(tr.matchupEdgeGuardWorkshopBtn)}</span>
+              <span class="matchup-workshop-btn-desc">Visualize recovery starting positions & replay edge guards</span>
+            </span>
+            <span class="matchup-workshop-btn-arrow">&rarr;</span>
+          </a>
+        </div>
+
         <div id="matchupGameListWrap" class="game-list-wrap"></div>
       </div>
     `;

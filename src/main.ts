@@ -58,6 +58,7 @@ import { LibraryViewController } from "./library/libraryView.js";
 import { HomeSidebarController } from "./library/homeSidebar.js";
 import { MatchupViewController } from "./matchup/matchupView.js";
 import { CharacterPreviewController } from "./preview/characterPreview.js";
+import { EdgeGuardWorkshopViewController } from "./workshop/edgeGuardWorkshopView.js";
 import {
   createDefaultIdentity,
   matchesAlias,
@@ -94,6 +95,9 @@ const matchViewEl = document.getElementById("matchView") as HTMLDivElement;
 const searchViewEl = document.getElementById("searchView") as HTMLDivElement;
 const sessionViewEl = document.getElementById("sessionView") as HTMLDivElement;
 const matchupViewEl = document.getElementById("matchupView") as HTMLDivElement;
+const edgeGuardWorkshopViewEl = document.getElementById(
+  "edgeGuardWorkshopView",
+) as HTMLDivElement;
 const matchFooterEl = document.getElementById("matchFooter") as HTMLElement;
 const modalContainerEl = document.getElementById(
   "modalContainer",
@@ -239,6 +243,7 @@ let previewController: CharacterPreviewController;
 let searchController: SearchViewController;
 let sessionController: SessionViewController;
 let matchupController: MatchupViewController;
+let edgeGuardWorkshopController: EdgeGuardWorkshopViewController;
 
 const DEMO_REPLAY_URLS = DEMO_REPLAY_FILENAMES.map(
   (filename) => `${import.meta.env.BASE_URL}replays/${filename}`,
@@ -666,6 +671,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     searchViewEl.hidden = true;
     sessionViewEl.hidden = true;
     matchupViewEl.hidden = true;
+    edgeGuardWorkshopViewEl.hidden = true;
     backToLibraryBtn.hidden = true;
 
     homeShellEl.hidden = false;
@@ -683,6 +689,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     searchViewEl.hidden = true;
     sessionViewEl.hidden = true;
     matchupViewEl.hidden = true;
+    edgeGuardWorkshopViewEl.hidden = true;
     // The header nav's Library link covers this; keeping both showed two
     // Library buttons side by side.
     backToLibraryBtn.hidden = true;
@@ -700,6 +707,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     previewViewEl.hidden = true;
     libraryViewEl.hidden = true;
     matchupViewEl.hidden = true;
+    edgeGuardWorkshopViewEl.hidden = true;
     // The header nav's Library link covers this; keeping both showed two
     // Library buttons side by side.
     backToLibraryBtn.hidden = true;
@@ -737,6 +745,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     libraryViewEl.hidden = true;
     searchViewEl.hidden = true;
     matchupViewEl.hidden = true;
+    edgeGuardWorkshopViewEl.hidden = true;
     // The header nav's Library link covers this; keeping both showed two
     // Library buttons side by side.
     backToLibraryBtn.hidden = true;
@@ -766,6 +775,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     searchViewEl.hidden = true;
     sessionViewEl.hidden = true;
     matchupViewEl.hidden = true;
+    edgeGuardWorkshopViewEl.hidden = true;
     matchViewEl.hidden = false;
     matchFooterEl.hidden = false;
     // The header nav's Library link covers this; keeping both showed two
@@ -860,8 +870,32 @@ async function handleRouteChange(route: Route): Promise<void> {
     backToLibraryBtn.hidden = true;
     homeShellEl.hidden = true;
 
+    edgeGuardWorkshopViewEl.hidden = true;
     matchupViewEl.hidden = false;
     matchupController.render(
+      route.myChar,
+      route.oppChar,
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
+  } else if (route.view === "edgeGuardWorkshop") {
+    currentMatchSummary = null;
+    currentMatchupRoute = null;
+    // Show Edge Guard Workshop View
+    matchController.deactivate();
+    previewController?.deactivate();
+    matchViewEl.hidden = true;
+    matchFooterEl.hidden = true;
+    previewViewEl.hidden = true;
+    libraryViewEl.hidden = true;
+    searchViewEl.hidden = true;
+    sessionViewEl.hidden = true;
+    matchupViewEl.hidden = true;
+    backToLibraryBtn.hidden = true;
+    homeShellEl.hidden = true;
+
+    edgeGuardWorkshopViewEl.hidden = false;
+    edgeGuardWorkshopController.render(
       route.myChar,
       route.oppChar,
       libraryController.getSummaries(),
@@ -947,6 +981,14 @@ async function init(): Promise<void> {
     },
     (session) => {
       handleShowFailedEdgeGuards(session);
+    },
+  );
+
+  edgeGuardWorkshopController = new EdgeGuardWorkshopViewController(
+    edgeGuardWorkshopViewEl,
+    loadReplayForSummary,
+    (clip) => {
+      playPlaylistClips([clip], 0);
     },
   );
 
