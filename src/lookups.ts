@@ -97,7 +97,9 @@ export function actionStateName(
   id: number,
   lang?: Language,
   goodName?: string,
+  /** Resolves a character-specific special-move name (id >= 0x0dc) for one of the original 12 - see rmgr-ts's LookupOptions.characterId. */
+  characterId?: number,
 ): string {
   const language = lang ?? getLanguage();
-  return getActionStateName(id, { goodName, lang: language });
+  return getActionStateName(id, { goodName, lang: language, characterId });
 }
