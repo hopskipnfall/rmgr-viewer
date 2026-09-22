@@ -332,6 +332,44 @@ describe("Edge Guard Data Extraction & Mirroring", () => {
     const situations = extractEdgeGuardSituations(replay, mockSummary, 0, 1);
     expect(situations).toHaveLength(0);
   });
+
+  it("excludes situations where classify() returns dead at entry (character falling below blast zone)", () => {
+    // Simulate the Link / J-Linker case: character is still in Fall action state (not a post-KO
+    // state), but is already below the lower blast zone with no jumps — classify() says "dead".
+    // Fox (characterId 0x01) is a supported character. We put him at y = -3000 (well below the
+    // lower blast zone at -2233) with 0 jumps and downward velocity so that classify() must
+    // return "dead".
+    const replay = makeMockReplay(3500, true, 0, 90);
+    // Set the recovering player's character to Fox (0x01) in the summary used for this test.
+    const foxSummary = {
+      ...mockSummary,
+      ports: [
+        { ...mockSummary.ports[0]! },
+        { ...mockSummary.ports[1]!, characterId: 0x01 },
+      ],
+    };
+    // Overwrite the entry frame (frame 2) so Fox is falling below the blast zone.
+    const frame2 = replay.frames[2]!;
+    const state = frame2.ports[1]!.state as unknown as {
+      positionX: number;
+      positionY: number;
+      velocityX: number;
+      velocityY: number;
+      jumpsRemaining: number;
+      actionStateId: number;
+      characterId: number;
+    };
+    state.positionX = 3500;
+    state.positionY = -3000; // Well below the lower blast zone
+    state.velocityX = 0;
+    state.velocityY = -50; // Falling fast
+    state.jumpsRemaining = 0;
+    state.actionStateId = 24; // Fall — NOT a dead action state
+    state.characterId = 0x01; // Fox
+
+    const situations = extractEdgeGuardSituations(replay, foxSummary as typeof mockSummary, 0, 1);
+    expect(situations).toHaveLength(0);
+  });
 });
 
 describe("Edge Guard Situation Filtering", () => {

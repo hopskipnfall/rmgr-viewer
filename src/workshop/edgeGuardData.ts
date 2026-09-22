@@ -1,6 +1,7 @@
 import type { Replay, PortIndex } from "@rmg-k/rmgr";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { computeEdgeGuardEvents, isHitstunState, DEAD_OR_RESPAWNING_STATES } from "../edgeGuard.js";
+import { classify, SUPPORTED_CHARACTERS } from "../recoveryHeuristics.js";
 import type { GameSummary } from "../data/gameSummary.js";
 
 export interface RecoveryTrajectoryPoint {
@@ -112,6 +113,26 @@ export function extractEdgeGuardSituations(
           if (DEAD_OR_RESPAWNING_STATES.has(recoveringState.actionStateId)) {
             openSituation = null;
             continue;
+          }
+          // Also skip situations where the recovery heuristic already classifies the player as
+          // dead at the entry frame (e.g. they are falling below the blast zone but not yet in a
+          // dead action state). "dead-if-ledge-occupied" is treated as recoverable for workshop
+          // purposes (the edge guard is what makes it dead, which is the point of this page).
+          if (SUPPORTED_CHARACTERS.has(recoveringState.characterId)) {
+            const entryVerdict = classify(
+              recoveringState.characterId,
+              recoveringState.positionX,
+              recoveringState.positionY,
+              recoveringState.velocityX,
+              recoveringState.velocityY,
+              recoveringState.jumpsRemaining ?? 0,
+              recoveringState.actionStateId,
+              recoveringState.facingDirection as 1 | -1,
+            );
+            if (entryVerdict === "dead") {
+              openSituation = null;
+              continue;
+            }
           }
           const rawStartX = recoveringState.positionX;
           const startY = recoveringState.positionY;
