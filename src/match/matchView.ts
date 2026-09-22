@@ -6,7 +6,7 @@ import {
   type Replay,
   type RemixSettingField,
 } from "@rmg-k/rmgr";
-import { Camera } from "../camera.js";
+import { Camera, type CameraTrackingMode } from "../camera.js";
 import { ControllerPad } from "../controllerPad.js";
 import { PlaybackController, type FrameChangeReason } from "../playback.js";
 import { PORT_LABELS, getPlayerColor } from "../players.js";
@@ -296,6 +296,8 @@ export class MatchViewController {
   private cameraWidgetTitleEl: HTMLHeadingElement;
   private cameraCollapseBtn: HTMLButtonElement;
   private cameraPanelBodyEl: HTMLElement;
+  private cameraModeDefaultBtn: HTMLButtonElement;
+  private cameraModeOriginalBtn: HTMLButtonElement;
   private cameraLockBtn: HTMLButtonElement;
   private cameraControls: HTMLElement;
   private cameraZoomOutBtn: HTMLButtonElement;
@@ -773,6 +775,12 @@ export class MatchViewController {
     this.cameraPanelBodyEl = document.getElementById(
       "cameraPanelBody",
     ) as HTMLElement;
+    this.cameraModeDefaultBtn = document.getElementById(
+      "cameraModeDefaultBtn",
+    ) as HTMLButtonElement;
+    this.cameraModeOriginalBtn = document.getElementById(
+      "cameraModeOriginalBtn",
+    ) as HTMLButtonElement;
     this.cameraLockBtn = document.getElementById(
       "cameraLockBtn",
     ) as HTMLButtonElement;
@@ -788,6 +796,10 @@ export class MatchViewController {
     this.cameraZoomSlider = document.getElementById(
       "cameraZoomSlider",
     ) as HTMLInputElement;
+    // Derived from Camera.MAX_ZOOM_LEVEL rather than trusting index.html's
+    // static max attribute to stay in sync with it by hand.
+    this.cameraZoomSlider.max = String(Camera.MAX_ZOOM_LEVEL);
+    this.cameraZoomSlider.min = String(Camera.MIN_ZOOM_LEVEL);
     this.cameraPanUpBtn = document.getElementById(
       "cameraPanUpBtn",
     ) as HTMLButtonElement;
@@ -808,16 +820,26 @@ export class MatchViewController {
       this.cameraPanelBodyEl.hidden = collapsed;
       this.cameraCollapseBtn.setAttribute("aria-expanded", String(!collapsed));
     });
+    this.cameraModeDefaultBtn.addEventListener("click", () => {
+      this.setCameraTrackingMode("default");
+    });
+    this.cameraModeOriginalBtn.addEventListener("click", () => {
+      this.setCameraTrackingMode("original");
+    });
     this.cameraLockBtn.addEventListener("click", () => {
       this.toggleCameraLock();
     });
     this.cameraZoomOutBtn.addEventListener("click", () => {
-      this.camera.setZoomLevel(this.camera.getZoomLevel() / 1.2);
+      this.camera.setZoomLevel(
+        this.camera.getZoomLevel() / Camera.ZOOM_STEP_FACTOR,
+      );
       this.syncCameraZoomSlider();
       this.rerenderCurrentFrame();
     });
     this.cameraZoomInBtn.addEventListener("click", () => {
-      this.camera.setZoomLevel(this.camera.getZoomLevel() * 1.2);
+      this.camera.setZoomLevel(
+        this.camera.getZoomLevel() * Camera.ZOOM_STEP_FACTOR,
+      );
       this.syncCameraZoomSlider();
       this.rerenderCurrentFrame();
     });
@@ -1822,6 +1844,12 @@ export class MatchViewController {
         tr.cameraWidgetTitle,
       );
     }
+    if (this.cameraModeDefaultBtn)
+      this.cameraModeDefaultBtn.textContent = tr.cameraModeDefaultBtn;
+    if (this.cameraModeOriginalBtn) {
+      this.cameraModeOriginalBtn.textContent = tr.cameraModeOriginalBtn;
+      this.cameraModeOriginalBtn.title = tr.cameraModeOriginalTitle;
+    }
     if (this.cameraLockBtn && this.camera) this.updateCameraLockUI();
     if (this.cameraZoomOutBtn)
       this.cameraZoomOutBtn.title = tr.cameraZoomOutTitle;
@@ -2113,6 +2141,27 @@ export class MatchViewController {
   }
 
   /**
+   * Switches between the default player-tracking camera and the
+   * "Original Camera" approximation (see Camera.updateOriginalCamera()'s
+   * own doc comment) - independent of lock state, so switching modes
+   * while locked just changes what unlocking would resume.
+   */
+  private setCameraTrackingMode(mode: CameraTrackingMode): void {
+    this.camera.setTrackingMode(mode);
+    this.cameraModeDefaultBtn.classList.toggle("active", mode === "default");
+    this.cameraModeDefaultBtn.setAttribute(
+      "aria-pressed",
+      String(mode === "default"),
+    );
+    this.cameraModeOriginalBtn.classList.toggle("active", mode === "original");
+    this.cameraModeOriginalBtn.setAttribute(
+      "aria-pressed",
+      String(mode === "original"),
+    );
+    this.rerenderCurrentFrame();
+  }
+
+  /**
    * Snaps back to wherever normal player-tracking would currently frame the
    * match (briefly unlocking so update() recomputes it, then re-locking),
    * clearing any manual pan/zoom without leaving lock mode entirely.
@@ -2187,6 +2236,11 @@ export class MatchViewController {
     }
     this.lastFrame = frame;
     const targets: Array<{ x: number; y: number }> = [];
+    const fighters: Array<{
+      x: number;
+      y: number;
+      facingDirection: 1 | -1;
+    }> = [];
     if (this.stageRenderer.isQuickAttackOverlayActive()) {
       const overlayPaths = this.stageRenderer.getQuickAttackOverlayPaths();
       if (overlayPaths && overlayPaths.length > 0) {
@@ -2198,6 +2252,9 @@ export class MatchViewController {
       }
       // Include stage boundaries and upper platform area so stage is well framed
       targets.push({ x: -400, y: 0 }, { x: 400, y: 0 }, { x: 0, y: 250 });
+      // updateOriginalCamera() has no equivalent overlay-framing behavior -
+      // leaving `fighters` empty here means it's simply not called below,
+      // same as if tracking mode were "default" during the overlay.
     } else {
       for (const panel of this.panels) {
         const post = frame?.ports[panel.port]?.state;
@@ -2217,12 +2274,18 @@ export class MatchViewController {
           { x: post.positionX - halfWidth, y: post.positionY },
           { x: post.positionX + halfWidth, y: post.positionY + height },
         );
+        fighters.push({
+          x: post.positionX,
+          y: post.positionY,
+          facingDirection: post.facingDirection,
+        });
       }
     }
-    this.camera.update(
-      targets,
-      snap || this.stageRenderer.isQuickAttackOverlayActive(),
-    );
+    const snapCamera = snap || this.stageRenderer.isQuickAttackOverlayActive();
+    this.camera.update(targets, snapCamera);
+    if (fighters.length > 0) {
+      this.camera.updateOriginalCamera(fighters, snapCamera);
+    }
 
     this.stageRenderer.render(
       this.camera,
