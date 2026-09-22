@@ -263,7 +263,11 @@ export class SessionViewController {
         (myChar, oppChar) => {
           this.sessionSelectedMyChar = myChar;
           this.sessionSelectedOppChar = oppChar;
-          renderSessionStats(myChar, oppChar);
+          // Full re-render, not just renderSessionStats(): the game list
+          // below is also filtered by this selection (see games' ternary
+          // near the end of render()) and needs to pick up the change too -
+          // same pattern GameList's own sort-order callback already uses.
+          this.render();
         },
       );
 
@@ -337,7 +341,24 @@ export class SessionViewController {
       gameList.setGroupBySession(false);
       gameList.setShowGroupToggle(false);
       gameList.setSortOrder(this.sortOrder);
-      const games = [...session.games];
+      // Filtered to the selected matchup chip, same resolution as
+      // matchupGames above - the chip selector previously only filtered the
+      // stats box, leaving every game in the session listed regardless of
+      // which matchup was picked.
+      const games =
+        this.sessionSelectedMyChar !== null &&
+        this.sessionSelectedOppChar !== null
+          ? sessionResolved
+              .filter(({ summary, yourPort, oppPort }) => {
+                const yourP = summary.ports.find((p) => p.port === yourPort);
+                const oppP = summary.ports.find((p) => p.port === oppPort);
+                return (
+                  yourP?.characterId === this.sessionSelectedMyChar &&
+                  oppP?.characterId === this.sessionSelectedOppChar
+                );
+              })
+              .map(({ summary }) => summary)
+          : [...session.games];
       gameList.render(games, this.identity, games.length);
     }
   }
