@@ -781,7 +781,12 @@ export class StageRenderer {
           pauseHudItems.push({
             x,
             y,
-            stateName: actionStateName(portData.state.actionStateId),
+            stateName: actionStateName(
+              portData.state.actionStateId,
+              undefined,
+              undefined,
+              portData.state.characterId,
+            ),
             stateId: portData.state.actionStateId,
             posX: portData.state.positionX,
             posY: portData.state.positionY,

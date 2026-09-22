@@ -1832,7 +1832,11 @@ export class CharacterPreviewController {
     // If current state not in list, add it dynamically
     if (!filtered.some((s) => s.id === this.actionStateId)) {
       const defs = getGameDefinitions();
-      const name = defs.getActionStateName(this.actionStateId);
+      const name = defs.getActionStateName(
+        this.actionStateId,
+        undefined,
+        this.characterId,
+      );
       filtered.unshift({
         id: this.actionStateId,
         name: `Custom: ${name}`,
@@ -1881,7 +1885,13 @@ export class CharacterPreviewController {
     const states = this.getAllStatesForCurrentChar();
     const cur = states.find((s) => s.id === this.actionStateId);
     const defs = getGameDefinitions();
-    const name = cur ? cur.name : defs.getActionStateName(this.actionStateId);
+    const name = cur
+      ? cur.name
+      : defs.getActionStateName(
+          this.actionStateId,
+          undefined,
+          this.characterId,
+        );
     const isVis = cur?.visualized ?? false;
     const visDesc =
       cur?.visualizedDesc ?? "Standard Skeleton Wireframe & Polygons";
@@ -2055,8 +2065,16 @@ export class CharacterPreviewController {
     const defs = getGameDefinitions();
     const charName = defs.getCharacterName(this.characterId, "en");
     const charNameJa = defs.getCharacterName(this.characterId, "ja");
-    const stateName = defs.getActionStateName(this.actionStateId, "en");
-    const stateNameJa = defs.getActionStateName(this.actionStateId, "ja");
+    const stateName = defs.getActionStateName(
+      this.actionStateId,
+      "en",
+      this.characterId,
+    );
+    const stateNameJa = defs.getActionStateName(
+      this.actionStateId,
+      "ja",
+      this.characterId,
+    );
 
     // Flight velocity vector for Fire Fox / Fire Bird flight
     const rad = (this.flightAngleDeg * Math.PI) / 180;

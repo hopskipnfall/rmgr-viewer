@@ -2040,7 +2040,12 @@ export function drawPlayer(
       ctx,
       x,
       y,
-      actionStateName(post.actionStateId),
+      actionStateName(
+        post.actionStateId,
+        undefined,
+        undefined,
+        post.characterId,
+      ),
       post.actionStateId,
       post.positionX,
       post.positionY,
