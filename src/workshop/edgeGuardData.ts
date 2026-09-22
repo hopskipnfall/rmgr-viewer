@@ -1,6 +1,6 @@
 import type { Replay, PortIndex } from "@rmg-k/rmgr";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
-import { computeEdgeGuardEvents, isHitstunState } from "../edgeGuard.js";
+import { computeEdgeGuardEvents, isHitstunState, DEAD_OR_RESPAWNING_STATES } from "../edgeGuard.js";
 import type { GameSummary } from "../data/gameSummary.js";
 
 export interface RecoveryTrajectoryPoint {
@@ -107,6 +107,12 @@ export function extractEdgeGuardSituations(
         const startFrame = replay.frames[openSituation.startFrameIndex];
         const recoveringState = startFrame?.ports[oppPort]?.state;
         if (recoveringState) {
+          // Skip situations where the recovering player was already dead/dying at entry —
+          // these are not genuine edge-guard opportunities.
+          if (DEAD_OR_RESPAWNING_STATES.has(recoveringState.actionStateId)) {
+            openSituation = null;
+            continue;
+          }
           const rawStartX = recoveringState.positionX;
           const startY = recoveringState.positionY;
           const wasLeft = rawStartX < 0;

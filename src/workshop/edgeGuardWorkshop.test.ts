@@ -316,6 +316,22 @@ describe("Edge Guard Data Extraction & Mirroring", () => {
     expect(situations).toHaveLength(1);
     expect(situations[0]!.jumpsAtEntry).toBe(1);
   });
+
+  it("excludes situations where the recovering player is DEAD/dying at entry", () => {
+    // Simulate a situation-entered that opens while port 1 is in DeadDown (0x000).
+    // This can happen at timing edges in computeEdgeGuardEvents; such windows
+    // are not genuine edge-guard opportunities and should be filtered out.
+    const replay = makeMockReplay(3500, true, 2, 80);
+    // Overwrite the action state on frame 2 (the situation-entered frame) to DeadDown.
+    const frame2 = replay.frames[2]!;
+    const state = frame2.ports[1]!.state as unknown as {
+      actionStateId: number;
+    };
+    state.actionStateId = 0x000; // DeadDown — member of DEAD_OR_RESPAWNING_STATES
+
+    const situations = extractEdgeGuardSituations(replay, mockSummary, 0, 1);
+    expect(situations).toHaveLength(0);
+  });
 });
 
 describe("Edge Guard Situation Filtering", () => {
