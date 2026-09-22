@@ -51,6 +51,29 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 /**
+ * Yields to the browser's idle time, not just the next macrotask - a plain
+ * `setTimeout(fn, 0)` queues another task that competes equally with
+ * everything else (including a pending animation frame), which isn't
+ * enough to keep something like active replay playback smooth against a
+ * background import's per-file parse/summarize bursts (each summarizeReplay()
+ * call is a single ~50ms synchronous block - reported by Jonn as choppy
+ * playback during a large background re-import, 2026-09-22).
+ * requestIdleCallback specifically waits for a gap after rendering, with a
+ * `timeout` so a busy page still guarantees forward progress. Falls back to
+ * setTimeout where requestIdleCallback isn't available (Safari, and
+ * vitest's Node test environment).
+ */
+function yieldToIdle(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(() => resolve(), { timeout: 200 });
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+/**
  * Parses multiple .rmgr files sequentially with event-loop yielding,
  * converts each into a compact GameSummary, and discards the parsed Replay to save memory (§3.1).
  */
@@ -76,8 +99,9 @@ export async function importReplayFiles(
       currentFileName: file.name,
     });
 
-    // Yield to the event loop so the UI remains responsive and progress renders (§3.5)
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Yield so the UI remains responsive and progress renders (§3.5) -
+    // see yieldToIdle()'s own comment for why this isn't a plain setTimeout.
+    await yieldToIdle();
 
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
