@@ -32,10 +32,7 @@ export class EdgeGuardCanvas {
   private dragStartX = 0;
   private dragStartY = 0;
 
-  constructor(
-    canvas: HTMLCanvasElement,
-    callbacks: CanvasCallbacks = {},
-  ) {
+  constructor(canvas: HTMLCanvasElement, callbacks: CanvasCallbacks = {}) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Could not get 2D context");
@@ -413,8 +410,12 @@ export class EdgeGuardCanvas {
         const lastPt = sit.trajectory[maxPts - 1]!;
         const pEnd = this.worldToScreen(lastPt.x, lastPt.y);
         ctx.fillStyle = isSuccess
-          ? (isLight ? "#0284c7" : "#38bdf8")
-          : (isLight ? "#dc2626" : "#f87171");
+          ? isLight
+            ? "#0284c7"
+            : "#38bdf8"
+          : isLight
+            ? "#dc2626"
+            : "#f87171";
         ctx.beginPath();
         ctx.arc(pEnd.x, pEnd.y, 4, 0, Math.PI * 2);
         ctx.fill();
@@ -471,8 +472,12 @@ export class EdgeGuardCanvas {
     // Success (KO): Blue (#38bdf8 in dark, #0284c7 in light)
     // Fail (Safe): Red (#f87171 in dark, #dc2626 in light)
     const fillColor = isSuccess
-      ? (isLight ? "#0284c7" : "#38bdf8")
-      : (isLight ? "#dc2626" : "#f87171");
+      ? isLight
+        ? "#0284c7"
+        : "#38bdf8"
+      : isLight
+        ? "#dc2626"
+        : "#f87171";
 
     const radius = isPriority ? 8 : 4.5;
 

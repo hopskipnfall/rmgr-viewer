@@ -367,7 +367,12 @@ describe("Edge Guard Data Extraction & Mirroring", () => {
     state.actionStateId = 24; // Fall — NOT a dead action state
     state.characterId = 0x01; // Fox
 
-    const situations = extractEdgeGuardSituations(replay, foxSummary as typeof mockSummary, 0, 1);
+    const situations = extractEdgeGuardSituations(
+      replay,
+      foxSummary as typeof mockSummary,
+      0,
+      1,
+    );
     expect(situations).toHaveLength(0);
   });
 });

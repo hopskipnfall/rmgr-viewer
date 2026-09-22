@@ -1583,8 +1583,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     matchupEdgeGuardWorkshopBtn: "復帰阻止ワークショップ",
     edgeGuardWorkshopTitle: "復帰阻止ワークショップ",
     edgeGuardWorkshopBackToMatchup: "対戦カードに戻る",
-    edgeGuardWorkshopTotalRecoveries: (count) =>
-      `${count} 件の復帰`,
+    edgeGuardWorkshopTotalRecoveries: (count) => `${count} 件の復帰`,
     edgeGuardWorkshopSuccessRate: (s, t, p) => `${s}/${t} (${p}%)`,
     edgeGuardWorkshopSuccessCount: (count) => `${count} 成功 (撃墜)`,
     edgeGuardWorkshopFailureCount: (count) => `${count} 失敗 (復帰成功)`,
@@ -1608,8 +1607,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     edgeGuardWorkshopPauseSimultaneous: "一時停止",
     edgeGuardWorkshopShowTrails: "軌道を表示",
     edgeGuardWorkshopJumpToMatch: "試合で再生",
-    edgeGuardWorkshopNoRecoveries:
-      "条件に一致する復帰阻止データはありません。",
+    edgeGuardWorkshopNoRecoveries: "条件に一致する復帰阻止データはありません。",
     edgeGuardWorkshopLoading: (done, total) =>
       `リプレイを読み込み中 (${done}/${total})...`,
     matchupExcludedGames: (count) =>

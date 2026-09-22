@@ -1,6 +1,10 @@
 import type { Replay, PortIndex } from "@rmg-k/rmgr";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
-import { computeEdgeGuardEvents, isHitstunState, DEAD_OR_RESPAWNING_STATES } from "../edgeGuard.js";
+import {
+  computeEdgeGuardEvents,
+  isHitstunState,
+  DEAD_OR_RESPAWNING_STATES,
+} from "../edgeGuard.js";
 import { classify, SUPPORTED_CHARACTERS } from "../recoveryHeuristics.js";
 import type { GameSummary } from "../data/gameSummary.js";
 

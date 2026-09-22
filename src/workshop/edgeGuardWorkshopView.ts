@@ -116,7 +116,10 @@ export class EdgeGuardWorkshopViewController {
       const { summary, yourPort, oppPort } = matchupGames[i]!;
 
       if (progressText) {
-        progressText.textContent = t().edgeGuardWorkshopLoading(i + 1, totalGames);
+        progressText.textContent = t().edgeGuardWorkshopLoading(
+          i + 1,
+          totalGames,
+        );
       }
       if (progressBar) {
         const pct = Math.round(((i + 1) / Math.max(1, totalGames)) * 100);
@@ -398,7 +401,8 @@ export class EdgeGuardWorkshopViewController {
     if (!canvasEl) return;
 
     this.canvas = new EdgeGuardCanvas(canvasEl, {
-      onHoverSituation: (sit, screenPos) => this.handleCanvasHover(sit, screenPos),
+      onHoverSituation: (sit, screenPos) =>
+        this.handleCanvasHover(sit, screenPos),
       onSelectSituation: (sit) => this.handleCanvasSelect(sit),
     });
     this.canvas.setIsLight(this.isLightMode());
@@ -499,7 +503,8 @@ export class EdgeGuardWorkshopViewController {
     recencySelect?.addEventListener("change", () => {
       const val = recencySelect.value as "all" | "month" | "since";
       if (sinceDateInput) {
-        sinceDateInput.style.display = val === "since" ? "inline-block" : "none";
+        sinceDateInput.style.display =
+          val === "since" ? "inline-block" : "none";
       }
       this.filters = {
         ...this.filters,
@@ -667,7 +672,8 @@ export class EdgeGuardWorkshopViewController {
     ) as HTMLElement | null;
     if (!listEl) return;
 
-    if (countBadge) countBadge.textContent = String(this.filteredSituations.length);
+    if (countBadge)
+      countBadge.textContent = String(this.filteredSituations.length);
 
     if (this.filteredSituations.length === 0) {
       listEl.innerHTML = `
@@ -872,7 +878,8 @@ export class EdgeGuardWorkshopViewController {
     const playIcon = this.container.querySelector("#egwPlayIcon");
     const playText = this.container.querySelector("#egwPlayText");
     const tr = t();
-    if (playIcon) playIcon.innerHTML = this.isPlaying ? "&#10074;&#10074;" : "&#9654;";
+    if (playIcon)
+      playIcon.innerHTML = this.isPlaying ? "&#10074;&#10074;" : "&#9654;";
     if (playText) {
       playText.textContent = this.isPlaying
         ? tr.edgeGuardWorkshopPauseSimultaneous
