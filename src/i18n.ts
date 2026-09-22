@@ -363,6 +363,9 @@ export interface Translations {
 
   // Camera panel (manual pan/zoom/lock)
   cameraWidgetTitle: string;
+  cameraModeDefaultBtn: string;
+  cameraModeOriginalBtn: string;
+  cameraModeOriginalTitle: string;
   cameraLockBtn: string;
   cameraLockBtnActive: string;
   cameraZoomOutTitle: string;
@@ -996,6 +999,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationCollapseTitle: (name) => `Collapse / expand ${name}`,
 
     cameraWidgetTitle: "Camera",
+    cameraModeDefaultBtn: "Default",
+    cameraModeOriginalBtn: "Original Camera",
+    cameraModeOriginalTitle:
+      "Approximates the original game's camera framing - tracks every fighter with a facing-biased look-ahead area, zooms tighter in 1v1 than free-for-all, and eases pan/zoom at different speeds. A 2D approximation, not an exact recreation of the real 3D camera.",
     cameraLockBtn: "🔓 Lock Camera",
     cameraLockBtnActive: "🔒 Unlock Camera",
     cameraZoomOutTitle: "Zoom out",
@@ -1633,6 +1640,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     situationCollapseTitle: (name) => `${name} の折りたたみ / 展開`,
 
     cameraWidgetTitle: "カメラ",
+    cameraModeDefaultBtn: "デフォルト",
+    cameraModeOriginalBtn: "原作カメラ",
+    cameraModeOriginalTitle:
+      "原作のカメラワークを再現したモード - 各ファイターの向いている方向を優先して追従し、1対1では乱闘より寄った画角になり、パンとズームは異なる速度でなめらかに追従します。実際の3Dカメラの厳密な再現ではなく、2Dでの近似表現です。",
     cameraLockBtn: "🔓 カメラを固定",
     cameraLockBtnActive: "🔒 固定を解除",
     cameraZoomOutTitle: "ズームアウト",

@@ -25,7 +25,24 @@
  * left it - update() becomes a no-op - so the user can pan/zoom by hand
  * (panByScreenDelta(), zoomAtScreenPoint(), panByViewFraction(),
  * setZoomLevel()) without normal player-tracking fighting them for it.
+ *
+ * setTrackingMode("original") switches update() from the above to
+ * updateOriginalCamera() instead - a from-scratch approximation of the
+ * real SSB64 in-game camera (Game Expert research, 2026-09-22, sourced
+ * from ssb-decomp-re's gmcamera.c): union of every fighter's own
+ * asymmetric look-ahead box (biased in their facing direction), scaled by
+ * a player-count zoom multiplier, with distance-dependent pan speed and a
+ * separate slower zoom-ease rate. The real camera moves in true 3D
+ * (FOV/eye-distance/parallax) with hard clamps in 3D distance units; this
+ * approximates the same FEEL in the existing 2D span model rather than
+ * porting exact 3D math that has no direct equivalent here - see
+ * updateOriginalCamera()'s own comment for exactly what's approximated
+ * vs. omitted (idle-player deweighting, per-move zoom overrides, and
+ * stage/mode-specific camera paths aren't modeled).
  */
+/** "default": the union-bounding-box + flat-lerp tracking this class has always used. "original": updateOriginalCamera() instead - see this class's own doc comment. */
+export type CameraTrackingMode = "default" | "original";
+
 export class Camera {
   private canvasWidth: number;
   private canvasHeight: number;
@@ -43,6 +60,7 @@ export class Camera {
   private locked = false;
   /** The view's world-unit X span at the moment lockView() was called - getZoomLevel()'s "1.0" reference point. */
   private lockedSpanX0 = 1;
+  private trackingMode: CameraTrackingMode = "default";
 
   /** Never frame tighter than this world-unit span, so characters near each other or a single player doesn't zoom in absurdly close. */
   private static readonly MIN_SPAN = 1400;
@@ -51,7 +69,44 @@ export class Camera {
   private static readonly LERP_FACTOR = 0.12;
   /** setZoomLevel()/the Camera panel's slider clamp to this range so a stray drag can't zoom to nothing or to a single pixel. */
   static readonly MIN_ZOOM_LEVEL = 0.2;
-  static readonly MAX_ZOOM_LEVEL = 8;
+  /** How much each zoom in/out button click multiplies the current zoom level by - shared with MAX_ZOOM_LEVEL below so "how far in can you go" stays defined in terms of "how many clicks from baseline," not a separate arbitrary number. */
+  static readonly ZOOM_STEP_FACTOR = 1.2;
+  /**
+   * 8 zoom-in clicks from the 1.0 baseline (ZOOM_STEP_FACTOR ** 8 ≈ 4.3).
+   * Previously a flat 8 (nearly two extra doublings past this), reported
+   * by Jonn (2026-09-22) as zooming in far too aggressively.
+   */
+  static readonly MAX_ZOOM_LEVEL = Camera.ZOOM_STEP_FACTOR ** 8;
+
+  // updateOriginalCamera() constants - see that method's own comment for
+  // what each one approximates from the real camera (Game Expert
+  // research, 2026-09-22, ssb-decomp-re's gmcamera.c).
+  /** World units the per-fighter look-ahead box extends in their facing direction. */
+  private static readonly ORIGINAL_AHEAD = 1000;
+  /** World units the box extends behind them. */
+  private static readonly ORIGINAL_BEHIND = 700;
+  /** World units the box extends above/below them. */
+  private static readonly ORIGINAL_VERT = 700;
+  /** dGMCameraPlayerZoomRanges[] - scales each fighter's box by seated-player count (index = count, clamped to 4). */
+  private static readonly ORIGINAL_PLAYER_COUNT_ZOOM: readonly number[] = [
+    0, 1.5, 1.32, 1.16, 1.0,
+  ];
+  /**
+   * Span-space stand-ins for the real camera's [2500, 30000] 3D distance
+   * clamp - there's no exact unit conversion between this app's 2D world
+   * span and the decomp's eye-to-target distance, so these are tuned to
+   * feel similarly tight up-close / permissive zoomed-out relative to the
+   * default mode's own MIN_SPAN=1400 and effectively unbounded max.
+   */
+  private static readonly ORIGINAL_MIN_SPAN = 1000;
+  private static readonly ORIGINAL_MAX_SPAN = 12000;
+  /** Zoom (span) eases toward its target at a fixed rate - matches the real camera's distance lerp being a single rate, unlike pan speed below. */
+  private static readonly ORIGINAL_ZOOM_LERP = 0.075;
+  /** Pan speed interpolates between these across ORIGINAL_PAN_SPEED_SPAN_LOW/HIGH, slower when zoomed in - proportional stand-in for the real camera's distance-dependent 0.05-0.10 pan lerp. */
+  private static readonly ORIGINAL_PAN_LERP_MIN = 0.05;
+  private static readonly ORIGINAL_PAN_LERP_MAX = 0.1;
+  private static readonly ORIGINAL_PAN_SPEED_SPAN_LOW = 1500;
+  private static readonly ORIGINAL_PAN_SPEED_SPAN_HIGH = 7000;
 
   constructor(canvasWidth: number, canvasHeight: number) {
     this.canvasWidth = canvasWidth;
@@ -77,6 +132,15 @@ export class Camera {
 
   isLocked(): boolean {
     return this.locked;
+  }
+
+  /** Switches which of update() / updateOriginalCamera() actually moves the camera when unlocked - see this class's own doc comment. Locking/unlocking and manual pan/zoom work identically regardless of mode. */
+  setTrackingMode(mode: CameraTrackingMode): void {
+    this.trackingMode = mode;
+  }
+
+  getTrackingMode(): CameraTrackingMode {
+    return this.trackingMode;
   }
 
   /** Current zoom relative to the view at lockView() time: 1.0 at lock, >1 zoomed in since, <1 zoomed out since. Meaningless unless locked. */
@@ -172,7 +236,7 @@ export class Camera {
     positions: ReadonlyArray<{ x: number; y: number }>,
     snap: boolean,
   ): void {
-    if (this.locked) return;
+    if (this.locked || this.trackingMode !== "default") return;
     if (positions.length === 0) {
       if (!this.hasView) {
         // Nothing to frame yet and no prior view - fall back to a plausible default so worldToScreen() still returns sane values.
@@ -215,6 +279,120 @@ export class Camera {
       this.viewMaxX + (targetMaxX - this.viewMaxX) * t,
       this.viewMinY + (targetMinY - this.viewMinY) * t,
       this.viewMaxY + (targetMaxY - this.viewMaxY) * t,
+    );
+  }
+
+  /**
+   * Alternate framing for setTrackingMode("original") - see this class's
+   * own doc comment for the overall approach and what's NOT modeled
+   * (idle-player deweighting, per-move zoom overrides, stage/mode-specific
+   * camera paths). Call once per render with every active fighter's
+   * position and facing direction, in place of update().
+   *
+   * Differs from the default mode in three ways, each translating a real
+   * camera behavior (Game Expert research, ssb-decomp-re's gmcamera.c)
+   * into this app's 2D span model:
+   * 1. Each fighter contributes an ASYMMETRIC box (more room ahead of them
+   *    than behind, per ORIGINAL_AHEAD/BEHIND) instead of a symmetric one
+   *    centered on their sprite - the real camera leans toward where a
+   *    fighter is facing/likely to move.
+   * 2. The union box is scaled by ORIGINAL_PLAYER_COUNT_ZOOM before being
+   *    clamped to [ORIGINAL_MIN_SPAN, ORIGINAL_MAX_SPAN] - 1v1 frames
+   *    tighter than a 4-player free-for-all at the same fighter spread.
+   * 3. Zoom (span) and pan (center position) ease at different,
+   *    independent rates - zoom always at ORIGINAL_ZOOM_LERP, pan
+   *    interpolating between ORIGINAL_PAN_LERP_MIN/MAX based on the
+   *    CURRENT span (slower/smoother pan when zoomed in, faster chase when
+   *    zoomed out) - vs. the default mode's single flat LERP_FACTOR for
+   *    both together.
+   */
+  updateOriginalCamera(
+    fighters: ReadonlyArray<{ x: number; y: number; facingDirection: 1 | -1 }>,
+    snap: boolean,
+  ): void {
+    if (this.locked || this.trackingMode !== "original") return;
+    if (fighters.length === 0) {
+      if (!this.hasView) {
+        this.setView(-450, 450, -100, 500);
+      }
+      return;
+    }
+
+    const countMult =
+      Camera.ORIGINAL_PLAYER_COUNT_ZOOM[
+        Math.min(fighters.length, Camera.ORIGINAL_PLAYER_COUNT_ZOOM.length - 1)
+      ] ?? 1.0;
+    const ahead = Camera.ORIGINAL_AHEAD * countMult;
+    const behind = Camera.ORIGINAL_BEHIND * countMult;
+    const vert = Camera.ORIGINAL_VERT * countMult;
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const f of fighters) {
+      const boxMinX = f.facingDirection > 0 ? f.x - behind : f.x - ahead;
+      const boxMaxX = f.facingDirection > 0 ? f.x + ahead : f.x + behind;
+      if (boxMinX < minX) minX = boxMinX;
+      if (boxMaxX > maxX) maxX = boxMaxX;
+      if (f.y - vert < minY) minY = f.y - vert;
+      if (f.y + vert > maxY) maxY = f.y + vert;
+    }
+
+    // Convert the raw box into a single aspect-matched span (the limiting
+    // dimension, same idea as rescale()'s Math.min) so the frame always
+    // exactly fills the canvas - the real camera projects both axes
+    // through one FOV/distance simultaneously, never letterboxing either.
+    const aspect = this.canvasWidth / this.canvasHeight;
+    const rawSpanX = maxX - minX;
+    const rawSpanY = maxY - minY;
+    const requiredSpanX = Math.max(rawSpanX, rawSpanY * aspect);
+    const targetSpanX = Math.min(
+      Camera.ORIGINAL_MAX_SPAN,
+      Math.max(Camera.ORIGINAL_MIN_SPAN, requiredSpanX),
+    );
+    const targetSpanY = targetSpanX / aspect;
+    const targetCenterX = (minX + maxX) / 2;
+    const targetCenterY = (minY + maxY) / 2;
+
+    if (!this.hasView || snap) {
+      this.setView(
+        targetCenterX - targetSpanX / 2,
+        targetCenterX + targetSpanX / 2,
+        targetCenterY - targetSpanY / 2,
+        targetCenterY + targetSpanY / 2,
+      );
+      return;
+    }
+
+    const currentSpanX = this.viewMaxX - this.viewMinX;
+    const currentCenterX = (this.viewMinX + this.viewMaxX) / 2;
+    const currentCenterY = (this.viewMinY + this.viewMaxY) / 2;
+
+    const zoomT = Camera.ORIGINAL_ZOOM_LERP;
+    const newSpanX = currentSpanX + (targetSpanX - currentSpanX) * zoomT;
+    const newSpanY = newSpanX / aspect;
+
+    const panFrac = Math.min(
+      1,
+      Math.max(
+        0,
+        (currentSpanX - Camera.ORIGINAL_PAN_SPEED_SPAN_LOW) /
+          (Camera.ORIGINAL_PAN_SPEED_SPAN_HIGH -
+            Camera.ORIGINAL_PAN_SPEED_SPAN_LOW),
+      ),
+    );
+    const panT =
+      Camera.ORIGINAL_PAN_LERP_MIN +
+      (Camera.ORIGINAL_PAN_LERP_MAX - Camera.ORIGINAL_PAN_LERP_MIN) * panFrac;
+    const newCenterX = currentCenterX + (targetCenterX - currentCenterX) * panT;
+    const newCenterY = currentCenterY + (targetCenterY - currentCenterY) * panT;
+
+    this.setView(
+      newCenterX - newSpanX / 2,
+      newCenterX + newSpanX / 2,
+      newCenterY - newSpanY / 2,
+      newCenterY + newSpanY / 2,
     );
   }
 

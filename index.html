@@ -4538,6 +4538,34 @@
         flex-direction: column;
         gap: 10px;
       }
+      .camera-mode-row {
+        display: flex;
+        gap: 4px;
+      }
+      .camera-mode-btn {
+        flex: 1;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 6px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--panel-border);
+        background: var(--btn-secondary-bg);
+        color: var(--text-dim);
+        cursor: pointer;
+        transition:
+          background 0.12s,
+          border-color 0.12s,
+          color 0.12s;
+      }
+      .camera-mode-btn:hover {
+        background: var(--btn-secondary-hover);
+        color: var(--text);
+      }
+      .camera-mode-btn.active {
+        background: var(--accent-subtle);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
       .camera-lock-btn {
         font-size: 11px;
         font-weight: 600;
@@ -7302,6 +7330,28 @@
                 </button>
               </div>
               <div id="cameraPanelBody" class="camera-panel-body">
+                <div
+                  id="cameraModeRow"
+                  class="camera-mode-row"
+                  role="radiogroup"
+                >
+                  <button
+                    id="cameraModeDefaultBtn"
+                    class="camera-mode-btn active"
+                    type="button"
+                    aria-pressed="true"
+                  >
+                    Default
+                  </button>
+                  <button
+                    id="cameraModeOriginalBtn"
+                    class="camera-mode-btn"
+                    type="button"
+                    aria-pressed="false"
+                  >
+                    Original Camera
+                  </button>
+                </div>
                 <button
                   id="cameraLockBtn"
                   class="camera-lock-btn"
@@ -7323,7 +7373,7 @@
                       id="cameraZoomSlider"
                       type="range"
                       min="0.2"
-                      max="8"
+                      max="4.3"
                       step="0.1"
                       value="1"
                     />
