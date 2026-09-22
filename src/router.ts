@@ -28,6 +28,7 @@ export type Route =
   | { view: "preview" }
   | { view: "session"; id: string }
   | { view: "matchup"; myChar: number; oppChar: number }
+  | { view: "edgeGuardWorkshop"; myChar: number; oppChar: number }
   | ({ view: "search" } & SearchRouteCriteria);
 
 function parseIntParam(params: URLSearchParams, key: string): number | null {
@@ -66,6 +67,9 @@ export function parseRoute(hash: string): Route {
     const myChar = Number(parts[0]);
     const oppChar = Number(parts[1]);
     if (Number.isFinite(myChar) && Number.isFinite(oppChar)) {
+      if (parts[2] === "workshop") {
+        return { view: "edgeGuardWorkshop", myChar, oppChar };
+      }
       return { view: "matchup", myChar, oppChar };
     }
   }
@@ -113,6 +117,13 @@ export function navigateToSession(id: string): void {
 
 export function navigateToMatchup(myChar: number, oppChar: number): void {
   window.location.hash = `#/matchup/${myChar}/${oppChar}`;
+}
+
+export function navigateToEdgeGuardWorkshop(
+  myChar: number,
+  oppChar: number,
+): void {
+  window.location.hash = `#/matchup/${myChar}/${oppChar}/workshop`;
 }
 
 export function navigateToSearch(criteria: SearchRouteCriteria): void {

@@ -245,6 +245,39 @@ export interface Translations {
   matchupGamesWord: string;
   matchupStatsSectionTitle: string;
   matchupGamesSectionTitle: string;
+  matchupEdgeGuardWorkshopBtn: string;
+  edgeGuardWorkshopTitle: string;
+  edgeGuardWorkshopBackToMatchup: string;
+  edgeGuardWorkshopTotalRecoveries: (count: number) => string;
+  edgeGuardWorkshopSuccessRate: (
+    successes: number,
+    total: number,
+    pct: number,
+  ) => string;
+  edgeGuardWorkshopSuccessCount: (count: number) => string;
+  edgeGuardWorkshopFailureCount: (count: number) => string;
+  edgeGuardWorkshopFilterJumps: string;
+  edgeGuardWorkshopFilterOpponent: string;
+  edgeGuardWorkshopFilterSession: string;
+  edgeGuardWorkshopFilterRecency: string;
+  edgeGuardWorkshopFilterOutcome: string;
+  edgeGuardWorkshopAllJumps: string;
+  edgeGuardWorkshopAllOpponents: string;
+  edgeGuardWorkshopAllSessions: string;
+  edgeGuardWorkshopAllTime: string;
+  edgeGuardWorkshopLastMonth: string;
+  edgeGuardWorkshopSinceDate: string;
+  edgeGuardWorkshopOutcomeAll: string;
+  edgeGuardWorkshopOutcomeSuccess: string;
+  edgeGuardWorkshopOutcomeFail: string;
+  edgeGuardWorkshopDayGrid: string;
+  edgeGuardWorkshopNightGrid: string;
+  edgeGuardWorkshopPlaySimultaneous: string;
+  edgeGuardWorkshopPauseSimultaneous: string;
+  edgeGuardWorkshopShowTrails: string;
+  edgeGuardWorkshopJumpToMatch: string;
+  edgeGuardWorkshopNoRecoveries: string;
+  edgeGuardWorkshopLoading: (done: number, total: number) => string;
   matchupExcludedGames: (count: number) => string;
   matchupEdgeGuardEffectivenessLabel: string;
   matchupEdgeGuardConversionLabel: string;
@@ -878,6 +911,38 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     matchupGamesWord: "games",
     matchupStatsSectionTitle: "STATS",
     matchupGamesSectionTitle: "GAMES",
+    matchupEdgeGuardWorkshopBtn: "Edge Guard Workshop",
+    edgeGuardWorkshopTitle: "Edge Guard Workshop",
+    edgeGuardWorkshopBackToMatchup: "Back to Matchup",
+    edgeGuardWorkshopTotalRecoveries: (count) =>
+      `${count} ${count === 1 ? "Recovery" : "Recoveries"}`,
+    edgeGuardWorkshopSuccessRate: (s, t, p) => `${s}/${t} (${p}%)`,
+    edgeGuardWorkshopSuccessCount: (count) => `${count} Successes (KO)`,
+    edgeGuardWorkshopFailureCount: (count) => `${count} Failures (Recovered)`,
+    edgeGuardWorkshopFilterJumps: "Jumps",
+    edgeGuardWorkshopFilterOpponent: "Opponent",
+    edgeGuardWorkshopFilterSession: "Session",
+    edgeGuardWorkshopFilterRecency: "Recency",
+    edgeGuardWorkshopFilterOutcome: "Outcome",
+    edgeGuardWorkshopAllJumps: "All Jumps",
+    edgeGuardWorkshopAllOpponents: "All Opponents",
+    edgeGuardWorkshopAllSessions: "All Sessions",
+    edgeGuardWorkshopAllTime: "All Time",
+    edgeGuardWorkshopLastMonth: "Last Month",
+    edgeGuardWorkshopSinceDate: "Since",
+    edgeGuardWorkshopOutcomeAll: "All Outcomes",
+    edgeGuardWorkshopOutcomeSuccess: "Successes (KO)",
+    edgeGuardWorkshopOutcomeFail: "Failures (Recovered)",
+    edgeGuardWorkshopDayGrid: "Day Grid",
+    edgeGuardWorkshopNightGrid: "Night Grid",
+    edgeGuardWorkshopPlaySimultaneous: "Play",
+    edgeGuardWorkshopPauseSimultaneous: "Pause",
+    edgeGuardWorkshopShowTrails: "Show Trails",
+    edgeGuardWorkshopJumpToMatch: "Play in Match",
+    edgeGuardWorkshopNoRecoveries:
+      "No edge guard recoveries match these filters.",
+    edgeGuardWorkshopLoading: (done, total) =>
+      `Loading replays (${done}/${total})...`,
     matchupExcludedGames: (count) =>
       `${count} excluded (non-Dream Land or unsupported)`,
     matchupEdgeGuardEffectivenessLabel: "Edge Guard Effectiveness",
@@ -1522,6 +1587,36 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     matchupGamesWord: "試合",
     matchupStatsSectionTitle: "統計",
     matchupGamesSectionTitle: "試合一覧",
+    matchupEdgeGuardWorkshopBtn: "復帰阻止ワークショップ",
+    edgeGuardWorkshopTitle: "復帰阻止ワークショップ",
+    edgeGuardWorkshopBackToMatchup: "対戦カードに戻る",
+    edgeGuardWorkshopTotalRecoveries: (count) => `${count} 件の復帰`,
+    edgeGuardWorkshopSuccessRate: (s, t, p) => `${s}/${t} (${p}%)`,
+    edgeGuardWorkshopSuccessCount: (count) => `${count} 成功 (撃墜)`,
+    edgeGuardWorkshopFailureCount: (count) => `${count} 失敗 (復帰成功)`,
+    edgeGuardWorkshopFilterJumps: "空中ジャンプ",
+    edgeGuardWorkshopFilterOpponent: "対戦相手",
+    edgeGuardWorkshopFilterSession: "セッション",
+    edgeGuardWorkshopFilterRecency: "期間",
+    edgeGuardWorkshopFilterOutcome: "結果",
+    edgeGuardWorkshopAllJumps: "すべてのジャンプ数",
+    edgeGuardWorkshopAllOpponents: "すべての対戦相手",
+    edgeGuardWorkshopAllSessions: "すべてのセッション",
+    edgeGuardWorkshopAllTime: "全期間",
+    edgeGuardWorkshopLastMonth: "過去1ヶ月",
+    edgeGuardWorkshopSinceDate: "以降",
+    edgeGuardWorkshopOutcomeAll: "すべての結果",
+    edgeGuardWorkshopOutcomeSuccess: "成功 (撃墜)",
+    edgeGuardWorkshopOutcomeFail: "失敗 (復帰成功)",
+    edgeGuardWorkshopDayGrid: "昼グリッド",
+    edgeGuardWorkshopNightGrid: "夜グリッド",
+    edgeGuardWorkshopPlaySimultaneous: "再生",
+    edgeGuardWorkshopPauseSimultaneous: "一時停止",
+    edgeGuardWorkshopShowTrails: "軌道を表示",
+    edgeGuardWorkshopJumpToMatch: "試合で再生",
+    edgeGuardWorkshopNoRecoveries: "条件に一致する復帰阻止データはありません。",
+    edgeGuardWorkshopLoading: (done, total) =>
+      `リプレイを読み込み中 (${done}/${total})...`,
     matchupExcludedGames: (count) =>
       `${count}件除外 (プププランド以外または非対応キャラ)`,
     matchupEdgeGuardEffectivenessLabel: "復帰阻止の有効性",
