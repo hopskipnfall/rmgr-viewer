@@ -111,7 +111,22 @@ export function extractEdgeGuardSituations(
           const startY = recoveringState.positionY;
           const wasLeft = rawStartX < 0;
           const startX = Math.abs(rawStartX);
-          const jumpsAtEntry = recoveringState.jumpsRemaining ?? 0;
+          let jumpsAtEntry = recoveringState.jumpsRemaining ?? 0;
+          // If the player consumed a jump on or upon entering this frame (e.g. buffering an aerial jump
+          // out of hitstun where frame f-1 had jumps remaining but frame f consumed it), attribute the
+          // available jump to the recovery entry state.
+          if (openSituation.startFrameIndex > 0) {
+            const prevFrame = replay.frames[openSituation.startFrameIndex - 1];
+            const prevState = prevFrame?.ports[oppPort]?.state;
+            if (
+              prevState &&
+              !prevState.grounded &&
+              prevState.jumpsRemaining !== undefined &&
+              prevState.jumpsRemaining > jumpsAtEntry
+            ) {
+              jumpsAtEntry = prevState.jumpsRemaining;
+            }
+          }
           const stocksRemaining = recoveringState.stocksRemaining ?? 0;
           const damageAtEntry = recoveringState.damagePercent ?? 0;
           // In edge-guarding perspective:

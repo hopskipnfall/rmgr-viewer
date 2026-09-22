@@ -1,6 +1,8 @@
 import type { EdgeGuardSituationData } from "./edgeGuardData.js";
+import { Camera } from "../camera.js";
+import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
+import { drawStage } from "../renderer/stage/stageGeometry.js";
 import { drawGridBackground } from "../renderer/stage/backgrounds/gridBackground.js";
-import { DREAM_LAND_RIGHT_SLOPE } from "../stageGeometry.js";
 
 export type GridTheme = "day" | "night";
 
@@ -15,7 +17,8 @@ export interface CanvasCallbacks {
 export class EdgeGuardCanvas {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  private theme: GridTheme = "night";
+  private camera: Camera;
+  private isLight: boolean = false;
   private situations: readonly EdgeGuardSituationData[] = [];
   private hoveredId: string | null = null;
   private selectedId: string | null = null;
@@ -23,16 +26,11 @@ export class EdgeGuardCanvas {
   private playbackFrame: number | null = null; // null = show start positions only
   private callbacks: CanvasCallbacks;
 
-  // World bounds for the right half of Dream Land
-  private readonly worldMinX = -600;
-  private readonly worldMaxX = 9600;
-  private readonly worldMinY = -4000;
-  private readonly worldMaxY = 8800;
-
-  // Viewport scale & offset
-  private scale = 1;
-  private offsetX = 0;
-  private offsetY = 0;
+  private initializedView = false;
+  private cameraDragging = false;
+  private dragMoved = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -43,17 +41,31 @@ export class EdgeGuardCanvas {
     if (!ctx) throw new Error("Could not get 2D context");
     this.ctx = ctx;
     this.callbacks = callbacks;
+    this.camera = new Camera(
+      Math.max(100, canvas.width || 800),
+      Math.max(100, canvas.height || 600),
+    );
 
     this.setupEventListeners();
   }
 
+  public setIsLight(isLight: boolean): void {
+    if (this.isLight !== isLight) {
+      this.isLight = isLight;
+      this.draw();
+    }
+  }
+
+  public getIsLight(): boolean {
+    return this.isLight;
+  }
+
   public setTheme(theme: GridTheme): void {
-    this.theme = theme;
-    this.draw();
+    this.setIsLight(theme === "day");
   }
 
   public getTheme(): GridTheme {
-    return this.theme;
+    return this.isLight ? "day" : "night";
   }
 
   public setShowTrails(show: boolean): void {
@@ -85,95 +97,160 @@ export class EdgeGuardCanvas {
     this.draw();
   }
 
-  private getDpr(): number {
-    return (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+  /** Frames the right side of Dream Land and edge guard recovery area. */
+  public recenterCamera(): void {
+    this.camera.unlockView();
+    // Frame Dream Land right side & recovery zone:
+    // Dream Land ground: x = -2318 to 2318, Y = 0.
+    // Right blast zone: x = 9000, Y bounds = -3500 to 8300.
+    // With Camera's 0.3 padding around (0, -2200) to (7800, 5800):
+    // Center is (3900, 1800), spanX = 7800, padX = 2340 -> frames x from -2340 to 10140.
+    // This cleanly puts stage center (x = 0) on the left and right blast zone (x = 9000) on the right.
+    this.camera.update(
+      [
+        { x: 0, y: -2200 },
+        { x: 7800, y: 5800 },
+      ],
+      true,
+    );
+    this.camera.lockView();
+    this.draw();
   }
 
   public resize(): void {
     const rect = this.canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
-    const dpr = this.getDpr();
-    this.canvas.width = Math.round(rect.width * dpr);
-    this.canvas.height = Math.round(rect.height * dpr);
-    this.updateTransform();
-    this.draw();
-  }
+    const width = Math.max(200, Math.floor(rect.width));
+    const height = Math.max(150, Math.floor(rect.height));
+    this.canvas.width = width;
+    this.canvas.height = height;
+    this.camera.resize(width, height);
 
-  private updateTransform(): void {
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    const worldW = this.worldMaxX - this.worldMinX;
-    const worldH = this.worldMaxY - this.worldMinY;
-
-    const pad = 24 * this.getDpr();
-    const availW = w - 2 * pad;
-    const availH = h - 2 * pad;
-
-    this.scale = Math.min(availW / worldW, availH / worldH);
-    // Center horizontally and vertically within available area
-    const drawnW = worldW * this.scale;
-    const drawnH = worldH * this.scale;
-    this.offsetX = pad + (availW - drawnW) / 2;
-    this.offsetY = pad + (availH - drawnH) / 2;
+    if (!this.initializedView) {
+      this.recenterCamera();
+      this.initializedView = true;
+    } else {
+      this.draw();
+    }
   }
 
   public worldToScreen(wx: number, wy: number): { x: number; y: number } {
-    const sx = this.offsetX + (wx - this.worldMinX) * this.scale;
-    // Y is inverted: Smash +Y is up, Canvas +Y is down
-    const sy = this.canvas.height - (this.offsetY + (wy - this.worldMinY) * this.scale);
-    return { x: sx, y: sy };
+    return this.camera.worldToScreen(wx, wy);
   }
 
   public screenToWorld(sx: number, sy: number): { x: number; y: number } {
-    const wx = this.worldMinX + (sx - this.offsetX) / this.scale;
-    const wy =
-      this.worldMinY + (this.canvas.height - sy - this.offsetY) / this.scale;
-    return { x: wx, y: wy };
+    return this.camera.screenToWorld(sx, sy);
   }
 
   private setupEventListeners(): void {
-    this.canvas.addEventListener("mousemove", (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      const dpr = this.getDpr();
-      const mouseX = (e.clientX - rect.left) * dpr;
-      const mouseY = (e.clientY - rect.top) * dpr;
+    this.canvas.style.cursor = "grab";
 
-      const closest = this.findClosestSituation(mouseX, mouseY, 18 * dpr);
-      if (closest) {
-        this.hoveredId = closest.id;
-        this.canvas.style.cursor = "pointer";
-        this.callbacks.onHoverSituation?.(closest, {
-          x: e.clientX,
-          y: e.clientY,
-        });
-      } else {
-        if (this.hoveredId !== null) {
-          this.hoveredId = null;
-          this.canvas.style.cursor = "default";
-          this.callbacks.onHoverSituation?.(null, null);
+    // Mouse drag to pan
+    this.canvas.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      this.cameraDragging = true;
+      this.dragMoved = false;
+      this.dragStartX = e.clientX;
+      this.dragStartY = e.clientY;
+      this.canvas.style.cursor = "grabbing";
+    });
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("mousemove", (e) => {
+        if (this.cameraDragging) {
+          const dx = e.clientX - this.dragStartX;
+          const dy = e.clientY - this.dragStartY;
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+            this.dragMoved = true;
+          }
+          this.camera.panByScreenDelta(e.movementX, e.movementY);
+          this.draw();
+          return;
         }
+
+        // Check hover when not dragging
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        if (
+          mouseX < 0 ||
+          mouseX > rect.width ||
+          mouseY < 0 ||
+          mouseY > rect.height
+        ) {
+          if (this.hoveredId !== null) {
+            this.hoveredId = null;
+            this.callbacks.onHoverSituation?.(null, null);
+            this.draw();
+          }
+          return;
+        }
+
+        const closest = this.findClosestSituation(mouseX, mouseY, 16);
+        if (closest) {
+          this.hoveredId = closest.id;
+          this.canvas.style.cursor = "pointer";
+          this.callbacks.onHoverSituation?.(closest, {
+            x: e.clientX,
+            y: e.clientY,
+          });
+        } else {
+          if (this.hoveredId !== null) {
+            this.hoveredId = null;
+            this.callbacks.onHoverSituation?.(null, null);
+          }
+          this.canvas.style.cursor = "grab";
+        }
+        this.draw();
+      });
+
+      window.addEventListener("mouseup", () => {
+        if (this.cameraDragging) {
+          this.cameraDragging = false;
+          this.canvas.style.cursor = this.hoveredId ? "pointer" : "grab";
+        }
+      });
+    }
+
+    // Mouse wheel to zoom anchored at cursor
+    this.canvas.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        const rect = this.canvas.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+        const clampedDeltaY = Math.max(-100, Math.min(100, e.deltaY));
+        const factor = Math.exp(-clampedDeltaY * 0.0015);
+        this.camera.zoomAtScreenPoint(factor, screenX, screenY);
+        this.draw();
+      },
+      { passive: false },
+    );
+
+    // Click on canvas to select a situation
+    this.canvas.addEventListener("click", (e) => {
+      if (this.dragMoved) {
+        this.dragMoved = false;
+        return;
       }
-      this.draw();
+      const rect = this.canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const closest = this.findClosestSituation(mouseX, mouseY, 16);
+      if (closest) {
+        this.selectedId = closest.id;
+        this.callbacks.onSelectSituation?.(closest);
+        this.draw();
+      }
     });
 
     this.canvas.addEventListener("mouseleave", () => {
       if (this.hoveredId !== null) {
         this.hoveredId = null;
         this.callbacks.onHoverSituation?.(null, null);
-        this.draw();
-      }
-    });
-
-    this.canvas.addEventListener("click", (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      const dpr = this.getDpr();
-      const mouseX = (e.clientX - rect.left) * dpr;
-      const mouseY = (e.clientY - rect.top) * dpr;
-
-      const closest = this.findClosestSituation(mouseX, mouseY, 18 * dpr);
-      if (closest) {
-        this.selectedId = closest.id;
-        this.callbacks.onSelectSituation?.(closest);
         this.draw();
       }
     });
@@ -216,18 +293,26 @@ export class EdgeGuardCanvas {
     const { ctx, canvas } = this;
     if (canvas.width === 0 || canvas.height === 0) return;
 
-    const isLight = this.theme === "day";
+    const isLight = this.isLight;
 
-    // 1. Grid Background (using standard app grid)
+    // 1. Exact Replay Grid Background
     drawGridBackground(ctx, canvas, isLight);
 
-    // 2. Blast Zones & Guides
+    // 2. Blast Zones & Guides (dashed lines without text labels)
     this.drawBlastZones(isLight);
 
-    // 3. Stage Geometry (Right Half of Dream Land)
-    this.drawStageGeometry(isLight);
+    // 3. Exact Replay Stage Geometry (Dream Land platforms, slopes, ribs, silhouette, ledges)
+    drawStage(
+      ctx,
+      this.camera,
+      DREAM_LAND_STAGE_ID,
+      0,
+      "grid",
+      isLight,
+      canvas,
+    );
 
-    // 4. Trajectories / Trails (if enabled or if situation is hovered/selected)
+    // 4. Trajectories (win/success blue, fail red)
     this.drawTrajectories(isLight);
 
     // 5. Recovery Points / Simultaneous Playback Ghosts
@@ -236,38 +321,31 @@ export class EdgeGuardCanvas {
 
   private drawBlastZones(isLight: boolean): void {
     const { ctx } = this;
-    const dpr = this.getDpr();
 
     // Center / Mirror line at x = 0
     const topCenter = this.worldToScreen(0, 8300);
     const bottomCenter = this.worldToScreen(0, -3500);
 
     ctx.save();
-    ctx.setLineDash([4 * dpr, 4 * dpr]);
+    ctx.setLineDash([4, 4]);
     ctx.strokeStyle = isLight
-      ? "rgba(100, 116, 139, 0.4)"
-      : "rgba(148, 163, 184, 0.25)";
-    ctx.lineWidth = 1.5 * dpr;
+      ? "rgba(100, 116, 139, 0.45)"
+      : "rgba(148, 163, 184, 0.3)";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(topCenter.x, topCenter.y);
     ctx.lineTo(bottomCenter.x, bottomCenter.y);
     ctx.stroke();
-
-    // Stage center label
-    ctx.fillStyle = isLight ? "#64748b" : "#94a3b8";
-    ctx.font = `600 ${10 * dpr}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillText("STAGE CENTER (x = 0)", topCenter.x, topCenter.y - 8 * dpr);
 
     // Blast zone boundaries (x = 9000, y = 8300, y = -3500)
     const rightTop = this.worldToScreen(9000, 8300);
     const rightBottom = this.worldToScreen(9000, -3500);
 
     ctx.strokeStyle = isLight
-      ? "rgba(239, 68, 68, 0.35)"
-      : "rgba(239, 68, 68, 0.25)";
-    ctx.lineWidth = 1 * dpr;
-    ctx.setLineDash([6 * dpr, 4 * dpr]);
+      ? "rgba(239, 68, 68, 0.4)"
+      : "rgba(239, 68, 68, 0.3)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
     ctx.beginPath();
     // Top blast line
     ctx.moveTo(topCenter.x, topCenter.y);
@@ -278,117 +356,11 @@ export class EdgeGuardCanvas {
     ctx.lineTo(bottomCenter.x, bottomCenter.y);
     ctx.stroke();
 
-    ctx.fillStyle = isLight ? "#ef4444" : "#f87171";
-    ctx.font = `${9 * dpr}px sans-serif`;
-    ctx.textAlign = "right";
-    ctx.fillText("RIGHT BLAST ZONE (x = 9000)", rightTop.x - 6 * dpr, rightTop.y + 14 * dpr);
-    ctx.fillText("UPPER BLAST ZONE (y = 8300)", rightTop.x - 6 * dpr, rightTop.y - 6 * dpr);
-    ctx.fillText("LOWER BLAST ZONE (y = -3500)", rightBottom.x - 6 * dpr, rightBottom.y + 14 * dpr);
-
-    ctx.restore();
-  }
-
-  private drawStageGeometry(isLight: boolean): void {
-    const { ctx } = this;
-    const dpr = this.getDpr();
-
-    // Stage Hull Polygon:
-    // (0, 0) -> (2318, 0) -> right slope -> (1972, -1072) -> (0, -1072) -> close
-    const pts = [
-      { x: 0, y: 0 },
-      { x: 2318, y: 0 },
-      ...DREAM_LAND_RIGHT_SLOPE.slice(1),
-      { x: 0, y: -1072 },
-    ];
-
-    ctx.save();
-    ctx.beginPath();
-    const p0 = this.worldToScreen(pts[0]!.x, pts[0]!.y);
-    ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < pts.length; i++) {
-      const p = this.worldToScreen(pts[i]!.x, pts[i]!.y);
-      ctx.lineTo(p.x, p.y);
-    }
-    ctx.closePath();
-
-    // Hull fill
-    ctx.fillStyle = isLight ? "#cbd5e1" : "#1e293b";
-    ctx.fill();
-
-    // Faceted structural ribs inside hull
-    ctx.strokeStyle = isLight
-      ? "rgba(100, 116, 139, 0.3)"
-      : "rgba(148, 163, 184, 0.15)";
-    ctx.lineWidth = 1 * dpr;
-    const internalRibs = [
-      [{ x: 0, y: -400 }, { x: 2150, y: -600 }],
-      [{ x: 0, y: -800 }, { x: 1972, y: -1072 }],
-      [{ x: 1200, y: 0 }, { x: 1000, y: -1072 }],
-    ];
-    for (const rib of internalRibs) {
-      const r0 = this.worldToScreen(rib[0]!.x, rib[0]!.y);
-      const r1 = this.worldToScreen(rib[1]!.x, rib[1]!.y);
-      ctx.beginPath();
-      ctx.moveTo(r0.x, r0.y);
-      ctx.lineTo(r1.x, r1.y);
-      ctx.stroke();
-    }
-
-    // Hull outline
-    ctx.strokeStyle = isLight ? "#64748b" : "#475569";
-    ctx.lineWidth = 2 * dpr;
-    ctx.stroke();
-
-    // Ground surface top edge: (0, 0) to (2318, 0)
-    const g0 = this.worldToScreen(0, 0);
-    const g1 = this.worldToScreen(2318, 0);
-    ctx.strokeStyle = isLight ? "#0284c7" : "#38bdf8";
-    ctx.lineWidth = 3 * dpr;
-    ctx.beginPath();
-    ctx.moveTo(g0.x, g0.y);
-    ctx.lineTo(g1.x, g1.y);
-    ctx.stroke();
-
-    // Right Ledge marker: (2318, 0)
-    ctx.fillStyle = isLight ? "#f59e0b" : "#fbbf24";
-    ctx.beginPath();
-    ctx.arc(g1.x, g1.y, 4 * dpr, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.font = `600 ${9 * dpr}px sans-serif`;
-    ctx.textAlign = "left";
-    ctx.fillText("LEDGE", g1.x + 6 * dpr, g1.y - 4 * dpr);
-
-    // Right Platform: leftX: 951, rightX: 1892, y: 907
-    const rp0 = this.worldToScreen(951, 907);
-    const rp1 = this.worldToScreen(1892, 907);
-    ctx.strokeStyle = isLight ? "#0284c7" : "#38bdf8";
-    ctx.lineWidth = 2.5 * dpr;
-    ctx.beginPath();
-    ctx.moveTo(rp0.x, rp0.y);
-    ctx.lineTo(rp1.x, rp1.y);
-    ctx.stroke();
-
-    // Top Platform right half: leftX: 0, rightX: 570, y: 1542
-    const tp0 = this.worldToScreen(0, 1542);
-    const tp1 = this.worldToScreen(570, 1542);
-    ctx.beginPath();
-    ctx.moveTo(tp0.x, tp0.y);
-    ctx.lineTo(tp1.x, tp1.y);
-    ctx.stroke();
-
-    // Platform labels
-    ctx.fillStyle = isLight ? "#64748b" : "#94a3b8";
-    ctx.font = `${8.5 * dpr}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillText("SIDE PLATFORM", (rp0.x + rp1.x) / 2, rp0.y - 5 * dpr);
-    ctx.fillText("TOP PLATFORM", tp1.x / 2, tp0.y - 5 * dpr);
-
     ctx.restore();
   }
 
   private drawTrajectories(isLight: boolean): void {
     const { ctx } = this;
-    const dpr = this.getDpr();
 
     for (const sit of this.situations) {
       const isHovered = sit.id === this.hoveredId;
@@ -401,10 +373,10 @@ export class EdgeGuardCanvas {
       if (sit.trajectory.length < 2) continue;
 
       const isSuccess = sit.outcome === "success";
-      // Success (KO): Blue / cyan
-      // Failure (Recovered): Red / orange
+      // Success (KO): Blue
+      // Failure (Safe): Red
       let strokeStyle: string;
-      const alpha = isHovered || isSelected ? 0.9 : 0.22;
+      const alpha = isHovered || isSelected ? 0.95 : 0.28;
 
       if (isSuccess) {
         strokeStyle = isLight
@@ -418,7 +390,7 @@ export class EdgeGuardCanvas {
 
       ctx.save();
       ctx.strokeStyle = strokeStyle;
-      ctx.lineWidth = (isHovered || isSelected ? 2.5 : 1.2) * dpr;
+      ctx.lineWidth = isHovered || isSelected ? 2.5 : 1.5;
 
       // Limit trajectory to playbackFrame if active
       const maxPts =
@@ -436,7 +408,7 @@ export class EdgeGuardCanvas {
       }
       ctx.stroke();
 
-      // If hovered or selected, draw directional arrow or end point
+      // If hovered or selected, draw end marker
       if ((isHovered || isSelected) && maxPts > 1) {
         const lastPt = sit.trajectory[maxPts - 1]!;
         const pEnd = this.worldToScreen(lastPt.x, lastPt.y);
@@ -444,7 +416,7 @@ export class EdgeGuardCanvas {
           ? (isLight ? "#0284c7" : "#38bdf8")
           : (isLight ? "#dc2626" : "#f87171");
         ctx.beginPath();
-        ctx.arc(pEnd.x, pEnd.y, 4 * dpr, 0, Math.PI * 2);
+        ctx.arc(pEnd.x, pEnd.y, 4, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -453,8 +425,6 @@ export class EdgeGuardCanvas {
   }
 
   private drawSituationPoints(isLight: boolean): void {
-    const dpr = this.getDpr();
-
     // Draw regular points first, then hovered/selected on top
     const regular: EdgeGuardSituationData[] = [];
     let priority: EdgeGuardSituationData | null = null;
@@ -468,10 +438,10 @@ export class EdgeGuardCanvas {
     }
 
     for (const sit of regular) {
-      this.drawSinglePoint(sit, false, isLight, dpr);
+      this.drawSinglePoint(sit, false, isLight);
     }
     if (priority) {
-      this.drawSinglePoint(priority, true, isLight, dpr);
+      this.drawSinglePoint(priority, true, isLight);
     }
   }
 
@@ -479,7 +449,6 @@ export class EdgeGuardCanvas {
     sit: EdgeGuardSituationData,
     isPriority: boolean,
     isLight: boolean,
-    dpr: number,
   ): void {
     const { ctx } = this;
     const isSuccess = sit.outcome === "success";
@@ -498,27 +467,27 @@ export class EdgeGuardCanvas {
 
     const s = this.worldToScreen(ptX, ptY);
 
-    // Base colors matching app standard
-    // Success: Blue (#38bdf8 / #1d4ed8 / #60a5fa)
-    // Fail: Red (#f87171 / #dc2626)
+    // App standard colors:
+    // Success (KO): Blue (#38bdf8 in dark, #0284c7 in light)
+    // Fail (Safe): Red (#f87171 in dark, #dc2626 in light)
     const fillColor = isSuccess
       ? (isLight ? "#0284c7" : "#38bdf8")
       : (isLight ? "#dc2626" : "#f87171");
 
-    const radius = (isPriority ? 8 : 4.5) * dpr;
+    const radius = isPriority ? 8 : 4.5;
 
     ctx.save();
     if (isPriority) {
       // Glow halo
       ctx.shadowColor = isSuccess ? "#38bdf8" : "#f87171";
-      ctx.shadowBlur = 10 * dpr;
+      ctx.shadowBlur = 10;
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2 * dpr;
+      ctx.lineWidth = 2;
     } else {
       ctx.strokeStyle = isLight
-        ? "rgba(15, 23, 42, 0.4)"
-        : "rgba(0, 0, 0, 0.6)";
-      ctx.lineWidth = 1 * dpr;
+        ? "rgba(15, 23, 42, 0.45)"
+        : "rgba(0, 0, 0, 0.65)";
+      ctx.lineWidth = 1;
     }
 
     ctx.fillStyle = fillColor;
@@ -531,11 +500,11 @@ export class EdgeGuardCanvas {
     if (isPriority) {
       ctx.shadowBlur = 0;
       ctx.fillStyle = isLight ? "#0f172a" : "#f8fafc";
-      ctx.font = `bold ${10 * dpr}px sans-serif`;
+      ctx.font = "bold 10px sans-serif";
       ctx.textAlign = "center";
       const outcomeText = isSuccess ? "KO" : "SAFE";
       const label = `${outcomeText} (${sit.jumpsAtEntry}J)`;
-      ctx.fillText(label, s.x, s.y - 12 * dpr);
+      ctx.fillText(label, s.x, s.y - 12);
     }
 
     ctx.restore();

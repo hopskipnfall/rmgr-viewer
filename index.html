@@ -2014,6 +2014,71 @@
         color: #38bdf8;
         border: 1px solid rgba(56, 189, 248, 0.3);
       }
+
+      /* Character Pickers in Header */
+      .egw-character-pickers {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .egw-picker-group {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .egw-picker-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        letter-spacing: 0.03em;
+      }
+      .egw-picker-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        padding: 2px 8px 2px 6px;
+      }
+      .egw-char-select {
+        background: transparent;
+        border: none;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        outline: none;
+        padding: 2px 0;
+      }
+      .egw-char-select optgroup {
+        font-weight: 700;
+        color: var(--text-dim);
+        background: var(--panel);
+      }
+      .egw-char-select option {
+        font-weight: 500;
+        color: var(--text);
+        background: var(--panel);
+      }
+      .egw-swap-btn {
+        background: var(--surface, rgba(255, 255, 255, 0.06));
+        border: 1px solid var(--panel-border);
+        color: var(--text-dim);
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        margin-top: 12px;
+        transition: all 0.12s ease;
+      }
+      .egw-swap-btn:hover {
+        background: var(--surface-hover, rgba(255, 255, 255, 0.12));
+        color: var(--text);
+        border-color: var(--accent);
+      }
+
       .egw-header-stats {
         display: flex;
         align-items: center;
@@ -2128,7 +2193,7 @@
         flex: 1;
         min-width: 0;
         height: 100%;
-        background: #0f172a;
+        background: var(--bg);
         position: relative;
       }
       .egw-canvas-wrap {
@@ -2143,6 +2208,10 @@
         width: 100%;
         height: 100%;
         display: block;
+        cursor: grab;
+      }
+      .egw-canvas:active {
+        cursor: grabbing;
       }
 
       /* Loading Overlay */
@@ -2306,6 +2375,24 @@
       }
       .egw-reset-frame-btn:hover {
         background: var(--surface-hover, rgba(255, 255, 255, 0.12));
+      }
+      .egw-recenter-btn {
+        background: var(--surface, rgba(255, 255, 255, 0.06));
+        border: 1px solid var(--panel-border);
+        color: var(--text);
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.12s ease;
+      }
+      .egw-recenter-btn:hover {
+        background: var(--surface-hover, rgba(255, 255, 255, 0.12));
+        border-color: var(--accent);
       }
 
       /* Sidebar & Recovery List */

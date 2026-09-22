@@ -22,17 +22,22 @@ describe("Edge Guard Workshop Route", () => {
   });
 
   it("generates hash correctly via navigateToEdgeGuardWorkshop", () => {
-    const originalWindow = (globalThis as any).window;
-    (globalThis as any).window = {
+    const originalWindow = (
+      globalThis as unknown as { window?: { location: { hash: string } } }
+    ).window;
+    (
+      globalThis as unknown as { window: { location: { hash: string } } }
+    ).window = {
       location: { hash: "" },
     };
 
     navigateToEdgeGuardWorkshop(1, 9);
-    expect((globalThis as any).window.location.hash).toBe(
-      "#/matchup/1/9/workshop",
-    );
+    expect(
+      (globalThis as unknown as { window: { location: { hash: string } } })
+        .window.location.hash,
+    ).toBe("#/matchup/1/9/workshop");
 
-    (globalThis as any).window = originalWindow;
+    (globalThis as unknown as { window?: unknown }).window = originalWindow;
   });
 });
 
@@ -43,7 +48,7 @@ describe("Edge Guard Data Extraction & Mirroring", () => {
     jumpsRemaining = 2,
     damage = 45,
   ): Replay {
-    const frames: any[] = [];
+    const frames: unknown[] = [];
 
     // Frame 0: Both actionable on stage
     frames.push({
@@ -289,9 +294,27 @@ describe("Edge Guard Data Extraction & Mirroring", () => {
 
   it("ignores non-Dream Land stages", () => {
     const replay = makeMockReplay(3500, true);
-    (replay.matchSettings as any).stageId = 4; // Sector Z or Peach's Castle
+    (replay.matchSettings as unknown as { stageId: number }).stageId = 4; // Sector Z or Peach's Castle
     const situations = extractEdgeGuardSituations(replay, mockSummary, 0, 1);
     expect(situations).toHaveLength(0);
+  });
+
+  it("preserves jumps remaining when jump is consumed on the entry frame", () => {
+    // In frame 1 (hitstun), jumpsRemaining = 1.
+    // In frame 2 (situation entered), player executes aerial jump (JumpAerialF 0x18), so jumpsRemaining = 0.
+    // The extraction must attribute the 1 jump to jumpsAtEntry.
+    const replay = makeMockReplay(3500, true, 1, 100);
+    const frame2 = replay.frames[2]!;
+    const state = frame2.ports[1]!.state as unknown as {
+      jumpsRemaining: number;
+      actionStateId: number;
+    };
+    state.jumpsRemaining = 0;
+    state.actionStateId = 0x18;
+
+    const situations = extractEdgeGuardSituations(replay, mockSummary, 0, 1);
+    expect(situations).toHaveLength(1);
+    expect(situations[0]!.jumpsAtEntry).toBe(1);
   });
 });
 
@@ -450,6 +473,7 @@ describe("EdgeGuardCanvas Coordinate Transforms", () => {
       setLineDash: () => {},
       fillText: () => {},
       arc: () => {},
+      createLinearGradient: () => ({ addColorStop: () => {} }),
     };
     const mockCanvas = {
       width: 800,

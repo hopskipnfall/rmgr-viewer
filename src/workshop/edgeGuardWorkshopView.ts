@@ -1,6 +1,6 @@
 import type { PortIndex } from "@rmg-k/rmgr";
 import { t } from "../i18n.js";
-import { characterName } from "../lookups.js";
+import { characterName, NA_ORIGINAL_12_IDS } from "../lookups.js";
 import { characterIconHtml } from "../characterIcons.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import { createDefaultIdentity, type Identity } from "../data/identity.js";
@@ -8,13 +8,15 @@ import type { LoadedReplay } from "../replaySource.js";
 import type { PlaylistClip } from "../playlist.js";
 import { filterGameSummaries } from "../data/aggregate.js";
 import { groupGamesIntoSessions } from "../data/session.js";
+import { groupAndSortCharacters } from "../library/matchupChipSelector.js";
+import { navigateToEdgeGuardWorkshop } from "../router.js";
 import {
   extractEdgeGuardSituations,
   filterEdgeGuardSituations,
   type EdgeGuardSituationData,
   type EdgeGuardFilterState,
 } from "./edgeGuardData.js";
-import { EdgeGuardCanvas, type GridTheme } from "./edgeGuardCanvas.js";
+import { EdgeGuardCanvas } from "./edgeGuardCanvas.js";
 
 export class EdgeGuardWorkshopViewController {
   private container: HTMLElement;
@@ -41,8 +43,8 @@ export class EdgeGuardWorkshopViewController {
     outcome: "all",
   };
 
-  private currentTheme: GridTheme = "night";
   private showTrails: boolean = true;
+  private themeObserver: MutationObserver | null = null;
 
   // Simultaneous playback state
   private isPlaying = false;
@@ -76,6 +78,7 @@ export class EdgeGuardWorkshopViewController {
     this.summaries = summaries;
     this.identity = identity;
     this.stopPlayback();
+    this.themeObserver?.disconnect();
 
     const token = ++this.loadToken;
 
@@ -156,6 +159,45 @@ export class EdgeGuardWorkshopViewController {
     this.applyFilters();
   }
 
+  private renderCharacterSelectOptions(selectedId: number): string {
+    const allCharIds = Array.from(
+      new Set([
+        ...NA_ORIGINAL_12_IDS,
+        ...this.summaries.flatMap((s) => s.ports.map((p) => p.characterId)),
+      ]),
+    );
+    const sections = groupAndSortCharacters(allCharIds);
+    return sections
+      .map(
+        (sec) => `
+        <optgroup label="${escapeHtml(sec.name)}">
+          ${sec.charIds
+            .map(
+              (id) => `
+            <option value="${id}" ${id === selectedId ? "selected" : ""}>
+              ${escapeHtml(characterName(id))}
+            </option>
+          `,
+            )
+            .join("")}
+        </optgroup>
+      `,
+      )
+      .join("");
+  }
+
+  private isLightMode(): boolean {
+    if (typeof document !== "undefined") {
+      const attr = document.documentElement.getAttribute("data-theme");
+      if (attr === "light") return true;
+      if (attr === "dark") return false;
+      if (typeof window !== "undefined" && window.matchMedia) {
+        return window.matchMedia("(prefers-color-scheme: light)").matches;
+      }
+    }
+    return false;
+  }
+
   private renderShell(): void {
     const tr = t();
 
@@ -167,14 +209,33 @@ export class EdgeGuardWorkshopViewController {
             <a href="#/matchup/${this.myChar}/${this.oppChar}" class="egw-back-link">
               &larr; ${escapeHtml(tr.edgeGuardWorkshopBackToMatchup)}
             </a>
-            <h1 class="egw-title">
-              ${characterIconHtml(this.myChar, "egw-char-icon", { showBadge: false })}
-              <span>${escapeHtml(characterName(this.myChar))}</span>
-              <span class="egw-vs">${escapeHtml(tr.matchupVs)}</span>
-              ${characterIconHtml(this.oppChar, "egw-char-icon", { showBadge: false })}
-              <span>${escapeHtml(characterName(this.oppChar))}</span>
+            <div class="egw-character-pickers">
+              <div class="egw-picker-group">
+                <span class="egw-picker-label">${escapeHtml(tr.yourCharacter)}</span>
+                <div class="egw-picker-control">
+                  ${characterIconHtml(this.myChar, "egw-char-icon", { showBadge: false })}
+                  <select id="egwMyCharSelect" class="egw-char-select">
+                    ${this.renderCharacterSelectOptions(this.myChar)}
+                  </select>
+                </div>
+              </div>
+
+              <button type="button" class="egw-swap-btn" id="egwSwapBtn" title="Swap Matchup">
+                &#8644;
+              </button>
+
+              <div class="egw-picker-group">
+                <span class="egw-picker-label">${escapeHtml(tr.opponent)}</span>
+                <div class="egw-picker-control">
+                  ${characterIconHtml(this.oppChar, "egw-char-icon", { showBadge: false })}
+                  <select id="egwOppCharSelect" class="egw-char-select">
+                    ${this.renderCharacterSelectOptions(this.oppChar)}
+                  </select>
+                </div>
+              </div>
+
               <span class="egw-badge">${escapeHtml(tr.edgeGuardWorkshopTitle)}</span>
-            </h1>
+            </div>
           </div>
 
           <!-- Summary Stats -->
@@ -245,11 +306,6 @@ export class EdgeGuardWorkshopViewController {
           <div class="egw-filter-spacer"></div>
 
           <div class="egw-filter-controls">
-            <!-- Theme Toggle -->
-            <button type="button" class="egw-theme-btn" id="egwThemeBtn" title="Toggle Grid Theme">
-              <span id="egwThemeLabel">🌙 ${escapeHtml(tr.edgeGuardWorkshopNightGrid)}</span>
-            </button>
-
             <!-- Trails Toggle -->
             <label class="egw-checkbox-label">
               <input type="checkbox" id="egwTrailsCheck" ${this.showTrails ? "checked" : ""} />
@@ -308,6 +364,10 @@ export class EdgeGuardWorkshopViewController {
               <button type="button" class="egw-reset-frame-btn" id="egwResetFrameBtn" title="Reset to initial positions">
                 &#8634;
               </button>
+
+              <button type="button" class="egw-recenter-btn" id="egwRecenterBtn" title="Recenter camera">
+                &#x2316; Recenter View
+              </button>
             </div>
           </div>
 
@@ -341,8 +401,55 @@ export class EdgeGuardWorkshopViewController {
       onHoverSituation: (sit, screenPos) => this.handleCanvasHover(sit, screenPos),
       onSelectSituation: (sit) => this.handleCanvasSelect(sit),
     });
-    this.canvas.setTheme(this.currentTheme);
+    this.canvas.setIsLight(this.isLightMode());
     this.canvas.setShowTrails(this.showTrails);
+
+    // Auto-sync canvas theme with UI theme changes
+    if (
+      typeof MutationObserver !== "undefined" &&
+      typeof document !== "undefined"
+    ) {
+      this.themeObserver?.disconnect();
+      this.themeObserver = new MutationObserver(() => {
+        this.canvas?.setIsLight(this.isLightMode());
+      });
+      this.themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme"],
+      });
+    }
+
+    // Character pickers in header
+    const myCharSelect = this.container.querySelector(
+      "#egwMyCharSelect",
+    ) as HTMLSelectElement | null;
+    myCharSelect?.addEventListener("change", () => {
+      const newMy = parseInt(myCharSelect.value, 10);
+      navigateToEdgeGuardWorkshop(newMy, this.oppChar);
+    });
+
+    const oppCharSelect = this.container.querySelector(
+      "#egwOppCharSelect",
+    ) as HTMLSelectElement | null;
+    oppCharSelect?.addEventListener("change", () => {
+      const newOpp = parseInt(oppCharSelect.value, 10);
+      navigateToEdgeGuardWorkshop(this.myChar, newOpp);
+    });
+
+    const swapBtn = this.container.querySelector(
+      "#egwSwapBtn",
+    ) as HTMLButtonElement | null;
+    swapBtn?.addEventListener("click", () => {
+      navigateToEdgeGuardWorkshop(this.oppChar, this.myChar);
+    });
+
+    // Recenter camera button
+    const recenterBtn = this.container.querySelector(
+      "#egwRecenterBtn",
+    ) as HTMLButtonElement | null;
+    recenterBtn?.addEventListener("click", () => {
+      this.canvas?.recenterCamera();
+    });
 
     // Window resize observer
     const wrap = this.container.querySelector("#egwCanvasWrap") as HTMLElement;
@@ -419,24 +526,6 @@ export class EdgeGuardWorkshopViewController {
         outcome: outcomeSelect.value as "all" | "success" | "fail",
       };
       this.applyFilters();
-    });
-
-    // Theme toggle
-    const themeBtn = this.container.querySelector(
-      "#egwThemeBtn",
-    ) as HTMLButtonElement;
-    const themeLabel = this.container.querySelector(
-      "#egwThemeLabel",
-    ) as HTMLElement;
-    themeBtn?.addEventListener("click", () => {
-      this.currentTheme = this.currentTheme === "night" ? "day" : "night";
-      this.canvas?.setTheme(this.currentTheme);
-      if (themeLabel) {
-        themeLabel.textContent =
-          this.currentTheme === "night"
-            ? `🌙 ${t().edgeGuardWorkshopNightGrid}`
-            : `☀️ ${t().edgeGuardWorkshopDayGrid}`;
-      }
     });
 
     // Trails toggle
