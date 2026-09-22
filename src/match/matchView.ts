@@ -38,6 +38,7 @@ import {
   remixSettingFieldLabel,
   REMIX_GAMEPLAY_SETTING_FIELD_ORDER,
   REMIX_STAGE_SETTING_FIELD_ORDER,
+  isJapaneseVersionGameplaySettings,
 } from "../remixSettingsLabels.js";
 import {
   DREAM_LAND_STAGE_ID,
@@ -335,6 +336,11 @@ export class MatchViewController {
   private replayInfoRngSeedRow: HTMLDivElement;
   private replayInfoRngSeedLabel: HTMLSpanElement;
   private replayInfoRngSeed: HTMLSpanElement;
+  private replayInfoRegionRow: HTMLDivElement;
+  private replayInfoRegionLabel: HTMLSpanElement;
+  private replayInfoRegion: HTMLSpanElement;
+  /** Set by renderReplayInfo(), null when the row is hidden (schema <3) - lets a language switch re-translate the region VALUE (not just its label) without re-deriving it. */
+  private replayInfoRegionIsJapanese: boolean | null = null;
   private replayInfoRemixSettingsDetails: HTMLDetailsElement;
   private replayInfoRemixSettingsHeading: HTMLElement;
   private replayInfoGameplaySettingsSubheading: HTMLElement;
@@ -951,6 +957,15 @@ export class MatchViewController {
     ) as HTMLSpanElement;
     this.replayInfoRngSeed = document.getElementById(
       "replayInfoRngSeed",
+    ) as HTMLSpanElement;
+    this.replayInfoRegionRow = document.getElementById(
+      "replayInfoRegionRow",
+    ) as HTMLDivElement;
+    this.replayInfoRegionLabel = document.getElementById(
+      "replayInfoRegionLabel",
+    ) as HTMLSpanElement;
+    this.replayInfoRegion = document.getElementById(
+      "replayInfoRegion",
     ) as HTMLSpanElement;
     this.replayInfoRemixSettingsDetails = document.getElementById(
       "replayInfoRemixSettingsDetails",
@@ -1965,6 +1980,13 @@ export class MatchViewController {
     if (this.replayInfoStageSettingsSubheading)
       this.replayInfoStageSettingsSubheading.textContent =
         tr.replayInfoStageSettingsSubheading;
+    if (this.replayInfoRegionLabel)
+      this.replayInfoRegionLabel.textContent = tr.replayInfoRegionLabel;
+    if (this.replayInfoRegion && this.replayInfoRegionIsJapanese !== null) {
+      this.replayInfoRegion.textContent = this.replayInfoRegionIsJapanese
+        ? tr.replayInfoRegionJapanese
+        : tr.replayInfoRegionStandard;
+    }
     if (this.videoUrlInput)
       this.videoUrlInput.placeholder = tr.youtubeVideoUrlPlaceholder;
     if (this.videoLinkSaveBtn)
@@ -5269,6 +5291,19 @@ export class MatchViewController {
       this.replayInfoRngSeedRow.hidden = !hasSeed;
       if (hasSeed && this.replayInfoRngSeed) {
         this.replayInfoRngSeed.textContent = String(matchSettings.rngSeed);
+      }
+    }
+    if (this.replayInfoRegionRow) {
+      const gameplaySettingsForRegion = matchSettings?.gameplaySettings;
+      this.replayInfoRegionIsJapanese = gameplaySettingsForRegion
+        ? isJapaneseVersionGameplaySettings(gameplaySettingsForRegion)
+        : null;
+      this.replayInfoRegionRow.hidden =
+        this.replayInfoRegionIsJapanese === null;
+      if (this.replayInfoRegionIsJapanese !== null && this.replayInfoRegion) {
+        this.replayInfoRegion.textContent = this.replayInfoRegionIsJapanese
+          ? tr.replayInfoRegionJapanese
+          : tr.replayInfoRegionStandard;
       }
     }
     if (this.replayInfoRemixSettingsDetails) {

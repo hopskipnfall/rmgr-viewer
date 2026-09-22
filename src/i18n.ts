@@ -469,6 +469,9 @@ export interface Translations {
   replayInfoRemixSettingsHeading: string;
   replayInfoGameplaySettingsSubheading: string;
   replayInfoStageSettingsSubheading: string;
+  replayInfoRegionLabel: string;
+  replayInfoRegionJapanese: string;
+  replayInfoRegionStandard: string;
   finalStocksDetail: (stocks: number) => string;
   gameResultWin: (winnerStocks: number) => string;
   gameResultLoss: (winnerStocks: number) => string;
@@ -1103,6 +1106,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoRemixSettingsHeading: "Remix Settings",
     replayInfoGameplaySettingsSubheading: "Gameplay",
     replayInfoStageSettingsSubheading: "Stage",
+    replayInfoRegionLabel: "Region",
+    replayInfoRegionJapanese: "🇯🇵 Japanese",
+    replayInfoRegionStandard: "Standard/NA",
     finalStocksDetail: (stocks) => `Stocks Remaining: ${stocks}`,
     gameResultWin: (stocks) => `W · ${stocks} left`,
     gameResultLoss: (stocks) => `L · ${stocks} left`,
@@ -1732,6 +1738,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     replayInfoRemixSettingsHeading: "Remix設定",
     replayInfoGameplaySettingsSubheading: "ゲームプレイ",
     replayInfoStageSettingsSubheading: "ステージ",
+    replayInfoRegionLabel: "リージョン",
+    replayInfoRegionJapanese: "🇯🇵 日本版",
+    replayInfoRegionStandard: "標準/北米版",
     finalStocksDetail: (stocks) => `残ストック: ${stocks}`,
     gameResultWin: (stocks) => `勝 · 残${stocks}`,
     gameResultLoss: (stocks) => `敗 · 残${stocks}`,
