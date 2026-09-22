@@ -106,3 +106,27 @@ const REMIX_SETTING_FIELD_LABELS: Readonly<Record<string, string>> = {
 export function remixSettingFieldLabel(field: RemixSettingField): string {
   return REMIX_SETTING_FIELD_LABELS[field] ?? field;
 }
+
+/**
+ * Whether `gameplaySettings` matches Remix's "Japanese" preset - confirmed
+ * 2026-09-22 (Jonn) by diffing a default-NA-settings replay against one
+ * recorded with the Japanese preset enabled: exactly these 5 gameplay
+ * fields flip to their Japanese value, deliberately excluding
+ * `japaneseSounds` (a cosmetic audio toggle, not part of the preset's
+ * gameplay identity) and both stage settings the same diff also found
+ * (`whispyMode`, `pokemonAnnouncer` - stage-specific, not "is this a
+ * Japanese-version game"). A game that matches this only means the BASE
+ * game rules are the Japanese release's - the characters being played
+ * could still be non-Japanese-region IDs, independent of this preset.
+ */
+export function isJapaneseVersionGameplaySettings(
+  gameplaySettings: RemixGameplaySettings,
+): boolean {
+  return (
+    gameplaySettings.hitlag === 1 &&
+    gameplaySettings.di === 1 &&
+    gameplaySettings.japaneseStunSleep === 1 &&
+    gameplaySettings.momentumSlide === 1 &&
+    gameplaySettings.shieldStun === 1
+  );
+}

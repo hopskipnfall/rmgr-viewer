@@ -7601,6 +7601,18 @@
                     >—</span
                   >
                 </div>
+                <!-- Region (Japanese vs Standard/NA): derived from 5
+                     specific gameplaySettings fields matching Remix's
+                     Japanese preset (see isJapaneseVersionGameplaySettings()
+                     in remixSettingsLabels.ts) - only about the BASE game
+                     rules, not which character region IDs are in play.
+                     Hidden for schema <3 files, same as the rows above. -->
+                <div class="replay-info-row" id="replayInfoRegionRow" hidden>
+                  <span class="replay-info-label" id="replayInfoRegionLabel"
+                    >Region</span
+                  >
+                  <span id="replayInfoRegion" class="replay-info-value">—</span>
+                </div>
                 <!-- Remix's 31 Gameplay + 8 Stage Toggles.asm settings (recorder
                      schema 3+, RMGR_SPEC.md §5.1.1/§5.1.2) - a fixed but large
                      field set, so unlike the rows above (each written by hand),
