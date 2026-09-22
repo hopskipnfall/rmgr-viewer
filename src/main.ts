@@ -440,6 +440,18 @@ async function handleImport(files: FileList | File[]): Promise<void> {
         libraryStore,
         [...files],
         onProgress,
+        // Surfaces already-cached games (e.g. the one the missing-file
+        // prompt is waiting on) the moment they're recognized, rather than
+        // making that prompt block on parsing the rest of a large folder's
+        // genuinely-new files. Harmless to attach again once the full
+        // result comes back below - Object.assign onto the same summary
+        // twice is a no-op the second time.
+        (fastMatched) => {
+          if (fastMatched.length > 0) {
+            attachImportedSummaries([...fastMatched]);
+            for (const listener of [...importFinishedListeners]) listener();
+          }
+        },
       );
       for (const { id, legacyId } of result.newIds) {
         migrateVideoLink(legacyId, id);

@@ -104,6 +104,16 @@ export async function importIntoLibrary(
   store: LibraryStore,
   files: readonly File[],
   onProgress?: (progress: ImportProgress) => void,
+  /**
+   * Fired right after the fast path (step 1) finishes, before the slow
+   * parse of anything uncached even starts - so a caller that's waiting on
+   * one specific already-cached game (e.g. the missing-file prompt) can act
+   * on it immediately instead of blocking on the rest of a large folder's
+   * worth of genuinely-new files. Those still get parsed and attached
+   * normally via this function's own return value; this is purely an
+   * early, redundant preview of the subset that didn't need parsing.
+   */
+  onFastPathMatched?: (summaries: readonly GameSummary[]) => void,
 ): Promise<PersistImportResult> {
   const existing = await store.getAll();
   const byPath = new Map(existing.map((e) => [e.sourcePath, e]));
@@ -124,6 +134,7 @@ export async function importIntoLibrary(
       toParse.push(file);
     }
   }
+  onFastPathMatched?.(summaries);
 
   // 2. Parse the rest, collapsing copies of the same game.
   const { games, errors } = await importReplayFiles(toParse, onProgress);
