@@ -11,13 +11,38 @@ import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import type { Replay } from "@rmg-k/rmgr";
 import type { GameSummary } from "../data/gameSummary.js";
 
+import { recoveriesHash } from "../router.js";
+
 describe("Edge Guard Workshop Route", () => {
-  it("parses workshop route correctly from hash", () => {
+  it("parses recoveries route correctly from hash", () => {
+    const route = parseRoute("#/matchup/0/3/recoveries");
+    expect(route).toEqual({
+      view: "edgeGuardWorkshop",
+      myChar: 0,
+      oppChar: 3,
+      filters: {},
+    });
+  });
+
+  it("parses legacy /workshop route as alias (backward compat)", () => {
     const route = parseRoute("#/matchup/0/3/workshop");
     expect(route).toEqual({
       view: "edgeGuardWorkshop",
       myChar: 0,
       oppChar: 3,
+      filters: {},
+    });
+  });
+
+  it("parses filter params from recoveries URL", () => {
+    const route = parseRoute(
+      "#/matchup/9/8/recoveries?jumps=0&outcome=success&recency=month",
+    );
+    expect(route).toEqual({
+      view: "edgeGuardWorkshop",
+      myChar: 9,
+      oppChar: 8,
+      filters: { jumps: 0, outcome: "success", recency: "month" },
     });
   });
 
@@ -35,9 +60,19 @@ describe("Edge Guard Workshop Route", () => {
     expect(
       (globalThis as unknown as { window: { location: { hash: string } } })
         .window.location.hash,
-    ).toBe("#/matchup/1/9/workshop");
+    ).toBe("#/matchup/1/9/recoveries");
 
     (globalThis as unknown as { window?: unknown }).window = originalWindow;
+  });
+
+  it("recoveriesHash encodes non-default filters in query string", () => {
+    expect(recoveriesHash(9, 8, { jumps: 1, outcome: "fail" })).toBe(
+      "#/matchup/9/8/recoveries?jumps=1&outcome=fail",
+    );
+    expect(recoveriesHash(9, 8, {})).toBe("#/matchup/9/8/recoveries");
+    expect(recoveriesHash(9, 8, { jumps: "all", outcome: "all" })).toBe(
+      "#/matchup/9/8/recoveries",
+    );
   });
 });
 

@@ -22,13 +22,31 @@ export interface SearchRouteCriteria {
   readonly allowGaps: boolean;
 }
 
+/** Filter params encoded in the Edge Guard Workshop URL.
+ * Only non-default values appear in the query string; an absent param means
+ * the "all" / default value for that filter. */
+export interface EgwFilters {
+  readonly jumps?: number | "all";
+  readonly outcome?: "all" | "success" | "fail";
+  readonly recency?: "all" | "month" | "since";
+  /** YYYY-MM-DD — only meaningful when recency === "since". */
+  readonly since?: string;
+  readonly opponent?: string;
+  readonly session?: string;
+}
+
 export type Route =
   | { view: "library" }
   | { view: "match"; id: string }
   | { view: "preview" }
   | { view: "session"; id: string }
   | { view: "matchup"; myChar: number; oppChar: number }
-  | { view: "edgeGuardWorkshop"; myChar: number; oppChar: number }
+  | {
+      view: "edgeGuardWorkshop";
+      myChar: number;
+      oppChar: number;
+      filters: EgwFilters;
+    }
   | ({ view: "search" } & SearchRouteCriteria);
 
 function parseIntParam(params: URLSearchParams, key: string): number | null {
@@ -49,6 +67,41 @@ function parseAreaBox(params: URLSearchParams): StartingAreaBox | null {
   return { minX, maxX, minY, maxY };
 }
 
+function parseEgwFilters(queryStr: string): EgwFilters {
+  const params = new URLSearchParams(queryStr);
+
+  const rawJumps = params.get("jumps");
+  const jumps: number | "all" | undefined =
+    rawJumps === null
+      ? undefined
+      : rawJumps === "all"
+        ? "all"
+        : Number.isFinite(Number(rawJumps))
+          ? Number(rawJumps)
+          : undefined;
+
+  const rawOutcome = params.get("outcome");
+  const outcome: "all" | "success" | "fail" | undefined =
+    rawOutcome === "success" || rawOutcome === "fail" || rawOutcome === "all"
+      ? rawOutcome
+      : undefined;
+
+  const rawRecency = params.get("recency");
+  const recency: "all" | "month" | "since" | undefined =
+    rawRecency === "month" || rawRecency === "since" || rawRecency === "all"
+      ? rawRecency
+      : undefined;
+
+  return {
+    ...(jumps !== undefined && { jumps }),
+    ...(outcome !== undefined && { outcome }),
+    ...(recency !== undefined && { recency }),
+    ...(params.has("since") && { since: params.get("since")! }),
+    ...(params.has("opponent") && { opponent: params.get("opponent")! }),
+    ...(params.has("session") && { session: params.get("session")! }),
+  };
+}
+
 export function parseRoute(hash: string): Route {
   const clean = hash.replace(/^#\/?/, "");
   if (clean.startsWith("match/")) {
@@ -67,8 +120,21 @@ export function parseRoute(hash: string): Route {
     const myChar = Number(parts[0]);
     const oppChar = Number(parts[1]);
     if (Number.isFinite(myChar) && Number.isFinite(oppChar)) {
-      if (parts[2] === "workshop") {
-        return { view: "edgeGuardWorkshop", myChar, oppChar };
+      // Third segment may be "recoveries", "recoveries?...", or "workshop" (legacy alias).
+      const thirdSegment = parts[2] ?? "";
+      if (
+        thirdSegment === "workshop" ||
+        thirdSegment === "recoveries" ||
+        thirdSegment.startsWith("recoveries?")
+      ) {
+        const qIdx = thirdSegment.indexOf("?");
+        const queryStr = qIdx >= 0 ? thirdSegment.slice(qIdx + 1) : "";
+        return {
+          view: "edgeGuardWorkshop",
+          myChar,
+          oppChar,
+          filters: parseEgwFilters(queryStr),
+        };
       }
       return { view: "matchup", myChar, oppChar };
     }
@@ -122,8 +188,39 @@ export function navigateToMatchup(myChar: number, oppChar: number): void {
 export function navigateToEdgeGuardWorkshop(
   myChar: number,
   oppChar: number,
+  filters?: EgwFilters,
 ): void {
-  window.location.hash = `#/matchup/${myChar}/${oppChar}/workshop`;
+  window.location.hash = recoveriesHash(myChar, oppChar, filters);
+}
+
+/** Builds the #/matchup/{m}/{o}/recoveries[?...] hash for the given filters.
+ * Only non-default filter values are included in the query string. */
+export function recoveriesHash(
+  myChar: number,
+  oppChar: number,
+  filters?: EgwFilters,
+): string {
+  const params = new URLSearchParams();
+  if (filters?.jumps !== undefined && filters.jumps !== "all") {
+    params.set("jumps", String(filters.jumps));
+  }
+  if (filters?.outcome && filters.outcome !== "all") {
+    params.set("outcome", filters.outcome);
+  }
+  if (filters?.recency && filters.recency !== "all") {
+    params.set("recency", filters.recency);
+    if (filters.recency === "since" && filters.since) {
+      params.set("since", filters.since);
+    }
+  }
+  if (filters?.opponent && filters.opponent !== "all") {
+    params.set("opponent", filters.opponent);
+  }
+  if (filters?.session && filters.session !== "all") {
+    params.set("session", filters.session);
+  }
+  const qs = params.toString();
+  return `#/matchup/${myChar}/${oppChar}/recoveries${qs ? `?${qs}` : ""}`;
 }
 
 export function navigateToSearch(criteria: SearchRouteCriteria): void {
