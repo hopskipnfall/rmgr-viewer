@@ -900,6 +900,7 @@ async function handleRouteChange(route: Route): Promise<void> {
       route.oppChar,
       libraryController.getSummaries(),
       libraryController.getIdentity(),
+      route.filters,
     );
   }
 }

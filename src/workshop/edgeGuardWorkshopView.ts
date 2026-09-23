@@ -9,7 +9,11 @@ import type { PlaylistClip } from "../playlist.js";
 import { filterGameSummaries } from "../data/aggregate.js";
 import { groupGamesIntoSessions } from "../data/session.js";
 import { groupAndSortCharacters } from "../library/matchupChipSelector.js";
-import { navigateToEdgeGuardWorkshop } from "../router.js";
+import {
+  navigateToEdgeGuardWorkshop,
+  recoveriesHash,
+  type EgwFilters,
+} from "../router.js";
 import {
   extractEdgeGuardSituations,
   filterEdgeGuardSituations,
@@ -72,6 +76,7 @@ export class EdgeGuardWorkshopViewController {
     oppChar: number,
     summaries: GameSummary[],
     identity: Identity,
+    initialFilters?: EgwFilters,
   ): Promise<void> {
     this.myChar = myChar;
     this.oppChar = oppChar;
@@ -79,6 +84,20 @@ export class EdgeGuardWorkshopViewController {
     this.identity = identity;
     this.stopPlayback();
     this.themeObserver?.disconnect();
+    document.removeEventListener("keydown", this.handleKeyDown);
+
+    // Initialise filter state from the URL-parsed params.
+    // On character-picker change we carry over recency/outcome but reset the
+    // matchup-specific ones (jumps, opponent, session), so those come in as
+    // undefined here — they'll default to "all".
+    this.filters = {
+      jumps: initialFilters?.jumps ?? "all",
+      outcome: initialFilters?.outcome ?? "all",
+      recency: initialFilters?.recency ?? "all",
+      sinceDate: initialFilters?.since,
+      opponent: initialFilters?.opponent ?? "all",
+      session: initialFilters?.session ?? "all",
+    };
 
     const token = ++this.loadToken;
 
@@ -203,6 +222,10 @@ export class EdgeGuardWorkshopViewController {
 
   private renderShell(): void {
     const tr = t();
+    const f = this.filters;
+
+    // Helper: return "selected" if the condition is true
+    const sel = (cond: boolean) => (cond ? "selected" : "");
 
     this.container.innerHTML = `
       <div class="egw-container">
@@ -213,28 +236,22 @@ export class EdgeGuardWorkshopViewController {
               &larr; ${escapeHtml(tr.edgeGuardWorkshopBackToMatchup)}
             </a>
             <div class="egw-character-pickers">
-              <div class="egw-picker-group">
-                <span class="egw-picker-label">${escapeHtml(tr.yourCharacter)}</span>
-                <div class="egw-picker-control">
-                  ${characterIconHtml(this.myChar, "egw-char-icon", { showBadge: false })}
-                  <select id="egwMyCharSelect" class="egw-char-select">
-                    ${this.renderCharacterSelectOptions(this.myChar)}
-                  </select>
-                </div>
+              <div class="egw-picker-control">
+                ${characterIconHtml(this.myChar, "egw-char-icon", { showBadge: false })}
+                <select id="egwMyCharSelect" class="egw-char-select">
+                  ${this.renderCharacterSelectOptions(this.myChar)}
+                </select>
               </div>
 
               <button type="button" class="egw-swap-btn" id="egwSwapBtn" title="Swap Matchup">
                 &#8644;
               </button>
 
-              <div class="egw-picker-group">
-                <span class="egw-picker-label">${escapeHtml(tr.opponent)}</span>
-                <div class="egw-picker-control">
-                  ${characterIconHtml(this.oppChar, "egw-char-icon", { showBadge: false })}
-                  <select id="egwOppCharSelect" class="egw-char-select">
-                    ${this.renderCharacterSelectOptions(this.oppChar)}
-                  </select>
-                </div>
+              <div class="egw-picker-control">
+                ${characterIconHtml(this.oppChar, "egw-char-icon", { showBadge: false })}
+                <select id="egwOppCharSelect" class="egw-char-select">
+                  ${this.renderCharacterSelectOptions(this.oppChar)}
+                </select>
               </div>
 
               <span class="egw-badge">${escapeHtml(tr.edgeGuardWorkshopTitle)}</span>
@@ -260,56 +277,46 @@ export class EdgeGuardWorkshopViewController {
 
         <!-- Filters Bar -->
         <div class="egw-filter-bar">
-          <div class="egw-filter-item">
-            <label for="egwFilterJumps">${escapeHtml(tr.edgeGuardWorkshopFilterJumps)}</label>
-            <select id="egwFilterJumps" class="egw-select">
-              <option value="all">${escapeHtml(tr.edgeGuardWorkshopAllJumps)}</option>
-              <option value="0">0 Jumps</option>
-              <option value="1">1 Jump</option>
-              <option value="2">2 Jumps</option>
-              <option value="3">3 Jumps</option>
-              <option value="4">4 Jumps</option>
-              <option value="5">5+ Jumps</option>
-            </select>
-          </div>
+          <select id="egwFilterJumps" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterJumps)}">
+            <option value="all" ${sel(f.jumps === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllJumps)}</option>
+            <option value="0" ${sel(f.jumps === 0)}>0 Jumps</option>
+            <option value="1" ${sel(f.jumps === 1)}>1 Jump</option>
+            <option value="2" ${sel(f.jumps === 2)}>2 Jumps</option>
+            <option value="3" ${sel(f.jumps === 3)}>3 Jumps</option>
+            <option value="4" ${sel(f.jumps === 4)}>4 Jumps</option>
+            <option value="5" ${sel(f.jumps === 5)}>5+ Jumps</option>
+          </select>
 
-          <div class="egw-filter-item">
-            <label for="egwFilterOpponent">${escapeHtml(tr.edgeGuardWorkshopFilterOpponent)}</label>
-            <select id="egwFilterOpponent" class="egw-select">
-              <option value="all">${escapeHtml(tr.edgeGuardWorkshopAllOpponents)}</option>
-            </select>
-          </div>
+          <select id="egwFilterOpponent" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterOpponent)}">
+            <option value="all" ${sel(f.opponent === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllOpponents)}</option>
+          </select>
 
-          <div class="egw-filter-item">
-            <label for="egwFilterSession">${escapeHtml(tr.edgeGuardWorkshopFilterSession)}</label>
-            <select id="egwFilterSession" class="egw-select">
-              <option value="all">${escapeHtml(tr.edgeGuardWorkshopAllSessions)}</option>
-            </select>
-          </div>
+          <select id="egwFilterSession" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterSession)}">
+            <option value="all" ${sel(f.session === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllSessions)}</option>
+          </select>
 
-          <div class="egw-filter-item">
-            <label for="egwFilterRecency">${escapeHtml(tr.edgeGuardWorkshopFilterRecency)}</label>
-            <select id="egwFilterRecency" class="egw-select">
-              <option value="all">${escapeHtml(tr.edgeGuardWorkshopAllTime)}</option>
-              <option value="month">${escapeHtml(tr.edgeGuardWorkshopLastMonth)}</option>
-              <option value="since">${escapeHtml(tr.edgeGuardWorkshopSinceDate)}</option>
-            </select>
-            <input type="date" id="egwSinceDate" class="egw-date-input" style="display: none;" />
-          </div>
+          <select id="egwFilterRecency" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterRecency)}">
+            <option value="all" ${sel(f.recency === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllTime)}</option>
+            <option value="month" ${sel(f.recency === "month")}>${escapeHtml(tr.edgeGuardWorkshopLastMonth)}</option>
+            <option value="since" ${sel(f.recency === "since")}>${escapeHtml(tr.edgeGuardWorkshopSinceDate)}</option>
+          </select>
+          <input
+            type="date"
+            id="egwSinceDate"
+            class="egw-date-input"
+            value="${escapeHtml(f.sinceDate ?? "")}"
+            style="display: ${f.recency === "since" ? "inline-block" : "none"};"
+          />
 
-          <div class="egw-filter-item">
-            <label for="egwFilterOutcome">${escapeHtml(tr.edgeGuardWorkshopFilterOutcome)}</label>
-            <select id="egwFilterOutcome" class="egw-select">
-              <option value="all">${escapeHtml(tr.edgeGuardWorkshopOutcomeAll)}</option>
-              <option value="success">${escapeHtml(tr.edgeGuardWorkshopOutcomeSuccess)}</option>
-              <option value="fail">${escapeHtml(tr.edgeGuardWorkshopOutcomeFail)}</option>
-            </select>
-          </div>
+          <select id="egwFilterOutcome" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterOutcome)}">
+            <option value="all" ${sel(f.outcome === "all")}>${escapeHtml(tr.edgeGuardWorkshopOutcomeAll)}</option>
+            <option value="success" ${sel(f.outcome === "success")}>${escapeHtml(tr.edgeGuardWorkshopOutcomeSuccess)}</option>
+            <option value="fail" ${sel(f.outcome === "fail")}>${escapeHtml(tr.edgeGuardWorkshopOutcomeFail)}</option>
+          </select>
 
           <div class="egw-filter-spacer"></div>
 
           <div class="egw-filter-controls">
-            <!-- Trails Toggle -->
             <label class="egw-checkbox-label">
               <input type="checkbox" id="egwTrailsCheck" ${this.showTrails ? "checked" : ""} />
               <span>${escapeHtml(tr.edgeGuardWorkshopShowTrails)}</span>
@@ -319,7 +326,7 @@ export class EdgeGuardWorkshopViewController {
 
         <!-- Main Body: Replay-Like Stage View & Sidebar -->
         <div class="egw-main-body">
-          <!-- Stage Stage Canvas & Playback Bar -->
+          <!-- Stage Canvas & Playback Bar -->
           <div class="egw-stage-section">
             <div class="egw-canvas-wrap" id="egwCanvasWrap">
               <canvas id="egwCanvas" class="egw-canvas"></canvas>
@@ -363,14 +370,6 @@ export class EdgeGuardWorkshopViewController {
                 <button type="button" class="egw-speed-btn active" data-speed="1.0">1x</button>
                 <button type="button" class="egw-speed-btn" data-speed="2.0">2x</button>
               </div>
-
-              <button type="button" class="egw-reset-frame-btn" id="egwResetFrameBtn" title="Reset to initial positions">
-                &#8634;
-              </button>
-
-              <button type="button" class="egw-recenter-btn" id="egwRecenterBtn" title="Recenter camera">
-                &#x2316; Recenter View
-              </button>
             </div>
           </div>
 
@@ -378,7 +377,7 @@ export class EdgeGuardWorkshopViewController {
           <aside class="egw-sidebar">
             <div class="egw-sidebar-header">
               <h3 class="egw-sidebar-title">
-                ${escapeHtml(tr.sidebarStatistics)}
+                Edge guards
                 <span class="egw-count-badge" id="egwListCount">0</span>
               </h3>
             </div>
@@ -392,6 +391,23 @@ export class EdgeGuardWorkshopViewController {
     `;
 
     this.bindEvents();
+  }
+
+  /** Silently updates the URL to reflect the current filter state without
+   * triggering a hashchange / re-render. */
+  private updateFiltersInUrl(): void {
+    if (typeof history === "undefined") return;
+    const hash = recoveriesHash(this.myChar, this.oppChar, {
+      jumps: this.filters.jumps,
+      outcome: this.filters.outcome,
+      recency: this.filters.recency,
+      since: this.filters.sinceDate,
+      opponent:
+        this.filters.opponent !== "all" ? this.filters.opponent : undefined,
+      session:
+        this.filters.session !== "all" ? this.filters.session : undefined,
+    });
+    history.replaceState(null, "", hash);
   }
 
   private bindEvents(): void {
@@ -423,13 +439,22 @@ export class EdgeGuardWorkshopViewController {
       });
     }
 
-    // Character pickers in header
+    // Character pickers in header.
+    // When switching the matchup we carry recency and outcome across (they are
+    // user preferences, not matchup-specific) but reset jumps, opponent, and
+    // session since those don't apply to the new character pair.
+    const sharedFilters = () => ({
+      recency: this.filters.recency,
+      since: this.filters.sinceDate,
+      outcome: this.filters.outcome,
+    });
+
     const myCharSelect = this.container.querySelector(
       "#egwMyCharSelect",
     ) as HTMLSelectElement | null;
     myCharSelect?.addEventListener("change", () => {
       const newMy = parseInt(myCharSelect.value, 10);
-      navigateToEdgeGuardWorkshop(newMy, this.oppChar);
+      navigateToEdgeGuardWorkshop(newMy, this.oppChar, sharedFilters());
     });
 
     const oppCharSelect = this.container.querySelector(
@@ -437,14 +462,14 @@ export class EdgeGuardWorkshopViewController {
     ) as HTMLSelectElement | null;
     oppCharSelect?.addEventListener("change", () => {
       const newOpp = parseInt(oppCharSelect.value, 10);
-      navigateToEdgeGuardWorkshop(this.myChar, newOpp);
+      navigateToEdgeGuardWorkshop(this.myChar, newOpp, sharedFilters());
     });
 
     const swapBtn = this.container.querySelector(
       "#egwSwapBtn",
     ) as HTMLButtonElement | null;
     swapBtn?.addEventListener("click", () => {
-      navigateToEdgeGuardWorkshop(this.oppChar, this.myChar);
+      navigateToEdgeGuardWorkshop(this.oppChar, this.myChar, sharedFilters());
     });
 
     // Recenter camera button
@@ -464,7 +489,8 @@ export class EdgeGuardWorkshopViewController {
       ro.observe(wrap);
     }
 
-    // Filter events
+    // Filter events — update URL silently (replaceState) so the address bar
+    // stays in sync without triggering a full re-render.
     const jumpsSelect = this.container.querySelector(
       "#egwFilterJumps",
     ) as HTMLSelectElement;
@@ -474,6 +500,7 @@ export class EdgeGuardWorkshopViewController {
         ...this.filters,
         jumps: val === "all" ? "all" : parseInt(val, 10),
       };
+      this.updateFiltersInUrl();
       this.applyFilters();
     });
 
@@ -482,6 +509,7 @@ export class EdgeGuardWorkshopViewController {
     ) as HTMLSelectElement;
     oppSelect?.addEventListener("change", () => {
       this.filters = { ...this.filters, opponent: oppSelect.value };
+      this.updateFiltersInUrl();
       this.applyFilters();
     });
 
@@ -490,6 +518,7 @@ export class EdgeGuardWorkshopViewController {
     ) as HTMLSelectElement;
     sessionSelect?.addEventListener("change", () => {
       this.filters = { ...this.filters, session: sessionSelect.value };
+      this.updateFiltersInUrl();
       this.applyFilters();
     });
 
@@ -511,6 +540,7 @@ export class EdgeGuardWorkshopViewController {
         recency: val,
         sinceDate: sinceDateInput?.value || undefined,
       };
+      this.updateFiltersInUrl();
       this.applyFilters();
     });
 
@@ -519,6 +549,7 @@ export class EdgeGuardWorkshopViewController {
         ...this.filters,
         sinceDate: sinceDateInput.value || undefined,
       };
+      this.updateFiltersInUrl();
       this.applyFilters();
     });
 
@@ -530,6 +561,7 @@ export class EdgeGuardWorkshopViewController {
         ...this.filters,
         outcome: outcomeSelect.value as "all" | "success" | "fail",
       };
+      this.updateFiltersInUrl();
       this.applyFilters();
     });
 
@@ -560,14 +592,6 @@ export class EdgeGuardWorkshopViewController {
       this.canvas?.setPlaybackFrame(this.currentFrame);
     });
 
-    const resetBtn = this.container.querySelector(
-      "#egwResetFrameBtn",
-    ) as HTMLButtonElement;
-    resetBtn?.addEventListener("click", () => {
-      this.stopPlayback();
-      this.canvas?.setPlaybackFrame(null);
-    });
-
     const speedButtons = this.container.querySelectorAll(".egw-speed-btn");
     speedButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -578,7 +602,18 @@ export class EdgeGuardWorkshopViewController {
         );
       });
     });
+
+    // Spacebar toggles play/pause (ignore when focus is on an input/select)
+    document.addEventListener("keydown", this.handleKeyDown);
   }
+
+  private readonly handleKeyDown = (e: KeyboardEvent): void => {
+    if (e.code !== "Space") return;
+    const tag = (e.target as HTMLElement | null)?.tagName ?? "";
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    e.preventDefault();
+    this.togglePlayback();
+  };
 
   private populateFilterDropdowns(): void {
     const oppSelect = this.container.querySelector(

@@ -99,7 +99,7 @@ export class MatchupViewController {
         </div>
 
         <div class="matchup-workshop-banner">
-          <a href="#/matchup/${myChar}/${oppChar}/workshop" class="matchup-workshop-btn" id="matchupWorkshopBtn">
+          <a href="#/matchup/${myChar}/${oppChar}/recoveries" class="matchup-workshop-btn" id="matchupWorkshopBtn">
             <span class="matchup-workshop-btn-icon">🎯</span>
             <span class="matchup-workshop-btn-text">
               <span class="matchup-workshop-btn-title">${escapeHtml(tr.matchupEdgeGuardWorkshopBtn)}</span>
