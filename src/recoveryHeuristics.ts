@@ -102,6 +102,27 @@ function descendingCrossingX(
   return prevX + t * (x - prevX);
 }
 
+/**
+ * A landing doesn't require the DESCENDING crossing of y=0 itself to fall strictly between both
+ * edges -- per the user (2026-09-25): a real player who's already passing over the stage's X span
+ * while still clearly above it (prevY/y both > 0) could simply stop drifting and fall straight
+ * down onto it right there, rather than being forced to keep holding the stick all the way to
+ * y=0 the way this simulation otherwise would. So EITHER the classic landing crossing (within
+ * bounds) OR merely passing through the stage's X span while still airborne counts.
+ *
+ * REVISION HISTORY, for whoever touches this next: an earlier version of this relaxation instead
+ * widened the OLD two-sided bound (LEDGE_L_X <= crossX <= LEDGE_R_X) to a one-sided check keyed off
+ * a `targetLr` direction parameter ("only the edge you're drifting TOWARD matters"). That was a
+ * real bug, not just an approximation: `targetLr` is the SEARCH BRANCH's arbitrary chosen drift
+ * direction, not the character's actual starting side, and the search always tries BOTH directions
+ * -- including the branch that drifts AWAY from the stage entirely. For that branch, the one-sided
+ * check trivially passed once the character was already past the edge on the far side of their
+ * OWN starting position (which is true almost immediately, since they started outside stage bounds
+ * in the first place), producing unbounded false "reaches-stage" results with no cap on distance at
+ * all (confirmed via a debug sweep: x = 10,000,000 falsely resolved "reaches-stage"). The X-span-
+ * overlap check here needs no direction parameter and has no such failure mode: a branch drifting
+ * away from the stage never re-enters [LEDGE_L_X, LEDGE_R_X] at all, so it correctly finds nothing.
+ */
 function checkLandsOnMainFloor(
   prevX: number,
   prevY: number,
@@ -109,7 +130,15 @@ function checkLandsOnMainFloor(
   y: number,
 ): boolean {
   const crossX = descendingCrossingX(prevX, prevY, x, y);
-  return crossX !== null && LEDGE_L_X <= crossX && crossX <= LEDGE_R_X;
+  if (crossX !== null && LEDGE_L_X <= crossX && crossX <= LEDGE_R_X) {
+    return true;
+  }
+  if (prevY > 0 && y > 0) {
+    const xLo = Math.min(prevX, x);
+    const xHi = Math.max(prevX, x);
+    if (xHi >= LEDGE_L_X && xLo <= LEDGE_R_X) return true;
+  }
+  return false;
 }
 
 /** The real decomp ledge-catch mechanic (ram-map.md section 4.6): the ledge-grab PROBE is offset
@@ -321,6 +350,94 @@ export function xAtFrame(
   return xAtPrereach + (k - n + 1) * target;
 }
 
+/**
+ * Smallest k in [0, nMax] such that yAtFrame(k) >= 0 (Y has risen to/past the stage's height) -
+ * the ascending counterpart to firstCrossingFrame's descending search, needed because a phase can
+ * start BELOW the stage (y0 <= 0, e.g. still rising out of a hit) and only become airborne-above-
+ * the-stage partway through, once a jump's vy0 has lifted it back up. Y is unimodal (rises to a
+ * peak, then falls - see firstCrossingFrame's own peak-finding logic, duplicated here for the
+ * rising segment specifically), so this search is confined to [0, peakK]. Returns null if Y never
+ * reaches 0 within the phase at all (peak itself stays <= 0).
+ */
+function firstAscendingCrossingFrame(
+  y0: number,
+  vy0: number,
+  gravity: number,
+  tvel: number,
+  nMax: number,
+  nHit?: number,
+): number | null {
+  if (y0 >= 0) return 0;
+  if (vy0 <= 0) return null; // already falling (or flat) and starting below 0 -> never rises to 0
+
+  const n = nHit ?? gravityHitFrame(vy0, gravity, tvel);
+  const y = (k: number): number => {
+    if (n === 0) return y0 + k * -tvel;
+    if (k < n) return y0 + k * vy0 - gravity * k * (k + 1) * 0.5;
+    const yAtPrehit = y0 + (n - 1) * vy0 - gravity * (n - 1) * n * 0.5;
+    return yAtPrehit + (k - n + 1) * -tvel;
+  };
+
+  const peakContinuous = vy0 / gravity;
+  const loP = Math.max(0, Math.min(nMax, Math.floor(peakContinuous)));
+  const hiP = Math.max(0, Math.min(nMax, loP + 1));
+  const peakK = y(hiP) > y(loP) ? hiP : loP;
+  if (y(peakK) < 0) return null; // never actually reaches 0, even at the peak
+
+  let lo = 0;
+  let hi = peakK;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (y(mid) >= 0) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+/**
+ * True if X ever enters [LEDGE_L_X, LEDGE_R_X] at any frame in [kStart, kEnd] under xAtFrame's
+ * ramp-then-constant velocity model - the closed-form counterpart to checkLandsOnMainFloor's
+ * "passing over the stage while still airborne counts" relaxation (see its own doc comment), used
+ * by evaluatePhase to stay consistent with the frame-stepped path. X(k) is monotonic in k UNLESS
+ * vx0 and driftTarget have opposite signs, in which case velocity crosses zero exactly once during
+ * the ramp (a linear ramp can only cross once) and X has a single turning point there - checked as
+ * a third candidate alongside both endpoints, since the true min/max over the range isn't
+ * necessarily at either endpoint in that case. `kStart` need not be 0 (e.g. a phase that starts
+ * below the stage and only becomes airborne-above-it partway through, once a jump's vy0 has lifted
+ * it back up - see firstAscendingCrossingFrame).
+ */
+function xRangeOverlapsStageWithinFrames(
+  x0: number,
+  vx0: number,
+  driftTarget: number,
+  driftStep: number,
+  kStart: number,
+  kEnd: number,
+): boolean {
+  if (kEnd < kStart) return false;
+  const xStart = xAtFrame(x0, vx0, driftTarget, driftStep, kStart);
+  const xEnd = xAtFrame(x0, vx0, driftTarget, driftStep, kEnd);
+  let lo = Math.min(xStart, xEnd);
+  let hi = Math.max(xStart, xEnd);
+  const delta = driftTarget - vx0;
+  if (
+    driftStep > 0 &&
+    delta !== 0 &&
+    vx0 !== 0 &&
+    Math.sign(vx0) !== Math.sign(driftTarget)
+  ) {
+    const sign = delta > 0 ? 1 : -1;
+    const n = driftReachFrame(vx0, driftTarget, driftStep);
+    const kZero = -vx0 / (sign * driftStep);
+    if (kZero > kStart && kZero < Math.min(n, kEnd)) {
+      const xTurn = xAtFrame(x0, vx0, driftTarget, driftStep, kZero);
+      lo = Math.min(lo, xTurn);
+      hi = Math.max(hi, xTurn);
+    }
+  }
+  return hi >= LEDGE_L_X && lo <= LEDGE_R_X;
+}
+
 /** Smallest k in [1, nMax] such that yAtFrame(k-1) >= target >= yAtFrame(k) -- a DESCENDING
  * crossing of `target`, matching descendingCrossingX's requirement (prevY >= targetLine >= y)
  * exactly, just generalized from a hardcoded 0 to an arbitrary target height. Passing target=0
@@ -452,6 +569,47 @@ export function evaluatePhase(
       yAt(stageK),
     );
     if (cx !== null && LEDGE_L_X <= cx && cx <= LEDGE_R_X) {
+      return { outcome: "both", endState: null, died: false };
+    }
+  }
+  // checkLandsOnMainFloor's own relaxation (see its doc comment): passing over the stage's X span
+  // while still airborne counts too, not just the eventual landing crossing. Y is > 0 for frames
+  // [ascendK, stageK) - ascendK instead of a flat 0 because a phase can START below the stage
+  // (y0 <= 0, e.g. still rising out of a hit) and only become airborne-above-it partway through,
+  // once vy0 has lifted it back up (gravity physics are unimodal - a single peak then monotonic
+  // descent - so there's at most one rising crossing and one falling crossing per phase).
+  //
+  // The frame-stepped reference only credits a TRANSITION whose two endpoints are BOTH strictly
+  // > 0 (checkLandsOnMainFloor's own `prevY > 0 && y > 0`). The first such transition is
+  // (ascendK -> ascendK+1): y(ascendK) is the first non-negative sample (its OWN predecessor,
+  // ascendK-1, was still <= 0, so the transition INTO ascendK doesn't qualify), and y(ascendK+1),
+  // still rising, is positive too. So X VALUES from frame ascendK onward are what's relevant - but
+  // only if a frame AFTER ascendK actually exists within the window (kEndRaw > ascendK); if the
+  // ascending crossing lands exactly on the last checked frame with nothing after it to confirm a
+  // positive-positive transition, no relaxation applies at all, matching the reference exactly.
+  // Found both directions via real fuzz mismatches (evaluatePhase vs. the naive per-frame
+  // reference) before this two-part condition existed.
+  const ascendK = firstAscendingCrossingFrame(
+    y0,
+    vy0,
+    gravity,
+    tvel,
+    nMax,
+    nHit,
+  );
+  if (ascendK !== null) {
+    const kEndRaw = stageK !== null ? stageK - 1 : nMax;
+    if (
+      ascendK < kEndRaw &&
+      xRangeOverlapsStageWithinFrames(
+        x0,
+        vx0,
+        driftTarget,
+        driftStep,
+        ascendK,
+        kEndRaw,
+      )
+    ) {
       return { outcome: "both", endState: null, died: false };
     }
   }
@@ -1015,13 +1173,26 @@ const PIKA_OUTCOME_ABS_X_MAX = LEDGE_R_X + PIKA.CLIFFCATCH_X;
 function pikaFrictionDriftBound(vx: number): number {
   return (vx * vx) / (2 * PIKA.AIR_FRICTION);
 }
+
+/**
+ * Whether an outcome is still possibly reachable from x, with `driftBudget` additional travel
+ * available in either direction. A symmetric distance bound is valid for both directions:
+ * checkLandsOnMainFloor's relaxation (see its own doc comment) only credits X actually passing
+ * through [LEDGE_L_X, LEDGE_R_X] (or the ledge probe's slightly wider reach) at some point while
+ * still airborne - a character drifting AWAY from that range never re-enters it no matter how far
+ * it travels, so this bound was never actually invalidated by that relaxation (an earlier version
+ * of this function assumed otherwise, added a directional shortcut, and reintroduced the exact
+ * unbounded-reach bug the relaxation itself was fixed for - see checkLandsOnMainFloor's own
+ * revision-history comment).
+ */
+function pikaOutcomeStillReachable(x: number, driftBudget: number): boolean {
+  return (
+    Math.abs(x) - driftBudget - PIKA_PRUNE_MARGIN <= PIKA_OUTCOME_ABS_X_MAX
+  );
+}
 /** Fastest possible second zip (magnitude 80 or straight-up, both = CONTROLLER_RANGE_MAX). */
 const PIKA_SECOND_ZIP_SPEED_MAX =
   (PIKA.VEL_BASE * PIKA.CONTROLLER_RANGE_MAX + PIKA.VEL_ADD) * PIKA.VEL_MUL;
-/** Max |dx| over an entire re-aim subtree (second zip + its end window + helpless tail). */
-const PIKA_REAIM_SUBTREE_X_REACH =
-  PIKA.ZIP_TIME * PIKA_SECOND_ZIP_SPEED_MAX +
-  pikaFrictionDriftBound(PIKA_SECOND_ZIP_SPEED_MAX * PIKA.VEL_BAK_MUL);
 /** Max upward dy over an entire re-aim subtree: the zip itself, then the end window (vy shrinks
  * geometrically by 8/9, so total rise <= 8 * vy), then the tail (gravity 3/frame from at most that
  * same vy: rise <= vy^2 / (2g) + vy). Very loose on purpose. */
@@ -1058,8 +1229,7 @@ function pikaSimulateEndAndBeyond(
   // already known to be {false, false}.
   if (
     usedSecondZip &&
-    Math.abs(x) - pikaFrictionDriftBound(vx) - PIKA_PRUNE_MARGIN >
-      PIKA_OUTCOME_ABS_X_MAX
+    !pikaOutcomeStillReachable(x, pikaFrictionDriftBound(vx))
   ) {
     return { reachedLedge: false, reachedStage: false };
   }
@@ -1100,10 +1270,12 @@ function pikaSimulateEndAndBeyond(
   // frame 9: the re-aim window. Tries every candidate in reAimCandidates (the full grid by
   // default; a single canonical-technique candidate when called from pikaCanonicalProbe).
   // Exact prune: skip the whole re-aim grid when no second zip (+ its own deterministic
-  // remainder) could bring the body back within outcome range horizontally or vertically.
+  // remainder) could bring the body back within outcome range vertically. This used to also gate
+  // on an X-reach bound (PIKA_REAIM_SUBTREE_X_REACH vs. PIKA_OUTCOME_ABS_X_MAX) - dropped for
+  // simplicity when re-deriving pikaOutcomeStillReachable's bound (see its own doc comment for the
+  // directional bug that prompted that), not because the bound itself was wrong. Safe either way -
+  // omitting a prune only costs speed, never correctness - just slightly less tight than before.
   const reAimCanMatter =
-    Math.abs(x) - PIKA_REAIM_SUBTREE_X_REACH - PIKA_PRUNE_MARGIN <=
-      PIKA_OUTCOME_ABS_X_MAX &&
     y + PIKA_REAIM_SUBTREE_Y_RISE + PIKA_PRUNE_MARGIN >= -PIKA.CLIFFCATCH_Y;
   if (!usedSecondZip && reAimCanMatter) {
     for (const { angle, magnitude } of reAimCandidates) {
@@ -1166,10 +1338,7 @@ function pikaSimulateEndAndBeyond(
   // Both exits below are exact prunes (see PIKA_PRUNE_MARGIN's block): every way out of this loop
   // other than an outcome returns the current flags unchanged, so once no future frame can
   // produce an outcome, returning now gives the identical result.
-  if (
-    Math.abs(x) - pikaFrictionDriftBound(vx) - PIKA_PRUNE_MARGIN >
-    PIKA_OUTCOME_ABS_X_MAX
-  ) {
+  if (!pikaOutcomeStillReachable(x, pikaFrictionDriftBound(vx))) {
     return { reachedLedge, reachedStage };
   }
   for (let frame = 0; frame < PIKA.MAX_HELPLESS_FRAMES; frame++) {
@@ -3023,144 +3192,10 @@ export const SUPPORTED_CHARACTERS = new Set([
 export const ACTION_STATE_JUMP_AERIAL_F = 0x018;
 export const ACTION_STATE_JUMP_AERIAL_B = 0x019;
 
-// ---------------------------------------------------------------------------
-// Fast dead-rejection: a precomputed boundary curve lets the confirmed cost driver (Pikachu's
-// nested angle x magnitude x delay search, measured up to ~2s for a single genuinely-dead call on
-// real match data) skip straight to "dead" for the clearly-hopeless tail instead of running the
-// full search.
-//
-// The curve below is STATIC DATA, computed OFFLINE (not at runtime): each entry is
-// {y, xThreshold}, where xThreshold is the largest |x| (mirrored left/right by symmetry, vx=vy=0
-// baseline) for which classify() does NOT return "dead" at that y. Baking it in as a literal
-// array -- rather than precomputing it lazily on first use -- matters for the same reason the
-// call-site reduction in recoveryVerdicts.ts did: this project's whole point is that match loading
-// must never stall, and a "lazy but one-time" precompute would still stall the FIRST match loaded
-// in a session (measured ~13 minutes to generate this table at full precision offline -- clearly
-// not something to ever run inline). Regenerate by binary-searching classify() itself at each y
-// (see the dev script referenced in the proposal doc) if Pikachu's physics ever changes.
-//
-// jumpsRemaining===1 samples stop at y=-600: at y >= -400, the real threshold exceeds this
-// search's 10000-unit cap entirely (Pikachu's jump-formula-overridden Quick Attack has enormous
-// reach once given enough height) -- there's no usable "dead" boundary to reject against up there
-// within any realistic position (Dream Land's own blast zone is only +-9000), so those samples
-// were simply cut rather than recorded as a meaningless 10000. getPikachuDeadThreshold's
-// clamp-to-last-sample behavior for y beyond the table safely extrapolates from the y=-600 value
-// instead (see its own doc comment for why that's still conservative).
-const PIKACHU_DEAD_BOUNDARY_JUMPS_0: readonly (readonly [number, number])[] = [
-  [-3000, 4970],
-  [-2800, 5443],
-  [-2600, 5711],
-  [-2400, 6004],
-  [-2200, 6277],
-  [-2000, 6474],
-  [-1800, 6666],
-  [-1600, 6867],
-  [-1400, 7060],
-  [-1200, 7237],
-  [-1000, 7407],
-  [-800, 7569],
-  [-600, 7725],
-  [-400, 7875],
-  [-200, 8022],
-  [0, 8166],
-  [200, 8311],
-  [400, 8455],
-  [600, 8599],
-  [800, 8743],
-  [1000, 8888],
-  [1200, 9032],
-  [1400, 9176],
-  [1600, 9320],
-  [1800, 9465],
-  [2000, 9609],
-];
-
-const PIKACHU_DEAD_BOUNDARY_JUMPS_1: readonly (readonly [number, number])[] = [
-  [-3000, 8055],
-  [-2800, 8251],
-  [-2600, 8439],
-  [-2400, 8611],
-  [-2200, 8776],
-  [-2000, 8934],
-  [-1800, 9086],
-  [-1600, 9233],
-  [-1400, 9380],
-  [-1200, 9524],
-  [-1000, 9667],
-  [-800, 9811],
-  [-600, 9956],
-];
-
-/** How far past the (conservatively interpolated) threshold the real |x| must be before the fast
- * path trusts a "dead" rejection -- guards against both inter-sample interpolation error and any
- * residual imprecision in how the table above was generated. Generous on purpose: being
- * conservative here only costs a few missed fast-path opportunities right at the boundary, never
- * correctness, and the boundary region is a small fraction of the realistically-far-off-stage
- * positions this is actually meant to catch. */
-const PIKACHU_DEAD_BOUNDARY_SAFETY_MARGIN = 400;
-
-/** Linear interpolation between the two bracketing samples, clamped to the nearest sample's value
- * outside the table's range (safe/conservative for y below the table: the threshold trends
- * smaller as y decreases throughout the whole measured range, so using the lowest sample's value
- * for anything even lower is an underestimate, never an overestimate. Safe for y above the
- * table's jumpsRemaining===1 range too, for the reason in that table's own doc comment: the true
- * threshold there is larger, so extrapolating flat from the last known point still only
- * underestimates reachability, meaning the fast path stays conservative, just less useful). Also
- * takes the min against both bracketing samples, not just the lerp, guarding against a
- * non-monotonic dip between two samples that pure linear interpolation wouldn't see. */
-function interpolatePikachuDeadThreshold(
-  table: readonly (readonly [number, number])[],
-  y: number,
-): number {
-  const first = table[0]!;
-  if (y <= first[0]) return first[1];
-  const last = table[table.length - 1]!;
-  if (y >= last[0]) return last[1];
-  for (let i = 0; i < table.length - 1; i++) {
-    const [yA, xA] = table[i]!;
-    const [yB, xB] = table[i + 1]!;
-    if (y >= yA && y <= yB) {
-      const t = (y - yA) / (yB - yA);
-      const lerp = xA + t * (xB - xA);
-      return Math.min(lerp, xA, xB);
-    }
-  }
-  return 0; // unreachable given the bounds checks above
-}
-
-/**
- * Fast-rejects the clearly-hopeless tail of Pikachu recovery classifications without running the
- * full search. For jumpsRemaining===1, Pikachu's jump formula fully overrides incoming velocity
- * (see pikachuRecoveryOutcomes -- jumpVx0/jumpVy0 are formula-derived, the passed-in vx0/vy0
- * aren't used at all for that branch), so real vx/vy genuinely cannot change the result and no
- * velocity check is needed once position alone is confidently past the boundary. For
- * jumpsRemaining===0, real velocity DOES matter, so this only rejects when it also isn't helping
- * (not drifting toward the stage, not moving upward) -- otherwise returns null, meaning "run the
- * real search," same as whenever position isn't confidently past the boundary at all.
- */
-function fastRejectPikachuDead(
-  x: number,
-  y: number,
-  vx: number,
-  vy: number,
-  jumpsRemaining: number,
-): "dead" | null {
-  if (jumpsRemaining !== 0 && jumpsRemaining !== 1) return null;
-  const table =
-    jumpsRemaining === 0
-      ? PIKACHU_DEAD_BOUNDARY_JUMPS_0
-      : PIKACHU_DEAD_BOUNDARY_JUMPS_1;
-  const safeThreshold =
-    interpolatePikachuDeadThreshold(table, y) +
-    PIKACHU_DEAD_BOUNDARY_SAFETY_MARGIN;
-  if (Math.abs(x) <= safeThreshold) return null;
-  if (jumpsRemaining === 1) return "dead";
-  const towardStage = x < 0 ? 1 : -1;
-  const VELOCITY_HELP_EPSILON = 0.5;
-  if (vx * towardStage > VELOCITY_HELP_EPSILON) return null; // drifting toward the stage -- might help
-  if (vy > VELOCITY_HELP_EPSILON) return null; // moving upward -- might help
-  return "dead";
-}
+// Fast dead-rejection for Pikachu (a precomputed offline boundary table) was removed
+// 2026-09-25: it was built against the pre-relaxation physics (see checkLandsOnMainFloor's own
+// doc comment) and started producing false "dead" rejections once that relaxed. See
+// classify()'s CHAR_PIKACHU case for the current (always-run-the-real-search) behavior.
 
 function classifyImpl(
   characterId: number,
@@ -3204,8 +3239,11 @@ function classifyImpl(
       // Quick Attack's aim is a free choice, independent of the character's current facing --
       // Pikachu can turn around with it. Facing direction never changes the result.
       if (jumpsRemaining > 1) return null;
-      if (fastRejectPikachuDead(x, y, vx, vy, jumpsRemaining) === "dead")
-        return "dead";
+      // No fast-dead-rejection table anymore - see the removed fastRejectPikachuDead's git history
+      // (deleted 2026-09-25): it was precomputed offline against the pre-relaxation physics (see
+      // checkLandsOnMainFloor's own doc comment), and Quick Attack's own thrust can now cover far
+      // more ground than that table assumed, making its "beyond this |x|, always dead" premise
+      // false. A regenerated table could restore this optimization.
       return toRecoveryVerdict(
         pikachuRecoveryOutcomes(x, y, vx, vy, jumpsRemaining),
       );

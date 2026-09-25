@@ -243,12 +243,51 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
       const recoveringUnsafe =
         recoveringInHitstun || CAPTURE_STATES.has(recoveringPost.actionStateId);
 
+      // Resolution: recovering player has entered a Dead*/respawn action
+      // state → recovery failure (edge-guard success). Checked ahead of the
+      // stocksRemaining comparison below: the recorder can keep emitting the
+      // scripted death-animation (e.g. DeadU's star-KO arc) for well over a
+      // hundred frames before stocksRemaining actually decrements, so
+      // resolving on the stock-count change alone let the situation (and its
+      // rendered trajectory) drag on long after the player was already
+      // dead - confirmed against a real replay
+      // (260822222803-kusora_JPN-nue-22.rmgr) where the recovering player
+      // entered DeadU at frame 4228 but stocksRemaining didn't drop until
+      // frame 4409, rendering ~180 frames of a corpse coasting through its
+      // death animation as if still attempting to recover.
+      if (DEAD_OR_RESPAWNING_STATES.has(recoveringPost.actionStateId)) {
+        events.push({
+          frame: frameNumber,
+          frameIndex: i,
+          kind: "recovery-failure",
+          recoveringPort,
+          edgeGuardingPort,
+        });
+        situation = null;
+        continue;
+      }
+
       // Resolution: recovering player lost a stock → recovery failure (edge-guard success).
       if (recoveringPost.stocksRemaining < situation.recoveringStocksAtEntry) {
         events.push({
           frame: frameNumber,
           frameIndex: i,
           kind: "recovery-failure",
+          recoveringPort,
+          edgeGuardingPort,
+        });
+        situation = null;
+        continue;
+      }
+
+      // Resolution: edge-guarder has entered a Dead*/respawn action state →
+      // recovering player survived. Same death-animation-lag reasoning as
+      // the recovering-player check above, applied symmetrically.
+      if (DEAD_OR_RESPAWNING_STATES.has(edgeGuardingPost.actionStateId)) {
+        events.push({
+          frame: frameNumber,
+          frameIndex: i,
+          kind: "recovery-success",
           recoveringPort,
           edgeGuardingPort,
         });
@@ -392,17 +431,34 @@ export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
     });
   }
 
-  // If a situation is still open when the replay ends, the recovering
-  // player never came back — resolve it as a failure on the last frame.
-  // (format v5 always parses a complete match - see docs/RMGR_SPEC.md §2 -
-  // so there's no "truncated recording" case to exclude here anymore.)
+  // If a situation is still open when the replay ends, the match ended
+  // mid-situation - a stock match ends the instant the last stock is lost,
+  // so the recording can stop before the loser's action state ever flips to
+  // a Dead* state or their stocksRemaining decrements. Don't assume it was
+  // the recovering player who lost (the old behavior): consult
+  // matchResult.placements (-1 = eliminated) for who actually lost the
+  // match, since either side's last stock could be the one that ended it -
+  // confirmed against a real replay (260923150538-nue-Jon-6.rmgr) where the
+  // edge-guarder died at the final frame and the recovering player won, but
+  // the old code always resolved these as "recovery-failure" regardless.
   if (situation !== null) {
     const lastFrame = replay.frames[replay.frames.length - 1];
     if (lastFrame !== undefined) {
+      const placements = replay.matchResult?.placements;
+      const recoveringEliminated =
+        placements?.[situation.recoveringPort] === -1;
+      const edgeGuardingEliminated =
+        placements?.[situation.edgeGuardingPort] === -1;
+      // Default to "recovery-failure" (matches pre-existing behavior) unless
+      // matchResult clearly shows it was the edge-guarder who lost instead.
+      const kind: EdgeGuardEventKind =
+        edgeGuardingEliminated && !recoveringEliminated
+          ? "recovery-success"
+          : "recovery-failure";
       events.push({
         frame: lastFrame.frame,
         frameIndex: replay.frames.length - 1,
-        kind: "recovery-failure",
+        kind,
         recoveringPort: situation.recoveringPort,
         edgeGuardingPort: situation.edgeGuardingPort,
       });

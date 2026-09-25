@@ -1967,79 +1967,59 @@
         width: 100%;
         overflow: hidden;
       }
-      .egw-header {
+      /* Toolbar: two tight rows (identity+summary+export, then filters+toggles)
+         replacing what used to be a separate header and filter bar - see
+         Jonn's 2026-09-24 feedback that the old 4-line arrangement wasted
+         vertical space above the canvas. */
+      .egw-toolbar {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 6px 12px;
-        border-bottom: 1px solid var(--panel-border);
+        flex-direction: column;
         background: var(--panel);
+        border-bottom: 1px solid var(--panel-border);
         flex-shrink: 0;
-        gap: 12px;
       }
-      .egw-header-left {
+      .egw-toolbar-row {
         display: flex;
         align-items: center;
-        gap: 14px;
-      }
-      .egw-back-link {
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        padding: 5px 12px;
         font-size: 12px;
+        min-height: 30px;
+      }
+      .egw-toolbar-row-filters {
+        border-top: 1px solid var(--panel-border);
+      }
+      .egw-toolbar-divider {
+        width: 1px;
+        align-self: stretch;
+        background: var(--panel-border);
+        margin: 2px 2px;
+      }
+      .egw-toolbar-spacer {
+        flex: 1;
+      }
+      .egw-back-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        font-size: 14px;
         color: var(--text-dim);
         text-decoration: none;
-        padding: 4px 8px;
-        border-radius: 4px;
+        border-radius: 6px;
         border: 1px solid var(--panel-border);
         background: var(--surface, rgba(255, 255, 255, 0.05));
       }
-      .egw-back-link:hover {
+      .egw-back-btn:hover {
         color: var(--text);
         background: var(--surface-hover, rgba(255, 255, 255, 0.1));
       }
-      .egw-title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 16px;
-        font-weight: 700;
-        margin: 0;
-      }
       .egw-char-icon {
-        width: 24px;
-        height: 24px;
+        width: 20px;
+        height: 20px;
         border-radius: 50%;
-      }
-      .egw-vs {
-        font-size: 12px;
-        color: var(--text-dim);
-        font-weight: 400;
-      }
-      .egw-badge {
-        font-size: 11px;
-        font-weight: 600;
-        padding: 2px 8px;
-        border-radius: 12px;
-        background: rgba(56, 189, 248, 0.15);
-        color: #38bdf8;
-        border: 1px solid rgba(56, 189, 248, 0.3);
-      }
-
-      /* Character Pickers in Header */
-      .egw-character-pickers {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .egw-picker-group {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-      }
-      .egw-picker-label {
-        font-size: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-        color: var(--text-dim);
-        letter-spacing: 0.03em;
       }
       .egw-picker-control {
         display: flex;
@@ -2086,59 +2066,32 @@
         border-color: var(--accent);
       }
 
-      .egw-header-stats {
+      /* Condensed outcome summary - was three separate pills across a whole
+         row, now one inline line: "N Recoveries · X (P%) KO · Y (P%) Recovered". */
+      .egw-stats-line {
         display: flex;
         align-items: center;
-        gap: 8px;
-      }
-      .egw-stat-pill {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 12px;
-        background: var(--surface, rgba(0, 0, 0, 0.2));
-        border: 1px solid var(--panel-border);
-      }
-      .egw-stat-num {
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-      }
-      .egw-stat-lbl {
+        gap: 5px;
         color: var(--text-dim);
-        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
       }
-      .egw-stat-success .egw-stat-num {
+      .egw-stat-total {
+        color: var(--text);
+        font-weight: 700;
+      }
+      .egw-stats-dot {
+        opacity: 0.5;
+      }
+      .egw-stat-success {
+        font-weight: 700;
         color: var(--winner-color, #60a5fa);
       }
-      .egw-stat-fail .egw-stat-num {
+      .egw-stat-fail {
+        font-weight: 700;
         color: var(--loser-color, #f87171);
       }
 
-      /* Filters Bar */
-      .egw-filter-bar {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 6px 10px;
-        padding: 5px 12px;
-        background: var(--panel);
-        border-bottom: 1px solid var(--panel-border);
-        font-size: 12px;
-        flex-shrink: 0;
-      }
-      .egw-filter-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .egw-filter-item label {
-        color: var(--text-dim);
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-      }
       .egw-select {
         background: var(--bg);
         border: 1px solid var(--panel-border);
@@ -2155,36 +2108,36 @@
         border-radius: 4px;
         font-size: 11px;
       }
-      .egw-filter-spacer {
-        flex: 1;
-      }
-      .egw-filter-controls {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-      .egw-theme-btn {
-        background: var(--surface, rgba(255, 255, 255, 0.06));
+      /* Trails / Mirror-to-right toggles, matching the camera panel's
+         .camera-mode-btn active-state pattern elsewhere in the app. */
+      .egw-toggle-btn {
+        background: var(
+          --btn-secondary-bg,
+          var(--surface, rgba(255, 255, 255, 0.06))
+        );
         border: 1px solid var(--panel-border);
-        color: var(--text);
+        color: var(--text-dim);
         padding: 4px 10px;
         border-radius: 4px;
         font-size: 11px;
+        font-weight: 600;
         cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 4px;
+        transition:
+          background 0.12s,
+          border-color 0.12s,
+          color 0.12s;
       }
-      .egw-theme-btn:hover {
-        background: var(--surface-hover, rgba(255, 255, 255, 0.12));
+      .egw-toggle-btn:hover {
+        background: var(
+          --btn-secondary-hover,
+          var(--surface-hover, rgba(255, 255, 255, 0.12))
+        );
+        color: var(--text);
       }
-      .egw-checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        cursor: pointer;
-        font-size: 12px;
-        user-select: none;
+      .egw-toggle-btn.active {
+        background: var(--accent-subtle, rgba(56, 189, 248, 0.15));
+        border-color: var(--accent);
+        color: var(--accent);
       }
 
       /* Main Stage & Sidebar */
@@ -2294,12 +2247,6 @@
         margin-bottom: 6px;
         font-size: 13px;
       }
-      .tooltip-success {
-        color: var(--winner-color, #60a5fa);
-      }
-      .tooltip-fail {
-        color: var(--loser-color, #f87171);
-      }
       .egw-tooltip-line {
         margin: 2px 0;
         color: #cbd5e1;
@@ -2385,6 +2332,28 @@
       .egw-reset-frame-btn:hover {
         background: var(--surface-hover, rgba(255, 255, 255, 0.12));
       }
+      .egw-export-video-btn {
+        background: var(--surface, rgba(255, 255, 255, 0.06));
+        border: 1px solid var(--panel-border);
+        color: var(--text);
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+          background 0.12s ease,
+          opacity 0.12s ease;
+      }
+      .egw-export-video-btn:hover:not(:disabled) {
+        background: var(--surface-hover, rgba(255, 255, 255, 0.12));
+        border-color: var(--accent);
+      }
+      .egw-export-video-btn:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
       .egw-recenter-btn {
         background: var(--surface, rgba(255, 255, 255, 0.06));
         border: 1px solid var(--panel-border);
@@ -2453,6 +2422,7 @@
       .egw-recovery-card {
         background: var(--bg);
         border: 1px solid var(--panel-border);
+        border-left: 3px solid transparent;
         border-radius: 6px;
         padding: 8px 10px;
         display: flex;
@@ -2472,33 +2442,21 @@
         border-color: #38bdf8;
         box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
       }
-      .egw-recovery-card.is-success {
-        border-left: 3px solid var(--winner-color, #60a5fa);
-      }
-      .egw-recovery-card.is-fail {
-        border-left: 3px solid var(--loser-color, #f87171);
-      }
       .egw-card-header {
         display: flex;
         align-items: center;
         gap: 8px;
       }
+      /* Colored per-situation via inline style (background/color/border-color) from
+         EFFECTIVENESS_TIER_COLOR - up to 8 tiers now, not just success/fail. */
       .egw-outcome-badge {
         font-size: 10px;
         font-weight: 700;
         padding: 1px 6px;
         border-radius: 4px;
         letter-spacing: 0.03em;
-      }
-      .badge-success {
-        background: rgba(56, 189, 248, 0.2);
-        color: var(--winner-color, #60a5fa);
-        border: 1px solid rgba(56, 189, 248, 0.4);
-      }
-      .badge-fail {
-        background: rgba(239, 68, 68, 0.2);
-        color: var(--loser-color, #f87171);
-        border: 1px solid rgba(239, 68, 68, 0.4);
+        border: 1px solid transparent;
+        white-space: nowrap;
       }
       .egw-card-opp {
         font-size: 12px;
@@ -2538,6 +2496,18 @@
         background: rgba(148, 163, 184, 0.15);
         color: var(--text-dim);
         border: 1px solid rgba(148, 163, 184, 0.3);
+      }
+      .egw-hit-tag {
+        font-weight: 600;
+        opacity: 0.85;
+      }
+      .egw-hit-tag::before {
+        content: "• ";
+      }
+      .egw-tooltip-hit {
+        font-size: 11px;
+        font-weight: 400;
+        color: #cbd5e1;
       }
       .egw-card-actions {
         display: flex;

@@ -9,7 +9,7 @@
  * until you do, and `npm run generate:demo-summaries` refuses to overwrite
  * changed output without a bump.
  */
-export const ANALYSIS_VERSION = 5;
+export const ANALYSIS_VERSION = 6;
 // History:
 // 1 - initial persistent library.
 // 2 - GameSummary.lobbyNames (whole lobby, for rotating 3-4 player sessions).
@@ -19,6 +19,10 @@ export const ANALYSIS_VERSION = 5;
 //     Falcon Punch's release burst before Falcon Dive.
 // 5 - kill combos: a combo that leaves the victim in a "contestable" position
 //     (stage/ledge still reachable) isn't a kill combo, even if they die.
+// 6 - recovery classifier: checkLandsOnMainFloor now credits a trajectory
+//     that passes over the stage's X span while still airborne, not just an
+//     exact landing crossing (see docs/recovery-heuristics/README.md); the
+//     stale Pikachu fast-dead-rejection table this invalidated was removed.
 
 /** Matches replays by the versions in their file header. An unset field matches any value. */
 export interface VersionMatcher {

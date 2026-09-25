@@ -1,5 +1,5 @@
 {
-  "analysisVersion": 5,
+  "analysisVersion": 6,
   "games": [
     {
       "id": "g_mt9qi5yw_4sx",
@@ -1054,7 +1054,7 @@
         "1": {
           "recoverySituations": 3,
           "recoverySuccesses": 2,
-          "edgeGuardEffectivenessSum": 45,
+          "edgeGuardEffectivenessSum": 70,
           "edgeGuardEffectivenessCount": 2,
           "ledgeGetupSituations": 0,
           "ledgeGetupSuccesses": 0,
@@ -1209,7 +1209,7 @@
         "0": {
           "recoverySituations": 5,
           "recoverySuccesses": 2,
-          "edgeGuardEffectivenessSum": 185,
+          "edgeGuardEffectivenessSum": 230,
           "edgeGuardEffectivenessCount": 5,
           "ledgeGetupSituations": 2,
           "ledgeGetupSuccesses": 1,
@@ -1397,7 +1397,7 @@
         "0": {
           "recoverySituations": 4,
           "recoverySuccesses": 3,
-          "edgeGuardEffectivenessSum": 95,
+          "edgeGuardEffectivenessSum": 120,
           "edgeGuardEffectivenessCount": 7,
           "ledgeGetupSituations": 1,
           "ledgeGetupSuccesses": 1,
