@@ -211,8 +211,8 @@ function recoveringPlayerDamageGained(
     replay.frames[fromFrameIndex]?.ports[recoveringPort]?.state
       ?.damagePercent ?? 0;
   const endDamage =
-    replay.frames[toFrameIndex]?.ports[recoveringPort]?.state
-      ?.damagePercent ?? startDamage;
+    replay.frames[toFrameIndex]?.ports[recoveringPort]?.state?.damagePercent ??
+    startDamage;
   return Math.max(0, endDamage - startDamage);
 }
 

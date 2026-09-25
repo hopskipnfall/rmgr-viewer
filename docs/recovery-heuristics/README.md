@@ -61,17 +61,17 @@ contradiction, that's exactly the kind of contribution this project needs more o
 
 As of 2026-09-25, checked against a 719-file corpus (Dream Land only):
 
-| Character | Real situations checked | Wrong |
-|---|---|---|
-| Captain Falcon | 289 US + 346 JP | 0 |
-| Kirby | 4 US + 1 JP | 0 |
-| Fox | 92 US + 175 JP | 0 |
-| Donkey Kong | 228 US + 129 JP | 2 (JP only) |
-| Samus | 64 US + 139 JP | 0 |
-| Link | 0 US *(untested)* + 141 JP | 0 |
-| Yoshi | 173 US + 184 JP | 0 |
-| Pikachu | 3,355 US + 639 JP | 0 |
-| Jigglypuff | 0 US *(untested)* + 1 JP | 0 |
+| Character      | Real situations checked    | Wrong       |
+| -------------- | -------------------------- | ----------- |
+| Captain Falcon | 289 US + 346 JP            | 0           |
+| Kirby          | 4 US + 1 JP                | 0           |
+| Fox            | 92 US + 175 JP             | 0           |
+| Donkey Kong    | 228 US + 129 JP            | 2 (JP only) |
+| Samus          | 64 US + 139 JP             | 0           |
+| Link           | 0 US _(untested)_ + 141 JP | 0           |
+| Yoshi          | 173 US + 184 JP            | 0           |
+| Pikachu        | 3,355 US + 639 JP          | 0           |
+| Jigglypuff     | 0 US _(untested)_ + 1 JP   | 0           |
 
 Only 2 wrong predictions total, both Donkey Kong (JP) — see [dk.md](dk.md#known-gap). A few
 characters (Link US, Jigglypuff, Kirby) have too little data yet for "0 wrong" to mean much — see
@@ -102,17 +102,17 @@ each page's own coverage note.
 
 ## Characters
 
-| Character | Recovery move | Overall rigor | Obvious caveats | Page |
-|---|---|---|---|---|
-| Captain Falcon | Falcon Dive (+ optional Falcon Punch reposition) | Mixed — Dive's curve is replay-calibrated | None beyond the curve itself | [falcon.md](falcon.md) |
-| Kirby | Final Cutter | Mixed — the curve is replay-calibrated | Very little data; often reports "not enough information" | [kirby.md](kirby.md) |
-| Fox | Firefox | Decomp physics | None known | [fox.md](fox.md) |
-| Donkey Kong | Spinning Kong | Decomp physics (known gap, JP) | No verdict facing away from the stage | [dk.md](dk.md) |
-| Samus | Screw Attack | Decomp physics | No verdict facing away from the stage | [samus.md](samus.md) |
-| Link | Spin Attack | Decomp physics (US untested) | Facing away from the stage ⇒ treated as dead | [link.md](link.md) |
-| Yoshi | Double jump (no up-B) | Mixed — the jump curve is replay-calibrated | None known | [yoshi.md](yoshi.md) |
-| Pikachu | Quick Attack | Decomp physics | Only covers 0 jumps remaining | [pikachu.md](pikachu.md) |
-| Jigglypuff | Jump (no up-B) | Decomp physics (very little data) | None known | [jigglypuff.md](jigglypuff.md) |
+| Character      | Recovery move                                    | Overall rigor                               | Obvious caveats                                          | Page                           |
+| -------------- | ------------------------------------------------ | ------------------------------------------- | -------------------------------------------------------- | ------------------------------ |
+| Captain Falcon | Falcon Dive (+ optional Falcon Punch reposition) | Mixed — Dive's curve is replay-calibrated   | None beyond the curve itself                             | [falcon.md](falcon.md)         |
+| Kirby          | Final Cutter                                     | Mixed — the curve is replay-calibrated      | Very little data; often reports "not enough information" | [kirby.md](kirby.md)           |
+| Fox            | Firefox                                          | Decomp physics                              | None known                                               | [fox.md](fox.md)               |
+| Donkey Kong    | Spinning Kong                                    | Decomp physics (known gap, JP)              | No verdict facing away from the stage                    | [dk.md](dk.md)                 |
+| Samus          | Screw Attack                                     | Decomp physics                              | No verdict facing away from the stage                    | [samus.md](samus.md)           |
+| Link           | Spin Attack                                      | Decomp physics (US untested)                | Facing away from the stage ⇒ treated as dead             | [link.md](link.md)             |
+| Yoshi          | Double jump (no up-B)                            | Mixed — the jump curve is replay-calibrated | None known                                               | [yoshi.md](yoshi.md)           |
+| Pikachu        | Quick Attack                                     | Decomp physics                              | Only covers 0 jumps remaining                            | [pikachu.md](pikachu.md)       |
+| Jigglypuff     | Jump (no up-B)                                   | Decomp physics (very little data)           | None known                                               | [jigglypuff.md](jigglypuff.md) |
 
 **Not yet modeled: Mario, Luigi, and Ness.** No recovery prediction is produced for these
 characters at all.

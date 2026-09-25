@@ -589,7 +589,14 @@ export function evaluatePhase(
   // positive-positive transition, no relaxation applies at all, matching the reference exactly.
   // Found both directions via real fuzz mismatches (evaluatePhase vs. the naive per-frame
   // reference) before this two-part condition existed.
-  const ascendK = firstAscendingCrossingFrame(y0, vy0, gravity, tvel, nMax, nHit);
+  const ascendK = firstAscendingCrossingFrame(
+    y0,
+    vy0,
+    gravity,
+    tvel,
+    nMax,
+    nHit,
+  );
   if (ascendK !== null) {
     const kEndRaw = stageK !== null ? stageK - 1 : nMax;
     if (
@@ -1178,10 +1185,7 @@ function pikaFrictionDriftBound(vx: number): number {
  * unbounded-reach bug the relaxation itself was fixed for - see checkLandsOnMainFloor's own
  * revision-history comment).
  */
-function pikaOutcomeStillReachable(
-  x: number,
-  driftBudget: number,
-): boolean {
+function pikaOutcomeStillReachable(x: number, driftBudget: number): boolean {
   return (
     Math.abs(x) - driftBudget - PIKA_PRUNE_MARGIN <= PIKA_OUTCOME_ABS_X_MAX
   );
