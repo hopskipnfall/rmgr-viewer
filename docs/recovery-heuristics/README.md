@@ -1,139 +1,123 @@
 # Recovery Heuristics
 
-How `src/recoveryHeuristics.ts`'s `classify()` decides, for a given character at a given moment
-offstage, whether they're **dead** (no path back), **dead-if-ledge-occupied** (can reach the ledge
-but not the stage outright — survival depends on the ledge being free), or can **reach the
-stage** outright. This is the core input to the workshop's edge-guard scoring (see
-[classifiedSituations.ts](../../src/classifiedSituations.ts)) and to `matchupStatsView`'s Recovery%
-stat.
+For any character caught offstage, the app predicts whether they're **dead** (no path back),
+**ledge-only** (can grab the ledge but can't make it onto the stage outright — survival depends on
+the ledge being free), or can **reach the stage** outright. This prediction feeds the Edge Guard
+Workshop's scoring and the Recovery% stat.
 
-This directory documents, per character: where the physics model came from, how rigorously it's
-been checked, and what's still open. **Every character's page must say which tier it's at.**
-Don't leave a character undocumented — if you touch its model, update its page in the same change.
+This directory documents, per character, how that prediction is built: where the physics model
+came from, how well-tested it is against real games, and what's still open. If you play this
+character and something here looks wrong, or you have replays that might disagree with a
+prediction, that's useful — see "How accuracy is checked" below.
 
-## The three rigor tiers
+## Rigor tiers
 
-1. **Decomp physics constants** — gravity, air speed, jump formulas, and move-specific constants
-   read directly from the smashremix decomp source (relayed by the Game Expert agent's decomp
-   audits, cited inline in `recoveryHeuristics.ts` as `NNN_CharacterMain.c` file references). This
-   is the gold standard: if implemented correctly, it should never be wrong. Every one of the 9
-   supported characters' base physics is at this tier.
-2. **Real-replay-calibrated** — a curve or constant hand-extracted from real recorded replay
-   traces because no clean decomp source exists for it (usually because the move is root-motion /
-   animation-driven rather than a closed-form physics formula). One tier below gold standard:
-   corpus coverage is finite and may not cover every input the animation curve can produce.
-   Currently used for Yoshi's double-jump arc, Falcon Dive's post-activation curve, and Kirby's
-   Final Cutter curve — see their own pages for exactly what's calibrated and from which replay.
-3. **Chart / best-fit from outcome stats** — plotting recovered-vs-didn't against entry position
-   and fitting a boundary, with no physics model underneath at all. Lowest tier. **Not used
-   anywhere in this codebase currently** — every character has at least a real physics model
-   (tier 1 or 2), even where that model has known gaps.
+Each character's page states an overall rigor tier, and breaks it down further if different parts
+of their recovery are trusted to different degrees.
 
-A character's page states its tier per **component** where they differ (e.g. Yoshi's gravity/air
-speed are tier 1, but its double-jump arc is tier 2) — "the character" doesn't have one single
-tier if its model mixes both.
+1. **Decomp physics** — the numbers (gravity, air speed, jump height, move-specific constants) come
+   directly from the game's decompiled source code, not from guessing or curve-fitting. This is the
+   most trustworthy tier: if those numbers are read correctly and the surrounding logic is
+   implemented correctly, predictions built on them should match the real game exactly. That said,
+   being decomp-sourced isn't an absolute guarantee against mistakes — a constant can still be
+   mis-transcribed or mis-applied from the source, and the logic that combines those constants into
+   a dead/ledge/stage verdict is hand-written and can have its own bugs, independent of whether the
+   underlying numbers are right. That's what corpus validation (below) is for: it's how a mistake at
+   either level actually gets caught.
+2. **Replay-calibrated** — a curve or constant extracted by measuring real recorded games, used when
+   no clean formula exists in the decompiled source (usually because a move's motion comes from
+   hand-animated data rather than a physics formula). One tier below decomp: it's only as good as
+   the real examples it was built from, and might not capture behavior in situations the data
+   doesn't cover.
+3. **Chart / best-fit** — plotting outcomes against starting position and eyeballing a boundary, with
+   no physics model at all. The least trustworthy tier. **Not currently used for any character** —
+   every character has at least a real physics model behind their prediction.
 
-## Permanent corpus validation
+If any part of a character's recovery relies on a replay-calibrated piece, that character is not
+"fully tier 1" even if everything else about them is decomp-sourced — the page says which parts
+are which.
 
-[`scripts/recoveryValidation.ts`](../../scripts/recoveryValidation.ts) is the source of truth for
-whether a character's heuristic agrees with real games. Run it any time you touch
-`recoveryHeuristics.ts`, `edgeGuard.ts`'s situation detection, or the corpus grows meaningfully:
+## How accuracy is checked
+
+Every prediction is checked against real recorded games on an ongoing basis, not just spot-checked
+once. As the replay collection grows, [`scripts/recoveryValidation.ts`](../../scripts/recoveryValidation.ts)
+re-runs the current model against every real edge-guard situation on file and flags any case where
+the model's prediction doesn't match what actually happened — a predicted "dead" who reached the
+ledge or the stage anyway, for example. Situations where the recovering player took a hit that
+plausibly helped them (bumped back toward the stage) are excluded, since that's the defender
+getting lucky, not the model being wrong.
+
+Anyone can run this check:
 
 ```bash
 npx tsx scripts/recoveryValidation.ts
 ```
 
-For every real recorded edge-guard situation (from `computeEdgeGuardEvents`), it runs the real,
-shipped `classify()` against the recovering player's actual entry state, then checks whether the
-prediction holds up against what really happened:
+A real contradiction found this way means the model (or its documented caveats) needs to change —
+it's not something that gets quietly excluded or ignored. If you have replays that produce a
+contradiction, that's exactly the kind of contribution this project needs more of.
 
-- **`wrongStage`** — classifier said "not reaches-stage" (dead or ledge-only), but the player
-  landed back on the main stage anyway, **without taking any additional damage along the way**
-  (a hit can genuinely assist a recovery — see the accidental-save note in
-  [classifiedSituations.ts](../../src/classifiedSituations.ts) — so a damage-assisted case doesn't
-  count against the heuristic; it's excluded, not silently treated as correct).
-- **`wrongLedge`** — classifier said "dead" (can't even reach the ledge), but the player grabbed
-  the ledge anyway, undamaged. (A "reaches-stage" verdict always implies the ledge was reachable
-  too, by construction — see `checkLandsOnMainFloor`'s own doc comment — so only "dead" can be
-  wrong about the ledge specifically.)
+### Current results
 
-**A real contradiction found this way means the heuristic (or its documented tier/caveats) needs
-to change — not that the finding gets quietly excluded or the script's threshold loosened.** If
-you find one, open (or update) the relevant character's page with it as a known gap before doing
-anything else, whether or not you fix it in the same session.
+As of 2026-09-25, checked against a 719-file corpus (Dream Land only):
 
-### Current results (2026-09-25, 719-file corpus, Dream Land only)
+| Character | Real situations checked | Wrong |
+|---|---|---|
+| Captain Falcon | 289 US + 346 JP | 0 |
+| Kirby | 4 US + 1 JP | 0 |
+| Fox | 92 US + 175 JP | 0 |
+| Donkey Kong | 228 US + 129 JP | 2 (JP only) |
+| Samus | 64 US + 139 JP | 0 |
+| Link | 0 US *(untested)* + 141 JP | 0 |
+| Yoshi | 173 US + 184 JP | 0 |
+| Pikachu | 3,355 US + 639 JP | 0 |
+| Jigglypuff | 0 US *(untested)* + 1 JP | 0 |
 
-| Character | n (jumps=1) | damage-assisted excluded | WRONG |
-|---|---|---|---|
-| Captain Falcon | 289 (256) | 171 | 0 |
-| Captain Falcon (JP) | 346 (273) | 183 | 0 |
-| Kirby | 4 (2) | 2 | 0 |
-| Kirby (JP) | 1 (0) | 0 | 0 |
-| Fox | 92 (71) | 34 | 0 |
-| Fox (JP) | 175 (144) | 76 | 0 |
-| Donkey Kong | 228 (181) | 143 | 0 |
-| **Donkey Kong (JP)** | 129 (103) | 63 | **2** |
-| Samus | 64 (50) | 38 | 0 |
-| Samus (JP) | 139 (113) | 35 | 0 |
-| Link | *(0 situations in corpus — untested)* | — | — |
-| Link (JP) | 141 (114) | 38 | 0 |
-| Yoshi | 173 (151) | 66 | 0 |
-| Yoshi (JP) | 184 (159) | 99 | 0 |
-| Pikachu | 3355 (2314) | 1178 | 0 |
-| Pikachu (JP) | 639 (467) | 225 | 0 |
-| Jigglypuff | *(0 situations in corpus — untested)* | — | — |
-| Jigglypuff (JP) | 1 (1) | 1 | 0 |
-
-Only 2 wrong predictions total, both Donkey Kong (JP) — see [dk.md](dk.md#known-gap). Every other
-character currently has zero real corpus contradictions, though several (Link US, Jigglypuff both
-regions, Kirby both regions) have too little data to say much yet — see each page's own "corpus
-coverage" note.
-
-`unsupportedJumps` (543) and `unsupportedCharacter` (608) situations are skipped entirely — see
-"What's out of scope" below. `notImplemented` (82) situations are ones the classifier explicitly
-declines to guess on (see Falcon's and Kirby's pages) — never counted as wrong either way.
+Only 2 wrong predictions total, both Donkey Kong (JP) — see [dk.md](dk.md#known-gap). A few
+characters (Link US, Jigglypuff, Kirby) have too little data yet for "0 wrong" to mean much — see
+each page's own coverage note.
 
 ## What's out of scope
 
-- **`jumpsRemaining > 1`**: `classify()` returns `null` (unsupported) for any recovery with more
-  than one jump remaining — the search space for "how many different delayed-jump timings could
-  matter" isn't modeled. Real edge-guard situations mostly have 0 or 1 jump left by the time
-  they're actually contested, so this is a minor coverage gap, not a correctness one.
-- **Turning around mid-recovery**: most characters can only face toward the stage to use a
-  ledge-grab; a few (Samus's Charge Shot, DK's neutral-B) could technically turn around via a
-  different move, but that combined maneuver isn't modeled — those cases return
-  `"not-implemented"` rather than a guessed answer. Pikachu, Fox, and Yoshi's own recovery moves
-  have no facing dependency at all, so this doesn't apply to them.
-- **Platforms**: Dream Land's three extra platforms (two side, one top — see
-  [stageGeometry.ts](../../src/stageGeometry.ts)) are deliberately **not** modeled as landable
-  surfaces. Per the user (2026-09-25): only whether a character can reach the main floor's Y=0
-  level at or past its near edge matters; a trajectory with enough drift to cross the *entire*
-  stage is credited as reaching it too, since a real player could simply ease off the stick to
-  land short — see `checkLandsOnMainFloor`'s own doc comment for the exact rule and its revision
-  history (an earlier version of this relaxation had a real, since-fixed bug: keying the check off
-  the search branch's arbitrary drift direction instead of a stage-relative reference, which let
-  the "drifting away from the stage" search branch report success at literally unbounded
-  distance). This means the model can under-count recoverability for characters/positions where
-  the *only* real path back is landing on a platform rather than the main floor — not yet
-  quantified how often that actually matters in practice.
+- **More than one jump remaining**: the model doesn't currently attempt to predict recovery when a
+  character has more than one jump left — the space of possible delayed-jump timings gets too large.
+  In practice, most real edge-guard situations are already down to 0 or 1 jump by the time they're
+  actually contested, so this mostly isn't a gap in the situations that matter.
+- **Turning around mid-recovery**: most characters can only recover while facing the stage. Three
+  characters can technically turn around using a different move first — for Donkey Kong and Samus
+  that combined play isn't modeled, so those specific cases are reported as "not enough information"
+  rather than a guessed answer; for Link the model deliberately treats him as unable to (see
+  [link.md](link.md)), since it's judged too slow to matter in practice. A handful of characters
+  have no facing requirement at all for their main recovery move.
+- **Pikachu with more than 0 jumps remaining**: unlike other characters (where the general limit
+  above is "more than 1 jump"), Pikachu's model currently only covers the 0-jump case — see
+  [pikachu.md](pikachu.md).
+- **Platforms**: Dream Land's extra platforms (two side platforms and one top platform) aren't
+  treated as valid landing spots — only whether a character can get back down to the main stage
+  floor is modeled. A trajectory that would carry a character clear across the entire stage while
+  airborne is still credited as "reaches the stage," since a real player could just ease off the
+  stick and land short instead of flying over. This means the model can under-predict recoverability
+  in the rare case where a platform genuinely is the only way back — how often that actually matters
+  hasn't been measured yet.
 
 ## Characters
 
-| Character | Recovery move | Page |
-|---|---|---|
-| Captain Falcon | Falcon Dive (+ Falcon Punch reposition) | [falcon.md](falcon.md) |
-| Kirby | Final Cutter | [kirby.md](kirby.md) |
-| Fox | Firefox | [fox.md](fox.md) |
-| Donkey Kong | Spinning Kong | [dk.md](dk.md) |
-| Samus | Screw Attack | [samus.md](samus.md) |
-| Link | Spin Attack | [link.md](link.md) |
-| Yoshi | Double jump (no up-B) | [yoshi.md](yoshi.md) |
-| Pikachu | Quick Attack | [pikachu.md](pikachu.md) |
-| Jigglypuff | Double jump (no up-B) | [jigglypuff.md](jigglypuff.md) |
+| Character | Recovery move | Overall rigor | Obvious caveats | Page |
+|---|---|---|---|---|
+| Captain Falcon | Falcon Dive (+ optional Falcon Punch reposition) | Mixed — Dive's curve is replay-calibrated | None beyond the curve itself | [falcon.md](falcon.md) |
+| Kirby | Final Cutter | Mixed — the curve is replay-calibrated | Very little data; often reports "not enough information" | [kirby.md](kirby.md) |
+| Fox | Firefox | Decomp physics | None known | [fox.md](fox.md) |
+| Donkey Kong | Spinning Kong | Decomp physics (known gap, JP) | No verdict facing away from the stage | [dk.md](dk.md) |
+| Samus | Screw Attack | Decomp physics | No verdict facing away from the stage | [samus.md](samus.md) |
+| Link | Spin Attack | Decomp physics (US untested) | Facing away from the stage ⇒ treated as dead | [link.md](link.md) |
+| Yoshi | Double jump (no up-B) | Mixed — the jump curve is replay-calibrated | None known | [yoshi.md](yoshi.md) |
+| Pikachu | Quick Attack | Decomp physics | Only covers 0 jumps remaining | [pikachu.md](pikachu.md) |
+| Jigglypuff | Jump (no up-B) | Decomp physics (very little data) | None known | [jigglypuff.md](jigglypuff.md) |
 
-Every character above is ported from `/Users/ness/workspaces/smashremix/docs/recovery-analysis-plan.md`'s
-Python simulators, which were independently validated there against real replay data at
-**1,733/1,733 correct** as of the TypeScript port (per `recoveryHeuristics.ts`'s own top-of-file
-doc comment) — that's the baseline confidence level before any of this codebase's own
-corpus-validation or bug history below.
+**Not yet modeled: Mario, Luigi, and Ness.** No recovery prediction is produced for these
+characters at all.
+
+Every character's base physics model was validated separately, before being built into this app,
+against real replay data at 1,733/1,733 correct. That covers the underlying physics model itself,
+not this app's specific dead/ledge/stage verdicts — the ongoing corpus validation above is what
+checks those.

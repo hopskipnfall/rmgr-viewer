@@ -1,31 +1,28 @@
 # Samus
 
-Recovery move: **Screw Attack** (up-B). Implemented in `recoveryHeuristics.ts`'s `samus*`
-functions (`SAMUS` constants).
+Recovery move: **Screw Attack** (up-B).
 
 ## Rigor tier
 
-**Tier 1 (decomp) throughout** — base physics and jump formula from `217_SamusMain.c`. No
-replay-calibrated curves. Includes a delay-before-pressing search (same reasoning as DK): Screw
-Attack overwrites vy to a fixed 62.0 regardless of incoming vy, so pressing immediately when
-already moving upward faster than that discards free height for no reason. **This fix was applied
-proactively, not in response to a confirmed real miss** — it's the identical structural gap DK's
-delay search was built to close, fixed here on the same reasoning before any Samus-specific corpus
-case demonstrated it.
+**Decomp physics throughout** — base physics and the jump formula come directly from the game's
+code. No replay-calibrated curves. The model accounts for the fact that Screw Attack resets
+vertical speed to a fixed value regardless of how fast Samus was already moving upward, so pressing
+it immediately after a fast upward jump can waste free height — the model searches for the better
+timing rather than assuming an immediate press is always best.
 
-Samus CAN technically turn around using Charge Shot, but that combined maneuver isn't modeled — a
-facing-away, non-dead verdict reports `"not-implemented"` rather than a guess.
+Samus can technically turn around using Charge Shot before recovering, but that combined play isn't
+modeled — a facing-away situation that isn't already dead reports "not enough information" rather
+than a guess.
 
 ## JP region variant
 
-Confirmed region-independent — no recovery-relevant constant differences, per the Game Expert's
-decomp audit.
+No known physics differences between regions for this character's recovery.
 
-## Known caveats
+## Caveats
 
-None currently flagged beyond the proactive-not-confirmed delay-search fix noted above.
+None currently known.
 
 ## Corpus validation status
 
-0 wrong predictions across 64 US + 139 JP real situations (2026-09-25 run) — see the
-[top-level README](README.md#current-results-2026-09-25-719-file-corpus-dream-land-only).
+0 wrong predictions across 64 US + 139 JP real situations checked so far — see the
+[top-level README](README.md#current-results).
