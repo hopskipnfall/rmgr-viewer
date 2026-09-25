@@ -28,7 +28,11 @@ import {
   type ShieldBreakEvent,
 } from "./renderer/characters/index.js";
 export * from "./renderer/characters/index.js";
-import { computeComboEscapeGaps, type ComboEscapeGap } from "./combos.js";
+import {
+  computeComboEscapeGaps,
+  computeRollEscapeGaps,
+  type ComboEscapeGap,
+} from "./combos.js";
 import {
   drawPikachuPolygons,
   drawFalconPolygons,
@@ -263,7 +267,9 @@ export class StageRenderer {
   private getComboEscapeGaps(replay: Replay): ComboEscapeGap[] {
     let gaps = this.comboEscapeGapsCache.get(replay);
     if (!gaps) {
-      gaps = computeComboEscapeGaps(replay);
+      const comboGaps = computeComboEscapeGaps(replay);
+      const rollGaps = computeRollEscapeGaps(replay, undefined, comboGaps);
+      gaps = [...comboGaps, ...rollGaps];
       this.comboEscapeGapsCache.set(replay, gaps);
     }
     return gaps;
