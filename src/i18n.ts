@@ -278,6 +278,12 @@ export interface Translations {
   edgeGuardWorkshopJumpToMatch: string;
   edgeGuardWorkshopNoRecoveries: string;
   edgeGuardWorkshopLoading: (done: number, total: number) => string;
+  edgeGuardWorkshopMirrorToRight: string;
+  edgeGuardWorkshopExportVideo: string;
+  edgeGuardWorkshopExportingVideo: (
+    elapsedSeconds: number,
+    totalSeconds: number,
+  ) => string;
   matchupExcludedGames: (count: number) => string;
   matchupEdgeGuardEffectivenessLabel: string;
   matchupEdgeGuardConversionLabel: string;
@@ -943,6 +949,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       "No edge guard recoveries match these filters.",
     edgeGuardWorkshopLoading: (done, total) =>
       `Loading replays (${done}/${total})...`,
+    edgeGuardWorkshopMirrorToRight: "Mirror to Right",
+    edgeGuardWorkshopExportVideo: "Export Video",
+    edgeGuardWorkshopExportingVideo: (elapsed, total) =>
+      `Recording (${elapsed.toFixed(1)}/${total.toFixed(1)}s)...`,
     matchupExcludedGames: (count) =>
       `${count} excluded (non-Dream Land or unsupported)`,
     matchupEdgeGuardEffectivenessLabel: "Edge Guard Effectiveness",
@@ -1617,6 +1627,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     edgeGuardWorkshopNoRecoveries: "条件に一致する復帰阻止データはありません。",
     edgeGuardWorkshopLoading: (done, total) =>
       `リプレイを読み込み中 (${done}/${total})...`,
+    edgeGuardWorkshopMirrorToRight: "右側に反転",
+    edgeGuardWorkshopExportVideo: "動画を書き出す",
+    edgeGuardWorkshopExportingVideo: (elapsed, total) =>
+      `録画中 (${elapsed.toFixed(1)}/${total.toFixed(1)}秒)...`,
     matchupExcludedGames: (count) =>
       `${count}件除外 (プププランド以外または非対応キャラ)`,
     matchupEdgeGuardEffectivenessLabel: "復帰阻止の有効性",

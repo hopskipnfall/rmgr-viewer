@@ -17,10 +17,16 @@ import {
 import {
   extractEdgeGuardSituations,
   filterEdgeGuardSituations,
+  applyMirrorDisplay,
+  EFFECTIVENESS_TIER_COLOR,
+  EFFECTIVENESS_TIER_LABEL,
+  EFFECTIVENESS_TIER_ICON,
   type EdgeGuardSituationData,
   type EdgeGuardFilterState,
 } from "./edgeGuardData.js";
+import type { EdgeGuardEffectivenessTier } from "../classifiedSituations.js";
 import { EdgeGuardCanvas } from "./edgeGuardCanvas.js";
+import { exportSituationsVideo } from "./edgeGuardVideoExport.js";
 
 export class EdgeGuardWorkshopViewController {
   private container: HTMLElement;
@@ -48,6 +54,8 @@ export class EdgeGuardWorkshopViewController {
   };
 
   private showTrails: boolean = true;
+  private mirrorToRight: boolean = false;
+  private isExportingVideo: boolean = false;
   private themeObserver: MutationObserver | null = null;
 
   // Simultaneous playback state
@@ -220,6 +228,11 @@ export class EdgeGuardWorkshopViewController {
     return false;
   }
 
+  private tierColorFor(tier: EdgeGuardEffectivenessTier): string {
+    const c = EFFECTIVENESS_TIER_COLOR[tier];
+    return this.isLightMode() ? c.light : c.dark;
+  }
+
   private renderShell(): void {
     const tr = t();
     const f = this.filters;
@@ -229,98 +242,108 @@ export class EdgeGuardWorkshopViewController {
 
     this.container.innerHTML = `
       <div class="egw-container">
-        <!-- Header -->
-        <header class="egw-header">
-          <div class="egw-header-left">
-            <a href="#/matchup/${this.myChar}/${this.oppChar}" class="egw-back-link">
-              &larr; ${escapeHtml(tr.edgeGuardWorkshopBackToMatchup)}
+        <!-- Toolbar: two tight rows instead of a header + a separate filter bar -->
+        <div class="egw-toolbar">
+          <!-- Row 1: identity, live outcome summary, export -->
+          <div class="egw-toolbar-row">
+            <a href="#/matchup/${this.myChar}/${this.oppChar}" class="egw-back-btn" title="${escapeHtml(tr.edgeGuardWorkshopBackToMatchup)}">
+              &larr;
             </a>
-            <div class="egw-character-pickers">
-              <div class="egw-picker-control">
-                ${characterIconHtml(this.myChar, "egw-char-icon", { showBadge: false })}
-                <select id="egwMyCharSelect" class="egw-char-select">
-                  ${this.renderCharacterSelectOptions(this.myChar)}
-                </select>
-              </div>
 
-              <button type="button" class="egw-swap-btn" id="egwSwapBtn" title="Swap Matchup">
-                &#8644;
-              </button>
-
-              <div class="egw-picker-control">
-                ${characterIconHtml(this.oppChar, "egw-char-icon", { showBadge: false })}
-                <select id="egwOppCharSelect" class="egw-char-select">
-                  ${this.renderCharacterSelectOptions(this.oppChar)}
-                </select>
-              </div>
-
-              <span class="egw-badge">${escapeHtml(tr.edgeGuardWorkshopTitle)}</span>
+            <div class="egw-picker-control">
+              ${characterIconHtml(this.myChar, "egw-char-icon", { showBadge: false })}
+              <select id="egwMyCharSelect" class="egw-char-select">
+                ${this.renderCharacterSelectOptions(this.myChar)}
+              </select>
             </div>
+
+            <button type="button" class="egw-swap-btn" id="egwSwapBtn" title="Swap Matchup">
+              &#8644;
+            </button>
+
+            <div class="egw-picker-control">
+              ${characterIconHtml(this.oppChar, "egw-char-icon", { showBadge: false })}
+              <select id="egwOppCharSelect" class="egw-char-select">
+                ${this.renderCharacterSelectOptions(this.oppChar)}
+              </select>
+            </div>
+
+            <span class="egw-toolbar-divider"></span>
+
+            <div class="egw-stats-line">
+              <span class="egw-stat-total" id="egwStatTotal">${escapeHtml(tr.edgeGuardWorkshopTotalRecoveries(0))}</span>
+              <span class="egw-stats-dot">&middot;</span>
+              <span class="egw-stat-success" id="egwStatSuccess">0 (0%)</span> KO
+              <span class="egw-stats-dot">&middot;</span>
+              <span class="egw-stat-fail" id="egwStatFail">0 (0%)</span> Recovered
+            </div>
+
+            <span class="egw-toolbar-spacer"></span>
+
+            <button type="button" class="egw-export-video-btn" id="egwExportVideoBtn">
+              ${escapeHtml(tr.edgeGuardWorkshopExportVideo)}
+            </button>
           </div>
 
-          <!-- Summary Stats -->
-          <div class="egw-header-stats" id="egwHeaderStats">
-            <div class="egw-stat-pill egw-stat-total">
-              <span class="egw-stat-num" id="egwStatTotal">0</span>
-              <span class="egw-stat-lbl">${escapeHtml(tr.all)}</span>
-            </div>
-            <div class="egw-stat-pill egw-stat-success">
-              <span class="egw-stat-num" id="egwStatSuccess">0</span>
-              <span class="egw-stat-lbl">${escapeHtml(tr.edgeGuardWorkshopOutcomeSuccess)}</span>
-            </div>
-            <div class="egw-stat-pill egw-stat-fail">
-              <span class="egw-stat-num" id="egwStatFail">0</span>
-              <span class="egw-stat-lbl">${escapeHtml(tr.edgeGuardWorkshopOutcomeFail)}</span>
-            </div>
-          </div>
-        </header>
+          <!-- Row 2: filters + display toggles -->
+          <div class="egw-toolbar-row egw-toolbar-row-filters">
+            <select id="egwFilterJumps" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterJumps)}">
+              <option value="all" ${sel(f.jumps === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllJumps)}</option>
+              <option value="0" ${sel(f.jumps === 0)}>0 Jumps</option>
+              <option value="1" ${sel(f.jumps === 1)}>1 Jump</option>
+              <option value="2" ${sel(f.jumps === 2)}>2 Jumps</option>
+              <option value="3" ${sel(f.jumps === 3)}>3 Jumps</option>
+              <option value="4" ${sel(f.jumps === 4)}>4 Jumps</option>
+              <option value="5" ${sel(f.jumps === 5)}>5+ Jumps</option>
+            </select>
 
-        <!-- Filters Bar -->
-        <div class="egw-filter-bar">
-          <select id="egwFilterJumps" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterJumps)}">
-            <option value="all" ${sel(f.jumps === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllJumps)}</option>
-            <option value="0" ${sel(f.jumps === 0)}>0 Jumps</option>
-            <option value="1" ${sel(f.jumps === 1)}>1 Jump</option>
-            <option value="2" ${sel(f.jumps === 2)}>2 Jumps</option>
-            <option value="3" ${sel(f.jumps === 3)}>3 Jumps</option>
-            <option value="4" ${sel(f.jumps === 4)}>4 Jumps</option>
-            <option value="5" ${sel(f.jumps === 5)}>5+ Jumps</option>
-          </select>
+            <select id="egwFilterOpponent" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterOpponent)}">
+              <option value="all" ${sel(f.opponent === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllOpponents)}</option>
+            </select>
 
-          <select id="egwFilterOpponent" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterOpponent)}">
-            <option value="all" ${sel(f.opponent === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllOpponents)}</option>
-          </select>
+            <select id="egwFilterSession" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterSession)}">
+              <option value="all" ${sel(f.session === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllSessions)}</option>
+            </select>
 
-          <select id="egwFilterSession" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterSession)}">
-            <option value="all" ${sel(f.session === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllSessions)}</option>
-          </select>
+            <select id="egwFilterRecency" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterRecency)}">
+              <option value="all" ${sel(f.recency === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllTime)}</option>
+              <option value="month" ${sel(f.recency === "month")}>${escapeHtml(tr.edgeGuardWorkshopLastMonth)}</option>
+              <option value="since" ${sel(f.recency === "since")}>${escapeHtml(tr.edgeGuardWorkshopSinceDate)}</option>
+            </select>
+            <input
+              type="date"
+              id="egwSinceDate"
+              class="egw-date-input"
+              value="${escapeHtml(f.sinceDate ?? "")}"
+              style="display: ${f.recency === "since" ? "inline-block" : "none"};"
+            />
 
-          <select id="egwFilterRecency" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterRecency)}">
-            <option value="all" ${sel(f.recency === "all")}>${escapeHtml(tr.edgeGuardWorkshopAllTime)}</option>
-            <option value="month" ${sel(f.recency === "month")}>${escapeHtml(tr.edgeGuardWorkshopLastMonth)}</option>
-            <option value="since" ${sel(f.recency === "since")}>${escapeHtml(tr.edgeGuardWorkshopSinceDate)}</option>
-          </select>
-          <input
-            type="date"
-            id="egwSinceDate"
-            class="egw-date-input"
-            value="${escapeHtml(f.sinceDate ?? "")}"
-            style="display: ${f.recency === "since" ? "inline-block" : "none"};"
-          />
+            <select id="egwFilterOutcome" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterOutcome)}">
+              <option value="all" ${sel(f.outcome === "all")}>${escapeHtml(tr.edgeGuardWorkshopOutcomeAll)}</option>
+              <option value="success" ${sel(f.outcome === "success")}>${escapeHtml(tr.edgeGuardWorkshopOutcomeSuccess)}</option>
+              <option value="fail" ${sel(f.outcome === "fail")}>${escapeHtml(tr.edgeGuardWorkshopOutcomeFail)}</option>
+            </select>
 
-          <select id="egwFilterOutcome" class="egw-select" title="${escapeHtml(tr.edgeGuardWorkshopFilterOutcome)}">
-            <option value="all" ${sel(f.outcome === "all")}>${escapeHtml(tr.edgeGuardWorkshopOutcomeAll)}</option>
-            <option value="success" ${sel(f.outcome === "success")}>${escapeHtml(tr.edgeGuardWorkshopOutcomeSuccess)}</option>
-            <option value="fail" ${sel(f.outcome === "fail")}>${escapeHtml(tr.edgeGuardWorkshopOutcomeFail)}</option>
-          </select>
+            <span class="egw-toolbar-spacer"></span>
 
-          <div class="egw-filter-spacer"></div>
-
-          <div class="egw-filter-controls">
-            <label class="egw-checkbox-label">
-              <input type="checkbox" id="egwTrailsCheck" ${this.showTrails ? "checked" : ""} />
-              <span>${escapeHtml(tr.edgeGuardWorkshopShowTrails)}</span>
-            </label>
+            <button
+              type="button"
+              class="egw-toggle-btn ${this.mirrorToRight ? "active" : ""}"
+              id="egwMirrorBtn"
+              aria-pressed="${this.mirrorToRight ? "true" : "false"}"
+              title="${escapeHtml(tr.edgeGuardWorkshopMirrorToRight)}"
+            >
+              ${escapeHtml(tr.edgeGuardWorkshopMirrorToRight)}
+            </button>
+            <button
+              type="button"
+              class="egw-toggle-btn ${this.showTrails ? "active" : ""}"
+              id="egwTrailsBtn"
+              aria-pressed="${this.showTrails ? "true" : "false"}"
+              title="${escapeHtml(tr.edgeGuardWorkshopShowTrails)}"
+            >
+              ${escapeHtml(tr.edgeGuardWorkshopShowTrails)}
+            </button>
           </div>
         </div>
 
@@ -423,6 +446,7 @@ export class EdgeGuardWorkshopViewController {
     });
     this.canvas.setIsLight(this.isLightMode());
     this.canvas.setShowTrails(this.showTrails);
+    this.canvas.setShowBothSides(!this.mirrorToRight);
 
     // Auto-sync canvas theme with UI theme changes
     if (
@@ -566,12 +590,34 @@ export class EdgeGuardWorkshopViewController {
     });
 
     // Trails toggle
-    const trailsCheck = this.container.querySelector(
-      "#egwTrailsCheck",
-    ) as HTMLInputElement;
-    trailsCheck?.addEventListener("change", () => {
-      this.showTrails = trailsCheck.checked;
+    const trailsBtn = this.container.querySelector(
+      "#egwTrailsBtn",
+    ) as HTMLButtonElement | null;
+    trailsBtn?.addEventListener("click", () => {
+      this.showTrails = !this.showTrails;
+      trailsBtn.classList.toggle("active", this.showTrails);
+      trailsBtn.setAttribute("aria-pressed", String(this.showTrails));
       this.canvas?.setShowTrails(this.showTrails);
+    });
+
+    // Mirror-to-right toggle
+    const mirrorBtn = this.container.querySelector(
+      "#egwMirrorBtn",
+    ) as HTMLButtonElement | null;
+    mirrorBtn?.addEventListener("click", () => {
+      this.mirrorToRight = !this.mirrorToRight;
+      mirrorBtn.classList.toggle("active", this.mirrorToRight);
+      mirrorBtn.setAttribute("aria-pressed", String(this.mirrorToRight));
+      this.canvas?.recenterCamera(!this.mirrorToRight);
+      this.applyFilters();
+    });
+
+    // Export Video
+    const exportVideoBtn = this.container.querySelector(
+      "#egwExportVideoBtn",
+    ) as HTMLButtonElement | null;
+    exportVideoBtn?.addEventListener("click", () => {
+      void this.handleExportVideo();
     });
 
     // Playback bar controls
@@ -653,10 +699,14 @@ export class EdgeGuardWorkshopViewController {
   }
 
   private applyFilters(): void {
-    this.filteredSituations = filterEdgeGuardSituations(
+    const filtered = filterEdgeGuardSituations(
       this.allSituations,
       this.filters,
     );
+    this.filteredSituations = applyMirrorDisplay(
+      filtered,
+      this.mirrorToRight,
+    ) as EdgeGuardSituationData[];
 
     // Compute maxFrames for scrubber
     this.maxFrames = this.filteredSituations.reduce(
@@ -693,7 +743,8 @@ export class EdgeGuardWorkshopViewController {
     const successEl = this.container.querySelector("#egwStatSuccess");
     const failEl = this.container.querySelector("#egwStatFail");
 
-    if (totalEl) totalEl.textContent = String(total);
+    if (totalEl)
+      totalEl.textContent = t().edgeGuardWorkshopTotalRecoveries(total);
     if (successEl) successEl.textContent = `${successes} (${successPct}%)`;
     if (failEl) failEl.textContent = `${fails} (${failPct}%)`;
   }
@@ -720,21 +771,31 @@ export class EdgeGuardWorkshopViewController {
     listEl.innerHTML = "";
 
     this.filteredSituations.forEach((sit) => {
-      const isSuccess = sit.outcome === "success";
+      const tierColor = this.tierColorFor(sit.effectivenessTier);
       const card = document.createElement("div");
-      card.className = `egw-recovery-card ${isSuccess ? "is-success" : "is-fail"}`;
+      card.className = "egw-recovery-card";
+      card.style.borderLeftColor = tierColor;
       card.setAttribute("data-id", sit.id);
 
       const xFormatted = Math.round(sit.startX);
       const yFormatted = Math.round(sit.startY);
-      const mirrorNote = sit.wasLeft
+      // Only show "Mirrored" when the situation is actually being displayed
+      // flipped right now (mirrorToRight on AND it started on the left) -
+      // with mirrorToRight off, sit.startX already reflects its natural,
+      // unflipped position (see applyMirrorDisplay).
+      const isCurrentlyMirrored = this.mirrorToRight && sit.wasLeft;
+      const mirrorNote = isCurrentlyMirrored
         ? ` <span class="egw-mirrored-tag" title="Recovery started on left (X = ${Math.round(sit.rawStartX)}), mirrored across X=0">Mirrored</span>`
+        : "";
+      const tierLabel = EFFECTIVENESS_TIER_LABEL[sit.effectivenessTier];
+      const hitNote = sit.edgeGuarderWasHit
+        ? ` <span class="egw-hit-tag" title="The recovering player landed a hit on the edge-guarder during this situation">hit</span>`
         : "";
 
       card.innerHTML = `
         <div class="egw-card-header">
-          <span class="egw-outcome-badge ${isSuccess ? "badge-success" : "badge-fail"}">
-            ${isSuccess ? "KO" : "SAFE"}
+          <span class="egw-outcome-badge" style="background: ${tierColor}26; color: ${tierColor}; border-color: ${tierColor}66;">
+            ${escapeHtml(tierLabel)}${hitNote}
           </span>
           <span class="egw-card-opp">${escapeHtml(sit.opponentName)}</span>
           <span class="egw-card-date">${escapeHtml(sit.gameDate.split("T")[0] || sit.gameDate)}</span>
@@ -797,16 +858,20 @@ export class EdgeGuardWorkshopViewController {
       return;
     }
 
-    const isSuccess = sit.outcome === "success";
     const xFmt = Math.round(sit.startX);
     const yFmt = Math.round(sit.startY);
+    const tierColor = this.tierColorFor(sit.effectivenessTier);
+    const tierIcon = EFFECTIVENESS_TIER_ICON[sit.effectivenessTier];
+    const hitNote = sit.edgeGuarderWasHit
+      ? ` <span class="egw-tooltip-hit">(edge-guarder was hit)</span>`
+      : "";
 
     tooltip.innerHTML = `
-      <div class="egw-tooltip-title ${isSuccess ? "tooltip-success" : "tooltip-fail"}">
-        ${isSuccess ? "🎯 Edge Guard Succeeded (KO)" : "🛡️ Recovery Succeeded (Safe)"}
+      <div class="egw-tooltip-title" style="color: ${tierColor};">
+        ${tierIcon} ${escapeHtml(EFFECTIVENESS_TIER_LABEL[sit.effectivenessTier])}${hitNote}
       </div>
       <div class="egw-tooltip-line"><strong>Opponent:</strong> ${escapeHtml(sit.opponentName)}</div>
-      <div class="egw-tooltip-line"><strong>Position:</strong> (${xFmt}, ${yFmt}) ${sit.wasLeft ? "(Flipped from Left)" : ""}</div>
+      <div class="egw-tooltip-line"><strong>Position:</strong> (${xFmt}, ${yFmt}) ${this.mirrorToRight && sit.wasLeft ? "(Flipped from Left)" : ""}</div>
       <div class="egw-tooltip-line"><strong>Jumps at entry:</strong> ${sit.jumpsAtEntry}</div>
       <div class="egw-tooltip-line"><strong>Damage:</strong> ${sit.damageAtEntry}% &middot; ${sit.stocksRemaining} stocks</div>
       <div class="egw-tooltip-date">${escapeHtml(sit.gameDate.split("T")[0] || sit.gameDate)}</div>
@@ -863,6 +928,47 @@ export class EdgeGuardWorkshopViewController {
     this.lastAnimTime = performance.now();
     this.updatePlayBtnUI();
     this.animLoop();
+  }
+
+  private async handleExportVideo(): Promise<void> {
+    if (this.isExportingVideo || !this.canvas || this.maxFrames === 0) return;
+
+    const btn = this.container.querySelector(
+      "#egwExportVideoBtn",
+    ) as HTMLButtonElement | null;
+    if (!btn) return;
+
+    this.pausePlayback();
+    const frameToRestore = this.currentFrame;
+    this.isExportingVideo = true;
+    btn.disabled = true;
+    const tr = t();
+
+    try {
+      const { blob } = await exportSituationsVideo(this.canvas, {
+        maxFrames: this.maxFrames,
+        onProgress: (elapsedSeconds, totalSeconds) => {
+          btn.textContent = tr.edgeGuardWorkshopExportingVideo(
+            elapsedSeconds,
+            totalSeconds,
+          );
+        },
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `edge-guard-${this.myChar}-vs-${this.oppChar}-${Date.now()}.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      this.isExportingVideo = false;
+      btn.disabled = false;
+      btn.textContent = tr.edgeGuardWorkshopExportVideo;
+      this.currentFrame = frameToRestore;
+      this.canvas.setPlaybackFrame(Math.floor(this.currentFrame));
+      this.updatePlaybackFrameUI();
+    }
   }
 
   private pausePlayback(): void {

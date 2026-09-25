@@ -183,25 +183,37 @@ function edgeGuarderWasHitInWindow(
   );
 }
 
-function sumDamageDealtInWindow(
-  hits: readonly ReturnType<typeof extractAllHitsWithDI>[number][],
+/**
+ * Damage gained by the recovering player over the window, read directly off
+ * their own damagePercent rather than summing individual "hits". Found via a
+ * real bug report (2026-09-25): extractAllHitsWithDI's calculateHitDI
+ * explicitly returns null for any damage instance touching a
+ * CAPTURE_OR_THROW_STATES action state ("in Smash 64, throws and grab
+ * captures cannot be DI'd" - di.ts), which is correct for DI purposes but
+ * meant grab/throw damage was silently invisible to the sum that used to
+ * live here - a real situation (260828205834-nue-Kurabba-69-2.rmgr, frame
+ * 5572) where the edge-guarder grabbed and threw the recovering player
+ * twice for 21% total scored "no damage" because none of it came from a
+ * DI-eligible hit. damagePercent only increases within a stock (resets to 0
+ * on death/respawn, and this window never crosses a death - see
+ * computeEdgeGuardEvents), and in a 2-player match the only frame-to-frame
+ * source of damage to the recovering player IS the edge-guarder (Dream Land
+ * has no hazards/fall damage), so a plain start-vs-end delta covers hits
+ * AND throws without needing to enumerate either.
+ */
+function recoveringPlayerDamageGained(
+  replay: Replay,
   recoveringPort: PortIndex,
-  edgeGuardingPort: PortIndex,
   fromFrameIndex: number,
   toFrameIndex: number,
 ): number {
-  let total = 0;
-  for (const hit of hits) {
-    if (
-      hit.victimPort === recoveringPort &&
-      hit.attackerPort === edgeGuardingPort &&
-      hit.hitFrameIndex >= fromFrameIndex &&
-      hit.hitFrameIndex <= toFrameIndex
-    ) {
-      total += hit.damageDealt;
-    }
-  }
-  return total;
+  const startDamage =
+    replay.frames[fromFrameIndex]?.ports[recoveringPort]?.state
+      ?.damagePercent ?? 0;
+  const endDamage =
+    replay.frames[toFrameIndex]?.ports[recoveringPort]?.state
+      ?.damagePercent ?? startDamage;
+  return Math.max(0, endDamage - startDamage);
 }
 
 /**
@@ -327,10 +339,9 @@ function computeClassifiedSituationsUncached(
           resolutionFrameIndex,
         ));
 
-    const damageDealtByGuarder = sumDamageDealtInWindow(
-      hits,
+    const damageDealtByGuarder = recoveringPlayerDamageGained(
+      replay,
       recoveringPort,
-      edgeGuardingPort,
       enteredFrameIndex,
       resolutionFrameIndex,
     );
@@ -457,6 +468,51 @@ const DAMAGE_HIGH_THRESHOLD = 35;
 const DAMAGE_MID_THRESHOLD = 17;
 
 /**
+ * The discrete outcome bucket a situation's base score comes from, before the
+ * edgeGuarderWasHit penalty is applied -- exposed separately from the numeric
+ * score for callers that want to categorize/color-code situations (e.g. the
+ * Edge Guard Workshop's canvas) rather than average them. Order here matches
+ * edgeGuardEffectivenessScore's own branching exactly; that function is
+ * defined in terms of this one.
+ */
+export type EdgeGuardEffectivenessTier =
+  | "kill"
+  | "damage-high"
+  | "damage-mid"
+  | "damage-low"
+  | "no-damage"
+  | "missed-ledge-hog"
+  | "accidental-save"
+  /** "hopeless" situation that resolved normally -- nothing was being tested, no tier applies. */
+  | "unscored";
+
+export function edgeGuardEffectivenessTier(
+  situation: ClassifiedSituation,
+): EdgeGuardEffectivenessTier {
+  if (situation.missedLedgeHogOpportunity) return "missed-ledge-hog";
+  if (situation.possibleAccidentalSave) return "accidental-save";
+  if (situation.category === "hopeless") return "unscored";
+  if (situation.resolutionKind === "recovery-failure") return "kill";
+  if (situation.damageDealtByGuarder >= DAMAGE_HIGH_THRESHOLD)
+    return "damage-high";
+  if (situation.damageDealtByGuarder >= DAMAGE_MID_THRESHOLD)
+    return "damage-mid";
+  if (situation.damageDealtByGuarder > 0) return "damage-low";
+  return "no-damage";
+}
+
+const TIER_BASE_SCORE: Record<EdgeGuardEffectivenessTier, number | null> = {
+  kill: EDGE_GUARD_EFFECTIVENESS_SCORE.KILL,
+  "damage-high": EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_HIGH,
+  "damage-mid": EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_MID,
+  "damage-low": EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_LOW,
+  "no-damage": EDGE_GUARD_EFFECTIVENESS_SCORE.NO_DAMAGE,
+  "missed-ledge-hog": EDGE_GUARD_EFFECTIVENESS_SCORE.MISSED_LEDGE_HOG,
+  "accidental-save": EDGE_GUARD_EFFECTIVENESS_SCORE.ACCIDENTAL_SAVE,
+  unscored: null,
+};
+
+/**
  * Per-situation Edge Guard Effectiveness score (see EDGE_GUARD_EFFECTIVENESS_SCORE). Only "hopeless"
  * situations that resolved NORMALLY (opponent died as expected, no accidental save) are excluded
  * (null) -- nothing was actually being tested, same reasoning as the stats exclusion. A "hopeless"
@@ -475,24 +531,8 @@ const DAMAGE_MID_THRESHOLD = 17;
 export function edgeGuardEffectivenessScore(
   situation: ClassifiedSituation,
 ): number | null {
-  let baseScore: number;
-  if (situation.missedLedgeHogOpportunity) {
-    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.MISSED_LEDGE_HOG;
-  } else if (situation.possibleAccidentalSave) {
-    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.ACCIDENTAL_SAVE;
-  } else if (situation.category === "hopeless") {
-    return null;
-  } else if (situation.resolutionKind === "recovery-failure") {
-    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.KILL;
-  } else if (situation.damageDealtByGuarder >= DAMAGE_HIGH_THRESHOLD) {
-    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_HIGH;
-  } else if (situation.damageDealtByGuarder >= DAMAGE_MID_THRESHOLD) {
-    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_MID;
-  } else if (situation.damageDealtByGuarder > 0) {
-    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.DAMAGE_LOW;
-  } else {
-    baseScore = EDGE_GUARD_EFFECTIVENESS_SCORE.NO_DAMAGE;
-  }
+  const baseScore = TIER_BASE_SCORE[edgeGuardEffectivenessTier(situation)];
+  if (baseScore === null) return null;
 
   // Only applies when the recovering player actually got away -- a real kill (resolutionKind
   // "recovery-failure") is the one baseScore that can never reach here already being anything but

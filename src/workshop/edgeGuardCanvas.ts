@@ -1,4 +1,8 @@
-import type { EdgeGuardSituationData } from "./edgeGuardData.js";
+import {
+  EFFECTIVENESS_TIER_COLOR,
+  EFFECTIVENESS_TIER_LABEL,
+  type EdgeGuardSituationData,
+} from "./edgeGuardData.js";
 import { Camera } from "../camera.js";
 import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import { drawStage } from "../renderer/stage/stageGeometry.js";
@@ -27,6 +31,7 @@ export class EdgeGuardCanvas {
   private callbacks: CanvasCallbacks;
 
   private initializedView = false;
+  private showBothSides = false;
   private cameraDragging = false;
   private dragMoved = false;
   private dragStartX = 0;
@@ -94,24 +99,47 @@ export class EdgeGuardCanvas {
     this.draw();
   }
 
-  /** Frames the right side of Dream Land and edge guard recovery area. */
-  public recenterCamera(): void {
+  /**
+   * Frames the recovery area. By default (mirrored-to-right display) this
+   * frames just the right side of Dream Land, since every situation is
+   * shown there. When `showBothSides` is true (mirroring off, situations
+   * shown at their natural left/right position) it frames the whole stage
+   * so left-side recoveries stay visible too.
+   */
+  public recenterCamera(showBothSides = false): void {
     this.camera.unlockView();
-    // Frame Dream Land right side & recovery zone:
-    // Dream Land ground: x = -2318 to 2318, Y = 0.
-    // Right blast zone: x = 9000, Y bounds = -3500 to 8300.
-    // With Camera's 0.3 padding around (0, -2200) to (7800, 5800):
-    // Center is (3900, 1800), spanX = 7800, padX = 2340 -> frames x from -2340 to 10140.
-    // This cleanly puts stage center (x = 0) on the left and right blast zone (x = 9000) on the right.
-    this.camera.update(
-      [
-        { x: 0, y: -2200 },
-        { x: 7800, y: 5800 },
-      ],
-      true,
-    );
+    if (showBothSides) {
+      // Frame both blast zones: x = -9000 to 9000, same Y bounds as the
+      // right-side-only framing below.
+      this.camera.update(
+        [
+          { x: -9000, y: -2200 },
+          { x: 9000, y: 5800 },
+        ],
+        true,
+      );
+    } else {
+      // Frame Dream Land right side & recovery zone:
+      // Dream Land ground: x = -2318 to 2318, Y = 0.
+      // Right blast zone: x = 9000, Y bounds = -3500 to 8300.
+      // With Camera's 0.3 padding around (0, -2200) to (7800, 5800):
+      // Center is (3900, 1800), spanX = 7800, padX = 2340 -> frames x from -2340 to 10140.
+      // This cleanly puts stage center (x = 0) on the left and right blast zone (x = 9000) on the right.
+      this.camera.update(
+        [
+          { x: 0, y: -2200 },
+          { x: 7800, y: 5800 },
+        ],
+        true,
+      );
+    }
     this.camera.lockView();
     this.draw();
+  }
+
+  /** The underlying canvas element, for off-loop capture (e.g. GIF export). */
+  public getElement(): HTMLCanvasElement {
+    return this.canvas;
   }
 
   public resize(): void {
@@ -124,11 +152,21 @@ export class EdgeGuardCanvas {
     this.camera.resize(width, height);
 
     if (!this.initializedView) {
-      this.recenterCamera();
+      this.recenterCamera(this.showBothSides);
       this.initializedView = true;
     } else {
       this.draw();
     }
+  }
+
+  /**
+   * Sets which framing `resize()`'s one-time auto-recenter uses before the
+   * user has ever clicked "recenter" themselves. Call before the first
+   * `resize()` (i.e. right after construction) to match the workshop's
+   * current mirror-to-right toggle state.
+   */
+  public setShowBothSides(showBothSides: boolean): void {
+    this.showBothSides = showBothSides;
   }
 
   public worldToScreen(wx: number, wy: number): { x: number; y: number } {
@@ -334,15 +372,22 @@ export class EdgeGuardCanvas {
     ctx.lineTo(bottomCenter.x, bottomCenter.y);
     ctx.stroke();
 
-    // Blast zone boundaries (x = 9000, y = 8300, y = -3500)
+    // Blast zone boundaries, mirrored across x = 0 (x = 9000 and x = -9000,
+    // y = 8300, y = -3500). Only the right side used to be drawn, back when
+    // every situation was always mirrored onto it - now that the mirror
+    // toggle can show situations on their natural (left or right) side,
+    // both boundaries need to be visible.
     const rightTop = this.worldToScreen(9000, 8300);
     const rightBottom = this.worldToScreen(9000, -3500);
+    const leftTop = this.worldToScreen(-9000, 8300);
+    const leftBottom = this.worldToScreen(-9000, -3500);
 
     ctx.strokeStyle = isLight
       ? "rgba(239, 68, 68, 0.4)"
       : "rgba(239, 68, 68, 0.3)";
     ctx.lineWidth = 1;
     ctx.setLineDash([6, 4]);
+
     ctx.beginPath();
     // Top blast line
     ctx.moveTo(topCenter.x, topCenter.y);
@@ -353,7 +398,23 @@ export class EdgeGuardCanvas {
     ctx.lineTo(bottomCenter.x, bottomCenter.y);
     ctx.stroke();
 
+    ctx.beginPath();
+    // Top blast line (left)
+    ctx.moveTo(topCenter.x, topCenter.y);
+    ctx.lineTo(leftTop.x, leftTop.y);
+    // Left blast line
+    ctx.lineTo(leftBottom.x, leftBottom.y);
+    // Bottom blast line (left)
+    ctx.lineTo(bottomCenter.x, bottomCenter.y);
+    ctx.stroke();
+
     ctx.restore();
+  }
+
+  /** Hex color for a situation's effectiveness tier (see EFFECTIVENESS_TIER_COLOR). */
+  private tierHex(sit: EdgeGuardSituationData, isLight: boolean): string {
+    const c = EFFECTIVENESS_TIER_COLOR[sit.effectivenessTier];
+    return isLight ? c.light : c.dark;
   }
 
   private drawTrajectories(isLight: boolean): void {
@@ -369,21 +430,8 @@ export class EdgeGuardCanvas {
 
       if (sit.trajectory.length < 2) continue;
 
-      const isSuccess = sit.outcome === "success";
-      // Success (KO): Blue
-      // Failure (Safe): Red
-      let strokeStyle: string;
       const alpha = isHovered || isSelected ? 0.95 : 0.28;
-
-      if (isSuccess) {
-        strokeStyle = isLight
-          ? `rgba(2, 132, 199, ${alpha})`
-          : `rgba(56, 189, 248, ${alpha})`;
-      } else {
-        strokeStyle = isLight
-          ? `rgba(220, 38, 38, ${alpha})`
-          : `rgba(248, 113, 113, ${alpha})`;
-      }
+      const strokeStyle = hexToRgba(this.tierHex(sit, isLight), alpha);
 
       ctx.save();
       ctx.strokeStyle = strokeStyle;
@@ -409,13 +457,7 @@ export class EdgeGuardCanvas {
       if ((isHovered || isSelected) && maxPts > 1) {
         const lastPt = sit.trajectory[maxPts - 1]!;
         const pEnd = this.worldToScreen(lastPt.x, lastPt.y);
-        ctx.fillStyle = isSuccess
-          ? isLight
-            ? "#0284c7"
-            : "#38bdf8"
-          : isLight
-            ? "#dc2626"
-            : "#f87171";
+        ctx.fillStyle = this.tierHex(sit, isLight);
         ctx.beginPath();
         ctx.arc(pEnd.x, pEnd.y, 4, 0, Math.PI * 2);
         ctx.fill();
@@ -452,7 +494,6 @@ export class EdgeGuardCanvas {
     isLight: boolean,
   ): void {
     const { ctx } = this;
-    const isSuccess = sit.outcome === "success";
 
     // Position: current playback frame if playing, otherwise starting position
     let ptX = sit.startX;
@@ -467,24 +508,13 @@ export class EdgeGuardCanvas {
     }
 
     const s = this.worldToScreen(ptX, ptY);
-
-    // App standard colors:
-    // Success (KO): Blue (#38bdf8 in dark, #0284c7 in light)
-    // Fail (Safe): Red (#f87171 in dark, #dc2626 in light)
-    const fillColor = isSuccess
-      ? isLight
-        ? "#0284c7"
-        : "#38bdf8"
-      : isLight
-        ? "#dc2626"
-        : "#f87171";
-
+    const fillColor = this.tierHex(sit, isLight);
     const radius = isPriority ? 8 : 4.5;
 
     ctx.save();
     if (isPriority) {
       // Glow halo
-      ctx.shadowColor = isSuccess ? "#38bdf8" : "#f87171";
+      ctx.shadowColor = fillColor;
       ctx.shadowBlur = 10;
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 2;
@@ -501,17 +531,43 @@ export class EdgeGuardCanvas {
     ctx.fill();
     ctx.stroke();
 
+    // A hollow ring around the dot flags that the recovering player landed
+    // a hit on the edge-guarder during this situation - independent of the
+    // tier color, since e.g. a kill's tier/color doesn't change whether it
+    // came clean or the guarder got clipped on the way to it.
+    if (sit.edgeGuarderWasHit) {
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = isLight
+        ? "rgba(15, 23, 42, 0.75)"
+        : "rgba(255, 255, 255, 0.85)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, radius + 3.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     // If priority, draw small jumps indicator badge
     if (isPriority) {
       ctx.shadowBlur = 0;
       ctx.fillStyle = isLight ? "#0f172a" : "#f8fafc";
       ctx.font = "bold 10px sans-serif";
       ctx.textAlign = "center";
-      const outcomeText = isSuccess ? "KO" : "SAFE";
-      const label = `${outcomeText} (${sit.jumpsAtEntry}J)`;
+      const tierLabel = EFFECTIVENESS_TIER_LABEL[sit.effectivenessTier];
+      const hitTag = sit.edgeGuarderWasHit ? " • hit" : "";
+      const label = `${tierLabel} (${sit.jumpsAtEntry}J)${hitTag}`;
       ctx.fillText(label, s.x, s.y - 12);
     }
 
     ctx.restore();
   }
+}
+
+/** "#rrggbb" -> "rgba(r, g, b, alpha)". */
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

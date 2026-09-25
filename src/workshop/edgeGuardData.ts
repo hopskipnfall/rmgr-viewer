@@ -6,7 +6,64 @@ import {
   DEAD_OR_RESPAWNING_STATES,
 } from "../edgeGuard.js";
 import { classify, SUPPORTED_CHARACTERS } from "../recoveryHeuristics.js";
+import {
+  computeClassifiedSituations,
+  edgeGuardEffectivenessTier,
+  type EdgeGuardEffectivenessTier,
+} from "../classifiedSituations.js";
 import type { GameSummary } from "../data/gameSummary.js";
+
+/**
+ * Single source of truth for how each effectiveness tier is colored and
+ * labeled - shared by the canvas (dots/trajectories) and the sidebar list
+ * (badges), per Jonn's request (2026-09-24) to color-code edge guards by
+ * the same kill/damage/missed-hog/accidental-save scoring already computed
+ * in classifiedSituations.ts, not just a binary success/fail split. "kill"
+ * and "no-damage" reuse the app's existing success (blue) / fail (red)
+ * colors so this reads as a superset of the old two-color scheme, not a
+ * replacement.
+ */
+export const EFFECTIVENESS_TIER_COLOR: Record<
+  EdgeGuardEffectivenessTier,
+  { readonly dark: string; readonly light: string }
+> = {
+  kill: { dark: "#38bdf8", light: "#0284c7" },
+  "damage-high": { dark: "#34d399", light: "#059669" },
+  "damage-mid": { dark: "#fbbf24", light: "#d97706" },
+  "damage-low": { dark: "#fb923c", light: "#ea580c" },
+  "no-damage": { dark: "#f87171", light: "#dc2626" },
+  "missed-ledge-hog": { dark: "#e11d48", light: "#be123c" },
+  "accidental-save": { dark: "#c084fc", light: "#7c3aed" },
+  unscored: { dark: "#94a3b8", light: "#64748b" },
+};
+
+export const EFFECTIVENESS_TIER_LABEL: Record<
+  EdgeGuardEffectivenessTier,
+  string
+> = {
+  kill: "KO",
+  "damage-high": "Heavy Dmg",
+  "damage-mid": "Mid Dmg",
+  "damage-low": "Light Dmg",
+  "no-damage": "No Dmg",
+  "missed-ledge-hog": "Missed Hog",
+  "accidental-save": "Accidental Save",
+  unscored: "Unscored",
+};
+
+export const EFFECTIVENESS_TIER_ICON: Record<
+  EdgeGuardEffectivenessTier,
+  string
+> = {
+  kill: "🎯",
+  "damage-high": "💥",
+  "damage-mid": "💥",
+  "damage-low": "💥",
+  "no-damage": "🛡️",
+  "missed-ledge-hog": "⚠️",
+  "accidental-save": "🚨",
+  unscored: "❔",
+};
 
 export interface RecoveryTrajectoryPoint {
   readonly relFrame: number;
@@ -32,6 +89,19 @@ export interface EdgeGuardSituationData {
   readonly recoveringCharId: number;
   readonly edgeGuardingCharId: number;
   readonly outcome: "success" | "fail"; // "success" = edge guard succeeded (opponent KO'd), "fail" = opponent recovered
+  /** Effectiveness tier from classifiedSituations.ts's scoring model - a finer-grained read than
+   * `outcome` alone (e.g. distinguishes a clean kill from "dealt heavy damage but they got away,"
+   * or flags a missed free ledge-hog / an accidental save). "unscored" when the situation was
+   * classifier-hopeless and resolved normally (nothing was actually being tested). Falls back to
+   * a plain kill/no-damage split derived from `outcome` if no ClassifiedSituation could be matched
+   * for this entry (should only happen if the two independently-computed event lists ever
+   * disagree, which they shouldn't since both derive from the same computeEdgeGuardEvents call).
+   */
+  readonly effectivenessTier: EdgeGuardEffectivenessTier;
+  /** Did the recovering player land a hit on the edge-guarder during this situation? Shown as a
+   * marker independent of the tier color, since it doesn't change a kill's tier but is still
+   * worth flagging (e.g. "succeeded, but took a hit doing it"). */
+  readonly edgeGuarderWasHit: boolean;
   readonly startX: number; // Mirrored: always on positive x side (Math.abs)
   readonly startY: number;
   readonly rawStartX: number; // Original x before mirroring
@@ -69,6 +139,14 @@ export function extractEdgeGuardSituations(
 
   const events = computeEdgeGuardEvents(replay);
   if (events.length === 0) return [];
+
+  // Keyed by enteredFrameIndex, which uniquely identifies a situation (they
+  // never overlap - see edgeGuard.ts's own doc comment). Both this and
+  // `events` above derive from the same computeEdgeGuardEvents(replay) call,
+  // so every situation built below should find a match here.
+  const classifiedByEnteredFrame = new Map(
+    computeClassifiedSituations(replay).map((c) => [c.enteredFrameIndex, c]),
+  );
 
   const situations: EdgeGuardSituationData[] = [];
   const yourPortSummary = summary.ports.find((p) => p.port === yourPort);
@@ -166,6 +244,16 @@ export function extractEdgeGuardSituations(
           const outcome: "success" | "fail" =
             event.kind === "recovery-failure" ? "success" : "fail";
 
+          const classified = classifiedByEnteredFrame.get(
+            openSituation.startFrameIndex,
+          );
+          const effectivenessTier: EdgeGuardEffectivenessTier = classified
+            ? edgeGuardEffectivenessTier(classified)
+            : outcome === "success"
+              ? "kill"
+              : "no-damage";
+          const edgeGuarderWasHit = classified?.edgeGuarderWasHit ?? false;
+
           const endFrameIndex = Math.max(
             openSituation.startFrameIndex,
             event.frameIndex,
@@ -211,6 +299,8 @@ export function extractEdgeGuardSituations(
             recoveringCharId: oppCharId,
             edgeGuardingCharId: yourCharId,
             outcome,
+            effectivenessTier,
+            edgeGuarderWasHit,
             startX,
             startY,
             rawStartX,
@@ -286,5 +376,35 @@ export function filterEdgeGuardSituations(
     }
 
     return true;
+  });
+}
+
+/**
+ * Controls whether situations are shown in their natural (as-recorded)
+ * position or all mirrored onto the positive-X (right) side of the stage.
+ *
+ * `extractEdgeGuardSituations` always stores coordinates pre-mirrored to the
+ * right (see its own comment) - that mirroring is undone here when
+ * `mirrorToRight` is false, using `wasLeft` to recover each situation's
+ * original side. Since the mirror transform (negate X and facing) is its
+ * own inverse, undoing it is the same operation as applying it: negate X and
+ * facing again for any situation that started on the left.
+ */
+export function applyMirrorDisplay(
+  situations: readonly EdgeGuardSituationData[],
+  mirrorToRight: boolean,
+): readonly EdgeGuardSituationData[] {
+  if (mirrorToRight) return situations;
+  return situations.map((sit) => {
+    if (!sit.wasLeft) return sit;
+    return {
+      ...sit,
+      startX: -sit.startX,
+      trajectory: sit.trajectory.map((pt) => ({
+        ...pt,
+        x: -pt.x,
+        facing: -pt.facing,
+      })),
+    };
   });
 }
