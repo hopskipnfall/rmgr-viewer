@@ -475,6 +475,19 @@ export interface Translations {
   combosCountChip: (count: number) => string;
   noCombos: string;
 
+  // Micro stats widget (granular/secondary stats - see microStats.ts)
+  microStatsWidgetTitle: string;
+  microStatsForwardSmashLabel: string;
+  microStatsUpSmashLabel: string;
+  microStatsDownSmashLabel: string;
+  microStatsUpTiltPikachuLabel: string;
+  microStatsUpTiltNessLabel: string;
+  microStatsUpTiltYoshiLabel: string;
+  microStatsUpTiltLinkLabel: string;
+  microStatsRowSummary: (punished: number) => string;
+  noMicroStats: string;
+  matchupSecondaryStatsSummary: string;
+
   // Directional Influence (DI) widget
   diWidgetTitle: string;
   noDIFound: string;
@@ -1158,6 +1171,19 @@ export const TRANSLATIONS: Record<Language, Translations> = {
       `${count} ${count === 1 ? "kill combo" : "kill combos"}`,
     noCombos: "No kill combos (≥3 hits) in this match.",
 
+    microStatsWidgetTitle: "Strong Attack Punishes",
+    microStatsForwardSmashLabel: "Forward Smash",
+    microStatsUpSmashLabel: "Up Smash",
+    microStatsDownSmashLabel: "Down Smash",
+    microStatsUpTiltPikachuLabel: "Pikachu Up Tilt",
+    microStatsUpTiltNessLabel: "Ness Up Tilt",
+    microStatsUpTiltYoshiLabel: "Yoshi Up Tilt",
+    microStatsUpTiltLinkLabel: "Link Up Tilt",
+    microStatsRowSummary: (punished) =>
+      punished === 1 ? "Punished 1 time" : `Punished ${punished} times`,
+    noMicroStats: "No punished smash attacks recorded in this match.",
+    matchupSecondaryStatsSummary: "More stats",
+
     diWidgetTitle: "Directional Influence (DI)",
     noDIFound: "No hit events detected in this match.",
     diActiveHit: "Live Hit",
@@ -1827,6 +1853,18 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     comboKillBadge: "撃墜",
     combosCountChip: (count) => `${count} 撃墜コンボ`,
     noCombos: "この試合で撃墜コンボ（3ヒット以上）はありません。",
+
+    microStatsWidgetTitle: "強攻撃の被反撃",
+    microStatsForwardSmashLabel: "横スマッシュ",
+    microStatsUpSmashLabel: "上スマッシュ",
+    microStatsDownSmashLabel: "下スマッシュ",
+    microStatsUpTiltPikachuLabel: "ピカチュウ上強",
+    microStatsUpTiltNessLabel: "ネス上強",
+    microStatsUpTiltYoshiLabel: "ヨッシー上強",
+    microStatsUpTiltLinkLabel: "リンク上強",
+    microStatsRowSummary: (punished) => `${punished}回反撃を受けた`,
+    noMicroStats: "この試合では反撃を受けたスマッシュ攻撃はありません。",
+    matchupSecondaryStatsSummary: "その他の統計",
 
     diWidgetTitle: "ベクトル変更 (DI)",
     noDIFound: "この試合でヒットは検出されませんでした。",

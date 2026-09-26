@@ -3,6 +3,7 @@ import { characterName } from "../lookups.js";
 import { characterIconHtml } from "../characterIcons.js";
 import type { DerivedRates } from "../data/aggregate.js";
 import { edgeGuardEffectivenessGrade } from "../classifiedSituations.js";
+import type { MicroStatId } from "../microStats.js";
 
 function fmtPooled(successes: number, total: number): string {
   if (total === 0) return "—";
@@ -31,6 +32,39 @@ function statCard(label: string, value: string, note: string): string {
       <div class="matchup-stat-value">${escapeHtml(value)}</div>
       ${note ? `<div class="matchup-stat-note">${escapeHtml(note)}</div>` : ""}
     </div>
+  `;
+}
+
+/**
+ * Granular/secondary stats (see microStats.ts) tucked behind a native <details> disclosure so
+ * they're available without cluttering the always-visible stat cards above.
+ */
+function microStatsSectionHtml(rates: DerivedRates, tr: Translations): string {
+  const rows: [MicroStatId, string][] = [
+    ["smash-forward", tr.microStatsForwardSmashLabel],
+    ["smash-up", tr.microStatsUpSmashLabel],
+    ["smash-down", tr.microStatsDownSmashLabel],
+    ["utilt-pikachu", tr.microStatsUpTiltPikachuLabel],
+    ["utilt-ness", tr.microStatsUpTiltNessLabel],
+    ["utilt-yoshi", tr.microStatsUpTiltYoshiLabel],
+    ["utilt-link", tr.microStatsUpTiltLinkLabel],
+  ];
+
+  const cards = rows
+    .map(([id, label]) => {
+      const count = rates.microStats[id];
+      if (!count) return "";
+      return statCard(label, tr.microStatsRowSummary(count), "");
+    })
+    .join("");
+
+  if (!cards) return "";
+
+  return `
+    <details class="matchup-secondary-stats">
+      <summary>${escapeHtml(tr.matchupSecondaryStatsSummary)}</summary>
+      <div class="matchup-stats-grid">${cards}</div>
+    </details>
   `;
 }
 
@@ -92,6 +126,7 @@ export class MatchupStatsView {
           ${statCard(tr.matchupKillConversionLabel, fmtPooled(rates.openingsConvertedToKill, rates.openingsWon), "")}
           ${statCard(tr.nhPerStockCol, fmtHits(rates.neutralHitsPerStock, rates.stocksTaken, tr), "")}
         </div>
+        ${microStatsSectionHtml(rates, tr)}
       </div>
     `;
   }

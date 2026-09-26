@@ -16,6 +16,7 @@ import {
   type NeutralOpeningReason,
 } from "../neutralHits.js";
 import { computeKillCombos } from "../combos.js";
+import { computeMicroStats, type MicroStatCounts } from "../microStats.js";
 import type { LoadedReplay } from "../replaySource.js";
 
 /** Pooled per-reason opening counts, keyed by `NeutralOpeningReason`. */
@@ -59,6 +60,12 @@ export interface RawCounters {
   damageLeakOnOpenings?: number;
   /** Openings won that were converted all the way to a kill. */
   openingsConvertedToKill?: number;
+
+  /**
+   * Granular/secondary stats not shown as top-level numbers yet - see microStats.ts. Tracked so
+   * trends are visible once surfaced, without waiting on a UI for every new one.
+   */
+  microStats?: MicroStatCounts;
 }
 
 export interface GamePortSummary {
@@ -122,6 +129,7 @@ export function createEmptyCounters(): RawCounters {
     damageDealtOnOpenings: 0,
     damageLeakOnOpenings: 0,
     openingsConvertedToKill: 0,
+    microStats: {},
   };
 }
 
@@ -194,6 +202,8 @@ export function computeRawCountersForPort(
     }
   }
 
+  const microStats = computeMicroStats(replay, port);
+
   return {
     recoverySituations: edgeStats.recoverySituations,
     recoverySuccesses: edgeStats.recoverySuccesses,
@@ -216,6 +226,7 @@ export function computeRawCountersForPort(
     damageDealtOnOpenings,
     damageLeakOnOpenings,
     openingsConvertedToKill,
+    microStats,
   };
 }
 

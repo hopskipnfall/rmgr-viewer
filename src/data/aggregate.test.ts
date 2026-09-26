@@ -178,6 +178,36 @@ describe("aggregate module", () => {
     expect(agg.neutralHitsPerStock).toBe(6.0);
   });
 
+  it("sums micro stats element-wise across games", () => {
+    const g1 = makeSummary({
+      id: "g1",
+      yourStats: {
+        microStats: {
+          "smash-forward": 1,
+          "smash-up": 0,
+        },
+      },
+    });
+    const g2 = makeSummary({
+      id: "g2",
+      yourStats: {
+        microStats: {
+          "smash-forward": 2,
+          "smash-down": 1,
+        },
+      },
+    });
+
+    const filtered = filterGameSummaries([g1, g2], identity);
+    const agg = aggregateFilteredGames(filtered);
+
+    expect(agg.microStats).toEqual({
+      "smash-forward": 3,
+      "smash-up": 0,
+      "smash-down": 1,
+    });
+  });
+
   it("strictly enforces stage-gating for Dream Land stats", () => {
     const gDreamLand = makeSummary({
       id: "gDL",

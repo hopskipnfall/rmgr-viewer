@@ -1,5 +1,5 @@
 {
-  "analysisVersion": 6,
+  "analysisVersion": 9,
   "games": [
     {
       "id": "g_mt9qi5yw_4sx",
@@ -59,7 +59,10 @@
           },
           "damageDealtOnOpenings": 411,
           "damageLeakOnOpenings": 0,
-          "openingsConvertedToKill": 5
+          "openingsConvertedToKill": 5,
+          "microStats": {
+            "utilt-ness": 1
+          }
         },
         "1": {
           "recoverySituations": 1,
@@ -91,7 +94,8 @@
           },
           "damageDealtOnOpenings": 127,
           "damageLeakOnOpenings": 30,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": false
@@ -162,7 +166,11 @@
           },
           "damageDealtOnOpenings": 289,
           "damageLeakOnOpenings": 74,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {
+            "smash-up": 2,
+            "utilt-pikachu": 2
+          }
         },
         "1": {
           "recoverySituations": 4,
@@ -196,7 +204,8 @@
           },
           "damageDealtOnOpenings": 454,
           "damageLeakOnOpenings": 24,
-          "openingsConvertedToKill": 4
+          "openingsConvertedToKill": 4,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": false
@@ -259,7 +268,12 @@
           },
           "damageDealtOnOpenings": 270,
           "damageLeakOnOpenings": 56,
-          "openingsConvertedToKill": 3
+          "openingsConvertedToKill": 3,
+          "microStats": {
+            "smash-forward": 1,
+            "smash-up": 1,
+            "utilt-pikachu": 3
+          }
         },
         "1": {
           "recoverySituations": 7,
@@ -302,7 +316,8 @@
           },
           "damageDealtOnOpenings": 426,
           "damageLeakOnOpenings": 61,
-          "openingsConvertedToKill": 4
+          "openingsConvertedToKill": 4,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": false
@@ -367,7 +382,10 @@
           },
           "damageDealtOnOpenings": 330,
           "damageLeakOnOpenings": 42,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {
+            "smash-up": 1
+          }
         },
         "1": {
           "recoverySituations": 9,
@@ -401,7 +419,8 @@
           },
           "damageDealtOnOpenings": 322,
           "damageLeakOnOpenings": 33,
-          "openingsConvertedToKill": 4
+          "openingsConvertedToKill": 4,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": false
@@ -467,7 +486,11 @@
           },
           "damageDealtOnOpenings": 358,
           "damageLeakOnOpenings": 28,
-          "openingsConvertedToKill": 4
+          "openingsConvertedToKill": 4,
+          "microStats": {
+            "smash-forward": 1,
+            "utilt-link": 3
+          }
         },
         "1": {
           "recoverySituations": 3,
@@ -502,7 +525,10 @@
           },
           "damageDealtOnOpenings": 260,
           "damageLeakOnOpenings": 43,
-          "openingsConvertedToKill": 3
+          "openingsConvertedToKill": 3,
+          "microStats": {
+            "utilt-link": 5
+          }
         }
       },
       "isUnevenStockStart": false
@@ -566,7 +592,11 @@
           },
           "damageDealtOnOpenings": 187,
           "damageLeakOnOpenings": 10,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {
+            "smash-up": 1,
+            "utilt-link": 2
+          }
         },
         "1": {
           "recoverySituations": 2,
@@ -599,7 +629,8 @@
           },
           "damageDealtOnOpenings": 85,
           "damageLeakOnOpenings": 23,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -659,7 +690,8 @@
           },
           "damageDealtOnOpenings": 140,
           "damageLeakOnOpenings": 14,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {}
         },
         "1": {
           "recoverySituations": 2,
@@ -688,7 +720,10 @@
           },
           "damageDealtOnOpenings": 32,
           "damageLeakOnOpenings": 32,
-          "openingsConvertedToKill": 0
+          "openingsConvertedToKill": 0,
+          "microStats": {
+            "smash-up": 1
+          }
         }
       },
       "isUnevenStockStart": true
@@ -754,7 +789,11 @@
           },
           "damageDealtOnOpenings": 412,
           "damageLeakOnOpenings": 105,
-          "openingsConvertedToKill": 5
+          "openingsConvertedToKill": 5,
+          "microStats": {
+            "smash-forward": 1,
+            "smash-up": 2
+          }
         },
         "1": {
           "recoverySituations": 9,
@@ -789,7 +828,11 @@
           },
           "damageDealtOnOpenings": 260,
           "damageLeakOnOpenings": 92,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {
+            "smash-up": 3,
+            "smash-down": 1
+          }
         }
       },
       "isUnevenStockStart": false
@@ -859,7 +902,8 @@
           },
           "damageDealtOnOpenings": 240,
           "damageLeakOnOpenings": 49,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {}
         },
         "1": {
           "recoverySituations": 3,
@@ -892,7 +936,11 @@
           },
           "damageDealtOnOpenings": 131,
           "damageLeakOnOpenings": 46,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {
+            "smash-forward": 2,
+            "utilt-yoshi": 1
+          }
         }
       },
       "isUnevenStockStart": true
@@ -954,7 +1002,8 @@
           },
           "damageDealtOnOpenings": 163,
           "damageLeakOnOpenings": 11,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {}
         },
         "1": {
           "recoverySituations": 1,
@@ -985,7 +1034,8 @@
           },
           "damageDealtOnOpenings": 92,
           "damageLeakOnOpenings": 0,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -1049,7 +1099,8 @@
           },
           "damageDealtOnOpenings": 319,
           "damageLeakOnOpenings": 3,
-          "openingsConvertedToKill": 3
+          "openingsConvertedToKill": 3,
+          "microStats": {}
         },
         "1": {
           "recoverySituations": 3,
@@ -1082,7 +1133,8 @@
           },
           "damageDealtOnOpenings": 238,
           "damageLeakOnOpenings": 54,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -1143,7 +1195,8 @@
           },
           "damageDealtOnOpenings": 104,
           "damageLeakOnOpenings": 27,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {}
         },
         "1": {
           "recoverySituations": 1,
@@ -1173,7 +1226,8 @@
           },
           "damageDealtOnOpenings": 55,
           "damageLeakOnOpenings": 27,
-          "openingsConvertedToKill": 0
+          "openingsConvertedToKill": 0,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -1239,7 +1293,8 @@
           },
           "damageDealtOnOpenings": 285,
           "damageLeakOnOpenings": 74,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {}
         },
         "1": {
           "recoverySituations": 5,
@@ -1274,7 +1329,10 @@
           },
           "damageDealtOnOpenings": 242,
           "damageLeakOnOpenings": 42,
-          "openingsConvertedToKill": 4
+          "openingsConvertedToKill": 4,
+          "microStats": {
+            "utilt-ness": 1
+          }
         }
       },
       "isUnevenStockStart": false
@@ -1333,7 +1391,10 @@
           },
           "damageDealtOnOpenings": 99,
           "damageLeakOnOpenings": 0,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {
+            "smash-down": 1
+          }
         },
         "1": {
           "recoverySituations": 1,
@@ -1361,7 +1422,8 @@
           },
           "damageDealtOnOpenings": 65,
           "damageLeakOnOpenings": 9,
-          "openingsConvertedToKill": 0
+          "openingsConvertedToKill": 0,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -1429,7 +1491,12 @@
           },
           "damageDealtOnOpenings": 501,
           "damageLeakOnOpenings": 28,
-          "openingsConvertedToKill": 4
+          "openingsConvertedToKill": 4,
+          "microStats": {
+            "smash-forward": 1,
+            "smash-up": 1,
+            "smash-down": 2
+          }
         },
         "1": {
           "recoverySituations": 7,
@@ -1460,7 +1527,10 @@
           },
           "damageDealtOnOpenings": 181,
           "damageLeakOnOpenings": 14,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {
+            "smash-forward": 1
+          }
         }
       },
       "isUnevenStockStart": false
@@ -1523,7 +1593,10 @@
           },
           "damageDealtOnOpenings": 408,
           "damageLeakOnOpenings": 18,
-          "openingsConvertedToKill": 3
+          "openingsConvertedToKill": 3,
+          "microStats": {
+            "smash-down": 1
+          }
         },
         "1": {
           "recoverySituations": 3,
@@ -1555,7 +1628,8 @@
           },
           "damageDealtOnOpenings": 206,
           "damageLeakOnOpenings": 6,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -1615,7 +1689,8 @@
           },
           "damageDealtOnOpenings": 105,
           "damageLeakOnOpenings": 21,
-          "openingsConvertedToKill": 0
+          "openingsConvertedToKill": 0,
+          "microStats": {}
         },
         "1": {
           "recoverySituations": 1,
@@ -1644,7 +1719,8 @@
           },
           "damageDealtOnOpenings": 60,
           "damageLeakOnOpenings": 9,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -1723,7 +1799,10 @@
           },
           "damageDealtOnOpenings": 415,
           "damageLeakOnOpenings": 17,
-          "openingsConvertedToKill": 5
+          "openingsConvertedToKill": 5,
+          "microStats": {
+            "utilt-yoshi": 4
+          }
         },
         "1": {
           "recoverySituations": 2,
@@ -1760,7 +1839,10 @@
           },
           "damageDealtOnOpenings": 309,
           "damageLeakOnOpenings": 59,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {
+            "smash-down": 1
+          }
         }
       },
       "isUnevenStockStart": false
@@ -1822,7 +1904,10 @@
           },
           "damageDealtOnOpenings": 357,
           "damageLeakOnOpenings": 25,
-          "openingsConvertedToKill": 4
+          "openingsConvertedToKill": 4,
+          "microStats": {
+            "utilt-yoshi": 2
+          }
         },
         "1": {
           "recoverySituations": 5,
@@ -1853,7 +1938,10 @@
           },
           "damageDealtOnOpenings": 84,
           "damageLeakOnOpenings": 48,
-          "openingsConvertedToKill": 0
+          "openingsConvertedToKill": 0,
+          "microStats": {
+            "smash-up": 1
+          }
         }
       },
       "isUnevenStockStart": true
@@ -1919,7 +2007,10 @@
           },
           "damageDealtOnOpenings": 125,
           "damageLeakOnOpenings": 0,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {
+            "utilt-yoshi": 1
+          }
         },
         "1": {
           "recoverySituations": 0,
@@ -1948,7 +2039,8 @@
           },
           "damageDealtOnOpenings": 66,
           "damageLeakOnOpenings": 4,
-          "openingsConvertedToKill": 1
+          "openingsConvertedToKill": 1,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -2010,7 +2102,10 @@
           },
           "damageDealtOnOpenings": 320,
           "damageLeakOnOpenings": 61,
-          "openingsConvertedToKill": 3
+          "openingsConvertedToKill": 3,
+          "microStats": {
+            "smash-forward": 1
+          }
         },
         "1": {
           "recoverySituations": 4,
@@ -2041,7 +2136,8 @@
           },
           "damageDealtOnOpenings": 347,
           "damageLeakOnOpenings": 82,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -2105,7 +2201,11 @@
           },
           "damageDealtOnOpenings": 279,
           "damageLeakOnOpenings": 33,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {
+            "smash-up": 1,
+            "smash-down": 1
+          }
         },
         "1": {
           "recoverySituations": 4,
@@ -2138,7 +2238,8 @@
           },
           "damageDealtOnOpenings": 199,
           "damageLeakOnOpenings": 12,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true
@@ -2200,7 +2301,8 @@
           },
           "damageDealtOnOpenings": 154,
           "damageLeakOnOpenings": 35,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {}
         },
         "1": {
           "recoverySituations": 2,
@@ -2231,7 +2333,8 @@
           },
           "damageDealtOnOpenings": 245,
           "damageLeakOnOpenings": 34,
-          "openingsConvertedToKill": 2
+          "openingsConvertedToKill": 2,
+          "microStats": {}
         }
       },
       "isUnevenStockStart": true

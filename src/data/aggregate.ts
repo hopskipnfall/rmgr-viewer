@@ -7,6 +7,7 @@ import {
 } from "./identity.js";
 import { getCharacterGroup, type CharacterGroup } from "../lookups.js";
 import type { NeutralOpeningReason } from "../neutralHits.js";
+import type { MicroStatCounts } from "../microStats.js";
 
 export const NEUTRAL_OPENING_REASONS: readonly NeutralOpeningReason[] = [
   "whiff-punish",
@@ -88,6 +89,9 @@ export interface DerivedRates {
   openingsConvertedToKill: number;
   /** % of openings won that converted all the way to a kill. */
   conversionToKillPct: number | null;
+
+  /** Granular/secondary stats (see microStats.ts), summed element-wise across resolved games. */
+  microStats: MicroStatCounts;
 }
 
 export interface ReasonDifferential {
@@ -234,6 +238,7 @@ export function aggregateFilteredGames(
   let damageDealtOnOpenings = 0;
   let damageLeakOnOpenings = 0;
   let openingsConvertedToKill = 0;
+  const microStats: { [id: string]: number } = {};
 
   for (const { summary, yourPort, oppPort } of resolvedGames) {
     const yourP = summary.ports.find((p) => p.port === yourPort);
@@ -292,6 +297,9 @@ export function aggregateFilteredGames(
       openingsLostByReason[reason] =
         (openingsLostByReason[reason] ?? 0) +
         (stats.openingsLostByReason?.[reason] ?? 0);
+    }
+    for (const [id, count] of Object.entries(stats.microStats ?? {})) {
+      microStats[id] = (microStats[id] ?? 0) + count;
     }
   }
 
@@ -357,6 +365,8 @@ export function aggregateFilteredGames(
     leakPerOpening: openingsWon > 0 ? damageLeakOnOpenings / openingsWon : null,
     openingsConvertedToKill,
     conversionToKillPct: rate(openingsConvertedToKill, openingsWon),
+
+    microStats: microStats as MicroStatCounts,
   };
 }
 

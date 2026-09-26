@@ -9,7 +9,7 @@
  * until you do, and `npm run generate:demo-summaries` refuses to overwrite
  * changed output without a bump.
  */
-export const ANALYSIS_VERSION = 6;
+export const ANALYSIS_VERSION = 9;
 // History:
 // 1 - initial persistent library.
 // 2 - GameSummary.lobbyNames (whole lobby, for rotating 3-4 player sessions).
@@ -23,6 +23,13 @@ export const ANALYSIS_VERSION = 6;
 //     that passes over the stage's X span while still airborne, not just an
 //     exact landing crossing (see docs/recovery-heuristics/README.md); the
 //     stale Pikachu fast-dead-rejection table this invalidated was removed.
+// 7 - RawCounters.microStats: granular/secondary stats not shown as top-level
+//     numbers yet, starting with punished up/down/forward smash attempts
+//     (see microStats.ts).
+// 8 - microStats only tracks punish counts now, not attempt counts (each
+//     MicroStatId maps to a number, not {attempted, punished}).
+// 9 - microStats: added punished up tilt for Pikachu, Ness, Yoshi, and Link
+//     (US+JP) as four new stat ids.
 
 /** Matches replays by the versions in their file header. An unset field matches any value. */
 export interface VersionMatcher {
