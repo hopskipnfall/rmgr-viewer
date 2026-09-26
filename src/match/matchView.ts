@@ -47,6 +47,7 @@ import {
 } from "../stageGeometry.js";
 import { t, getLanguage } from "../i18n.js";
 import { computeKillCombos } from "../combos.js";
+import { computeMicroStats, type MicroStatId } from "../microStats.js";
 import {
   DI_ARROW_GLYPHS,
   extractAllHitsWithDI,
@@ -280,6 +281,10 @@ export class MatchViewController {
   private combosCollapseBtn: HTMLButtonElement;
   private combosWidgetTitleEl: HTMLHeadingElement;
   private combosList: HTMLDivElement;
+  private microStatsWidget: HTMLElement;
+  private microStatsCollapseBtn: HTMLButtonElement;
+  private microStatsWidgetTitleEl: HTMLHeadingElement;
+  private microStatsList: HTMLDivElement;
   private diWidget: HTMLElement;
   private diCollapseBtn: HTMLButtonElement;
   private diWidgetTitleEl: HTMLHeadingElement;
@@ -290,6 +295,7 @@ export class MatchViewController {
   private ledgeGetupCollapsed = false;
   private ledgeTrapCollapsed = false;
   private combosCollapsed = false;
+  private microStatsCollapsed = true;
   private diCollapsed = false;
   private diEvents: HitDIResult[] = [];
   private cameraWidget: HTMLElement;
@@ -392,6 +398,12 @@ export class MatchViewController {
 
   private stageRenderer: StageRenderer;
   private camera!: Camera;
+  /**
+   * The user's chosen camera tracking mode, persisted to localStorage and re-applied every time
+   * a new Camera is constructed (each clip/game load creates a fresh one) - the source of truth
+   * for the mode, independent of any single Camera instance's own state.
+   */
+  private cameraTrackingMode: CameraTrackingMode = "default";
   private currentReplay: Replay | null = null;
   private currentLoaded: LoadedReplay | null = null;
   private panels: PlayerPanel[] = [];
@@ -756,6 +768,19 @@ export class MatchViewController {
     ) as HTMLHeadingElement;
     this.combosList = document.getElementById("combosList") as HTMLDivElement;
 
+    this.microStatsWidget = document.getElementById(
+      "microStatsWidget",
+    ) as HTMLElement;
+    this.microStatsCollapseBtn = document.getElementById(
+      "microStatsCollapseBtn",
+    ) as HTMLButtonElement;
+    this.microStatsWidgetTitleEl = document.getElementById(
+      "microStatsWidgetTitle",
+    ) as HTMLHeadingElement;
+    this.microStatsList = document.getElementById(
+      "microStatsList",
+    ) as HTMLDivElement;
+
     this.diWidget = document.getElementById("diWidget") as HTMLElement;
     this.diCollapseBtn = document.getElementById(
       "diCollapseBtn",
@@ -820,6 +845,14 @@ export class MatchViewController {
       this.cameraPanelBodyEl.hidden = collapsed;
       this.cameraCollapseBtn.setAttribute("aria-expanded", String(!collapsed));
     });
+    try {
+      const savedMode = localStorage.getItem("rmgr-viewer-camera-mode");
+      if (savedMode === "default" || savedMode === "original") {
+        this.cameraTrackingMode = savedMode;
+      }
+    } catch {
+      // Ignore localStorage read error
+    }
     this.cameraModeDefaultBtn.addEventListener("click", () => {
       this.setCameraTrackingMode("default");
     });
@@ -1305,6 +1338,15 @@ export class MatchViewController {
       this.combosCollapseBtn.classList.toggle(
         "collapsed",
         this.combosCollapsed,
+      );
+    });
+
+    this.microStatsCollapseBtn.addEventListener("click", () => {
+      this.microStatsCollapsed = !this.microStatsCollapsed;
+      this.microStatsList.hidden = this.microStatsCollapsed;
+      this.microStatsCollapseBtn.classList.toggle(
+        "collapsed",
+        this.microStatsCollapsed,
       );
     });
 
@@ -1942,6 +1984,12 @@ export class MatchViewController {
       this.combosCollapseBtn.title = tr.situationCollapseTitle(
         tr.combosWidgetTitle,
       );
+    if (this.microStatsWidgetTitleEl)
+      this.microStatsWidgetTitleEl.textContent = tr.microStatsWidgetTitle;
+    if (this.microStatsCollapseBtn)
+      this.microStatsCollapseBtn.title = tr.situationCollapseTitle(
+        tr.microStatsWidgetTitle,
+      );
     if (this.diWidgetTitleEl)
       this.diWidgetTitleEl.textContent = tr.diWidgetTitle;
     if (this.diCollapseBtn)
@@ -2141,12 +2189,14 @@ export class MatchViewController {
   }
 
   /**
-   * Switches between the default player-tracking camera and the
-   * "Original Camera" approximation (see Camera.updateOriginalCamera()'s
-   * own doc comment) - independent of lock state, so switching modes
-   * while locked just changes what unlocking would resume.
+   * Applies a camera tracking mode to the current Camera instance and syncs the mode buttons'
+   * active state to match - no persistence, no rerender. Called both from setCameraTrackingMode()
+   * (user clicked a mode button) and whenever a new Camera is constructed for a freshly loaded
+   * game/clip, so the new instance (which always starts in "default") and the buttons never fall
+   * out of sync with the user's actual chosen mode.
    */
-  private setCameraTrackingMode(mode: CameraTrackingMode): void {
+  private applyCameraTrackingMode(mode: CameraTrackingMode): void {
+    this.cameraTrackingMode = mode;
     this.camera.setTrackingMode(mode);
     this.cameraModeDefaultBtn.classList.toggle("active", mode === "default");
     this.cameraModeDefaultBtn.setAttribute(
@@ -2158,6 +2208,22 @@ export class MatchViewController {
       "aria-pressed",
       String(mode === "original"),
     );
+  }
+
+  /**
+   * Switches between the default player-tracking camera and the
+   * "Original Camera" approximation (see Camera.updateOriginalCamera()'s
+   * own doc comment) - independent of lock state, so switching modes
+   * while locked just changes what unlocking would resume. Persists the
+   * choice so it's sticky across clips, games, and future visits.
+   */
+  private setCameraTrackingMode(mode: CameraTrackingMode): void {
+    this.applyCameraTrackingMode(mode);
+    try {
+      localStorage.setItem("rmgr-viewer-camera-mode", mode);
+    } catch {
+      // Ignore localStorage write error
+    }
     this.rerenderCurrentFrame();
   }
 
@@ -3118,6 +3184,7 @@ export class MatchViewController {
       this.matchupLinkWrap.hidden = true;
       this.renderNeutralHitsPanel(replay);
       this.renderCombosPanel(replay);
+      this.renderMicroStatsPanel(replay);
       this.renderDIPanel(replay);
       this.renderCharacterMetaPanel(replay);
       return;
@@ -3482,6 +3549,7 @@ export class MatchViewController {
     this.buildSituationWidgets(replay);
     this.renderNeutralHitsPanel(replay);
     this.renderCombosPanel(replay);
+    this.renderMicroStatsPanel(replay);
     this.renderDIPanel(replay);
     this.renderCharacterMetaPanel(replay);
   }
@@ -4270,6 +4338,62 @@ export class MatchViewController {
 
       this.combosList.appendChild(row);
     });
+  }
+
+  /**
+   * Granular/secondary stats (see microStats.ts) - not part of the always-visible stat cards,
+   * shown here collapsed by default so they're available without cluttering the main panels.
+   */
+  private renderMicroStatsPanel(replay: Replay): void {
+    const tr = t();
+    this.microStatsList.innerHTML = "";
+
+    if (replay.frames.length === 0 || this.perspectivePort === null) {
+      this.microStatsWidget.hidden = true;
+      return;
+    }
+
+    this.microStatsWidget.hidden = false;
+
+    const stats = computeMicroStats(replay, this.perspectivePort);
+    const rows: [MicroStatId, string][] = [
+      ["smash-forward", tr.microStatsForwardSmashLabel],
+      ["smash-up", tr.microStatsUpSmashLabel],
+      ["smash-down", tr.microStatsDownSmashLabel],
+      ["utilt-pikachu", tr.microStatsUpTiltPikachuLabel],
+      ["utilt-ness", tr.microStatsUpTiltNessLabel],
+      ["utilt-yoshi", tr.microStatsUpTiltYoshiLabel],
+      ["utilt-link", tr.microStatsUpTiltLinkLabel],
+    ];
+
+    const totalPunished = rows.reduce((sum, [id]) => sum + (stats[id] ?? 0), 0);
+    if (totalPunished === 0) {
+      const empty = document.createElement("div");
+      empty.className = "situation-empty";
+      empty.textContent = tr.noMicroStats;
+      this.microStatsList.appendChild(empty);
+      return;
+    }
+
+    for (const [id, label] of rows) {
+      const punished = stats[id] ?? 0;
+      if (punished === 0) continue;
+
+      const row = document.createElement("div");
+      row.className = "situation-row";
+
+      const labelEl = document.createElement("span");
+      labelEl.className = "situation-time";
+      labelEl.textContent = label;
+
+      const summaryEl = document.createElement("span");
+      summaryEl.className = "combo-damage";
+      summaryEl.textContent = tr.microStatsRowSummary(punished);
+
+      row.appendChild(labelEl);
+      row.appendChild(summaryEl);
+      this.microStatsList.appendChild(row);
+    }
   }
 
   /** Disables and clears stale dataset.gameId off the prev/next nav buttons. */
@@ -5214,6 +5338,7 @@ export class MatchViewController {
       this.qaOverlayExitBtn.hidden = true;
     }
     this.camera = new Camera(width, height);
+    this.applyCameraTrackingMode(this.cameraTrackingMode);
     this.updateCameraLockUI();
 
     this.buildPlayerPanels(replay);

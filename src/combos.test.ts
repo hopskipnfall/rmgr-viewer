@@ -6,6 +6,7 @@ import {
   joinCombosAcrossGaps,
   isActionableInComboGap,
   computeComboEscapeGaps,
+  computeRollEscapeGaps,
   CAPTURE_STATES,
   DEAD_OR_RESPAWNING_STATES,
   COMBO_JUMP_LEAD_IN_FRAMES,
@@ -985,5 +986,159 @@ describe("computeComboEscapeGaps", () => {
       expect(fIdx).toBeGreaterThanOrEqual(gap.gapStartFrameIndex);
       expect(fIdx).toBeLessThanOrEqual(gap.gapEndFrameIndex);
     }
+  });
+});
+
+describe("computeRollEscapeGaps", () => {
+  it("returns empty array when there are no rolls", () => {
+    const replay = makeMockReplay([]);
+    expect(computeRollEscapeGaps(replay)).toEqual([]);
+  });
+
+  it("creates a gap when a normal roll is followed by a hit within 30 frames", () => {
+    const frames: Frame[] = [];
+    // Roll: frames 0..5 (victim rolling, RollF)
+    for (let f = 0; f <= 5; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: 0, y: 0 },
+          { state: 0x09c, x: 50, y: 0 },
+        ),
+      );
+    }
+    // Actionable gap after the roll ends: frames 6..15 (10 frames)
+    for (let f = 6; f <= 15; f++) {
+      frames.push(
+        makeFrame(f, { state: 0x0a, x: 0, y: 0 }, { state: 0x0a, x: 60, y: 0 }),
+      );
+    }
+    // Hit lands on frame 16, within 30 frames of the roll ending
+    frames.push(
+      makeFrame(
+        16,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x33, x: 70, y: 0, dmg: 10, comboHit: 1, hitstun: 20 },
+      ),
+    );
+
+    const replay = makeMockReplay(frames);
+    const gaps = computeRollEscapeGaps(replay);
+
+    expect(gaps).toHaveLength(1);
+    const gap = gaps[0]!;
+    expect(gap.victimPort).toBe(1);
+    expect(gap.attackerPort).toBe(0);
+    expect(gap.gapStartFrameIndex).toBe(6);
+    expect(gap.gapEndFrameIndex).toBe(15);
+    expect(gap.actionableFrameCount).toBe(10);
+  });
+
+  it("creates a gap when a tech roll is followed by a grab within 30 frames", () => {
+    const frames: Frame[] = [];
+    // Tech roll: frames 0..3
+    for (let f = 0; f <= 3; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: 0, y: 0 },
+          { state: 0x049, x: 50, y: 0 },
+        ),
+      );
+    }
+    // Actionable gap: frames 4..8 (5 frames)
+    for (let f = 4; f <= 8; f++) {
+      frames.push(
+        makeFrame(f, { state: 0x0a, x: 0, y: 0 }, { state: 0x0a, x: 60, y: 0 }),
+      );
+    }
+    // Grabbed on frame 9
+    frames.push(
+      makeFrame(
+        9,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x0ab, x: 65, y: 0, dmg: 10 },
+      ),
+    );
+
+    const replay = makeMockReplay(frames);
+    const gaps = computeRollEscapeGaps(replay);
+
+    expect(gaps).toHaveLength(1);
+    const gap = gaps[0]!;
+    expect(gap.gapStartFrameIndex).toBe(4);
+    expect(gap.gapEndFrameIndex).toBe(8);
+    expect(gap.actionableFrameCount).toBe(5);
+  });
+
+  it("does not create a gap when no hit lands within 30 frames of the roll ending", () => {
+    const frames: Frame[] = [];
+    for (let f = 0; f <= 5; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: 0, y: 0 },
+          { state: 0x09c, x: 50, y: 0 },
+        ),
+      );
+    }
+    // Safe for 40 frames after the roll ends - well past the 30 frame window
+    for (let f = 6; f <= 46; f++) {
+      frames.push(
+        makeFrame(f, { state: 0x0a, x: 0, y: 0 }, { state: 0x0a, x: 60, y: 0 }),
+      );
+    }
+
+    const replay = makeMockReplay(frames);
+    expect(computeRollEscapeGaps(replay)).toEqual([]);
+  });
+
+  it("does not duplicate a gap already reported by computeComboEscapeGaps", () => {
+    const frames: Frame[] = [];
+    // Segment 1: attacker hits victim into hitstun, frames 0..5
+    for (let f = 0; f <= 5; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: 0, y: 0 },
+          { state: 0x33, x: 50, y: 0, dmg: 10, comboHit: 1, hitstun: 20 },
+        ),
+      );
+    }
+    // Victim tech rolls away: frames 6..10
+    for (let f = 6; f <= 10; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: 0, y: 0 },
+          { state: 0x049, x: 100, y: 0, dmg: 10 },
+        ),
+      );
+    }
+    // Actionable gap after the roll ends: frames 11..20 (10 frames)
+    for (let f = 11; f <= 20; f++) {
+      frames.push(
+        makeFrame(
+          f,
+          { state: 0x0a, x: 0, y: 0 },
+          { state: 0x0a, x: 110, y: 0, dmg: 10 },
+        ),
+      );
+    }
+    // Same attacker catches them again on frame 21, joining the combo
+    frames.push(
+      makeFrame(
+        21,
+        { state: 0x0a, x: 0, y: 0 },
+        { state: 0x33, x: 120, y: 0, dmg: 20, comboHit: 1, hitstun: 20 },
+      ),
+    );
+
+    const replay = makeMockReplay(frames);
+    const comboGaps = computeComboEscapeGaps(replay);
+    expect(comboGaps).toHaveLength(1);
+
+    const rollGaps = computeRollEscapeGaps(replay);
+    expect(rollGaps).toEqual([]);
   });
 });

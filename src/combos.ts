@@ -11,6 +11,7 @@ import {
   isProneState,
   isDownBoundState,
   isMissedTechState,
+  isRollState,
 } from "./renderer/common/actionStates.js";
 
 /** Ledge catch/wait states that cancel pending kill combo tracking. */
@@ -411,6 +412,126 @@ export function computeComboEscapeGaps(
   }
 
   return gaps;
+}
+
+/**
+ * Finds actionable windows right after a roll (shield roll, tech roll, ledge roll, or get-up
+ * roll) ends, where the roller gets hit or grabbed within `maxGapFrames` of becoming actionable
+ * again. Unlike computeComboEscapeGaps, this doesn't require the hit to be part of a combo the
+ * same attacker was already running - any hit or grab within the window counts.
+ *
+ * Skips any window already reported by `existingGaps` (default: computeComboEscapeGaps) for the
+ * same victim, so a tech-chase (hit -> tech roll -> re-hit by the same attacker) doesn't produce
+ * two overlapping badges for the same moment.
+ */
+export function computeRollEscapeGaps(
+  replay: Replay,
+  maxGapFrames: number = COMBO_GAP_MAX_FRAMES,
+  existingGaps: readonly ComboEscapeGap[] = computeComboEscapeGaps(
+    replay,
+    maxGapFrames,
+  ),
+): ComboEscapeGap[] {
+  const seated = getSeatedPorts(replay);
+  if (seated.length !== 2) return [];
+  const [portA, portB] = seated as [PortIndex, PortIndex];
+
+  const gaps: ComboEscapeGap[] = [];
+
+  for (const victimPort of [portA, portB]) {
+    const attackerPort = victimPort === portA ? portB : portA;
+    const existingForVictim = existingGaps.filter(
+      (g) => g.victimPort === victimPort,
+    );
+
+    let wasRolling = false;
+    for (let i = 0; i < replay.frames.length; i++) {
+      const state = replay.frames[i]?.ports[victimPort]?.state;
+      if (!state) continue;
+      const isRolling = isRollState(state.actionStateId);
+
+      if (wasRolling && !isRolling) {
+        // Roll just ended on the previous frame - this frame is the start of the gap.
+        const gapStartFrameIndex = i;
+        const triggerIndex = findHitOrGrabIndex(
+          replay,
+          victimPort,
+          gapStartFrameIndex,
+          maxGapFrames,
+        );
+
+        if (triggerIndex !== null) {
+          const gapEndFrameIndex = triggerIndex - 1;
+          const overlapsExisting = existingForVictim.some(
+            (g) =>
+              gapStartFrameIndex <= g.gapEndFrameIndex &&
+              gapEndFrameIndex >= g.gapStartFrameIndex,
+          );
+
+          if (!overlapsExisting) {
+            const actionableFrameIndices: number[] = [];
+            for (let f = gapStartFrameIndex; f <= gapEndFrameIndex; f++) {
+              const s = replay.frames[f]?.ports[victimPort]?.state;
+              if (
+                s &&
+                isActionableInComboGap(s.actionStateId, s.hitstunCounter ?? 0)
+              ) {
+                actionableFrameIndices.push(f);
+              }
+            }
+
+            if (actionableFrameIndices.length > 0) {
+              const firstActionableIndex = actionableFrameIndices[0]!;
+              const anchorState =
+                replay.frames[firstActionableIndex]?.ports[victimPort]?.state;
+
+              gaps.push({
+                victimPort,
+                attackerPort,
+                gapStartFrame: replay.frames[gapStartFrameIndex]!.frame,
+                gapEndFrame: replay.frames[gapEndFrameIndex]!.frame,
+                gapStartFrameIndex,
+                gapEndFrameIndex,
+                actionableFrameIndices,
+                actionableFrameCount: actionableFrameIndices.length,
+                anchorWorldX: anchorState?.positionX ?? 0,
+                anchorWorldY: anchorState?.positionY ?? 0,
+                anchorFacingRight: (anchorState?.facingDirection ?? 1) > 0,
+              });
+            }
+          }
+        }
+      }
+
+      wasRolling = isRolling;
+    }
+  }
+
+  return gaps.sort((a, b) => a.gapStartFrameIndex - b.gapStartFrameIndex);
+}
+
+/**
+ * Finds the frame index, within `maxFrames` of `fromIndex` (inclusive), where the given player
+ * first enters hitstun or gets captured/grabbed. Returns null if no such frame exists in range.
+ */
+function findHitOrGrabIndex(
+  replay: Replay,
+  victimPort: PortIndex,
+  fromIndex: number,
+  maxFrames: number,
+): number | null {
+  const lastIndex = Math.min(replay.frames.length - 1, fromIndex + maxFrames);
+  for (let f = fromIndex; f <= lastIndex; f++) {
+    const state = replay.frames[f]?.ports[victimPort]?.state;
+    if (!state) continue;
+    if (
+      isHitstunState(state.actionStateId, state.hitstunCounter ?? 0) ||
+      CAPTURE_STATES.has(state.actionStateId)
+    ) {
+      return f;
+    }
+  }
+  return null;
 }
 
 type ComboStart = Pick<

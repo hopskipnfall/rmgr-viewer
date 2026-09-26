@@ -1877,6 +1877,32 @@
         color: var(--text-dim);
         margin-top: 2px;
       }
+      .matchup-secondary-stats {
+        margin-top: 14px;
+      }
+      .matchup-secondary-stats summary {
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-dim);
+        padding: 4px 0;
+        list-style: none;
+      }
+      .matchup-secondary-stats summary::-webkit-details-marker {
+        display: none;
+      }
+      .matchup-secondary-stats summary::before {
+        content: "▸";
+        display: inline-block;
+        margin-right: 6px;
+        transition: transform 0.15s ease;
+      }
+      .matchup-secondary-stats[open] summary::before {
+        transform: rotate(90deg);
+      }
+      .matchup-secondary-stats .matchup-stats-grid {
+        margin-top: 10px;
+      }
       .matchup-link-wrap {
         padding: 0 12px 8px;
       }
@@ -7962,6 +7988,21 @@
                 </button>
               </div>
               <div id="combosList" class="situation-list"></div>
+            </section>
+            <section id="microStatsWidget" class="situation-widget" hidden>
+              <div class="situation-widget-header">
+                <button
+                  id="microStatsCollapseBtn"
+                  class="situation-collapse-btn collapsed"
+                  title="Collapse / expand Strong Attack Punishes"
+                >
+                  <span class="collapse-icon">▼</span>
+                  <h2 id="microStatsWidgetTitle" class="situation-widget-title">
+                    Strong Attack Punishes
+                  </h2>
+                </button>
+              </div>
+              <div id="microStatsList" class="situation-list" hidden></div>
             </section>
             <section id="cameraWidget" class="situation-widget" hidden>
               <div class="situation-widget-header">
