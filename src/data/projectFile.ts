@@ -38,6 +38,9 @@ export interface ProjectFile {
   readonly videoLinks: Readonly<Record<string, VideoLinkData>>;
   /** Keyed by replay id, as stored in localStorage by notes.ts. */
   readonly notes: Readonly<Record<string, readonly MatchNote[]>>;
+  /** Keyed by session id (SessionGroup.id, from data/session.ts), as stored in localStorage by
+   * sessionComments.ts. */
+  readonly sessionComments: Readonly<Record<string, string>>;
 }
 
 /**
@@ -79,6 +82,7 @@ export function buildProjectFile(
   identity: Identity,
   videoLinks: Readonly<Record<string, VideoLinkData>>,
   notes: Readonly<Record<string, readonly MatchNote[]>> = {},
+  sessionComments: Readonly<Record<string, string>> = {},
 ): ProjectFile {
   return {
     kind: KIND,
@@ -92,6 +96,7 @@ export function buildProjectFile(
     },
     videoLinks,
     notes,
+    sessionComments,
   };
 }
 
@@ -116,6 +121,11 @@ export function serializeProjectFile(file: ProjectFile): Blob {
   const notes = listLines(
     Object.entries(file.notes).map(([id, list]) => `${j(id)}: ${j(list)}`),
   );
+  const sessionComments = listLines(
+    Object.entries(file.sessionComments).map(
+      ([id, comment]) => `${j(id)}: ${j(comment)}`,
+    ),
+  );
 
   const text = [
     "{",
@@ -132,11 +142,14 @@ export function serializeProjectFile(file: ProjectFile): Blob {
     `  },`,
     `  "notes": {`,
     notes,
+    `  },`,
+    `  "sessionComments": {`,
+    sessionComments,
     `  }`,
     "}",
     "",
   ]
-    // Drop the empty line an empty games/videoLinks/notes list would leave behind.
+    // Drop the empty line an empty games/videoLinks/notes/sessionComments list would leave behind.
     .filter((line) => line !== "")
     .join("\n")
     .concat("\n");
@@ -175,6 +188,7 @@ export function parseProjectFile(text: string): ProjectFile {
     },
     videoLinks: file.videoLinks ?? {},
     notes: file.notes ?? {},
+    sessionComments: file.sessionComments ?? {},
   };
 }
 

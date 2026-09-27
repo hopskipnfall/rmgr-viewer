@@ -263,3 +263,54 @@ describe("notes export/import", () => {
     expect(parsed.notes).toEqual({});
   });
 });
+
+describe("session comments export/import", () => {
+  it("round-trips comments keyed by session id", () => {
+    const built = buildProjectFile(
+      [storedGame("a")],
+      createDefaultIdentity(),
+      {},
+      {},
+      { session_a: "Great set, watch the ledge trap" },
+    );
+    const parsed = parseProjectFile(JSON.stringify(built));
+    expect(parsed.sessionComments.session_a).toBe(
+      "Great set, watch the ledge trap",
+    );
+  });
+
+  it("defaults to no session comments when the 5th argument is omitted", () => {
+    const built = buildProjectFile(
+      [storedGame("a")],
+      createDefaultIdentity(),
+      {},
+    );
+    expect(built.sessionComments).toEqual({});
+  });
+
+  it("puts each session's comment on its own line, and still parses", async () => {
+    const built = buildProjectFile(
+      [storedGame("a"), storedGame("b")],
+      createDefaultIdentity(),
+      {},
+      {},
+      { session_a: "comment text" },
+    );
+    const text = await serializeProjectFile(built).text();
+    const commentLines = text
+      .split("\n")
+      .filter((l) => l.includes('"comment text"'));
+    expect(commentLines).toHaveLength(1);
+
+    const parsed = parseProjectFile(text);
+    expect(parsed.sessionComments.session_a).toBe("comment text");
+  });
+
+  it("stays valid JSON with no session comments", async () => {
+    const text = await serializeProjectFile(
+      buildProjectFile([], createDefaultIdentity(), {}),
+    ).text();
+    const parsed = parseProjectFile(text);
+    expect(parsed.sessionComments).toEqual({});
+  });
+});
