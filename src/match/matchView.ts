@@ -4609,7 +4609,7 @@ export class MatchViewController {
 
   private updateNeutralHitsHighlight(currentFrameIndex: number): void {
     const rows = this.neutralHitsList.querySelectorAll<HTMLElement>(
-      ".situation-row[data-frame-index]",
+      ".situation-row[data-frame-index], .match-note[data-frame-index]",
     );
     let activeRow: HTMLElement | null = null;
     for (const row of rows) {

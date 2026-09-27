@@ -5921,16 +5921,20 @@
       /* The footer's own speech-bubble emoji renders in its natural (often dark) color, which
          has poor contrast against the dark theme's own panel background - inverting it keeps the
          glyph's shading/detail (unlike brightness(0), which flattens it into an illegible solid
-         blob) while turning it a light color with much better contrast. Light theme keeps the
-         emoji's natural coloring, which already has enough contrast against a white panel. */
-      #addNoteBtn {
+         blob) while turning it a light color with much better contrast. Filtering only this inner
+         span (not the button itself) keeps the button's own dark background intact - filtering
+         the whole button inverted its background too, turning it light instead of just the icon.
+         Light theme keeps the emoji's natural coloring, which already has enough contrast against
+         a white panel. */
+      .add-note-icon {
+        display: inline-block;
         filter: invert(1);
       }
-      [data-theme="light"] #addNoteBtn {
+      [data-theme="light"] .add-note-icon {
         filter: none;
       }
       @media (prefers-color-scheme: light) {
-        :root:not([data-theme="dark"]) #addNoteBtn {
+        :root:not([data-theme="dark"]) .add-note-icon {
           filter: none;
         }
       }
@@ -5943,6 +5947,10 @@
         background: rgba(250, 204, 21, 0.06);
         border-left: 3px solid #facc15;
         cursor: pointer;
+      }
+      .match-note.active {
+        background: rgba(250, 204, 21, 0.22);
+        box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.7);
       }
       .match-note-text {
         flex: 1;
@@ -8736,7 +8744,9 @@
           </button>
         </div>
       </div>
-      <button id="addNoteBtn" title="Add a note at the current frame">🗨</button>
+      <button id="addNoteBtn" title="Add a note at the current frame">
+        <span class="add-note-icon">🗨</span>
+      </button>
       <div id="scrubberContainer">
         <div
           id="scrubberBar"
