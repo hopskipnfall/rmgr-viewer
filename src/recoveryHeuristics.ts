@@ -400,11 +400,22 @@ function firstAscendingCrossingFrame(
  * "passing over the stage while still airborne counts" relaxation (see its own doc comment), used
  * by evaluatePhase to stay consistent with the frame-stepped path. X(k) is monotonic in k UNLESS
  * vx0 and driftTarget have opposite signs, in which case velocity crosses zero exactly once during
- * the ramp (a linear ramp can only cross once) and X has a single turning point there - checked as
- * a third candidate alongside both endpoints, since the true min/max over the range isn't
- * necessarily at either endpoint in that case. `kStart` need not be 0 (e.g. a phase that starts
- * below the stage and only becomes airborne-above-it partway through, once a jump's vy0 has lifted
- * it back up - see firstAscendingCrossingFrame).
+ * the ramp (a linear ramp can only cross once) and X has a turning point there - checked as
+ * candidates alongside both endpoints, since the true min/max over the range isn't necessarily at
+ * either endpoint in that case. `kStart` need not be 0 (e.g. a phase that starts below the stage
+ * and only becomes airborne-above-it partway through, once a jump's vy0 has lifted it back up -
+ * see firstAscendingCrossingFrame).
+ *
+ * The turning point itself is found at INTEGER frames only, not the continuous zero of
+ * vx0+sign*step*k: xAtFrame's own ramp term is the discrete sum sign*step*k*(k+1)/2 (matching the
+ * frame-stepped reference's actual accumulation, velocity applied THEN added each frame), whose
+ * derivative w.r.t. a continuous k is sign*step*(2k+1)/2 - offset by half a step from the
+ * "velocity" ramp vx0+sign*step*k used to locate kZero. Evaluating xAtFrame AT that fractional
+ * kZero (as an earlier version of this function did) silently extrapolates the discrete formula
+ * off-grid and can land strictly between the true integer minimum and its neighbors, missing a
+ * real one-frame dip into the stage's X range entirely - found via a real fuzz mismatch against the
+ * frame-stepped reference, which naturally samples only at integers. floor(kZero)/ceil(kZero),
+ * clamped into [kStart, kEnd], bracket the actual discrete extremum exactly.
  */
 function xRangeOverlapsStageWithinFrames(
   x0: number,
@@ -430,9 +441,12 @@ function xRangeOverlapsStageWithinFrames(
     const n = driftReachFrame(vx0, driftTarget, driftStep);
     const kZero = -vx0 / (sign * driftStep);
     if (kZero > kStart && kZero < Math.min(n, kEnd)) {
-      const xTurn = xAtFrame(x0, vx0, driftTarget, driftStep, kZero);
-      lo = Math.min(lo, xTurn);
-      hi = Math.max(hi, xTurn);
+      for (const kCandidate of [Math.floor(kZero), Math.ceil(kZero)]) {
+        const kClamped = Math.max(kStart, Math.min(kEnd, kCandidate));
+        const xTurn = xAtFrame(x0, vx0, driftTarget, driftStep, kClamped);
+        lo = Math.min(lo, xTurn);
+        hi = Math.max(hi, xTurn);
+      }
     }
   }
   return hi >= LEDGE_L_X && lo <= LEDGE_R_X;
