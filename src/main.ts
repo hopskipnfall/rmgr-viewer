@@ -79,6 +79,7 @@ import {
   type VideoLinkData,
 } from "./video/youtubeSync.js";
 import { loadMatchNotes, saveMatchNotes, type MatchNote } from "./notes.js";
+import { loadSessionComment, saveSessionComment } from "./sessionComments.js";
 import {
   isTobloSfxEnabled,
   playTobloEnabledSfx,
@@ -1137,12 +1138,22 @@ async function init(): Promise<void> {
         const gameNotes = loadMatchNotes(row.id);
         if (gameNotes.length > 0) notes[row.id] = gameNotes;
       }
+      const sessions = groupGamesIntoSessions(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
+      const sessionComments: Record<string, string> = {};
+      for (const session of sessions) {
+        const comment = loadSessionComment(session.id);
+        if (comment) sessionComments[session.id] = comment;
+      }
       const blob = serializeProjectFile(
         buildProjectFile(
           rows,
           libraryController.getIdentity(),
           videoLinks,
           notes,
+          sessionComments,
         ),
       );
       const url = URL.createObjectURL(blob);
@@ -1176,6 +1187,9 @@ async function init(): Promise<void> {
         }
         for (const [id, gameNotes] of Object.entries(parsed.notes)) {
           saveMatchNotes(id, gameNotes);
+        }
+        for (const [id, comment] of Object.entries(parsed.sessionComments)) {
+          saveSessionComment(id, comment);
         }
         if (projectFileStatus) {
           projectFileStatus.textContent = t().importProjectDone(
