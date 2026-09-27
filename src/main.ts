@@ -78,6 +78,7 @@ import {
   saveVideoLink,
   type VideoLinkData,
 } from "./video/youtubeSync.js";
+import { loadMatchNotes, saveMatchNotes, type MatchNote } from "./notes.js";
 import {
   isTobloSfxEnabled,
   playTobloEnabledSfx,
@@ -1129,12 +1130,20 @@ async function init(): Promise<void> {
       if (!libraryStore) return;
       const rows = await libraryStore.getAll();
       const videoLinks: Record<string, VideoLinkData> = {};
+      const notes: Record<string, MatchNote[]> = {};
       for (const row of rows) {
         const link = loadVideoLink(row.id);
         if (link) videoLinks[row.id] = link;
+        const gameNotes = loadMatchNotes(row.id);
+        if (gameNotes.length > 0) notes[row.id] = gameNotes;
       }
       const blob = serializeProjectFile(
-        buildProjectFile(rows, libraryController.getIdentity(), videoLinks),
+        buildProjectFile(
+          rows,
+          libraryController.getIdentity(),
+          videoLinks,
+          notes,
+        ),
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1164,6 +1173,9 @@ async function init(): Promise<void> {
         saveIdentity(identityOf(parsed));
         for (const [id, link] of Object.entries(parsed.videoLinks)) {
           saveVideoLink(id, link);
+        }
+        for (const [id, gameNotes] of Object.entries(parsed.notes)) {
+          saveMatchNotes(id, gameNotes);
         }
         if (projectFileStatus) {
           projectFileStatus.textContent = t().importProjectDone(

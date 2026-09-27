@@ -1,4 +1,5 @@
 import type { VideoLinkData } from "../video/youtubeSync.js";
+import type { MatchNote } from "../notes.js";
 import {
   ANALYSIS_VERSION,
   isStale,
@@ -35,6 +36,8 @@ export interface ProjectFile {
   readonly identity: SerializedIdentity;
   /** Keyed by replay id, as stored in localStorage by youtubeSync.ts. */
   readonly videoLinks: Readonly<Record<string, VideoLinkData>>;
+  /** Keyed by replay id, as stored in localStorage by notes.ts. */
+  readonly notes: Readonly<Record<string, readonly MatchNote[]>>;
 }
 
 /**
@@ -75,6 +78,7 @@ export function buildProjectFile(
   games: readonly StoredGame[],
   identity: Identity,
   videoLinks: Readonly<Record<string, VideoLinkData>>,
+  notes: Readonly<Record<string, readonly MatchNote[]>> = {},
 ): ProjectFile {
   return {
     kind: KIND,
@@ -87,6 +91,7 @@ export function buildProjectFile(
       aliases: [...identity.aliases],
     },
     videoLinks,
+    notes,
   };
 }
 
@@ -108,6 +113,9 @@ export function serializeProjectFile(file: ProjectFile): Blob {
   const videoLinks = listLines(
     Object.entries(file.videoLinks).map(([id, link]) => `${j(id)}: ${j(link)}`),
   );
+  const notes = listLines(
+    Object.entries(file.notes).map(([id, list]) => `${j(id)}: ${j(list)}`),
+  );
 
   const text = [
     "{",
@@ -121,11 +129,14 @@ export function serializeProjectFile(file: ProjectFile): Blob {
     `  ],`,
     `  "videoLinks": {`,
     videoLinks,
+    `  },`,
+    `  "notes": {`,
+    notes,
     `  }`,
     "}",
     "",
   ]
-    // Drop the empty line an empty games/videoLinks list would leave behind.
+    // Drop the empty line an empty games/videoLinks/notes list would leave behind.
     .filter((line) => line !== "")
     .join("\n")
     .concat("\n");
@@ -163,6 +174,7 @@ export function parseProjectFile(text: string): ProjectFile {
         : [],
     },
     videoLinks: file.videoLinks ?? {},
+    notes: file.notes ?? {},
   };
 }
 

@@ -204,3 +204,64 @@ describe("mergeProjectFile", () => {
     expect(store.rows.map((r) => r.id).sort()).toEqual(["existing", "new"]);
   });
 });
+
+describe("notes export/import", () => {
+  it("round-trips notes keyed by game id", () => {
+    const note = {
+      id: "n1",
+      frameIndex: 120,
+      text: "hello",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const built = buildProjectFile(
+      [storedGame("a")],
+      createDefaultIdentity(),
+      {},
+      { a: [note] },
+    );
+    const parsed = parseProjectFile(JSON.stringify(built));
+    expect(parsed.notes.a).toEqual([note]);
+  });
+
+  it("defaults to no notes when the 4th argument is omitted", () => {
+    const built = buildProjectFile(
+      [storedGame("a")],
+      createDefaultIdentity(),
+      {},
+    );
+    expect(built.notes).toEqual({});
+  });
+
+  it("puts each game's notes on its own line, and still parses", async () => {
+    const note = {
+      id: "n1",
+      frameIndex: 10,
+      text: "note text",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const built = buildProjectFile(
+      [storedGame("a"), storedGame("b")],
+      createDefaultIdentity(),
+      {},
+      { a: [note] },
+    );
+    const text = await serializeProjectFile(built).text();
+    const noteLines = text
+      .split("\n")
+      .filter((l) => l.includes('"note text"'));
+    expect(noteLines).toHaveLength(1);
+
+    const parsed = parseProjectFile(text);
+    expect(parsed.notes.a?.[0]?.text).toBe("note text");
+  });
+
+  it("stays valid JSON with no notes", async () => {
+    const text = await serializeProjectFile(
+      buildProjectFile([], createDefaultIdentity(), {}),
+    ).text();
+    const parsed = parseProjectFile(text);
+    expect(parsed.notes).toEqual({});
+  });
+});
