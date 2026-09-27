@@ -121,6 +121,13 @@ import {
   clearVideoOffsetOverride,
   unlinkVideoFromSession,
 } from "../video/youtubeSync.js";
+import {
+  type MatchNote,
+  loadMatchNotes,
+  upsertAnchoredNote,
+  updateNoteText,
+  deleteMatchNote,
+} from "../notes.js";
 
 export type MatchEvent =
   | EdgeGuardEvent
@@ -278,7 +285,11 @@ export class MatchViewController {
   private neutralHitsWidgetTitleEl: HTMLHeadingElement;
   private neutralHitsList: HTMLDivElement;
   private neutralHitEvents: NeutralHitEvent[] = [];
-  private neutralHitFilter: "all" | "openings" | "punishes" = "all";
+  private neutralShowWin = false;
+  private neutralShowLoss = true;
+  private neutralShowComments = true;
+  private matchNotes: MatchNote[] = [];
+  private pendingAnchoredNoteFrameIndex: number | null = null;
   private wasPlayingBeforeScrub = false;
   private leftSidebarCollapsed = false;
   private rightSidebarCollapsed = false;
@@ -4001,14 +4012,26 @@ export class MatchViewController {
     const tr = t();
     this.neutralHitsList.innerHTML = "";
 
-    if (replay.frames.length === 0 || this.neutralHitEvents.length === 0) {
+    if (replay.frames.length === 0) {
       this.updateSidebarVisibility();
       return;
     }
 
     this.updateSidebarVisibility();
 
-    const createRow = (e: NeutralHitEvent): HTMLElement => {
+    const anchoredNoteByFrame = new Map<number, MatchNote>();
+    if (this.neutralShowComments) {
+      for (const n of this.matchNotes) {
+        if (n.eventFrameIndex !== undefined) {
+          anchoredNoteByFrame.set(n.eventFrameIndex, n);
+        }
+      }
+    }
+
+    const createRow = (
+      e: NeutralHitEvent,
+      suppressAddNoteButton: boolean,
+    ): HTMLElement => {
       const row = document.createElement("div");
       row.className = "situation-row neutral-interaction-row";
       row.dataset.frameIndex = String(e.frameIndex);
@@ -4191,6 +4214,21 @@ export class MatchViewController {
       }
 
       topLine.appendChild(chipsWrap);
+
+      if (!suppressAddNoteButton && this.neutralShowComments) {
+        const addNoteBtn = document.createElement("button");
+        addNoteBtn.type = "button";
+        addNoteBtn.className = "add-note-btn";
+        addNoteBtn.title = tr.addNoteRowTitle;
+        addNoteBtn.textContent = "💬";
+        addNoteBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          this.pendingAnchoredNoteFrameIndex = e.frameIndex;
+          this.renderNeutralHitsPanel(replay);
+        });
+        topLine.appendChild(addNoteBtn);
+      }
+
       row.appendChild(topLine);
 
       // Cumulative damage across the whole interaction, shown as its own line below the chips
@@ -4224,73 +4262,115 @@ export class MatchViewController {
     };
 
     if (this.perspectivePort !== null) {
-      const openingsCount = this.neutralHitEvents.filter(
+      const winCount = this.neutralHitEvents.filter(
         (e) => e.attackerPort === this.perspectivePort,
       ).length;
-      const punishesCount = this.neutralHitEvents.filter(
+      const lossCount = this.neutralHitEvents.filter(
         (e) => e.victimPort === this.perspectivePort,
       ).length;
+      const commentsCount = this.matchNotes.length;
 
-      // Filter chips bar
       const filterContainer = document.createElement("div");
       filterContainer.className = "neutral-filters";
 
-      const btnAll = document.createElement("button");
-      btnAll.className = `neutral-filter-btn${this.neutralHitFilter === "all" ? " active" : ""}`;
-      btnAll.textContent = tr.neutralFilterAll(this.neutralHitEvents.length);
-      btnAll.addEventListener("click", () => {
-        this.neutralHitFilter = "all";
-        this.renderNeutralHitsPanel(replay);
-      });
+      const makeToggle = (
+        active: boolean,
+        colorClass: string,
+        label: string,
+        onToggle: () => void,
+      ): HTMLButtonElement => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `neutral-filter-btn ${colorClass}${active ? " active" : ""}`;
+        btn.textContent = label;
+        btn.setAttribute("aria-pressed", String(active));
+        btn.addEventListener("click", () => {
+          onToggle();
+          this.renderNeutralHitsPanel(replay);
+        });
+        return btn;
+      };
 
-      const btnOpenings = document.createElement("button");
-      btnOpenings.className = `neutral-filter-btn${this.neutralHitFilter === "openings" ? " active" : ""}`;
-      btnOpenings.textContent = tr.neutralFilterOpenings(openingsCount);
-      btnOpenings.addEventListener("click", () => {
-        this.neutralHitFilter = "openings";
-        this.renderNeutralHitsPanel(replay);
-      });
-
-      const btnPunishes = document.createElement("button");
-      btnPunishes.className = `neutral-filter-btn${this.neutralHitFilter === "punishes" ? " active" : ""}`;
-      btnPunishes.textContent = tr.neutralFilterPunishes(punishesCount);
-      btnPunishes.addEventListener("click", () => {
-        this.neutralHitFilter = "punishes";
-        this.renderNeutralHitsPanel(replay);
-      });
-
-      filterContainer.appendChild(btnAll);
-      filterContainer.appendChild(btnOpenings);
-      filterContainer.appendChild(btnPunishes);
+      filterContainer.appendChild(
+        makeToggle(
+          this.neutralShowWin,
+          "filter-win",
+          tr.neutralFilterWin(winCount),
+          () => {
+            this.neutralShowWin = !this.neutralShowWin;
+          },
+        ),
+      );
+      filterContainer.appendChild(
+        makeToggle(
+          this.neutralShowLoss,
+          "filter-loss",
+          tr.neutralFilterLoss(lossCount),
+          () => {
+            this.neutralShowLoss = !this.neutralShowLoss;
+          },
+        ),
+      );
+      filterContainer.appendChild(
+        makeToggle(
+          this.neutralShowComments,
+          "filter-comments",
+          tr.neutralFilterComments(commentsCount),
+          () => {
+            this.neutralShowComments = !this.neutralShowComments;
+          },
+        ),
+      );
       this.neutralHitsList.appendChild(filterContainer);
     }
 
     let eventsToRender = this.neutralHitEvents;
     if (this.perspectivePort !== null) {
-      if (this.neutralHitFilter === "openings") {
-        eventsToRender = this.neutralHitEvents.filter(
-          (e) => e.attackerPort === this.perspectivePort,
-        );
-      } else if (this.neutralHitFilter === "punishes") {
-        eventsToRender = this.neutralHitEvents.filter(
-          (e) => e.victimPort === this.perspectivePort,
-        );
-      }
+      eventsToRender = this.neutralHitEvents.filter((e) => {
+        const isWin = e.attackerPort === this.perspectivePort;
+        const isLoss = e.victimPort === this.perspectivePort;
+        if (isWin && !this.neutralShowWin) return false;
+        if (isLoss && !this.neutralShowLoss) return false;
+        return true;
+      });
     }
 
     if (eventsToRender.length === 0) {
       const empty = document.createElement("div");
       empty.className = "situation-empty";
-      empty.textContent =
-        this.neutralHitFilter === "openings"
-          ? tr.noNeutralOpeningsLanded
-          : this.neutralHitFilter === "punishes"
-            ? tr.noNeutralPunishesTaken
-            : tr.noNeutralHits;
+      empty.textContent = tr.noNeutralHits;
       this.neutralHitsList.appendChild(empty);
     } else {
       eventsToRender.forEach((e) => {
-        const row = createRow(e);
+        const anchored = anchoredNoteByFrame.get(e.frameIndex) ?? null;
+        const pendingHere = this.pendingAnchoredNoteFrameIndex === e.frameIndex;
+        if (anchored) {
+          this.neutralHitsList.appendChild(
+            this.createNoteBlock(anchored, replay),
+          );
+        } else if (pendingHere && this.neutralShowComments) {
+          const composer = this.createNoteComposer(
+            "",
+            (text) => {
+              if (this.currentReplayId) {
+                this.matchNotes = upsertAnchoredNote(
+                  this.currentReplayId,
+                  e.frameIndex,
+                  text,
+                );
+              }
+              this.pendingAnchoredNoteFrameIndex = null;
+              this.renderNeutralHitsPanel(replay);
+            },
+            () => {
+              this.pendingAnchoredNoteFrameIndex = null;
+              this.renderNeutralHitsPanel(replay);
+            },
+          );
+          this.neutralHitsList.appendChild(composer);
+        }
+
+        const row = createRow(e, Boolean(anchored) || pendingHere);
         if (this.perspectivePort !== null) {
           if (e.attackerPort === this.perspectivePort) {
             row.classList.add("neutral-row-opening");
@@ -4301,6 +4381,112 @@ export class MatchViewController {
         this.neutralHitsList.appendChild(row);
       });
     }
+  }
+
+  /** A textarea + Save/Cancel used for both a new note and editing an existing one. */
+  private createNoteComposer(
+    initialText: string,
+    onSave: (text: string) => void,
+    onCancel: () => void,
+  ): HTMLElement {
+    const tr = t();
+    const wrap = document.createElement("div");
+    wrap.className = "note-composer";
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "note-composer-input";
+    textarea.value = initialText;
+    textarea.placeholder = tr.notePlaceholder;
+    textarea.addEventListener("click", (ev) => ev.stopPropagation());
+    wrap.appendChild(textarea);
+
+    const actions = document.createElement("div");
+    actions.className = "note-composer-actions";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "note-composer-save";
+    saveBtn.textContent = tr.noteSaveButton;
+    saveBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const text = textarea.value.trim();
+      if (text) onSave(text);
+    });
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "note-composer-cancel";
+    cancelBtn.textContent = tr.noteCancelButton;
+    cancelBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      onCancel();
+    });
+
+    actions.appendChild(saveBtn);
+    actions.appendChild(cancelBtn);
+    wrap.appendChild(actions);
+
+    setTimeout(() => textarea.focus(), 0);
+    return wrap;
+  }
+
+  /** A rendered note - its text (click to edit) and a hover-reveal delete button. */
+  private createNoteBlock(note: MatchNote, replay: Replay): HTMLElement {
+    const tr = t();
+    const wrap = document.createElement("div");
+    wrap.className = "match-note";
+    wrap.dataset.frameIndex = String(note.frameIndex);
+
+    const renderView = (): void => {
+      wrap.innerHTML = "";
+
+      const textEl = document.createElement("div");
+      textEl.className = "match-note-text";
+      textEl.textContent = note.text;
+      textEl.title = tr.noteEditTitle;
+      textEl.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        renderEdit();
+      });
+      wrap.appendChild(textEl);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "match-note-delete";
+      deleteBtn.title = tr.noteDeleteTitle;
+      deleteBtn.textContent = "🗑";
+      deleteBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (this.currentReplayId) {
+          this.matchNotes = deleteMatchNote(this.currentReplayId, note.id);
+        }
+        this.renderNeutralHitsPanel(replay);
+      });
+      wrap.appendChild(deleteBtn);
+    };
+
+    const renderEdit = (): void => {
+      wrap.innerHTML = "";
+      wrap.appendChild(
+        this.createNoteComposer(
+          note.text,
+          (text) => {
+            if (this.currentReplayId) {
+              this.matchNotes = updateNoteText(
+                this.currentReplayId,
+                note.id,
+                text,
+              );
+            }
+            this.renderNeutralHitsPanel(replay);
+          },
+          renderView,
+        ),
+      );
+    };
+
+    renderView();
+    return wrap;
   }
 
   private updateNeutralHitsHighlight(currentFrameIndex: number): void {
@@ -5379,6 +5565,8 @@ export class MatchViewController {
     const angelEvents = computeAngelInvincibilityEvents(replay);
     const neutralEvents = computeNeutralHitEvents(replay);
     this.neutralHitEvents = neutralEvents;
+    this.matchNotes = loadMatchNotes(this.currentReplayId ?? "");
+    this.pendingAnchoredNoteFrameIndex = null;
     const puffEvents = computeJigglypuffFThrowEvents(replay);
     const shieldEvents = computeShieldPressureEvents(replay);
     // Superseded by classifiedSituationEvents (missed-ledge-hog / possible-accidental-save) and

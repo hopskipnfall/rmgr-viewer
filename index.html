@@ -5851,20 +5851,20 @@
         border-color: var(--accent);
         color: var(--text);
       }
-      .neutral-filter-btn.filter-openings.active {
+      .neutral-filter-btn.filter-win.active {
         background: rgba(59, 130, 246, 0.18);
         border-color: #60a5fa;
         color: #2563eb;
       }
-      [data-theme="dark"] .neutral-filter-btn.filter-openings.active {
+      [data-theme="dark"] .neutral-filter-btn.filter-win.active {
         color: #60a5fa;
       }
-      .neutral-filter-btn.filter-punishes.active {
+      .neutral-filter-btn.filter-loss.active {
         background: rgba(224, 71, 63, 0.18);
         border-color: #e0473f;
         color: #dc2626;
       }
-      [data-theme="dark"] .neutral-filter-btn.filter-punishes.active {
+      [data-theme="dark"] .neutral-filter-btn.filter-loss.active {
         color: #f87171;
       }
       .situation-row.neutral-row-opening {
@@ -5888,6 +5888,117 @@
       .situation-row.neutral-row-punish.active {
         background: rgba(224, 71, 63, 0.24);
         box-shadow: inset 0 0 0 1px rgba(224, 71, 63, 0.8);
+      }
+      .neutral-filter-btn.filter-comments.active {
+        background: rgba(250, 204, 21, 0.18);
+        border-color: #facc15;
+        color: #92730a;
+      }
+      [data-theme="dark"] .neutral-filter-btn.filter-comments.active {
+        color: #facc15;
+      }
+      .add-note-btn {
+        opacity: 0;
+        margin-left: auto;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        padding: 2px 4px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        transition:
+          opacity 0.1s,
+          background 0.1s;
+      }
+      .neutral-interaction-row:hover .add-note-btn {
+        opacity: 1;
+      }
+      .add-note-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .match-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 12px 6px 20px;
+        border-bottom: 1px solid var(--panel-border);
+        background: rgba(250, 204, 21, 0.06);
+        border-left: 3px solid #facc15;
+      }
+      .match-note-text {
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--text);
+        white-space: pre-wrap;
+        cursor: pointer;
+      }
+      .match-note-delete {
+        opacity: 0;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 12px;
+        flex-shrink: 0;
+        transition: opacity 0.1s;
+      }
+      .match-note:hover .match-note-delete {
+        opacity: 1;
+      }
+      .note-composer {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px 12px 8px 20px;
+        border-bottom: 1px solid var(--panel-border);
+        background: rgba(250, 204, 21, 0.08);
+        border-left: 3px solid #facc15;
+      }
+      .note-composer-input {
+        width: 100%;
+        min-height: 48px;
+        resize: vertical;
+        font-family: inherit;
+        font-size: 12px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--panel-border);
+        background: var(--card-bg);
+        color: var(--text);
+        box-sizing: border-box;
+      }
+      .note-composer-actions {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+      }
+      .note-composer-save,
+      .note-composer-cancel {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        border: 1px solid var(--panel-border);
+        font-family: inherit;
+      }
+      .note-composer-save {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .note-composer-save:hover {
+        background: var(--accent-hover);
+      }
+      .note-composer-cancel {
+        background: var(--btn-secondary-bg);
+        color: var(--text);
+      }
+      .note-composer-cancel:hover {
+        background: var(--btn-secondary-hover);
       }
       .qa-overlay-btn {
         width: 100%;
