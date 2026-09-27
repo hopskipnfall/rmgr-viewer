@@ -448,14 +448,19 @@ export interface Translations {
 
   // Neutral Openings widget
   neutralHitsWidgetTitle: string;
-  neutralFilterAll: (count: number) => string;
-  neutralFilterOpenings: (count: number) => string;
-  neutralFilterPunishes: (count: number) => string;
+  neutralFilterWin: (count: number) => string;
+  neutralFilterLoss: (count: number) => string;
+  neutralFilterComments: (count: number) => string;
   neutralOpeningsGroupTitle: (count: number) => string;
   neutralPunishesGroupTitle: (count: number) => string;
   noNeutralHits: string;
-  noNeutralOpeningsLanded: string;
-  noNeutralPunishesTaken: string;
+  addNoteButtonTitle: string;
+  addNoteRowTitle: string;
+  notePlaceholder: string;
+  noteSaveButton: string;
+  noteCancelButton: string;
+  noteEditTitle: string;
+  noteDeleteTitle: string;
   neutralReasonShieldPressure: string;
   neutralReasonLandingLag: string;
   neutralReasonWhiffPunish: string;
@@ -1150,14 +1155,19 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     edgeGuardEffectivenessDetailWithHitTaken: (base) => `${base}, got hit`,
 
     neutralHitsWidgetTitle: "Neutral Analysis",
-    neutralFilterAll: (count) => `All (${count})`,
-    neutralFilterOpenings: (count) => `Openings (${count})`,
-    neutralFilterPunishes: (count) => `Punishes (${count})`,
+    neutralFilterWin: (count) => `Win (${count})`,
+    neutralFilterLoss: (count) => `Loss (${count})`,
+    neutralFilterComments: (count) => `Comments (${count})`,
     neutralOpeningsGroupTitle: (count) => `Neutral Openings (${count})`,
     neutralPunishesGroupTitle: (count) => `Neutral Punishes Taken (${count})`,
     noNeutralHits: "No neutral hits in this match.",
-    noNeutralOpeningsLanded: "No neutral openings landed.",
-    noNeutralPunishesTaken: "No neutral punishes taken.",
+    addNoteButtonTitle: "Add a note at the current frame",
+    addNoteRowTitle: "Add a note for this interaction",
+    notePlaceholder: "Write a note...",
+    noteSaveButton: "Save",
+    noteCancelButton: "Cancel",
+    noteEditTitle: "Click to edit",
+    noteDeleteTitle: "Delete note",
     neutralReasonShieldPressure: "Unsafe Shield Pressure",
     neutralReasonLandingLag: "Land Punish",
     neutralReasonWhiffPunish: "Whiff Punish",
@@ -1840,14 +1850,19 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     edgeGuardEffectivenessDetailWithHitTaken: (base) => `${base}、被弾`,
 
     neutralHitsWidgetTitle: "立ち回り分析",
-    neutralFilterAll: (count) => `すべて (${count})`,
-    neutralFilterOpenings: (count) => `差し込み (${count})`,
-    neutralFilterPunishes: (count) => `被弾 (${count})`,
+    neutralFilterWin: (count) => `差し込み (${count})`,
+    neutralFilterLoss: (count) => `被弾 (${count})`,
+    neutralFilterComments: (count) => `コメント (${count})`,
     neutralOpeningsGroupTitle: (count) => `差し込み成功 (${count})`,
     neutralPunishesGroupTitle: (count) => `被弾・被差し返し (${count})`,
     noNeutralHits: "この試合で差し込みヒットはありません。",
-    noNeutralOpeningsLanded: "差し込みヒットはありません。",
-    noNeutralPunishesTaken: "立ち回りでの被弾はありません。",
+    addNoteButtonTitle: "現在のフレームにメモを追加",
+    addNoteRowTitle: "この場面にメモを追加",
+    notePlaceholder: "メモを入力...",
+    noteSaveButton: "保存",
+    noteCancelButton: "キャンセル",
+    noteEditTitle: "クリックして編集",
+    noteDeleteTitle: "メモを削除",
     neutralReasonShieldPressure: "シールド反撃",
     neutralReasonLandingLag: "着地狩り",
     neutralReasonWhiffPunish: "後隙狩り (空振り)",
