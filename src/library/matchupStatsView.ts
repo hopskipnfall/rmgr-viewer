@@ -127,6 +127,17 @@ export class MatchupStatsView {
           ${statCard(tr.nhPerStockCol, fmtHits(rates.neutralHitsPerStock, rates.stocksTaken, tr), "")}
         </div>
         ${microStatsSectionHtml(rates, tr)}
+
+        <div class="matchup-workshop-banner">
+          <a href="#/matchup/${myChar}/${oppChar}/recoveries" class="matchup-workshop-btn">
+            <span class="matchup-workshop-btn-icon">🎯</span>
+            <span class="matchup-workshop-btn-text">
+              <span class="matchup-workshop-btn-title">${escapeHtml(tr.matchupEdgeGuardWorkshopBtn)}</span>
+              <span class="matchup-workshop-btn-desc">Visualize recovery starting positions & replay edge guards</span>
+            </span>
+            <span class="matchup-workshop-btn-arrow">&rarr;</span>
+          </a>
+        </div>
       </div>
     `;
   }
