@@ -5918,14 +5918,31 @@
       .add-note-btn:hover {
         background: rgba(255, 255, 255, 0.08);
       }
+      /* The footer's own speech-bubble emoji renders in its natural (often dark) color, which
+         has poor contrast against the dark theme's own panel background - inverting it keeps the
+         glyph's shading/detail (unlike brightness(0), which flattens it into an illegible solid
+         blob) while turning it a light color with much better contrast. Light theme keeps the
+         emoji's natural coloring, which already has enough contrast against a white panel. */
+      #addNoteBtn {
+        filter: invert(1);
+      }
+      [data-theme="light"] #addNoteBtn {
+        filter: none;
+      }
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) #addNoteBtn {
+          filter: none;
+        }
+      }
       .match-note {
         display: flex;
-        align-items: flex-start;
-        gap: 8px;
+        align-items: center;
+        gap: 10px;
         padding: 6px 12px 6px 20px;
         border-bottom: 1px solid var(--panel-border);
         background: rgba(250, 204, 21, 0.06);
         border-left: 3px solid #facc15;
+        cursor: pointer;
       }
       .match-note-text {
         flex: 1;
@@ -5934,9 +5951,8 @@
         line-height: 1.4;
         color: var(--text);
         white-space: pre-wrap;
-        cursor: pointer;
       }
-      .match-note-delete {
+      .match-note-edit {
         opacity: 0;
         background: transparent;
         border: none;
@@ -5945,7 +5961,7 @@
         flex-shrink: 0;
         transition: opacity 0.1s;
       }
-      .match-note:hover .match-note-delete {
+      .match-note:hover .match-note-edit {
         opacity: 1;
       }
       .note-composer {
@@ -5975,8 +5991,12 @@
         gap: 6px;
         justify-content: flex-end;
       }
+      .note-composer-delete {
+        margin-right: auto;
+      }
       .note-composer-save,
-      .note-composer-cancel {
+      .note-composer-cancel,
+      .note-composer-delete {
         font-size: 11px;
         font-weight: 600;
         padding: 4px 10px;
@@ -5998,6 +6018,13 @@
         color: var(--text);
       }
       .note-composer-cancel:hover {
+        background: var(--btn-secondary-hover);
+      }
+      .note-composer-delete {
+        background: var(--btn-secondary-bg);
+        color: var(--loser-color);
+      }
+      .note-composer-delete:hover {
         background: var(--btn-secondary-hover);
       }
       .qa-overlay-btn {

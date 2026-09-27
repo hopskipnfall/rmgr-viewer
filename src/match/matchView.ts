@@ -4356,6 +4356,18 @@ export class MatchViewController {
       | { frameIndex: number; kind: "note"; note: MatchNote }
       | { frameIndex: number; kind: "new-note" };
 
+    // An anchored note stays visible whenever Comments is on, even if its own row got filtered
+    // out by the Win/Loss toggles - the note is the user's own bookmark on that interaction, not
+    // a property of whichever side "won" it, so hiding e.g. Losses shouldn't hide notes taken on
+    // a loss. Its row still renders normally (with the note inline above it) when NOT filtered
+    // out; only when the row itself is hidden does the note fall back to a standalone entry here.
+    const eventsToRenderFrameIndexes = new Set(
+      eventsToRender.map((e) => e.frameIndex),
+    );
+    const orphanedAnchoredNotes = [...anchoredNoteByFrame.entries()]
+      .filter(([frameIndex]) => !eventsToRenderFrameIndexes.has(frameIndex))
+      .map(([, note]) => note);
+
     const items: NeutralRenderItem[] = [
       ...eventsToRender.map((event): NeutralRenderItem => ({
         frameIndex: event.frameIndex,
@@ -4363,6 +4375,11 @@ export class MatchViewController {
         event,
       })),
       ...freeformNotes.map((note): NeutralRenderItem => ({
+        frameIndex: note.frameIndex,
+        kind: "note",
+        note,
+      })),
+      ...orphanedAnchoredNotes.map((note): NeutralRenderItem => ({
         frameIndex: note.frameIndex,
         kind: "note",
         note,
@@ -4453,11 +4470,13 @@ export class MatchViewController {
     }
   }
 
-  /** A textarea + Save/Cancel used for both a new note and editing an existing one. */
+  /** A textarea + Save/Cancel (and, when editing an existing note, Delete) used for both a new
+   * note and editing an existing one. */
   private createNoteComposer(
     initialText: string,
     onSave: (text: string) => void,
     onCancel: () => void,
+    onDelete?: () => void,
   ): HTMLElement {
     const tr = t();
     const wrap = document.createElement("div");
@@ -4472,6 +4491,18 @@ export class MatchViewController {
 
     const actions = document.createElement("div");
     actions.className = "note-composer-actions";
+
+    if (onDelete) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "note-composer-delete";
+      deleteBtn.textContent = tr.noteDeleteTitle;
+      deleteBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        onDelete();
+      });
+      actions.appendChild(deleteBtn);
+    }
 
     const saveBtn = document.createElement("button");
     saveBtn.type = "button";
@@ -4500,39 +4531,50 @@ export class MatchViewController {
     return wrap;
   }
 
-  /** A rendered note - its text (click to edit) and a hover-reveal delete button. */
+  /** A rendered note - clicking it seeks to that frame like any other Neutral Analysis entry; a
+   * hover-reveal edit button opens the composer, which itself offers Delete alongside Save. */
   private createNoteBlock(note: MatchNote, replay: Replay): HTMLElement {
     const tr = t();
     const wrap = document.createElement("div");
     wrap.className = "match-note";
     wrap.dataset.frameIndex = String(note.frameIndex);
+    wrap.addEventListener("click", () => {
+      this.dismissQuickAttackOverlay();
+      const seekTarget = Math.max(0, note.frameIndex - 60);
+      this.playback?.seek(seekTarget);
+      this.playback?.play();
+    });
 
     const renderView = (): void => {
       wrap.innerHTML = "";
 
+      const timeCol = document.createElement("div");
+      timeCol.className = "neutral-time-col";
+      const timeEl = document.createElement("span");
+      timeEl.className = "situation-time";
+      timeEl.textContent = formatElapsed(note.frameIndex);
+      const frameEl = document.createElement("span");
+      frameEl.className = "situation-frame";
+      frameEl.textContent = `${note.frameIndex}F`;
+      timeCol.appendChild(timeEl);
+      timeCol.appendChild(frameEl);
+      wrap.appendChild(timeCol);
+
       const textEl = document.createElement("div");
       textEl.className = "match-note-text";
       textEl.textContent = note.text;
-      textEl.title = tr.noteEditTitle;
-      textEl.addEventListener("click", (ev) => {
+      wrap.appendChild(textEl);
+
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "match-note-edit";
+      editBtn.title = tr.noteEditTitle;
+      editBtn.textContent = "✏️";
+      editBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         renderEdit();
       });
-      wrap.appendChild(textEl);
-
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "match-note-delete";
-      deleteBtn.title = tr.noteDeleteTitle;
-      deleteBtn.textContent = "🗑";
-      deleteBtn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        if (this.currentReplayId) {
-          this.matchNotes = deleteMatchNote(this.currentReplayId, note.id);
-        }
-        this.renderNeutralHitsPanel(replay);
-      });
-      wrap.appendChild(deleteBtn);
+      wrap.appendChild(editBtn);
     };
 
     const renderEdit = (): void => {
@@ -4551,6 +4593,12 @@ export class MatchViewController {
             this.renderNeutralHitsPanel(replay);
           },
           renderView,
+          () => {
+            if (this.currentReplayId) {
+              this.matchNotes = deleteMatchNote(this.currentReplayId, note.id);
+            }
+            this.renderNeutralHitsPanel(replay);
+          },
         ),
       );
     };
