@@ -1918,6 +1918,41 @@
       .matchup-link-btn:hover {
         opacity: 0.8;
       }
+      .matchup-comment-section {
+        margin: 12px 0;
+      }
+      .matchup-comment-section h3 {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-dim);
+        margin: 0 0 8px;
+      }
+      .matchup-comment-input {
+        width: 100%;
+        min-height: 64px;
+        resize: vertical;
+        font-family: inherit;
+        font-size: 13px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--panel-border);
+        background: var(--card-bg);
+        color: var(--text);
+        box-sizing: border-box;
+      }
+      .matchup-comment-saved {
+        display: inline-block;
+        margin-top: 6px;
+        font-size: 11px;
+        color: var(--text-dim);
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      .matchup-comment-saved.visible {
+        opacity: 1;
+      }
 
       /* Matchup Workshop Banner Link */
       .matchup-workshop-banner {

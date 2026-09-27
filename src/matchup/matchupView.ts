@@ -11,6 +11,7 @@ import {
 import { edgeGuardEffectivenessGrade } from "../classifiedSituations.js";
 import { GameList } from "../library/gameList.js";
 import type { SessionGroup } from "../data/session.js";
+import { loadMatchupComment, saveMatchupComment } from "../matchupComments.js";
 
 function fmtPooled(successes: number, total: number): string {
   if (total === 0) return "—";
@@ -98,6 +99,18 @@ export class MatchupViewController {
           ${statCard(tr.nhPerStockCol, fmtHits(rates.neutralHitsPerStock, rates.stocksTaken, tr), "")}
         </div>
 
+        <section class="matchup-comment-section">
+          <h3>${escapeHtml(tr.matchupCommentTitle)}</h3>
+          <textarea
+            id="matchupCommentInput"
+            class="matchup-comment-input"
+            placeholder="${escapeHtml(tr.matchupCommentPlaceholder)}"
+          ></textarea>
+          <span id="matchupCommentSaved" class="matchup-comment-saved">${escapeHtml(
+            tr.matchupCommentSaved,
+          )}</span>
+        </section>
+
         <div class="matchup-workshop-banner">
           <a href="#/matchup/${myChar}/${oppChar}/recoveries" class="matchup-workshop-btn" id="matchupWorkshopBtn">
             <span class="matchup-workshop-btn-icon">🎯</span>
@@ -112,6 +125,23 @@ export class MatchupViewController {
         <div id="matchupGameListWrap" class="game-list-wrap"></div>
       </div>
     `;
+
+    const commentEl = this.container.querySelector<HTMLTextAreaElement>(
+      "#matchupCommentInput",
+    );
+    const commentSavedEl = this.container.querySelector<HTMLElement>(
+      "#matchupCommentSaved",
+    );
+    if (commentEl) {
+      commentEl.value = loadMatchupComment(myChar, oppChar);
+      commentEl.addEventListener("blur", () => {
+        saveMatchupComment(myChar, oppChar, commentEl.value);
+        if (commentSavedEl) {
+          commentSavedEl.classList.add("visible");
+          setTimeout(() => commentSavedEl.classList.remove("visible"), 2000);
+        }
+      });
+    }
 
     const gameListWrap = this.container.querySelector(
       "#matchupGameListWrap",
