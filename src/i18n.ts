@@ -23,6 +23,8 @@ export interface Translations {
   sessionGames: (count: number) => string;
   sessionGamesHeading: string;
   sessionVideos: string;
+  sessionCommentTitle: string;
+  sessionCommentPlaceholder: string;
   sessionQuickSearches: string;
   quickSearchFailedEdgeGuards: string;
   quickSearchCombos: string;
@@ -701,6 +703,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sessionGames: (count) => (count === 1 ? "1 game" : `${count} games`),
     sessionGamesHeading: "Games",
     sessionVideos: "Video",
+    sessionCommentTitle: "Session Comment",
+    sessionCommentPlaceholder: "Write a comment about this session...",
     sessionQuickSearches: "Quick searches",
     quickSearchFailedEdgeGuards: "Failed Edge Guards",
     quickSearchCombos: "Combos",
@@ -1415,6 +1419,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sessionGames: (count) => `${count} 試合`,
     sessionGamesHeading: "試合",
     sessionVideos: "動画",
+    sessionCommentTitle: "セッションコメント",
+    sessionCommentPlaceholder: "このセッションについてコメントを入力...",
     sessionQuickSearches: "クイック検索",
     quickSearchFailedEdgeGuards: "失敗した復帰阻止",
     quickSearchCombos: "コンボ",
