@@ -74,7 +74,7 @@ describe("importIntoLibrary + loadPersistedLibrary", () => {
     expect(again.newIds).toEqual([]);
   });
 
-  it("sets stale entries aside, then replaces them on re-import", async () => {
+  it("still shows stale entries (using cached stats) alongside flagging them for re-import", async () => {
     const store = await freshStore();
     await importIntoLibrary(store, demoFiles());
     const all = await store.getAll();
@@ -83,7 +83,7 @@ describe("importIntoLibrary + loadPersistedLibrary", () => {
     );
 
     const loaded = await loadPersistedLibrary(store);
-    expect(loaded.summaries).toEqual([]);
+    expect(loaded.summaries).toHaveLength(3);
     expect(loaded.staleEntries).toHaveLength(3);
 
     const reimported = await importIntoLibrary(store, demoFiles());

@@ -154,11 +154,11 @@ describe("mergeProjectFile", () => {
     const result = await mergeProjectFile(file, store);
 
     expect(result.imported).toBe(2);
-    expect(result.skippedStale).toBe(0);
+    expect(result.pendingRecompute).toBe(0);
     expect(store.rows).toHaveLength(2);
   });
 
-  it("drops entries analyzed by an older version so they get recomputed", async () => {
+  it("still imports entries analyzed by an older version, flagged as pending recompute", async () => {
     const store = fakeStore();
     const file = buildProjectFile(
       [storedGame("a"), storedGame("old", ANALYSIS_VERSION - 1)],
@@ -167,8 +167,28 @@ describe("mergeProjectFile", () => {
     );
     const result = await mergeProjectFile(file, store);
 
+    expect(result.imported).toBe(2);
+    expect(result.pendingRecompute).toBe(1);
+    expect(store.rows.map((r) => r.id).sort()).toEqual(["a", "old"]);
+  });
+
+  it("drops entries with a known-bad encoding rather than importing wrong data", async () => {
+    const store = fakeStore();
+    const badGame = {
+      ...storedGame("bad"),
+      formatVersion: 4,
+      recorderSchemaVersion: 1,
+    };
+    const file = buildProjectFile(
+      [storedGame("a"), badGame],
+      createDefaultIdentity(),
+      {},
+    );
+    const result = await mergeProjectFile(file, store, [
+      { formatVersion: 4, recorderSchemaVersion: 1 },
+    ]);
+
     expect(result.imported).toBe(1);
-    expect(result.skippedStale).toBe(1);
     expect(store.rows.map((r) => r.id)).toEqual(["a"]);
   });
 

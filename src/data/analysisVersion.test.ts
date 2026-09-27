@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ANALYSIS_VERSION, isStale } from "./analysisVersion.js";
+import {
+  ANALYSIS_VERSION,
+  isStale,
+  isKnownBadEncoding,
+} from "./analysisVersion.js";
 
 const base = {
   analysisVersion: ANALYSIS_VERSION,
@@ -27,5 +31,29 @@ describe("isStale", () => {
 
   it("ignores an empty matcher rather than flagging everything", () => {
     expect(isStale(base, [{}])).toBe(false);
+  });
+});
+
+describe("isKnownBadEncoding", () => {
+  it("is false at an older analysis version - that alone isn't a bad encoding", () => {
+    expect(
+      isKnownBadEncoding(
+        { ...base, analysisVersion: ANALYSIS_VERSION - 1 },
+        [],
+      ),
+    ).toBe(false);
+  });
+
+  it("is true when the file's versions are on the known-bad list", () => {
+    expect(isKnownBadEncoding(base, [{ recorderSchemaVersion: 1 }])).toBe(true);
+    expect(
+      isKnownBadEncoding(base, [
+        { formatVersion: 5, recorderSchemaVersion: 2 },
+      ]),
+    ).toBe(false);
+  });
+
+  it("ignores an empty matcher rather than flagging everything", () => {
+    expect(isKnownBadEncoding(base, [{}])).toBe(false);
   });
 });

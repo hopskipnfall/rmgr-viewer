@@ -1,5 +1,9 @@
 import type { PortIndex } from "@rmg-k/rmgr";
-import { ANALYSIS_VERSION, isStale } from "./analysisVersion.js";
+import {
+  ANALYSIS_VERSION,
+  isStale,
+  isKnownBadEncoding,
+} from "./analysisVersion.js";
 import {
   deserializeGameSummary,
   legacyGameId,
@@ -28,9 +32,16 @@ import { searchCache } from "../search/searchCache.js";
  */
 
 export interface LoadedLibrary {
-  /** Fresh entries, ready for the library. `fileRef` is null - no file is loaded yet this session. */
+  /**
+   * Entries shown in the library, `fileRef` null (no file loaded yet this session). Includes
+   * entries on an older ANALYSIS_VERSION - their cached stats may reflect an older stat
+   * definition, but showing possibly-slightly-outdated numbers beats hiding the game entirely,
+   * especially for a project import where the user may not have the original replay file handy to
+   * trigger a recompute (see projectFile.ts). Only entries matching KNOWN_BAD_VERSIONS (the replay
+   * itself was parsed from a broken encoding, not just an old stat definition) are excluded here.
+   */
   summaries: GameSummary[];
-  /** Entries needing re-import (older ANALYSIS_VERSION or a known-bad encoding). Kept out of the library and stats. */
+  /** Entries needing re-import (older ANALYSIS_VERSION or a known-bad encoding) - drives the "N games need reimporting" banner. May overlap with `summaries`. */
   staleEntries: StoredGame[];
 }
 
@@ -50,7 +61,8 @@ export async function loadPersistedLibrary(
   const staleEntries: StoredGame[] = [];
   for (const entry of await store.getAll()) {
     if (isStale(entry)) staleEntries.push(entry);
-    else summaries.push(summaryFromEntry(entry, null));
+    if (!isKnownBadEncoding(entry))
+      summaries.push(summaryFromEntry(entry, null));
   }
   return { summaries, staleEntries };
 }

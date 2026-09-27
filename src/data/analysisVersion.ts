@@ -50,11 +50,17 @@ export interface VersionedEntry {
   recorderSchemaVersion: number;
 }
 
-export function isStale(
+/**
+ * True only for a KNOWN_BAD_VERSIONS match - the replay itself was parsed from a broken encoding,
+ * so the cached summary may hold genuinely wrong data. Distinct from isStale(): a plain
+ * analysisVersion mismatch just means a newer stat definition exists, not that the old numbers are
+ * wrong - callers that can tolerate slightly outdated stats (e.g. project import - see
+ * projectFile.ts) should check this instead of isStale() to decide what's safe to show.
+ */
+export function isKnownBadEncoding(
   entry: VersionedEntry,
   knownBad: readonly VersionMatcher[] = KNOWN_BAD_VERSIONS,
 ): boolean {
-  if (entry.analysisVersion !== ANALYSIS_VERSION) return true;
   return knownBad.some(
     (m) =>
       (m.formatVersion !== undefined ||
@@ -64,4 +70,13 @@ export function isStale(
       (m.recorderSchemaVersion === undefined ||
         m.recorderSchemaVersion === entry.recorderSchemaVersion),
   );
+}
+
+/** True if this entry needs recomputing: either a newer stat definition exists, or isKnownBadEncoding(). */
+export function isStale(
+  entry: VersionedEntry,
+  knownBad: readonly VersionMatcher[] = KNOWN_BAD_VERSIONS,
+): boolean {
+  if (entry.analysisVersion !== ANALYSIS_VERSION) return true;
+  return isKnownBadEncoding(entry, knownBad);
 }
