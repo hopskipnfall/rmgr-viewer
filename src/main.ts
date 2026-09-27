@@ -81,6 +81,10 @@ import {
 import { loadMatchNotes, saveMatchNotes, type MatchNote } from "./notes.js";
 import { loadSessionComment, saveSessionComment } from "./sessionComments.js";
 import {
+  getAllMatchupComments,
+  saveMatchupCommentByKey,
+} from "./matchupComments.js";
+import {
   isTobloSfxEnabled,
   playTobloEnabledSfx,
   setTobloSfxEnabled,
@@ -1147,6 +1151,7 @@ async function init(): Promise<void> {
         const comment = loadSessionComment(session.id);
         if (comment) sessionComments[session.id] = comment;
       }
+      const matchupComments = getAllMatchupComments();
       const blob = serializeProjectFile(
         buildProjectFile(
           rows,
@@ -1154,6 +1159,7 @@ async function init(): Promise<void> {
           videoLinks,
           notes,
           sessionComments,
+          matchupComments,
         ),
       );
       const url = URL.createObjectURL(blob);
@@ -1190,6 +1196,9 @@ async function init(): Promise<void> {
         }
         for (const [id, comment] of Object.entries(parsed.sessionComments)) {
           saveSessionComment(id, comment);
+        }
+        for (const [key, comment] of Object.entries(parsed.matchupComments)) {
+          saveMatchupCommentByKey(key, comment);
         }
         if (projectFileStatus) {
           projectFileStatus.textContent = t().importProjectDone(
