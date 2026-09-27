@@ -25,6 +25,7 @@ export interface Translations {
   sessionVideos: string;
   sessionCommentTitle: string;
   sessionCommentPlaceholder: string;
+  sessionCommentSaved: string;
   sessionQuickSearches: string;
   quickSearchFailedEdgeGuards: string;
   quickSearchCombos: string;
@@ -705,6 +706,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sessionVideos: "Video",
     sessionCommentTitle: "Session Comment",
     sessionCommentPlaceholder: "Write a comment about this session...",
+    sessionCommentSaved: "Saved",
     sessionQuickSearches: "Quick searches",
     quickSearchFailedEdgeGuards: "Failed Edge Guards",
     quickSearchCombos: "Combos",
@@ -1421,6 +1423,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sessionVideos: "動画",
     sessionCommentTitle: "セッションコメント",
     sessionCommentPlaceholder: "このセッションについてコメントを入力...",
+    sessionCommentSaved: "保存しました",
     sessionQuickSearches: "クイック検索",
     quickSearchFailedEdgeGuards: "失敗した復帰阻止",
     quickSearchCombos: "コンボ",

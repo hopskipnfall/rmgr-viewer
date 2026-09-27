@@ -12,6 +12,7 @@ import { GameList } from "../library/gameList.js";
 import { MatchupChipSelector } from "../library/matchupChipSelector.js";
 import { MatchupStatsView } from "../library/matchupStatsView.js";
 import { searchHash, type SearchRouteCriteria } from "../router.js";
+import { loadSessionComment, saveSessionComment } from "../sessionComments.js";
 
 /** No filters: the base every quick search starts from. */
 const EMPTY_CRITERIA: SearchRouteCriteria = {
@@ -174,6 +175,17 @@ export class SessionViewController {
           </p>
         </section>
         <section class="session-page-section">
+          <h3>${escapeHtml(tr.sessionCommentTitle)}</h3>
+          <textarea
+            id="sessionCommentInput"
+            class="session-comment-input"
+            placeholder="${escapeHtml(tr.sessionCommentPlaceholder)}"
+          ></textarea>
+          <span id="sessionCommentSaved" class="session-comment-saved">${escapeHtml(
+            tr.sessionCommentSaved,
+          )}</span>
+        </section>
+        <section class="session-page-section">
           <h3>${escapeHtml(tr.sessionQuickSearches)}</h3>
           <div id="sessionQuickSearchLinks" class="session-quick-search-links"></div>
         </section>
@@ -193,6 +205,23 @@ export class SessionViewController {
         </section>
       </div>
     `;
+
+    const commentEl = this.container.querySelector<HTMLTextAreaElement>(
+      "#sessionCommentInput",
+    );
+    const commentSavedEl = this.container.querySelector<HTMLElement>(
+      "#sessionCommentSaved",
+    );
+    if (commentEl) {
+      commentEl.value = loadSessionComment(session.id);
+      commentEl.addEventListener("blur", () => {
+        saveSessionComment(session.id, commentEl.value);
+        if (commentSavedEl) {
+          commentSavedEl.classList.add("visible");
+          setTimeout(() => commentSavedEl.classList.remove("visible"), 2000);
+        }
+      });
+    }
 
     const selectorEl = this.container.querySelector<HTMLElement>(
       "#sessionMatchupSelector",
