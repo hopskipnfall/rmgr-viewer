@@ -248,9 +248,7 @@ describe("notes export/import", () => {
       { a: [note] },
     );
     const text = await serializeProjectFile(built).text();
-    const noteLines = text
-      .split("\n")
-      .filter((l) => l.includes('"note text"'));
+    const noteLines = text.split("\n").filter((l) => l.includes('"note text"'));
     expect(noteLines).toHaveLength(1);
 
     const parsed = parseProjectFile(text);
