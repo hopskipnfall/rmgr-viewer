@@ -41,6 +41,9 @@ export interface ProjectFile {
   /** Keyed by session id (SessionGroup.id, from data/session.ts), as stored in localStorage by
    * sessionComments.ts. */
   readonly sessionComments: Readonly<Record<string, string>>;
+  /** Keyed by "myChar_oppChar" (a directed character-id pair, from router.ts's matchup route),
+   * as stored in localStorage by matchupComments.ts. */
+  readonly matchupComments: Readonly<Record<string, string>>;
 }
 
 /**
@@ -83,6 +86,7 @@ export function buildProjectFile(
   videoLinks: Readonly<Record<string, VideoLinkData>>,
   notes: Readonly<Record<string, readonly MatchNote[]>> = {},
   sessionComments: Readonly<Record<string, string>> = {},
+  matchupComments: Readonly<Record<string, string>> = {},
 ): ProjectFile {
   return {
     kind: KIND,
@@ -97,6 +101,7 @@ export function buildProjectFile(
     videoLinks,
     notes,
     sessionComments,
+    matchupComments,
   };
 }
 
@@ -126,6 +131,11 @@ export function serializeProjectFile(file: ProjectFile): Blob {
       ([id, comment]) => `${j(id)}: ${j(comment)}`,
     ),
   );
+  const matchupComments = listLines(
+    Object.entries(file.matchupComments).map(
+      ([id, comment]) => `${j(id)}: ${j(comment)}`,
+    ),
+  );
 
   const text = [
     "{",
@@ -145,11 +155,15 @@ export function serializeProjectFile(file: ProjectFile): Blob {
     `  },`,
     `  "sessionComments": {`,
     sessionComments,
+    `  },`,
+    `  "matchupComments": {`,
+    matchupComments,
     `  }`,
     "}",
     "",
   ]
-    // Drop the empty line an empty games/videoLinks/notes/sessionComments list would leave behind.
+    // Drop the empty line an empty games/videoLinks/notes/sessionComments/matchupComments list
+    // would leave behind.
     .filter((line) => line !== "")
     .join("\n")
     .concat("\n");
@@ -189,6 +203,7 @@ export function parseProjectFile(text: string): ProjectFile {
     videoLinks: file.videoLinks ?? {},
     notes: file.notes ?? {},
     sessionComments: file.sessionComments ?? {},
+    matchupComments: file.matchupComments ?? {},
   };
 }
 

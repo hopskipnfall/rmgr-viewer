@@ -314,3 +314,54 @@ describe("session comments export/import", () => {
     expect(parsed.sessionComments).toEqual({});
   });
 });
+
+describe("matchup comments export/import", () => {
+  it("round-trips comments keyed by matchup pair", () => {
+    const built = buildProjectFile(
+      [storedGame("a")],
+      createDefaultIdentity(),
+      {},
+      {},
+      {},
+      { "2_12": "Watch out for his up-smash" },
+    );
+    const parsed = parseProjectFile(JSON.stringify(built));
+    expect(parsed.matchupComments["2_12"]).toBe("Watch out for his up-smash");
+  });
+
+  it("defaults to no matchup comments when the 6th argument is omitted", () => {
+    const built = buildProjectFile(
+      [storedGame("a")],
+      createDefaultIdentity(),
+      {},
+    );
+    expect(built.matchupComments).toEqual({});
+  });
+
+  it("puts each matchup's comment on its own line, and still parses", async () => {
+    const built = buildProjectFile(
+      [storedGame("a"), storedGame("b")],
+      createDefaultIdentity(),
+      {},
+      {},
+      {},
+      { "2_12": "comment text" },
+    );
+    const text = await serializeProjectFile(built).text();
+    const commentLines = text
+      .split("\n")
+      .filter((l) => l.includes('"comment text"'));
+    expect(commentLines).toHaveLength(1);
+
+    const parsed = parseProjectFile(text);
+    expect(parsed.matchupComments["2_12"]).toBe("comment text");
+  });
+
+  it("stays valid JSON with no matchup comments", async () => {
+    const text = await serializeProjectFile(
+      buildProjectFile([], createDefaultIdentity(), {}),
+    ).text();
+    const parsed = parseProjectFile(text);
+    expect(parsed.matchupComments).toEqual({});
+  });
+});

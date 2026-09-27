@@ -251,6 +251,9 @@ export interface Translations {
   matchupVs: string;
   matchupGamesWord: string;
   matchupStatsSectionTitle: string;
+  matchupCommentTitle: string;
+  matchupCommentPlaceholder: string;
+  matchupCommentSaved: string;
   matchupGamesSectionTitle: string;
   matchupEdgeGuardWorkshopBtn: string;
   edgeGuardWorkshopTitle: string;
@@ -950,6 +953,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     matchupVs: "vs",
     matchupGamesWord: "games",
     matchupStatsSectionTitle: "STATS",
+    matchupCommentTitle: "Matchup Comment",
+    matchupCommentPlaceholder: "Write a comment about this matchup...",
+    matchupCommentSaved: "Saved",
     matchupGamesSectionTitle: "GAMES",
     matchupEdgeGuardWorkshopBtn: "Edge Guard Workshop",
     edgeGuardWorkshopTitle: "Edge Guard Workshop",
@@ -1657,6 +1663,9 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     matchupVs: "vs",
     matchupGamesWord: "試合",
     matchupStatsSectionTitle: "統計",
+    matchupCommentTitle: "対戦カードコメント",
+    matchupCommentPlaceholder: "この対戦カードについてコメントを入力...",
+    matchupCommentSaved: "保存しました",
     matchupGamesSectionTitle: "試合一覧",
     matchupEdgeGuardWorkshopBtn: "復帰阻止ワークショップ",
     edgeGuardWorkshopTitle: "復帰阻止ワークショップ",
