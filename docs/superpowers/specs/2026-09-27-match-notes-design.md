@@ -28,10 +28,25 @@ export interface MatchNote {
 }
 
 export function loadMatchNotes(gameId: string): MatchNote[];
-export function saveMatchNotes(gameId: string, notes: readonly MatchNote[]): void;
-export function upsertAnchoredNote(gameId: string, eventFrameIndex: number, text: string): MatchNote[];
-export function addFreeformNote(gameId: string, frameIndex: number, text: string): MatchNote[];
-export function updateNoteText(gameId: string, noteId: string, text: string): MatchNote[];
+export function saveMatchNotes(
+  gameId: string,
+  notes: readonly MatchNote[],
+): void;
+export function upsertAnchoredNote(
+  gameId: string,
+  eventFrameIndex: number,
+  text: string,
+): MatchNote[];
+export function addFreeformNote(
+  gameId: string,
+  frameIndex: number,
+  text: string,
+): MatchNote[];
+export function updateNoteText(
+  gameId: string,
+  noteId: string,
+  text: string,
+): MatchNote[];
 export function deleteMatchNote(gameId: string, noteId: string): MatchNote[];
 ```
 

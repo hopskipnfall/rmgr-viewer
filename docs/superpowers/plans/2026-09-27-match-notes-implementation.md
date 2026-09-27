@@ -24,10 +24,12 @@
 ### Task 1: `src/notes.ts` persistence module
 
 **Files:**
+
 - Create: `src/notes.ts`
 - Create: `src/notes.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `interface MatchNote { readonly id: string; readonly frameIndex: number; readonly text: string; readonly eventFrameIndex?: number; readonly createdAt: number; readonly updatedAt: number; }`
   - `function loadMatchNotes(gameId: string): MatchNote[]`
@@ -334,11 +336,13 @@ git commit -m "Add src/notes.ts: per-game timestamped match notes persistence"
 ### Task 2: Project export/import wiring
 
 **Files:**
+
 - Modify: `src/data/projectFile.ts`
 - Modify: `src/main.ts`
 - Modify: `src/data/projectFile.test.ts`
 
 **Interfaces:**
+
 - Consumes: `MatchNote` (from `src/notes.ts`, Task 1), `loadMatchNotes`/`saveMatchNotes` (from `src/notes.ts`, Task 1).
 - Produces:
   - `ProjectFile.notes: Readonly<Record<string, readonly MatchNote[]>>`
@@ -392,9 +396,7 @@ describe("notes export/import", () => {
       { a: [note] },
     );
     const text = await serializeProjectFile(built).text();
-    const noteLines = text
-      .split("\n")
-      .filter((l) => l.includes('"note text"'));
+    const noteLines = text.split("\n").filter((l) => l.includes('"note text"'));
     expect(noteLines).toHaveLength(1);
 
     const parsed = parseProjectFile(text);
@@ -572,26 +574,26 @@ to:
 In the import handler, change:
 
 ```ts
-        const parsed = parseProjectFile(await file.text());
-        const result = await mergeProjectFile(parsed, libraryStore);
-        saveIdentity(identityOf(parsed));
-        for (const [id, link] of Object.entries(parsed.videoLinks)) {
-          saveVideoLink(id, link);
-        }
+const parsed = parseProjectFile(await file.text());
+const result = await mergeProjectFile(parsed, libraryStore);
+saveIdentity(identityOf(parsed));
+for (const [id, link] of Object.entries(parsed.videoLinks)) {
+  saveVideoLink(id, link);
+}
 ```
 
 to:
 
 ```ts
-        const parsed = parseProjectFile(await file.text());
-        const result = await mergeProjectFile(parsed, libraryStore);
-        saveIdentity(identityOf(parsed));
-        for (const [id, link] of Object.entries(parsed.videoLinks)) {
-          saveVideoLink(id, link);
-        }
-        for (const [id, gameNotes] of Object.entries(parsed.notes)) {
-          saveMatchNotes(id, gameNotes);
-        }
+const parsed = parseProjectFile(await file.text());
+const result = await mergeProjectFile(parsed, libraryStore);
+saveIdentity(identityOf(parsed));
+for (const [id, link] of Object.entries(parsed.videoLinks)) {
+  saveVideoLink(id, link);
+}
+for (const [id, gameNotes] of Object.entries(parsed.notes)) {
+  saveMatchNotes(id, gameNotes);
+}
 ```
 
 - [ ] **Step 6: Type-check and lint**
@@ -616,9 +618,11 @@ git commit -m "Fold match notes into project export/import, alongside video link
 ### Task 3: `src/i18n.ts` translation strings
 
 **Files:**
+
 - Modify: `src/i18n.ts`
 
 **Interfaces:**
+
 - Produces (added to the `Translations` interface, and both the English and Japanese `Translations` objects):
   - `neutralFilterWin: (count: number) => string` (replaces `neutralFilterOpenings`)
   - `neutralFilterLoss: (count: number) => string` (replaces `neutralFilterPunishes`)
@@ -637,36 +641,36 @@ git commit -m "Fold match notes into project export/import, alongside video link
 Find this block (around line 449-458):
 
 ```ts
-  // Neutral Openings widget
-  neutralHitsWidgetTitle: string;
-  neutralFilterAll: (count: number) => string;
-  neutralFilterOpenings: (count: number) => string;
-  neutralFilterPunishes: (count: number) => string;
-  neutralOpeningsGroupTitle: (count: number) => string;
-  neutralPunishesGroupTitle: (count: number) => string;
-  noNeutralHits: string;
-  noNeutralOpeningsLanded: string;
-  noNeutralPunishesTaken: string;
+// Neutral Openings widget
+neutralHitsWidgetTitle: string;
+neutralFilterAll: (count: number) => string;
+neutralFilterOpenings: (count: number) => string;
+neutralFilterPunishes: (count: number) => string;
+neutralOpeningsGroupTitle: (count: number) => string;
+neutralPunishesGroupTitle: (count: number) => string;
+noNeutralHits: string;
+noNeutralOpeningsLanded: string;
+noNeutralPunishesTaken: string;
 ```
 
 Replace it with:
 
 ```ts
-  // Neutral Openings widget
-  neutralHitsWidgetTitle: string;
-  neutralFilterWin: (count: number) => string;
-  neutralFilterLoss: (count: number) => string;
-  neutralFilterComments: (count: number) => string;
-  neutralOpeningsGroupTitle: (count: number) => string;
-  neutralPunishesGroupTitle: (count: number) => string;
-  noNeutralHits: string;
-  addNoteButtonTitle: string;
-  addNoteRowTitle: string;
-  notePlaceholder: string;
-  noteSaveButton: string;
-  noteCancelButton: string;
-  noteEditTitle: string;
-  noteDeleteTitle: string;
+// Neutral Openings widget
+neutralHitsWidgetTitle: string;
+neutralFilterWin: (count: number) => string;
+neutralFilterLoss: (count: number) => string;
+neutralFilterComments: (count: number) => string;
+neutralOpeningsGroupTitle: (count: number) => string;
+neutralPunishesGroupTitle: (count: number) => string;
+noNeutralHits: string;
+addNoteButtonTitle: string;
+addNoteRowTitle: string;
+notePlaceholder: string;
+noteSaveButton: string;
+noteCancelButton: string;
+noteEditTitle: string;
+noteDeleteTitle: string;
 ```
 
 - [ ] **Step 2: Modify the English translations object**
@@ -761,10 +765,12 @@ git commit -m "Add match-notes translations; rename neutral filter tabs to Win/L
 ### Task 4: Win/Loss/Comments toggle bar + anchored notes in `matchView.ts`
 
 **Files:**
+
 - Modify: `index.html`
 - Modify: `src/match/matchView.ts`
 
 **Interfaces:**
+
 - Consumes: `MatchNote`, `loadMatchNotes`, `upsertAnchoredNote`, `updateNoteText`, `deleteMatchNote` (from `src/notes.ts`, Task 1); `neutralFilterWin`/`neutralFilterLoss`/`neutralFilterComments`/`addNoteRowTitle`/`notePlaceholder`/`noteSaveButton`/`noteCancelButton`/`noteEditTitle`/`noteDeleteTitle`/`noNeutralHits` (from `src/i18n.ts`, Task 3).
 - Produces (for Task 5 to build on):
   - `private createNoteComposer(initialText: string, onSave: (text: string) => void, onCancel: () => void): HTMLElement`
@@ -777,168 +783,168 @@ git commit -m "Add match-notes translations; rename neutral filter tabs to Win/L
 Find this block (search for `.situation-row.neutral-row-punish.active`):
 
 ```css
-      .situation-row.neutral-row-punish.active {
-        background: rgba(224, 71, 63, 0.24);
-        box-shadow: inset 0 0 0 1px rgba(224, 71, 63, 0.8);
-      }
+.situation-row.neutral-row-punish.active {
+  background: rgba(224, 71, 63, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(224, 71, 63, 0.8);
+}
 ```
 
 Immediately after its closing `}`, insert:
 
 ```css
-      .neutral-filter-btn.filter-comments.active {
-        background: rgba(250, 204, 21, 0.18);
-        border-color: #facc15;
-        color: #92730a;
-      }
-      [data-theme="dark"] .neutral-filter-btn.filter-comments.active {
-        color: #facc15;
-      }
-      .add-note-btn {
-        opacity: 0;
-        margin-left: auto;
-        background: transparent;
-        border: none;
-        cursor: pointer;
-        font-size: 14px;
-        line-height: 1;
-        padding: 2px 4px;
-        border-radius: 4px;
-        flex-shrink: 0;
-        transition:
-          opacity 0.1s,
-          background 0.1s;
-      }
-      .neutral-interaction-row:hover .add-note-btn {
-        opacity: 1;
-      }
-      .add-note-btn:hover {
-        background: rgba(255, 255, 255, 0.08);
-      }
-      .match-note {
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
-        padding: 6px 12px 6px 20px;
-        border-bottom: 1px solid var(--panel-border);
-        background: rgba(250, 204, 21, 0.06);
-        border-left: 3px solid #facc15;
-      }
-      .match-note-text {
-        flex: 1;
-        min-width: 0;
-        font-size: 12px;
-        line-height: 1.4;
-        color: var(--text);
-        white-space: pre-wrap;
-        cursor: pointer;
-      }
-      .match-note-delete {
-        opacity: 0;
-        background: transparent;
-        border: none;
-        cursor: pointer;
-        font-size: 12px;
-        flex-shrink: 0;
-        transition: opacity 0.1s;
-      }
-      .match-note:hover .match-note-delete {
-        opacity: 1;
-      }
-      .note-composer {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        padding: 8px 12px 8px 20px;
-        border-bottom: 1px solid var(--panel-border);
-        background: rgba(250, 204, 21, 0.08);
-        border-left: 3px solid #facc15;
-      }
-      .note-composer-input {
-        width: 100%;
-        min-height: 48px;
-        resize: vertical;
-        font-family: inherit;
-        font-size: 12px;
-        padding: 6px 8px;
-        border-radius: 4px;
-        border: 1px solid var(--panel-border);
-        background: var(--card-bg);
-        color: var(--text);
-        box-sizing: border-box;
-      }
-      .note-composer-actions {
-        display: flex;
-        gap: 6px;
-        justify-content: flex-end;
-      }
-      .note-composer-save,
-      .note-composer-cancel {
-        font-size: 11px;
-        font-weight: 600;
-        padding: 4px 10px;
-        border-radius: 4px;
-        cursor: pointer;
-        border: 1px solid var(--panel-border);
-        font-family: inherit;
-      }
-      .note-composer-save {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #fff;
-      }
-      .note-composer-save:hover {
-        background: var(--accent-hover);
-      }
-      .note-composer-cancel {
-        background: var(--btn-secondary-bg);
-        color: var(--text);
-      }
-      .note-composer-cancel:hover {
-        background: var(--btn-secondary-hover);
-      }
+.neutral-filter-btn.filter-comments.active {
+  background: rgba(250, 204, 21, 0.18);
+  border-color: #facc15;
+  color: #92730a;
+}
+[data-theme="dark"] .neutral-filter-btn.filter-comments.active {
+  color: #facc15;
+}
+.add-note-btn {
+  opacity: 0;
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition:
+    opacity 0.1s,
+    background 0.1s;
+}
+.neutral-interaction-row:hover .add-note-btn {
+  opacity: 1;
+}
+.add-note-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.match-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 12px 6px 20px;
+  border-bottom: 1px solid var(--panel-border);
+  background: rgba(250, 204, 21, 0.06);
+  border-left: 3px solid #facc15;
+}
+.match-note-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  white-space: pre-wrap;
+  cursor: pointer;
+}
+.match-note-delete {
+  opacity: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  flex-shrink: 0;
+  transition: opacity 0.1s;
+}
+.match-note:hover .match-note-delete {
+  opacity: 1;
+}
+.note-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 8px 20px;
+  border-bottom: 1px solid var(--panel-border);
+  background: rgba(250, 204, 21, 0.08);
+  border-left: 3px solid #facc15;
+}
+.note-composer-input {
+  width: 100%;
+  min-height: 48px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--panel-border);
+  background: var(--card-bg);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.note-composer-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.note-composer-save,
+.note-composer-cancel {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--panel-border);
+  font-family: inherit;
+}
+.note-composer-save {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.note-composer-save:hover {
+  background: var(--accent-hover);
+}
+.note-composer-cancel {
+  background: var(--btn-secondary-bg);
+  color: var(--text);
+}
+.note-composer-cancel:hover {
+  background: var(--btn-secondary-hover);
+}
 ```
 
 Then rename the two existing class selectors just above (search for `filter-openings` and `filter-punishes`):
 
 ```css
-      .neutral-filter-btn.filter-openings.active {
-        background: rgba(59, 130, 246, 0.18);
-        border-color: #60a5fa;
-        color: #2563eb;
-      }
-      [data-theme="dark"] .neutral-filter-btn.filter-openings.active {
-        color: #60a5fa;
-      }
-      .neutral-filter-btn.filter-punishes.active {
-        background: rgba(224, 71, 63, 0.18);
-        border-color: #e0473f;
-        color: #dc2626;
-      }
-      [data-theme="dark"] .neutral-filter-btn.filter-punishes.active {
-        color: #f87171;
-      }
+.neutral-filter-btn.filter-openings.active {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: #60a5fa;
+  color: #2563eb;
+}
+[data-theme="dark"] .neutral-filter-btn.filter-openings.active {
+  color: #60a5fa;
+}
+.neutral-filter-btn.filter-punishes.active {
+  background: rgba(224, 71, 63, 0.18);
+  border-color: #e0473f;
+  color: #dc2626;
+}
+[data-theme="dark"] .neutral-filter-btn.filter-punishes.active {
+  color: #f87171;
+}
 ```
 
 to:
 
 ```css
-      .neutral-filter-btn.filter-win.active {
-        background: rgba(59, 130, 246, 0.18);
-        border-color: #60a5fa;
-        color: #2563eb;
-      }
-      [data-theme="dark"] .neutral-filter-btn.filter-win.active {
-        color: #60a5fa;
-      }
-      .neutral-filter-btn.filter-loss.active {
-        background: rgba(224, 71, 63, 0.18);
-        border-color: #e0473f;
-        color: #dc2626;
-      }
-      [data-theme="dark"] .neutral-filter-btn.filter-loss.active {
-        color: #f87171;
-      }
+.neutral-filter-btn.filter-win.active {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: #60a5fa;
+  color: #2563eb;
+}
+[data-theme="dark"] .neutral-filter-btn.filter-win.active {
+  color: #60a5fa;
+}
+.neutral-filter-btn.filter-loss.active {
+  background: rgba(224, 71, 63, 0.18);
+  border-color: #e0473f;
+  color: #dc2626;
+}
+[data-theme="dark"] .neutral-filter-btn.filter-loss.active {
+  color: #f87171;
+}
 ```
 
 - [ ] **Step 2: Add new fields to `MatchViewController`**
@@ -978,17 +984,17 @@ import {
 Find (inside `public loadMatch(...)`):
 
 ```ts
-    const neutralEvents = computeNeutralHitEvents(replay);
-    this.neutralHitEvents = neutralEvents;
+const neutralEvents = computeNeutralHitEvents(replay);
+this.neutralHitEvents = neutralEvents;
 ```
 
 Replace with:
 
 ```ts
-    const neutralEvents = computeNeutralHitEvents(replay);
-    this.neutralHitEvents = neutralEvents;
-    this.matchNotes = loadMatchNotes(this.currentReplayId ?? "");
-    this.pendingAnchoredNoteFrameIndex = null;
+const neutralEvents = computeNeutralHitEvents(replay);
+this.neutralHitEvents = neutralEvents;
+this.matchNotes = loadMatchNotes(this.currentReplayId ?? "");
+this.pendingAnchoredNoteFrameIndex = null;
 ```
 
 - [ ] **Step 5: Rewrite `renderNeutralHitsPanel` and add the two new helper methods**
@@ -1482,10 +1488,12 @@ git commit -m "Add Win/Loss/Comments toggle bar and anchored match notes to Neut
 ### Task 5: Freeform notes (footer button + merged chronological list)
 
 **Files:**
+
 - Modify: `index.html`
 - Modify: `src/match/matchView.ts`
 
 **Interfaces:**
+
 - Consumes: `addFreeformNote` (from `src/notes.ts`, Task 1); `createNoteComposer`, `createNoteBlock` (from Task 4, unchanged); `addNoteButtonTitle` (from `src/i18n.ts`, Task 3).
 
 - [ ] **Step 1: Add the footer button markup to `index.html`**
@@ -1528,17 +1536,15 @@ Replace with:
 Find:
 
 ```ts
-    this.stepForwardBtn = document.getElementById(
-      "stepForward",
-    ) as HTMLButtonElement;
+this.stepForwardBtn = document.getElementById(
+  "stepForward",
+) as HTMLButtonElement;
 ```
 
 Immediately after it, insert:
 
 ```ts
-    this.addNoteBtn = document.getElementById(
-      "addNoteBtn",
-    ) as HTMLButtonElement;
+this.addNoteBtn = document.getElementById("addNoteBtn") as HTMLButtonElement;
 ```
 
 - [ ] **Step 3: Extend the notes import**
@@ -1573,21 +1579,20 @@ import {
 Find:
 
 ```ts
-    this.playPauseBtn.addEventListener("click", () => {
-      this.dismissQuickAttackOverlay();
-      this.playback?.toggle();
-    });
+this.playPauseBtn.addEventListener("click", () => {
+  this.dismissQuickAttackOverlay();
+  this.playback?.toggle();
+});
 ```
 
 Immediately before it, insert:
 
 ```ts
-    this.addNoteBtn.addEventListener("click", () => {
-      if (!this.currentReplay) return;
-      this.pendingFreeformNoteFrameIndex = this.playback?.currentIndex ?? 0;
-      this.renderNeutralHitsPanel(this.currentReplay);
-    });
-
+this.addNoteBtn.addEventListener("click", () => {
+  if (!this.currentReplay) return;
+  this.pendingFreeformNoteFrameIndex = this.playback?.currentIndex ?? 0;
+  this.renderNeutralHitsPanel(this.currentReplay);
+});
 ```
 
 - [ ] **Step 5: Reset the new pending field on load**
@@ -1595,16 +1600,16 @@ Immediately before it, insert:
 Find (from Task 4's change to `loadMatch()`):
 
 ```ts
-    this.matchNotes = loadMatchNotes(this.currentReplayId ?? "");
-    this.pendingAnchoredNoteFrameIndex = null;
+this.matchNotes = loadMatchNotes(this.currentReplayId ?? "");
+this.pendingAnchoredNoteFrameIndex = null;
 ```
 
 Replace with:
 
 ```ts
-    this.matchNotes = loadMatchNotes(this.currentReplayId ?? "");
-    this.pendingAnchoredNoteFrameIndex = null;
-    this.pendingFreeformNoteFrameIndex = null;
+this.matchNotes = loadMatchNotes(this.currentReplayId ?? "");
+this.pendingAnchoredNoteFrameIndex = null;
+this.pendingFreeformNoteFrameIndex = null;
 ```
 
 - [ ] **Step 6: Fix `updateSidebarVisibility` to account for notes**
@@ -1634,30 +1639,30 @@ Replace with:
 In `renderNeutralHitsPanel` (from Task 4), find:
 
 ```ts
-    const anchoredNoteByFrame = new Map<number, MatchNote>();
-    if (this.neutralShowComments) {
-      for (const n of this.matchNotes) {
-        if (n.eventFrameIndex !== undefined) {
-          anchoredNoteByFrame.set(n.eventFrameIndex, n);
-        }
-      }
+const anchoredNoteByFrame = new Map<number, MatchNote>();
+if (this.neutralShowComments) {
+  for (const n of this.matchNotes) {
+    if (n.eventFrameIndex !== undefined) {
+      anchoredNoteByFrame.set(n.eventFrameIndex, n);
     }
+  }
+}
 ```
 
 Replace with:
 
 ```ts
-    const anchoredNoteByFrame = new Map<number, MatchNote>();
-    const freeformNotes: MatchNote[] = [];
-    if (this.neutralShowComments) {
-      for (const n of this.matchNotes) {
-        if (n.eventFrameIndex !== undefined) {
-          anchoredNoteByFrame.set(n.eventFrameIndex, n);
-        } else {
-          freeformNotes.push(n);
-        }
-      }
+const anchoredNoteByFrame = new Map<number, MatchNote>();
+const freeformNotes: MatchNote[] = [];
+if (this.neutralShowComments) {
+  for (const n of this.matchNotes) {
+    if (n.eventFrameIndex !== undefined) {
+      anchoredNoteByFrame.set(n.eventFrameIndex, n);
+    } else {
+      freeformNotes.push(n);
     }
+  }
+}
 ```
 
 Then find the entire block from the `let eventsToRender = this.neutralHitEvents;` line through the end of the method (the `if (eventsToRender.length === 0) { ... } else { eventsToRender.forEach(...) }` block and the method's closing `}`):
@@ -1851,18 +1856,18 @@ Replace it with:
 Find the block in the translation-refresh method that sets other footer button titles:
 
 ```ts
-    if (this.stepBackBtn) this.stepBackBtn.title = tr.prevFrameTooltip;
-    if (this.playPauseBtn) this.playPauseBtn.title = tr.playPauseTooltip;
-    if (this.stepForwardBtn) this.stepForwardBtn.title = tr.nextFrameTooltip;
+if (this.stepBackBtn) this.stepBackBtn.title = tr.prevFrameTooltip;
+if (this.playPauseBtn) this.playPauseBtn.title = tr.playPauseTooltip;
+if (this.stepForwardBtn) this.stepForwardBtn.title = tr.nextFrameTooltip;
 ```
 
 Replace with:
 
 ```ts
-    if (this.stepBackBtn) this.stepBackBtn.title = tr.prevFrameTooltip;
-    if (this.playPauseBtn) this.playPauseBtn.title = tr.playPauseTooltip;
-    if (this.stepForwardBtn) this.stepForwardBtn.title = tr.nextFrameTooltip;
-    if (this.addNoteBtn) this.addNoteBtn.title = tr.addNoteButtonTitle;
+if (this.stepBackBtn) this.stepBackBtn.title = tr.prevFrameTooltip;
+if (this.playPauseBtn) this.playPauseBtn.title = tr.playPauseTooltip;
+if (this.stepForwardBtn) this.stepForwardBtn.title = tr.nextFrameTooltip;
+if (this.addNoteBtn) this.addNoteBtn.title = tr.addNoteButtonTitle;
 ```
 
 - [ ] **Step 9: Type-check and lint**
