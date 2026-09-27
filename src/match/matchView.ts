@@ -125,6 +125,7 @@ import {
   type MatchNote,
   loadMatchNotes,
   upsertAnchoredNote,
+  addFreeformNote,
   updateNoteText,
   deleteMatchNote,
 } from "../notes.js";
@@ -290,6 +291,8 @@ export class MatchViewController {
   private neutralShowComments = true;
   private matchNotes: MatchNote[] = [];
   private pendingAnchoredNoteFrameIndex: number | null = null;
+  private pendingFreeformNoteFrameIndex: number | null = null;
+  private addNoteBtn: HTMLButtonElement;
   private wasPlayingBeforeScrub = false;
   private leftSidebarCollapsed = false;
   private rightSidebarCollapsed = false;
@@ -459,6 +462,9 @@ export class MatchViewController {
     ) as HTMLButtonElement;
     this.stepForwardBtn = document.getElementById(
       "stepForward",
+    ) as HTMLButtonElement;
+    this.addNoteBtn = document.getElementById(
+      "addNoteBtn",
     ) as HTMLButtonElement;
     this.scrubberBarEl = document.getElementById("scrubberBar") as HTMLElement;
     const scrubberTimelineCanvas = document.getElementById(
@@ -1543,6 +1549,12 @@ export class MatchViewController {
       }
     });
 
+    this.addNoteBtn.addEventListener("click", () => {
+      if (!this.currentReplay) return;
+      this.pendingFreeformNoteFrameIndex = this.playback?.currentIndex ?? 0;
+      this.renderNeutralHitsPanel(this.currentReplay);
+    });
+
     this.playPauseBtn.addEventListener("click", () => {
       this.dismissQuickAttackOverlay();
       this.playback?.toggle();
@@ -1803,7 +1815,7 @@ export class MatchViewController {
     const hasNeutralHits =
       Boolean(this.currentReplay) &&
       (this.currentReplay?.frames.length ?? 0) > 0 &&
-      this.neutralHitEvents.length > 0;
+      (this.neutralHitEvents.length > 0 || this.matchNotes.length > 0);
 
     if (this.neutralHitsWidget) {
       this.neutralHitsWidget.hidden = !hasNeutralHits;
@@ -2211,6 +2223,7 @@ export class MatchViewController {
     if (this.stepBackBtn) this.stepBackBtn.title = tr.prevFrameTooltip;
     if (this.playPauseBtn) this.playPauseBtn.title = tr.playPauseTooltip;
     if (this.stepForwardBtn) this.stepForwardBtn.title = tr.nextFrameTooltip;
+    if (this.addNoteBtn) this.addNoteBtn.title = tr.addNoteButtonTitle;
     if (this.stageExpandBtn) {
       const isExpanded =
         this.leftSidebarCollapsed && this.rightSidebarCollapsed;
@@ -4020,10 +4033,13 @@ export class MatchViewController {
     this.updateSidebarVisibility();
 
     const anchoredNoteByFrame = new Map<number, MatchNote>();
+    const freeformNotes: MatchNote[] = [];
     if (this.neutralShowComments) {
       for (const n of this.matchNotes) {
         if (n.eventFrameIndex !== undefined) {
           anchoredNoteByFrame.set(n.eventFrameIndex, n);
+        } else {
+          freeformNotes.push(n);
         }
       }
     }
@@ -4335,13 +4351,42 @@ export class MatchViewController {
       });
     }
 
-    if (eventsToRender.length === 0) {
+    type NeutralRenderItem =
+      | { frameIndex: number; kind: "event"; event: NeutralHitEvent }
+      | { frameIndex: number; kind: "note"; note: MatchNote }
+      | { frameIndex: number; kind: "new-note" };
+
+    const items: NeutralRenderItem[] = [
+      ...eventsToRender.map((event): NeutralRenderItem => ({
+        frameIndex: event.frameIndex,
+        kind: "event",
+        event,
+      })),
+      ...freeformNotes.map((note): NeutralRenderItem => ({
+        frameIndex: note.frameIndex,
+        kind: "note",
+        note,
+      })),
+    ];
+    if (this.pendingFreeformNoteFrameIndex !== null) {
+      items.push({
+        frameIndex: this.pendingFreeformNoteFrameIndex,
+        kind: "new-note",
+      });
+    }
+    items.sort((a, b) => a.frameIndex - b.frameIndex);
+
+    if (items.length === 0) {
       const empty = document.createElement("div");
       empty.className = "situation-empty";
       empty.textContent = tr.noNeutralHits;
       this.neutralHitsList.appendChild(empty);
-    } else {
-      eventsToRender.forEach((e) => {
+      return;
+    }
+
+    for (const item of items) {
+      if (item.kind === "event") {
+        const e = item.event;
         const anchored = anchoredNoteByFrame.get(e.frameIndex) ?? null;
         const pendingHere = this.pendingAnchoredNoteFrameIndex === e.frameIndex;
         if (anchored) {
@@ -4379,7 +4424,32 @@ export class MatchViewController {
           }
         }
         this.neutralHitsList.appendChild(row);
-      });
+      } else if (item.kind === "note") {
+        this.neutralHitsList.appendChild(
+          this.createNoteBlock(item.note, replay),
+        );
+      } else {
+        const frameIndex = item.frameIndex;
+        const composer = this.createNoteComposer(
+          "",
+          (text) => {
+            if (this.currentReplayId) {
+              this.matchNotes = addFreeformNote(
+                this.currentReplayId,
+                frameIndex,
+                text,
+              );
+            }
+            this.pendingFreeformNoteFrameIndex = null;
+            this.renderNeutralHitsPanel(replay);
+          },
+          () => {
+            this.pendingFreeformNoteFrameIndex = null;
+            this.renderNeutralHitsPanel(replay);
+          },
+        );
+        this.neutralHitsList.appendChild(composer);
+      }
     }
   }
 
@@ -5567,6 +5637,7 @@ export class MatchViewController {
     this.neutralHitEvents = neutralEvents;
     this.matchNotes = loadMatchNotes(this.currentReplayId ?? "");
     this.pendingAnchoredNoteFrameIndex = null;
+    this.pendingFreeformNoteFrameIndex = null;
     const puffEvents = computeJigglypuffFThrowEvents(replay);
     const shieldEvents = computeShieldPressureEvents(replay);
     // Superseded by classifiedSituationEvents (missed-ledge-hog / possible-accidental-save) and
