@@ -229,6 +229,12 @@ export class MatchViewController {
   private zoneToggleBtn: HTMLButtonElement;
   /** Draw the edge-guard zone boundary on the stage ("Zone" toggle). */
   private zoneOverlayEnabled = false;
+  private skeletonToggleBtn: HTMLButtonElement;
+  /** Draw characters' real bone skeleton (where defined) instead of the normal art. */
+  private skeletonModeEnabled = false;
+  private animationToggleBtn: HTMLButtonElement;
+  /** Play animated attacks (where defined) instead of a still pose. */
+  private animationModeEnabled = false;
   private fpsDisplay: HTMLDivElement;
   private recoveryWidget: HTMLElement;
   private recoveryCollapseBtn: HTMLButtonElement;
@@ -647,6 +653,12 @@ export class MatchViewController {
     ) as HTMLButtonElement;
     this.zoneToggleBtn = document.getElementById(
       "zoneToggleBtn",
+    ) as HTMLButtonElement;
+    this.skeletonToggleBtn = document.getElementById(
+      "skeletonToggleBtn",
+    ) as HTMLButtonElement;
+    this.animationToggleBtn = document.getElementById(
+      "animationToggleBtn",
     ) as HTMLButtonElement;
     this.fpsDisplay = document.getElementById("fpsDisplay") as HTMLDivElement;
 
@@ -1451,6 +1463,75 @@ export class MatchViewController {
       }
     });
 
+    try {
+      this.animationModeEnabled =
+        localStorage.getItem("rmgr-viewer-animation") === "true";
+    } catch {
+      this.animationModeEnabled = false;
+    }
+    this.animationToggleBtn.classList.toggle(
+      "active",
+      this.animationModeEnabled,
+    );
+    this.stageRenderer.setAnimationMode(this.animationModeEnabled);
+    this.animationToggleBtn.addEventListener("click", () => {
+      this.animationModeEnabled = !this.animationModeEnabled;
+      this.animationToggleBtn.classList.toggle(
+        "active",
+        this.animationModeEnabled,
+      );
+      this.stageRenderer.setAnimationMode(this.animationModeEnabled);
+      try {
+        localStorage.setItem(
+          "rmgr-viewer-animation",
+          String(this.animationModeEnabled),
+        );
+      } catch {
+        // Ignore localStorage write error
+      }
+      // Redraw now, so it shows even while paused.
+      if (this.lastFrame && this.currentReplay) {
+        this.renderFrame(
+          this.lastFrame,
+          this.playback?.currentIndex ?? 0,
+          true,
+        );
+      }
+    });
+
+    try {
+      this.skeletonModeEnabled =
+        localStorage.getItem("rmgr-viewer-skeleton") === "true";
+    } catch {
+      this.skeletonModeEnabled = false;
+    }
+    this.skeletonToggleBtn.classList.toggle("active", this.skeletonModeEnabled);
+    this.stageRenderer.setSkeletonMode(this.skeletonModeEnabled);
+    this.skeletonToggleBtn.addEventListener("click", () => {
+      this.skeletonModeEnabled = !this.skeletonModeEnabled;
+      this.skeletonToggleBtn.classList.toggle(
+        "active",
+        this.skeletonModeEnabled,
+      );
+      this.stageRenderer.setSkeletonMode(this.skeletonModeEnabled);
+      try {
+        localStorage.setItem(
+          "rmgr-viewer-skeleton",
+          String(this.skeletonModeEnabled),
+        );
+      } catch {
+        // Ignore localStorage write error
+      }
+      // Redraw now, so it shows even while paused.
+      if (this.lastFrame && this.currentReplay) {
+        this.renderFrame(
+          this.lastFrame,
+          this.playback?.currentIndex ?? 0,
+          true,
+        );
+      }
+    });
+
     this.playPauseBtn.addEventListener("click", () => {
       this.dismissQuickAttackOverlay();
       this.playback?.toggle();
@@ -2005,6 +2086,14 @@ export class MatchViewController {
     if (this.zoneToggleBtn) {
       this.zoneToggleBtn.textContent = tr.zoneToggle;
       this.zoneToggleBtn.title = tr.zoneToggleTitle;
+    }
+    if (this.skeletonToggleBtn) {
+      this.skeletonToggleBtn.textContent = tr.skeletonToggle;
+      this.skeletonToggleBtn.title = tr.skeletonToggleTitle;
+    }
+    if (this.animationToggleBtn) {
+      this.animationToggleBtn.textContent = tr.animationToggle;
+      this.animationToggleBtn.title = tr.animationToggleTitle;
     }
     if (this.logFilterHeaderTitle) {
       this.logFilterHeaderTitle.textContent = tr.logFiltersTitle;

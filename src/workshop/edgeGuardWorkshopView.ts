@@ -7,7 +7,7 @@ import { createDefaultIdentity, type Identity } from "../data/identity.js";
 import type { LoadedReplay } from "../replaySource.js";
 import type { PlaylistClip } from "../playlist.js";
 import { filterGameSummaries } from "../data/aggregate.js";
-import { groupGamesIntoSessions } from "../data/session.js";
+import { groupGamesIntoSessions, type SessionGroup } from "../data/session.js";
 import { groupAndSortCharacters } from "../library/matchupChipSelector.js";
 import {
   navigateToEdgeGuardWorkshop,
@@ -42,6 +42,8 @@ export class EdgeGuardWorkshopViewController {
   private situationCache = new Map<string, EdgeGuardSituationData[]>();
   private allSituations: EdgeGuardSituationData[] = [];
   private filteredSituations: EdgeGuardSituationData[] = [];
+  /** For labeling the session filter dropdown - see populateFilterDropdowns(). */
+  private sessionsById = new Map<string, SessionGroup>();
 
   // Filter state
   private filters: EdgeGuardFilterState = {
@@ -120,7 +122,9 @@ export class EdgeGuardWorkshopViewController {
 
     const sessions = groupGamesIntoSessions(summaries, identity);
     const gameSessionMap = new Map<string, string>();
+    this.sessionsById.clear();
     for (const s of sessions) {
+      this.sessionsById.set(s.id, s);
       for (const g of s.games) {
         gameSessionMap.set(g.id, s.id);
       }
@@ -682,17 +686,18 @@ export class EdgeGuardWorkshopViewController {
     }
 
     if (sessionSelect) {
-      const sessions = Array.from(
-        new Set(
-          this.allSituations
-            .map((s) => s.sessionId)
-            .filter((s): s is string => Boolean(s)),
-        ),
-      ).sort();
-      for (const sess of sessions) {
+      const sessionIdsWithSituations = new Set(
+        this.allSituations
+          .map((s) => s.sessionId)
+          .filter((s): s is string => Boolean(s)),
+      );
+      // Iterate sessionsById (already newest-first from groupGamesIntoSessions) rather than
+      // re-sorting raw session ids, so the dropdown order matches the Search page's.
+      for (const session of this.sessionsById.values()) {
+        if (!sessionIdsWithSituations.has(session.id)) continue;
         const opt = document.createElement("option");
-        opt.value = sess;
-        opt.textContent = sess;
+        opt.value = session.id;
+        opt.textContent = `${formatSessionDate(session.startTime)} vs ${session.opponentName || "?"}`;
         sessionSelect.appendChild(opt);
       }
     }
@@ -1041,4 +1046,13 @@ function escapeHtml(s: string): string {
   const div = document.createElement("div");
   div.textContent = s;
   return div.innerHTML;
+}
+
+/** Matches the session dropdown label format used on the Search page. */
+function formatSessionDate(date: Date): string {
+  const month = date.toLocaleString("en-US", { month: "short" });
+  const day = date.getDate();
+  const hours = date.getHours().toString().padStart(2, "0");
+  const mins = date.getMinutes().toString().padStart(2, "0");
+  return `${month} ${day} ${hours}:${mins}`;
 }

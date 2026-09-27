@@ -102,6 +102,10 @@ export interface Translations {
   fpsToggleTitle: string;
   zoneToggle: string;
   zoneToggleTitle: string;
+  skeletonToggle: string;
+  skeletonToggleTitle: string;
+  animationToggle: string;
+  animationToggleTitle: string;
   logFilterRecovery: string;
   logFilterLedge: string;
   logFilterAngel: string;
@@ -767,6 +771,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     zoneToggle: "Zone",
     zoneToggleTitle:
       "Show the edge-guard zone: a player past the dashed line who can act again counts as recovering",
+    skeletonToggle: "Skeleton",
+    skeletonToggleTitle:
+      "Show the character's real bone skeleton (rest pose, where defined) instead of the normal art",
+    animationToggle: "Animation",
+    animationToggleTitle:
+      "Show animated attacks where defined, instead of a still pose",
     logFilterRecovery: "Recovery",
     logFilterLedge: "Ledge",
     logFilterAngel: "Angel",
@@ -1471,6 +1481,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     zoneToggle: "ゾーン",
     zoneToggleTitle:
       "崖外判定ゾーンを表示：点線より外側で行動可能になったプレイヤーは復帰中とみなされます",
+    skeletonToggle: "骨格",
+    skeletonToggleTitle:
+      "対応しているキャラクターは通常のイラストの代わりに実際の骨格（レストポーズ）を表示します",
+    animationToggle: "アニメーション",
+    animationToggleTitle:
+      "対応している攻撃は静止ポーズの代わりにアニメーションを表示します",
     logFilterRecovery: "復帰・阻止",
     logFilterLedge: "崖",
     logFilterAngel: "復活無敵",

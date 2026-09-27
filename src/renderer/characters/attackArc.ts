@@ -26,21 +26,27 @@ export function drawAttackArc(
   if (attack.type === "aerial" && attack.direction === "neutral") {
     // Nair: 360-degree rotating 4-vane aerodynamic cyclone / turbine vortex with concentric trailing echo ripple
     // Outward expansion in frames 0-6 (7 frames of travel), then sustained at peak reach with energized shimmer
+    //
+    // Sized off halfWidth rather than baseRadius (which is dominated by heightPx * 0.5 for most
+    // characters): a ring scaled to half the character's full height reads as detached from the
+    // body, and the effect is worst on the tallest models (e.g. Captain Falcon, Samus) since a
+    // taller heightPx pushes baseRadius - and the ring - proportionally larger.
+    const nairBaseRadius = halfWidth;
     const isEndlag = frame >= 9;
     const activeAlpha = isEndlag
       ? Math.max(0.4, 1.0 - (frame - 8) * 0.045)
       : 1.0;
     const progress = Math.min(1.0, (frame + 1) / 7);
     const easeOut = 1 - Math.pow(1 - progress, 3);
-    const startRadius = baseRadius * 0.75;
-    const peakRadius = baseRadius * 1.8;
+    const startRadius = nairBaseRadius * 0.85;
+    const peakRadius = nairBaseRadius * 1.35;
     const currentRadius = startRadius + (peakRadius - startRadius) * easeOut;
     const pulse =
-      frame >= 7 ? Math.sin((frame - 7) * 0.45) * (baseRadius * 0.035) : 0;
+      frame >= 7 ? Math.sin((frame - 7) * 0.45) * (nairBaseRadius * 0.035) : 0;
     const radius = currentRadius + pulse;
 
     // Concentric trailing ripple ring (expanding behind the main wave)
-    const echoRadius = Math.max(baseRadius * 0.7, radius * 0.82);
+    const echoRadius = Math.max(nairBaseRadius * 0.7, radius * 0.82);
     ctx.beginPath();
     ctx.arc(x, centerY, echoRadius, 0, Math.PI * 2);
     ctx.strokeStyle = hexToRgba(color, 0.45 * activeAlpha);

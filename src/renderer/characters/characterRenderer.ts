@@ -111,6 +111,8 @@ import {
 } from "./hudRenderer.js";
 import { drawAttackArc } from "./attackArc.js";
 import { drawYoshiEggShell } from "./yoshiEgg.js";
+import { drawCharacterSkeleton, getCharacterSkeleton } from "./skeleton.js";
+import { getAttackAnimationAngle } from "./attackAnimation.js";
 import {
   drawPikachuPolygons,
   drawFalconPolygons,
@@ -295,6 +297,8 @@ export function drawPlayer(
     port: PortIndex,
     frameIndex: number,
   ) => ShieldBreakEvent | null,
+  skeletonModeEnabled?: boolean,
+  animationModeEnabled?: boolean,
 ): void {
   // In daylight mode on mountain (cherry tree) theme, fighters are illuminated with
   // standard daylight colors rather than nocturnal moonlit skins.
@@ -799,6 +803,24 @@ export function drawPlayer(
     ctx.translate(-x, -y);
   }
 
+  // Animated attacks (Debug panel's "Animation" toggle): rotates the existing hand-drawn art
+  // around the character's own center over the move's real duration, instead of drawing a still
+  // pose - see attackAnimation.ts. Falls back to the normal still art when off or undefined for
+  // this character/move.
+  const attackAnimationAngle = animationModeEnabled
+    ? getAttackAnimationAngle(
+        post.characterId,
+        post.actionStateId,
+        post.actionFrameCounter,
+        facingRight,
+      )
+    : null;
+  if (attackAnimationAngle !== null) {
+    ctx.translate(x, centerY);
+    ctx.rotate(attackAnimationAngle);
+    ctx.translate(-x, -centerY);
+  }
+
   // Apply theme-adaptive silhouette proxy:
   // - Yellow silhouette when actionable during a combo gap
   // - Red silhouette when in hitstun or vulnerable stun (0x0a0 ShieldBreakDownBound, 0x0a4 Stun)
@@ -834,9 +856,25 @@ export function drawPlayer(
     );
   }
 
+  const skeleton =
+    skeletonModeEnabled && !isEggEncasedState(post.actionStateId)
+      ? getCharacterSkeleton(post.characterId)
+      : null;
+
   try {
     if (isEggEncasedState(post.actionStateId)) {
       drawYoshiEggShell(ctx, x, centerY, halfWidth, heightPx);
+    } else if (skeleton) {
+      drawCharacterSkeleton(
+        ctx,
+        x,
+        y,
+        halfWidth,
+        heightPx,
+        facingRight,
+        color,
+        skeleton,
+      );
     } else if (post.characterId === 0x1d) {
       drawFalcoPolygons(
         ctx,

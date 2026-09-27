@@ -1168,11 +1168,13 @@ async function init(): Promise<void> {
         if (projectFileStatus) {
           projectFileStatus.textContent = t().importProjectDone(
             result.imported,
-            result.skippedStale,
+            result.pendingRecompute,
           );
         }
         // Reload so the merged library loads through the normal startup path,
-        // the same way Clear local data does.
+        // the same way Clear local data does - delayed briefly so the status
+        // message above is actually readable instead of vanishing instantly.
+        await new Promise((resolve) => setTimeout(resolve, 1500));
         window.location.reload();
       } catch (err) {
         if (projectFileStatus) {

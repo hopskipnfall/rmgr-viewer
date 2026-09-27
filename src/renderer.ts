@@ -206,6 +206,10 @@ export class StageRenderer {
   private backgroundRenderer = new BackgroundRenderer();
   /** Draw the edge-guard zone boundary (match view's "Zone" toggle). */
   private showRecoveryZone = false;
+  /** Draw characters' real bone skeleton, where defined, instead of the normal art. */
+  private skeletonModeEnabled = false;
+  /** Play animated attacks, where defined, instead of a still pose. */
+  private animationModeEnabled = false;
   private bgBufferCanvas: HTMLCanvasElement | null = null;
   private bgBufferDirty = true;
   private bgBufferIsLight: boolean | null = null;
@@ -573,6 +577,14 @@ export class StageRenderer {
 
   public setShowRecoveryZone(show: boolean): void {
     this.showRecoveryZone = show;
+  }
+
+  public setSkeletonMode(enabled: boolean): void {
+    this.skeletonModeEnabled = enabled;
+  }
+
+  public setAnimationMode(enabled: boolean): void {
+    this.animationModeEnabled = enabled;
   }
 
   public setQuickAttackOverlay(paths: QuickAttackPath[] | null): void {
@@ -1381,6 +1393,8 @@ export class StageRenderer {
       comboEscapeState,
       (rep, p, fIdx) => this.getMostRecentReviveExit(rep, p, fIdx),
       (rep, p, fIdx) => this.getMostRecentShieldBreak(rep, p, fIdx),
+      this.skeletonModeEnabled,
+      this.animationModeEnabled,
     );
   }
 

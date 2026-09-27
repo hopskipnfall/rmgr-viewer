@@ -1,5 +1,11 @@
 import type { VideoLinkData } from "../video/youtubeSync.js";
-import { ANALYSIS_VERSION, isStale } from "./analysisVersion.js";
+import {
+  ANALYSIS_VERSION,
+  isStale,
+  isKnownBadEncoding,
+  KNOWN_BAD_VERSIONS,
+  type VersionMatcher,
+} from "./analysisVersion.js";
 import type { Identity } from "./identity.js";
 import type { LibraryStore, StoredGame } from "./libraryStore.js";
 
@@ -55,9 +61,14 @@ export function identityOf(file: ProjectFile): Identity {
 export class ProjectFileError extends Error {}
 
 export interface ImportProjectResult {
+  /** Entries actually stored - everything except known-bad encodings (see isKnownBadEncoding()). */
   readonly imported: number;
-  /** Entries dropped because their analysis is stale; they get recomputed. */
-  readonly skippedStale: number;
+  /**
+   * Of the imported entries, how many are on an older analysis version - they're shown using
+   * their cached stats right away (see libraryPersistence.ts's loadPersistedLibrary()) and get
+   * recomputed automatically once the user reconnects the original replay folder.
+   */
+  readonly pendingRecompute: number;
 }
 
 export function buildProjectFile(
@@ -157,19 +168,25 @@ export function parseProjectFile(text: string): ProjectFile {
 
 /**
  * Merges an imported project into the local library. Never clears: an import
- * adds to what's already there. Entries whose analysis is stale are dropped
- * so they're recomputed when the replay folder is re-added.
+ * adds to what's already there. Only entries with a genuinely broken encoding
+ * (isKnownBadEncoding()) are dropped - an older analysis version alone isn't a
+ * reason to discard a game, since the user importing a project file often
+ * doesn't have the original replay handy to trigger a recompute (that's the
+ * point of exporting a portable project file in the first place). Those
+ * entries are still imported and shown with their cached stats; they get
+ * recomputed automatically once the replay folder is re-added.
  */
 export async function mergeProjectFile(
   file: ProjectFile,
   store: LibraryStore,
+  knownBad: readonly VersionMatcher[] = KNOWN_BAD_VERSIONS,
 ): Promise<ImportProjectResult> {
   // StoredGame already carries analysisVersion/formatVersion/
-  // recorderSchemaVersion - exactly isStale()'s VersionedEntry shape.
-  const fresh = file.games.filter((g) => !isStale(g));
-  if (fresh.length > 0) await store.putMany(fresh);
+  // recorderSchemaVersion - exactly isKnownBadEncoding()'s VersionedEntry shape.
+  const usable = file.games.filter((g) => !isKnownBadEncoding(g, knownBad));
+  if (usable.length > 0) await store.putMany(usable);
   return {
-    imported: fresh.length,
-    skippedStale: file.games.length - fresh.length,
+    imported: usable.length,
+    pendingRecompute: usable.filter((g) => isStale(g, knownBad)).length,
   };
 }
