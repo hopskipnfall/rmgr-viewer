@@ -13,7 +13,6 @@ import {
   drawMissedTechBounce,
   drawTechBreakfall,
   drawTechRollSpeedLines,
-  drawJumpSquatFx,
   drawSuperArmorAura,
   drawDeconflictedPauseHuds,
   type PlayerPauseHudItem,
@@ -585,6 +584,20 @@ export class StageRenderer {
 
   public setAnimationMode(enabled: boolean): void {
     this.animationModeEnabled = enabled;
+  }
+
+  public isAnimationModeEnabled(): boolean {
+    return this.animationModeEnabled;
+  }
+
+  /** Alias for setAnimationMode */
+  public setAnimationEnabled(enabled: boolean): void {
+    this.setAnimationMode(enabled);
+  }
+
+  /** Alias for isAnimationModeEnabled */
+  public isAnimationEnabled(): boolean {
+    return this.isAnimationModeEnabled();
   }
 
   public setQuickAttackOverlay(paths: QuickAttackPath[] | null): void {
@@ -1619,27 +1632,6 @@ export class StageRenderer {
       facingDirection,
       halfWidth,
       frameCounter,
-      isOpponent,
-    );
-  }
-
-  private drawJumpSquatFx(
-    x: number,
-    y: number,
-    halfWidth: number,
-    heightPx: number,
-    frameCounter: number,
-    playerColor: string,
-    isOpponent: boolean,
-  ): void {
-    drawJumpSquatFx(
-      this.ctx,
-      x,
-      y,
-      halfWidth,
-      heightPx,
-      frameCounter,
-      playerColor,
       isOpponent,
     );
   }

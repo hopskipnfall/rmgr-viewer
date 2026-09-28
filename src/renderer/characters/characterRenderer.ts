@@ -51,6 +51,7 @@ import {
   isWalkState,
   isDashOrRunState,
   isDashAttackState,
+  isUtiltState,
   isDtiltState,
   isDsmashState,
   isFsmashState,
@@ -101,7 +102,6 @@ import {
   drawMissedTechBounce,
   drawTechBreakfall,
   drawTechRollSpeedLines,
-  drawJumpSquatFx,
 } from "./statusAuras.js";
 import {
   drawPlayerNameTag,
@@ -536,6 +536,8 @@ export function drawPlayer(
     isOpponent,
     actionFrameCounter: post.actionFrameCounter,
     isSuperArmor: hasYoshiSuperArmor,
+    animationEnabled: animationModeEnabled,
+    isUtilt: isUtiltState(post.actionStateId),
   };
 
   // Revival Cloud Platform: fighter stands on a fluffy cumulus cloud during Revive1 (0x007), Revive2 (0x008), and ReviveWait (0x009).
@@ -1913,19 +1915,6 @@ export function drawPlayer(
       effectiveDir,
       halfWidth,
       post.actionFrameCounter,
-      isOpponent,
-    );
-  }
-
-  if (isJumpSquat) {
-    drawJumpSquatFx(
-      ctx,
-      x,
-      y,
-      halfWidth,
-      heightPx,
-      post.actionFrameCounter,
-      color,
       isOpponent,
     );
   }

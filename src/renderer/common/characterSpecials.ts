@@ -471,30 +471,22 @@ export function getMarioSpecialType(
   // characters (docs/RMGR_SPEC.md §8) - Mario and Luigi's IDs only
   // coincidentally overlapped for most of this range.
   //
-  // Neutral-B: Fireball (0x0dc, 0x0dd, 0x0de, 0x0e0). No synthetic animation
-  // drawn for this anymore - the recorded Weapon object (WPKind.Fireball,
-  // drawn by drawItemObjects() in renderer.ts) is the real fireball now,
-  // so drawing a fake one attached to Mario/Luigi would visually double up.
+  // Neutral-B: Fireball (0x0dc, 0x0dd, 0x0de, 0x0df, 0x0e0).
+  // 0x0df is Mario's grounded SpecialN (fireball throw) and Luigi's throw landing lag.
+  // No synthetic animation is drawn for this - the recorded Weapon object (WPKind.Fireball,
+  // drawn by drawItemObjects() in renderer.ts) is the real fireball,
+  // so drawing an Up-B coin animation or fake fireball would be incorrect.
   if (
     actionStateId === 0x0dc ||
     actionStateId === 0x0dd ||
     actionStateId === 0x0de ||
+    actionStateId === 0x0df ||
     actionStateId === 0x0e0
   ) {
     return null;
   }
-  // 0x0df is Luigi's landing lag right after the throw - render his normal
-  // (non-special) pose for it instead of falling through to the shared Up-B
-  // bucket below.
-  if (isLuigiCharacter(characterId) && actionStateId === 0x0df) {
-    return null;
-  }
-  // Up-B Super Jump Punch: 0x0df (Mario), 0x0e1, 0x0e2
-  if (
-    actionStateId === 0x0df ||
-    actionStateId === 0x0e1 ||
-    actionStateId === 0x0e2
-  ) {
+  // Up-B Super Jump Punch: 0x0e1, 0x0e2
+  if (actionStateId === 0x0e1 || actionStateId === 0x0e2) {
     return "super_jump_punch";
   }
   // Down-B Tornado / Cyclone: 0x0e3, 0x0e4, 0x0e5

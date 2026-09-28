@@ -18,6 +18,8 @@ export interface CharacterAnimState {
   isOpponent: boolean;
   actionFrameCounter: number;
   isSuperArmor?: boolean;
+  animationEnabled?: boolean;
+  isUtilt?: boolean;
 }
 
 export function toGrayscale(colorStr: string, overrideAlpha?: number): string {

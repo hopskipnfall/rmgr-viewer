@@ -496,6 +496,13 @@ export function getCharacterSpecialStates(characterId: number): StateOption[] {
         visualized: true,
         visualizedDesc: "Electric Deceleration Flash",
       },
+      {
+        id: 0x0c7,
+        name: "Up Tilt (Tail Whip)",
+        category: "attack",
+        visualized: true,
+        visualizedDesc: "Animated Keyframed Tail Whip & Stretch",
+      },
     ];
   }
 
@@ -1232,6 +1239,7 @@ export class CharacterPreviewController {
   public actionFrameCounter = 0;
   public isPlaying = false;
   public flightAngleDeg = 45;
+  public animationEnabled = false;
 
   // Items Mode State
   public selectedItemIndex = 0;
@@ -1281,12 +1289,20 @@ export class CharacterPreviewController {
   private playPauseBtn!: HTMLButtonElement;
   private stepBackBtn!: HTMLButtonElement;
   private stepFwdBtn!: HTMLButtonElement;
+  private animToggleBtn!: HTMLButtonElement;
 
   constructor(container: HTMLDivElement) {
     this.container = container;
+    try {
+      this.animationEnabled =
+        localStorage.getItem("rmgr-viewer-animation") === "true";
+    } catch {
+      this.animationEnabled = false;
+    }
     this.buildDOM();
     this.canvas = this.container.querySelector("canvas") as HTMLCanvasElement;
     this.renderer = new StageRenderer(this.canvas);
+    this.renderer.setAnimationEnabled(this.animationEnabled);
     this.camera = new Camera(this.canvas.width, this.canvas.height);
     this.attachEvents();
   }
@@ -1440,7 +1456,10 @@ export class CharacterPreviewController {
 
         <!-- Animation / Frame Counter (Shared Scrubber) -->
         <div class="preview-control-group" style="margin-top:auto;padding-top:8px;border-top:1px solid var(--panel-border);">
-          <label class="preview-control-label">Frame Animation (0-60)</label>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <label class="preview-control-label">Frame Animation (0-60)</label>
+            <button id="previewAnimToggleBtn" class="preview-chip-btn ${this.animationEnabled ? "active" : ""}" style="font-size:11px;padding:3px 7px;" title="Toggle character animations">Animation</button>
+          </div>
           <div class="preview-slider-row">
             <button id="previewPlayPauseBtn" class="preview-chip-btn">⏸ Pause</button>
             <button id="previewStepBackBtn" class="preview-chip-btn">⏮</button>
@@ -1553,6 +1572,9 @@ export class CharacterPreviewController {
     ) as HTMLButtonElement;
     this.stepFwdBtn = this.container.querySelector(
       "#previewStepFwdBtn",
+    ) as HTMLButtonElement;
+    this.animToggleBtn = this.container.querySelector(
+      "#previewAnimToggleBtn",
     ) as HTMLButtonElement;
 
     // Mode Switch events
@@ -1787,6 +1809,35 @@ export class CharacterPreviewController {
       this.frameValEl.textContent = `#${this.actionFrameCounter}`;
       this.render();
     });
+
+    const updateAnimBtnClass = () => {
+      if (!this.animToggleBtn?.classList) return;
+      if (typeof this.animToggleBtn.classList.toggle === "function") {
+        this.animToggleBtn.classList.toggle("active", this.animationEnabled);
+      } else if (this.animationEnabled) {
+        this.animToggleBtn.classList.add("active");
+      } else {
+        this.animToggleBtn.classList.remove("active");
+      }
+    };
+
+    if (this.animToggleBtn) {
+      updateAnimBtnClass();
+      this.animToggleBtn.addEventListener("click", () => {
+        this.animationEnabled = !this.animationEnabled;
+        updateAnimBtnClass();
+        this.renderer.setAnimationEnabled(this.animationEnabled);
+        try {
+          localStorage.setItem(
+            "rmgr-viewer-animation",
+            String(this.animationEnabled),
+          );
+        } catch {
+          // Ignore localStorage write error
+        }
+        this.render();
+      });
+    }
 
     this.populateStates();
     this.populateItems();
@@ -2169,6 +2220,8 @@ export class CharacterPreviewController {
         synthFrame,
       ],
     } as unknown as Replay;
+
+    this.renderer.setAnimationEnabled(this.animationEnabled);
 
     if (!this.compareAllThemes) {
       // Single Theme Render

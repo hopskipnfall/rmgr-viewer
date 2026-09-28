@@ -177,6 +177,10 @@ export function isDashAttackState(actionStateId: number): boolean {
   return actionStateId === 0x0c0;
 }
 
+export function isUtiltState(actionStateId: number): boolean {
+  return actionStateId === 0x0c7;
+}
+
 export function isDtiltState(actionStateId: number): boolean {
   return actionStateId === 0x0c9;
 }
