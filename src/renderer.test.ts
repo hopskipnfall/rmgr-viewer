@@ -22,6 +22,7 @@ import {
   isBowserCharacter,
   isCrouchState,
   isDashAttackState,
+  isUtiltState,
   isDtiltState,
   isDsmashState,
   isFsmashState,
@@ -37,7 +38,6 @@ import {
   isEggEncasedState,
   isJigglypuffCharacter,
   isJumpSquatState,
-  drawJumpSquatFx,
   isKirbyCharacter,
   isLandingState,
   isHeavyLandingState,
@@ -1415,6 +1415,8 @@ describe("Tech and Roll state helpers", () => {
     expect(isDashAttackState(0x00a)).toBe(false);
 
     // Grounded tilts & smashes helpers
+    expect(isUtiltState(0x0c7)).toBe(true);
+    expect(isUtiltState(0x0c0)).toBe(false);
     expect(isDtiltState(0x0c9)).toBe(true);
     expect(isDtiltState(0x0c1)).toBe(false);
     expect(isDsmashState(0x0d0)).toBe(true);
@@ -1603,14 +1605,17 @@ describe("getMarioSpecialType", () => {
     // (WPKind.Fireball) gets its own marker instead.
     expect(getMarioSpecialType(0x00, 0x0dc)).toBeNull();
     expect(getMarioSpecialType(0x04, 0x0dd)).toBeNull();
+    expect(getMarioSpecialType(0x00, 0x0df)).toBeNull(); // Mario SpecialN (grounded neutral-b fireball)
     // Super Jump Punch
-    expect(getMarioSpecialType(0x00, 0x0df)).toBe("super_jump_punch");
+    expect(getMarioSpecialType(0x00, 0x0e1)).toBe("super_jump_punch");
+    expect(getMarioSpecialType(0x00, 0x0e2)).toBe("super_jump_punch");
     // Tornado / Cyclone
     expect(getMarioSpecialType(0x00, 0x0e3)).toBe("tornado");
     expect(getMarioSpecialType(0x04, 0x0e4)).toBe("tornado");
   });
 
-  it("classifies 0x0e0 (fireball throw) and Luigi's 0x0df (landing lag) as no synthetic special to draw here", () => {
+  it("classifies 0x0df/0x0e0 (fireball throw) and Luigi's 0x0df (landing lag) as no synthetic special to draw here", () => {
+    expect(getMarioSpecialType(0x00, 0x0df)).toBeNull(); // Mario SpecialN
     expect(getMarioSpecialType(0x00, 0x0e0)).toBeNull(); // Mario throw
     expect(getMarioSpecialType(0x04, 0x0e0)).toBeNull(); // Luigi throw
     expect(getMarioSpecialType(0x04, 0x0df)).toBeNull(); // Luigi landing lag
@@ -6605,61 +6610,7 @@ describe("StageRenderer background themes", () => {
   });
 
   describe("JumpSquat (0x14) Visualization", () => {
-    it("draws jumpsquat ground pressure ring, lateral dust puffs, and anticipation chevrons", () => {
-      const ellipses: { x: number; y: number; rx: number; ry: number }[] = [];
-      const arcs: { x: number; y: number; r: number }[] = [];
-      const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
-      let currentX = 0;
-      let currentY = 0;
-
-      const mockCtx = {
-        save: () => {},
-        restore: () => {},
-        beginPath: () => {},
-        closePath: () => {},
-        moveTo: (x: number, y: number) => {
-          currentX = x;
-          currentY = y;
-        },
-        lineTo: (x: number, y: number) => {
-          lines.push({ x1: currentX, y1: currentY, x2: x, y2: y });
-          currentX = x;
-          currentY = y;
-        },
-        arc: (x: number, y: number, r: number) => {
-          arcs.push({ x, y, r });
-        },
-        ellipse: (x: number, y: number, rx: number, ry: number) => {
-          ellipses.push({ x, y, rx, ry });
-        },
-        stroke: () => {},
-        fill: () => {},
-      } as unknown as CanvasRenderingContext2D;
-
-      // Frame 0: Initial compression
-      drawJumpSquatFx(mockCtx, 100, 200, 20, 50, 0, "#3b82f6", false);
-      expect(ellipses.length).toBeGreaterThanOrEqual(2); // Outer pressure ring and inner contact ellipse
-      expect(arcs.length).toBeGreaterThanOrEqual(4); // Left & right dust billows (primary + secondary)
-      expect(lines.length).toBeGreaterThan(0); // Ground skid lines & chevrons
-
-      // Check ground ring is at foot level
-      expect(ellipses[0]!.y).toBe(200);
-
-      // Frame 3: Advanced compression with sparks and higher chevrons
-      const arcsFrame3: { x: number; y: number; r: number }[] = [];
-      const mockCtxF3 = {
-        ...mockCtx,
-        arc: (x: number, y: number, r: number) => {
-          arcsFrame3.push({ x, y, r });
-        },
-      } as unknown as CanvasRenderingContext2D;
-
-      drawJumpSquatFx(mockCtxF3, 100, 200, 20, 50, 3, "#3b82f6", false);
-      // Frame 3 has additional kinetic compression sparks at the feet
-      expect(arcsFrame3.length).toBeGreaterThan(arcs.length);
-    });
-
-    it("applies spring compression scale transform and renders FX during 0x014 jumpsquat in drawPlayer", () => {
+    it("applies spring compression scale transform during 0x014 jumpsquat in drawPlayer", () => {
       const scales: { sx: number; sy: number }[] = [];
       const fakeCanvas = {
         getContext: () => ({

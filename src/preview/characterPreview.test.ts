@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   CHARACTER_GROUPS,
   ORIGINAL_CHARACTERS,
@@ -393,5 +393,48 @@ describe("Character Preview Character Definitions", () => {
     controller.itemViewMode = "grid";
     controller.render();
     expect(controller.itemViewMode).toBe("grid");
+  });
+
+  it("supports toggling Animation flag in preview", () => {
+    let clickHandler: (() => void) | undefined;
+    const mockContainer = {
+      innerHTML: "",
+      querySelector: (selector: string) => {
+        if (selector === "canvas") {
+          return {
+            getContext: () => createMockContext(),
+            width: 960,
+            height: 540,
+            parentElement: { clientWidth: 960, clientHeight: 540 },
+          };
+        }
+        if (selector === "#previewAnimToggleBtn") {
+          return {
+            addEventListener: (_event: string, fn: () => void) => {
+              clickHandler = fn;
+            },
+            classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() },
+          };
+        }
+        return {
+          addEventListener: () => {},
+          classList: { add: () => {}, remove: () => {} },
+          querySelectorAll: () => [],
+          value: "",
+          textContent: "",
+        };
+      },
+      querySelectorAll: () => [],
+    } as unknown as HTMLDivElement;
+
+    const controller = new CharacterPreviewController(mockContainer);
+    expect(controller.animationEnabled).toBe(false);
+
+    // Click toggle
+    clickHandler?.();
+    expect(controller.animationEnabled).toBe(true);
+
+    clickHandler?.();
+    expect(controller.animationEnabled).toBe(false);
   });
 });

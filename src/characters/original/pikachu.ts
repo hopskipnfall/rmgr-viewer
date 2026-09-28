@@ -1,5 +1,6 @@
 import type { BackgroundTheme, CharacterAnimState } from "../common.js";
 import { drawCharacterStateAuras, resolveColor } from "../common.js";
+import { applyPikachuUtiltTailTransform } from "./pikachuUtiltAnimation.js";
 
 export function drawPikachuPolygons(
   ctx: CanvasRenderingContext2D,
@@ -83,6 +84,28 @@ export function drawPikachuPolygons(
   const w = halfWidth;
   const h = heightPx;
 
+  const isUtiltAnimating = Boolean(
+    state.animationEnabled &&
+    state.isUtilt &&
+    state.actionFrameCounter >= 0 &&
+    state.actionFrameCounter < 27,
+  );
+
+  if (isUtiltAnimating) {
+    ctx.save();
+    const rootX = posX - 0.475 * dir * w;
+    const rootY = y - 0.28 * h;
+    applyPikachuUtiltTailTransform(
+      ctx,
+      rootX,
+      rootY,
+      dir,
+      w,
+      h,
+      state.actionFrameCounter,
+    );
+  }
+
   // Tail Base (Brown)
   ctx.beginPath();
   ctx.moveTo(posX - 0.45 * dir * w, y - 0.32 * h);
@@ -112,6 +135,10 @@ export function drawPikachuPolygons(
   ctx.strokeStyle = outlineColor;
   ctx.lineWidth = outlineWidth;
   ctx.stroke();
+
+  if (isUtiltAnimating) {
+    ctx.restore();
+  }
 
   // Back Ear
   ctx.beginPath();
