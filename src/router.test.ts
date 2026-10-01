@@ -11,7 +11,7 @@ const base: SearchRouteCriteria = {
   jumpCount: null,
   startingAreaBox: null,
   victimName: null,
-  minHits: null,
+  minAttacks: null,
   killed: null,
   allowGaps: false,
 };
@@ -26,7 +26,7 @@ describe("search route", () => {
       victimName: "kix",
       playerCharacterId: 50,
       opponentCharacterId: 2,
-      minHits: 5,
+      minAttacks: 5,
       killed: true,
       allowGaps: true,
     };

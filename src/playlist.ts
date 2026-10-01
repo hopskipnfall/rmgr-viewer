@@ -1,6 +1,11 @@
 import type { PortIndex, Replay } from "@rmg-k/rmgr";
 import { computeEdgeGuardEvents, type EdgeGuardEvent } from "./edgeGuard.js";
-import { computeCombos, joinCombosAcrossGaps, type Combo } from "./combos.js";
+import {
+  computeCombos,
+  countAttacks,
+  joinCombosAcrossGaps,
+  type Combo,
+} from "./combos.js";
 
 /** One clip in a cross-game playlist: a specific game, a frame range, and a label for the clip list UI. */
 export interface PlaylistClip {
@@ -152,8 +157,8 @@ export interface ComboSearchCriteria {
   readonly victimPort: PortIndex | null;
   readonly attackerCharacterId: number | null;
   readonly victimCharacterId: number | null;
-  /** Minimum hits (the search UI's floor is 3). */
-  readonly minHits: number;
+  /** Minimum distinct attacks (see countAttacks; the search UI's floor is 2). */
+  readonly minAttacks: number;
   /** true = only combos that killed, false = only ones that didn't, null = either. */
   readonly killed: boolean | null;
   /** Join combos whose meter reset for 0.5 s or less (joinCombosAcrossGaps) instead of true combos only. */
@@ -171,7 +176,7 @@ export function computeComboClips(
   replay: Replay,
   gameId: string,
   criteria: ComboSearchCriteria,
-  label: (combo: Combo) => string,
+  label: (combo: Combo, attackCount: number) => string,
 ): PlaylistClip[] {
   const trueCombos = computeCombos(replay);
   const combos = criteria.allowGaps
@@ -182,9 +187,19 @@ export function computeComboClips(
     replay.frames[combo.startFrameIndex]?.ports[port]?.state?.characterId;
 
   return combos
+    .map((combo) => ({
+      combo,
+      attackCount: countAttacks(
+        replay,
+        combo.attackerPort,
+        combo.victimPort,
+        combo.startFrameIndex,
+        combo.comboEndFrameIndex,
+      ),
+    }))
     .filter(
-      (c) =>
-        c.hitCount >= criteria.minHits &&
+      ({ combo: c, attackCount }) =>
+        attackCount >= criteria.minAttacks &&
         (criteria.killed === null || c.killed === criteria.killed) &&
         (criteria.attackerPort === null ||
           c.attackerPort === criteria.attackerPort) &&
@@ -195,13 +210,13 @@ export function computeComboClips(
         (criteria.victimCharacterId === null ||
           characterAt(c, c.victimPort) === criteria.victimCharacterId),
     )
-    .map((c) => ({
+    .map(({ combo: c, attackCount }) => ({
       gameId,
       startFrameIndex: Math.max(0, c.startFrameIndex - PRE_ROLL_FRAMES),
       endFrameIndex: Math.min(
         lastFrameIndex,
         c.endFrameIndex + POST_ROLL_FRAMES,
       ),
-      label: label(c),
+      label: label(c, attackCount),
     }));
 }

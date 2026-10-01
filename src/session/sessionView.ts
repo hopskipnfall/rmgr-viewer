@@ -25,7 +25,7 @@ const EMPTY_CRITERIA: SearchRouteCriteria = {
   jumpCount: null,
   startingAreaBox: null,
   victimName: null,
-  minHits: null,
+  minAttacks: null,
   killed: null,
   allowGaps: false,
 };

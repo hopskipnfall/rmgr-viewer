@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Frame, PortIndex, Replay } from "@rmg-k/rmgr";
 import {
   computeCombos,
+  countAttacks,
   computeKillCombos,
   joinCombosAcrossGaps,
   isActionableInComboGap,
@@ -357,27 +358,27 @@ function droppedComboFrames(): Frame[] {
   return [
     makeFrame(
       10,
-      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x40, x: 0, y: 0 },
       { state: 0x36, x: 50, y: 0, dmg: 10, comboHit: 1, hitstun: 20 },
     ),
     makeFrame(
       15,
-      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x41, x: 0, y: 0 },
       { state: 0x36, x: 100, y: 0, dmg: 20, comboHit: 2, hitstun: 20 },
     ),
     makeFrame(
       20,
-      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x40, x: 0, y: 0 },
       { state: 0x36, x: 150, y: 0, dmg: 30, comboHit: 3, hitstun: 20 },
     ),
     makeFrame(
       45,
-      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x41, x: 0, y: 0 },
       { state: 0x36, x: 200, y: 0, dmg: 45, comboHit: 1, hitstun: 20 },
     ),
     makeFrame(
       50,
-      { state: 0x0a, x: 0, y: 0 },
+      { state: 0x40, x: 0, y: 0 },
       { state: 0x34, x: 300, y: 0, dmg: 60, comboHit: 2, hitstun: 60 },
     ),
     makeFrame(
@@ -496,7 +497,7 @@ describe("computeComboClips", () => {
     victimPort: null,
     attackerCharacterId: null,
     victimCharacterId: null,
-    minHits: 3,
+    minAttacks: 3,
     killed: null,
     allowGaps: false,
   };
@@ -513,7 +514,8 @@ describe("computeComboClips", () => {
 
   it("allowing short gaps: one 5-hit combo that killed", () => {
     expect(clips({ allowGaps: true })).toEqual(["5 KO"]);
-    expect(clips({ allowGaps: true, minHits: 6 })).toEqual([]);
+    expect(clips({ allowGaps: true, minAttacks: 5 })).toEqual(["5 KO"]);
+    expect(clips({ allowGaps: true, minAttacks: 6 })).toEqual([]);
     expect(clips({ allowGaps: true, killed: false })).toEqual([]);
   });
 
@@ -1140,5 +1142,69 @@ describe("computeRollEscapeGaps", () => {
 
     const rollGaps = computeRollEscapeGaps(replay);
     expect(rollGaps).toEqual([]);
+  });
+});
+
+describe("countAttacks", () => {
+  const victim = (dmg: number, comboHit: number) => ({
+    state: 0x36,
+    x: 50,
+    y: 0,
+    dmg,
+    comboHit,
+    hitstun: 20,
+  });
+  const idleVictim = { state: 0x0a, x: 50, y: 0 };
+  const count = (frames: Frame[]) =>
+    countAttacks(makeMockReplay(frames), 0, 1, 1, frames.length - 1);
+
+  it("counts every hit made from one action state as a single attack", () => {
+    // A multi-hit down air: five hits, one state.
+    const frames = [
+      makeFrame(1, { state: 0x0a, x: 0, y: 0 }, idleVictim),
+      ...[1, 2, 3, 4, 5].map((n) =>
+        makeFrame(1 + n, { state: 0x60, x: 0, y: 0 }, victim(n * 2, n)),
+      ),
+    ];
+    expect(count(frames)).toBe(1);
+  });
+
+  it("counts a repeated state as a new attack once something else happened in between", () => {
+    // down air, up air, down air
+    const frames = [
+      makeFrame(1, { state: 0x0a, x: 0, y: 0 }, idleVictim),
+      makeFrame(2, { state: 0x60, x: 0, y: 0 }, victim(2, 1)),
+      makeFrame(3, { state: 0x60, x: 0, y: 0 }, victim(4, 2)),
+      makeFrame(4, { state: 0x5e, x: 0, y: 0 }, victim(10, 3)),
+      makeFrame(5, { state: 0x60, x: 0, y: 0 }, victim(12, 4)),
+      makeFrame(6, { state: 0x60, x: 0, y: 0 }, victim(14, 5)),
+    ];
+    expect(count(frames)).toBe(3);
+  });
+
+  it("counts a projectile vanishing on the hit frame as its own attack", () => {
+    const shot = {
+      frame: 0,
+      objectAddress: 0x1000,
+      linkId: 5,
+      kind: 0,
+      positionX: 0,
+      positionY: 0,
+      positionZ: 0,
+    };
+    const frames = [
+      { ...makeFrame(1, { state: 0x0a, x: 0, y: 0 }, idleVictim), items: [] },
+      {
+        ...makeFrame(2, { state: 0x0a, x: 0, y: 0 }, idleVictim),
+        items: [shot],
+      },
+      {
+        ...makeFrame(3, { state: 0x0a, x: 0, y: 0 }, victim(3, 1)),
+        items: [],
+      },
+      makeFrame(4, { state: 0x60, x: 0, y: 0 }, victim(8, 2)),
+      makeFrame(5, { state: 0x60, x: 0, y: 0 }, victim(10, 3)),
+    ];
+    expect(count(frames)).toBe(2);
   });
 });
