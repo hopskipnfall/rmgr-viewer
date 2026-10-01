@@ -612,7 +612,7 @@ export interface Translations {
   searchComboByCharacterLabel: string;
   searchComboOnLabel: string;
   searchComboOnCharacterLabel: string;
-  searchMinHitsLabel: string;
+  searchMinAttacksLabel: string;
   searchKoLabel: string;
   searchKoYes: string;
   searchKoNo: string;
@@ -620,7 +620,7 @@ export interface Translations {
   searchGapsTrueOnly: string;
   searchGapsAllow: string;
   comboClipLabel: (
-    hits: number,
+    attacks: number,
     startDamage: number,
     endDamage: number,
     killed: boolean,
@@ -1334,15 +1334,15 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     searchComboByCharacterLabel: "Combo by character",
     searchComboOnLabel: "Combo on",
     searchComboOnCharacterLabel: "Combo on character",
-    searchMinHitsLabel: "Minimum hits",
+    searchMinAttacksLabel: "Minimum attacks",
     searchKoLabel: "KO",
     searchKoYes: "KO'd",
     searchKoNo: "No KO",
     searchGapsLabel: "Combo type",
     searchGapsTrueOnly: "True combos only",
     searchGapsAllow: "Allow ≤0.5s gaps",
-    comboClipLabel: (hits, startDamage, endDamage, killed) =>
-      `${hits} hits · ${Math.round(startDamage)}% → ${Math.round(endDamage)}%${killed ? " · KO" : ""}`,
+    comboClipLabel: (attacks, startDamage, endDamage, killed) =>
+      `${attacks} attacks · ${Math.round(startDamage)}% → ${Math.round(endDamage)}%${killed ? " · KO" : ""}`,
     searchResultLabel: "Result",
     searchResultAny: "Any",
     searchResultSuccess: "Success (killed)",
@@ -2032,15 +2032,15 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     searchComboByCharacterLabel: "コンボしたキャラ",
     searchComboOnLabel: "コンボされた人",
     searchComboOnCharacterLabel: "コンボされたキャラ",
-    searchMinHitsLabel: "最小ヒット数",
+    searchMinAttacksLabel: "最小攻撃数",
     searchKoLabel: "撃墜",
     searchKoYes: "撃墜あり",
     searchKoNo: "撃墜なし",
     searchGapsLabel: "コンボの種類",
     searchGapsTrueOnly: "真コンボのみ",
     searchGapsAllow: "0.5秒以内の途切れを許可",
-    comboClipLabel: (hits, startDamage, endDamage, killed) =>
-      `${hits}ヒット · ${Math.round(startDamage)}% → ${Math.round(endDamage)}%${killed ? " · 撃墜" : ""}`,
+    comboClipLabel: (attacks, startDamage, endDamage, killed) =>
+      `${attacks}回攻撃 · ${Math.round(startDamage)}% → ${Math.round(endDamage)}%${killed ? " · 撃墜" : ""}`,
     searchResultLabel: "結果",
     searchResultAny: "すべて",
     searchResultSuccess: "成功 (撃墜)",

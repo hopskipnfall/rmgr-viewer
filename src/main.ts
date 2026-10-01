@@ -602,7 +602,7 @@ function handleShowFailedEdgeGuards(session: SessionGroup): void {
   navigateToSearch({
     type: "edgeGuards",
     victimName: null,
-    minHits: null,
+    minAttacks: null,
     killed: null,
     allowGaps: false,
     result: "failure",
@@ -648,7 +648,7 @@ function defaultSearchCriteria(): SearchRouteCriteria {
   return {
     type: "combos",
     victimName: null,
-    minHits: null,
+    minAttacks: null,
     killed: null,
     allowGaps: false,
     result: null,
@@ -728,7 +728,7 @@ async function handleRouteChange(route: Route): Promise<void> {
     searchController.setCriteria({
       type: route.type,
       victimName: route.victimName,
-      minHits: route.minHits,
+      minAttacks: route.minAttacks,
       killed: route.killed,
       allowGaps: route.allowGaps,
       result: route.result,

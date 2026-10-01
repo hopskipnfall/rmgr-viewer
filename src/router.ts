@@ -15,7 +15,7 @@ export interface SearchRouteCriteria {
   /** Combos only: who the combo was done on (playerName is who did it). */
   readonly victimName: string | null;
   /** Combos only: minimum hits (null = the default, 3). */
-  readonly minHits: number | null;
+  readonly minAttacks: number | null;
   /** Combos only: true = KO'd, false = didn't, null = either. */
   readonly killed: boolean | null;
   /** Combos only: join combos across combo-meter resets of 0.5 s or less. */
@@ -157,7 +157,7 @@ export function parseRoute(hash: string): Route {
       jumpCount: parseIntParam(params, "jumps"),
       startingAreaBox: parseAreaBox(params),
       victimName: params.get("victim"),
-      minHits: parseIntParam(params, "minHits"),
+      minAttacks: parseIntParam(params, "minAttacks"),
       killed: ko === "1" ? true : ko === "0" ? false : null,
       allowGaps: params.get("gaps") === "1",
     };
@@ -250,8 +250,8 @@ export function searchHash(criteria: SearchRouteCriteria): string {
     params.set("areaMaxY", String(criteria.startingAreaBox.maxY));
   }
   if (criteria.victimName) params.set("victim", criteria.victimName);
-  if (criteria.minHits !== null) {
-    params.set("minHits", String(criteria.minHits));
+  if (criteria.minAttacks !== null) {
+    params.set("minAttacks", String(criteria.minAttacks));
   }
   if (criteria.killed !== null) params.set("ko", criteria.killed ? "1" : "0");
   if (criteria.allowGaps) params.set("gaps", "1");

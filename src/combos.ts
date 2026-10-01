@@ -1,4 +1,9 @@
-import { getSeatedPorts, type PortIndex, type Replay } from "@rmg-k/rmgr";
+import {
+  getSeatedPorts,
+  type ItemUpdate,
+  type PortIndex,
+  type Replay,
+} from "@rmg-k/rmgr";
 import { isHitstunState } from "./edgeGuard.js";
 import {
   computeClassifiedSituations,
@@ -862,4 +867,79 @@ function scanCombos(replay: Replay, minHits: number): Combo[] {
   }
 
   return combos;
+}
+
+/**
+ * How many distinct attacks the attacker landed on the victim between `startFrameIndex` and
+ * `endFrameIndex` (inclusive). A "hit" is a frame where the victim's damage or combo-hit counter
+ * went up. Hits made while the attacker stays in one continuous action state (one run, restarting
+ * if the state's frame counter resets) are a single attack, so a multi-hit down air is 1, while
+ * down air -> up air -> down air is 3. A hit on the same frame a projectile/weapon item
+ * disappeared counts as its own attack whatever the attacker's state is; it doesn't use up the
+ * current state run, so a melee hit from that same run still counts.
+ *
+ * Known gap: projectiles that deal damage without disappearing (Ness's PK Fire/Thunder) only
+ * count through the attacker's state. Ownership of a vanishing item isn't recorded, so the
+ * victim's own projectile expiring on a hit frame can add a spurious attack.
+ */
+export function countAttacks(
+  replay: Replay,
+  attackerPort: PortIndex,
+  victimPort: PortIndex,
+  startFrameIndex: number,
+  endFrameIndex: number,
+): number {
+  const first = Math.max(0, startFrameIndex);
+  const last = Math.min(replay.frames.length - 1, endFrameIndex);
+  let attacks = 0;
+  // Tracks the attacker's current action-state run; -1 means no run counted yet.
+  let runId = 0;
+  let countedRunId = -1;
+  const startAttacker =
+    replay.frames[first - 1]?.ports[attackerPort]?.state ??
+    replay.frames[first]?.ports[attackerPort]?.state;
+  let prevStateId = startAttacker?.actionStateId;
+  let prevActionFrame = startAttacker?.actionFrameCounter ?? 0;
+
+  for (let i = first; i <= last; i++) {
+    const frame = replay.frames[i];
+    const prevFrame = replay.frames[i - 1];
+    const attacker = frame?.ports[attackerPort]?.state;
+    const victim = frame?.ports[victimPort]?.state;
+    const prevVictim = prevFrame?.ports[victimPort]?.state;
+    if (!frame || !attacker || !victim) continue;
+
+    if (
+      attacker.actionStateId !== prevStateId ||
+      attacker.actionFrameCounter < prevActionFrame
+    ) {
+      runId++;
+    }
+    prevStateId = attacker.actionStateId;
+    prevActionFrame = attacker.actionFrameCounter;
+
+    const hit = prevVictim
+      ? victim.damagePercent > prevVictim.damagePercent ||
+        (victim.comboHitCount ?? 0) > (prevVictim.comboHitCount ?? 0)
+      : (victim.comboHitCount ?? 0) > 0; // replay's first frame: nothing to diff against
+    if (!hit) continue;
+
+    if (itemVanished(prevFrame?.items, frame.items)) {
+      attacks++;
+    } else if (countedRunId !== runId) {
+      attacks++;
+      countedRunId = runId;
+    }
+  }
+  return attacks;
+}
+
+/** True when an item/weapon alive in `prev` is gone from `curr`. */
+function itemVanished(
+  prev: readonly ItemUpdate[] | undefined,
+  curr: readonly ItemUpdate[] | undefined,
+): boolean {
+  if (!prev || prev.length === 0) return false;
+  const alive = new Set((curr ?? []).map((it) => it.objectAddress));
+  return prev.some((it) => !alive.has(it.objectAddress));
 }

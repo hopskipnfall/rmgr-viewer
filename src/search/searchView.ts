@@ -18,9 +18,9 @@ import { openFfmpegModal } from "./ffmpegModal.js";
 import { loadVideoLink } from "../video/youtubeSync.js";
 
 const JUMP_COUNT_OPTIONS = [1, 2, 3, 4, 5];
-/** Combos search: a combo is at least 3 hits, so that's both the floor and the default. */
-const MIN_HITS_OPTIONS = [3, 4, 5, 6, 7, 8, 9, 10];
-const DEFAULT_MIN_HITS = 3;
+/** Combos search: distinct attacks (see countAttacks); one attack is just a single move, so 2 is the floor. */
+const MIN_ATTACKS_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+const DEFAULT_MIN_ATTACKS = 3;
 
 function formatDate(date: Date): string {
   const month = date.toLocaleString("en-US", { month: "short" });
@@ -58,7 +58,7 @@ export class SearchViewController {
   private criteria: SearchRouteCriteria = {
     type: "edgeGuards",
     victimName: null,
-    minHits: null,
+    minAttacks: null,
     killed: null,
     allowGaps: false,
     result: null,
@@ -157,7 +157,7 @@ export class SearchViewController {
         )
         .join("");
     const isCombos = this.criteria.type === "combos";
-    const minHits = this.criteria.minHits ?? DEFAULT_MIN_HITS;
+    const minAttacks = this.criteria.minAttacks ?? DEFAULT_MIN_ATTACKS;
 
     this.container.innerHTML = `
       <div class="search-view">
@@ -229,11 +229,11 @@ export class SearchViewController {
           ${
             isCombos
               ? `<label class="search-filter">
-            <span>${escapeHtml(tr.searchMinHitsLabel)}</span>
-            <select id="searchMinHitsSelect">
-              ${MIN_HITS_OPTIONS.map(
+            <span>${escapeHtml(tr.searchMinAttacksLabel)}</span>
+            <select id="searchMinAttacksSelect">
+              ${MIN_ATTACKS_OPTIONS.map(
                 (n) =>
-                  `<option value="${n}" ${minHits === n ? "selected" : ""}>${n}+</option>`,
+                  `<option value="${n}" ${minAttacks === n ? "selected" : ""}>${n}+</option>`,
               ).join("")}
             </select>
           </label>
@@ -297,7 +297,7 @@ export class SearchViewController {
         jumpCount: numberOrNull("searchJumpCountSelect"),
         startingAreaBox: this.criteria.startingAreaBox,
         victimName: value("searchVictimSelect") || null,
-        minHits: numberOrNull("searchMinHitsSelect"),
+        minAttacks: numberOrNull("searchMinAttacksSelect"),
         killed: ko === "1" ? true : ko === "0" ? false : null,
         allowGaps: value("searchGapsSelect") === "1",
       });
@@ -463,13 +463,13 @@ export class SearchViewController {
                   victimPort: portOf(this.criteria.victimName),
                   attackerCharacterId: this.criteria.playerCharacterId,
                   victimCharacterId: this.criteria.opponentCharacterId,
-                  minHits: this.criteria.minHits ?? DEFAULT_MIN_HITS,
+                  minAttacks: this.criteria.minAttacks ?? DEFAULT_MIN_ATTACKS,
                   killed: this.criteria.killed,
                   allowGaps: this.criteria.allowGaps,
                 },
-                (c) =>
+                (c, attacks) =>
                   tr.comboClipLabel(
-                    c.hitCount,
+                    attacks,
                     c.startDamage,
                     c.endDamage,
                     c.killed,
