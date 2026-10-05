@@ -200,6 +200,7 @@ export interface Translations {
   importFolder: string;
   sidebarStatistics: string;
   staleBanner: (count: number) => string;
+  staleBannerNotInFolder: (count: number) => string;
   reimportFolder: string;
   importDuplicatesSkipped: (count: number) => string;
   missingFileTitle: string;
@@ -907,6 +908,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sidebarStatistics: "Statistics",
     staleBanner: (count) =>
       `${count} game${count === 1 ? " was" : "s were"} analyzed with an older version and need${count === 1 ? "s" : ""} re-import.`,
+    staleBannerNotInFolder: (count) =>
+      `${count} game${count === 1 ? " was" : "s were"} analyzed with an older version, but ${count === 1 ? "its replay file wasn't" : "their replay files weren't"} in the folder you just imported. Their cached stats are still shown; import the original ${count === 1 ? "file" : "files"} to update ${count === 1 ? "it" : "them"}.`,
     reimportFolder: "Re-import folder",
     importDuplicatesSkipped: (count) =>
       `Skipped ${count} duplicate cop${count === 1 ? "y" : "ies"} of the same game.`,
@@ -1634,6 +1637,8 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     sidebarStatistics: "統計",
     staleBanner: (count) =>
       `${count}件のゲームは古いバージョンで解析されています。再インポートしてください。`,
+    staleBannerNotInFolder: (count) =>
+      `${count}件のゲームは古いバージョンで解析されていますが、今回インポートしたフォルダにリプレイファイルがありませんでした。保存済みの統計は引き続き表示されます。元のファイルをインポートすると更新されます。`,
     reimportFolder: "フォルダを再インポート",
     importDuplicatesSkipped: (count) =>
       `同じゲームの重複 ${count} 件をスキップしました。`,
