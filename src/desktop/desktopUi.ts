@@ -93,3 +93,11 @@ export function setProjectNotice(notice: ProjectNotice | null): void {
         ? tr.projectUnreadable
         : tr.projectRestored.replace("{n}", String(notice.backup));
 }
+
+/** Disables Rescan and Change… while a scan/import is running. */
+export function setScanning(scanning: boolean): void {
+  for (const id of ["rescanBtn", "changeFolderBtn", "libFolderBannerBtn"]) {
+    const btn = el<HTMLButtonElement>(id);
+    if (btn) btn.disabled = scanning;
+  }
+}

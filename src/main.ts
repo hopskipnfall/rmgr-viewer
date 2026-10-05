@@ -976,7 +976,20 @@ async function startDesktopLibrary(): Promise<void> {
     }
   };
 
+  let scanning = false;
   const scanAndWatch = async (): Promise<void> => {
+    if (scanning) return;
+    scanning = true;
+    ui.setScanning(true);
+    try {
+      await scanAndWatchUnguarded();
+    } finally {
+      scanning = false;
+      ui.setScanning(false);
+    }
+  };
+
+  const scanAndWatchUnguarded = async (): Promise<void> => {
     stopWatcher?.();
     stopWatcher = null;
     const state = await folder.resolveRoot(fs);
