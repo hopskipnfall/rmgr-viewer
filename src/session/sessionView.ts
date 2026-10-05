@@ -388,6 +388,19 @@ export class SessionViewController {
               })
               .map(({ summary }) => summary)
           : [...session.games];
+      // Keep 12-character battles grouped, as on the library's session list.
+      // Under a matchup filter, narrow each battle to the games that match.
+      const shownIds = new Set(games.map((g) => g.id));
+      gameList.setSingleSession({
+        ...session,
+        games,
+        twelveCharacterBattles: (session.twelveCharacterBattles ?? [])
+          .map((b) => ({
+            ...b,
+            games: b.games.filter((g) => shownIds.has(g.id)),
+          }))
+          .filter((b) => b.games.length > 0),
+      });
       gameList.render(games, this.identity, games.length);
     }
   }

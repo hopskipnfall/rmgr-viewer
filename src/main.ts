@@ -368,6 +368,11 @@ function rerenderMatchupIfActive(): void {
 let libraryStore: LibraryStore | null = null;
 /** Cached games from an older ANALYSIS_VERSION - kept out of the library until re-imported. */
 let staleEntries: StoredGame[] = [];
+/**
+ * True after a folder import that left stale entries behind: none of the
+ * files just imported matched them, so re-importing that folder won't help.
+ */
+let staleMissingFromImport = false;
 
 /** Set on desktop once the library folder is initialised (see startDesktopLibrary). */
 let desktopLibrary: { rescan(): Promise<void> } | null = null;
@@ -388,7 +393,10 @@ function renderStaleBanner(): void {
   bannerEl.hidden = count === 0;
   if (count === 0) return;
   const tr = t();
-  if (bannerText) bannerText.textContent = tr.staleBanner(count);
+  if (bannerText)
+    bannerText.textContent = staleMissingFromImport
+      ? tr.staleBannerNotInFolder(count)
+      : tr.staleBanner(count);
   if (bannerBtn) bannerBtn.textContent = tr.reimportFolder;
 }
 
@@ -415,6 +423,60 @@ function attachImportedSummaries(imported: GameSummary[]): void {
     );
   } else {
     libraryController.render();
+  }
+}
+
+/**
+ * The game the missing-file prompt is waiting on. While set, a picked
+ * file/folder is searched for just that game instead of being imported
+ * wholesale - parsing a whole folder in the background makes playback of
+ * the game being opened stutter.
+ */
+let missingFileTarget: GameSummary | null = null;
+
+/**
+ * Imports only the file(s) in `files` that could be `target`: the cached
+ * entry's own path/size/mtime first (fast path, no parsing), otherwise
+ * files with the same byte size (a renamed or moved copy). Anything else
+ * in the selection is ignored.
+ */
+async function importMissingFileTarget(
+  files: ReplayFileSource[],
+  target: GameSummary,
+): Promise<void> {
+  const all = files.filter((f) => f.name.toLowerCase().endsWith(".rmgr"));
+  const entry = libraryStore
+    ? (await libraryStore.getAll()).find((e) => e.id === target.id)
+    : undefined;
+  let candidates: ReplayFileSource[];
+  if (entry) {
+    const exact = all.filter((f) => {
+      const m = f.meta;
+      return (
+        m.sourcePath === entry.sourcePath &&
+        m.size === entry.size &&
+        m.lastModified === entry.lastModified
+      );
+    });
+    candidates =
+      exact.length > 0 ? exact : all.filter((f) => f.meta.size === entry.size);
+  } else {
+    candidates = all.filter((f) => f.name === target.sourceName);
+  }
+  if (candidates.length === 0) {
+    // Nothing plausible: let the prompt report "that isn't the file".
+    for (const listener of [...importFinishedListeners]) listener();
+    return;
+  }
+  await handleImport(candidates);
+}
+
+function handlePickedFiles(files: ReplayFileSource[]): void {
+  const target = missingFileTarget;
+  if (target && !target.source) {
+    void importMissingFileTarget(files, target);
+  } else {
+    void handleImport(files);
   }
 }
 
@@ -483,6 +545,7 @@ async function handleImport(files: ReplayFileSource[]): Promise<number> {
         migrateVideoLink(legacyId, id);
       }
       staleEntries = result.staleEntries;
+      staleMissingFromImport = staleEntries.length > 0;
       summaries = result.summaries;
       errorCount = result.errors.length;
       duplicateCount = result.duplicateCount;
@@ -578,14 +641,23 @@ async function loadReplayForSummary(
   const loaded = await promptForMissingFile({
     modalContainer: modalContainerEl,
     summary,
-    pickFile: () => filePicker.click(),
-    pickFolder: () => folderPicker.click(),
+    pickFile: () => {
+      missingFileTarget = summary;
+      filePicker.click();
+    },
+    pickFolder: () => {
+      missingFileTarget = summary;
+      folderPicker.click();
+    },
     desktopRescan: desktopLibrary
       ? () => void desktopLibrary?.rescan()
       : undefined,
     onImportFinished: (listener) => {
       importFinishedListeners.add(listener);
-      return () => importFinishedListeners.delete(listener);
+      return () => {
+        importFinishedListeners.delete(listener);
+        if (missingFileTarget === summary) missingFileTarget = null;
+      };
     },
   });
   if (!loaded || !summary.source) throw new MissingFileCancelledError();
@@ -1251,14 +1323,14 @@ async function init(): Promise<void> {
 
   filePicker.addEventListener("change", () => {
     if (filePicker.files) {
-      void handleImport([...filePicker.files].map(fromBrowserFile));
+      handlePickedFiles([...filePicker.files].map(fromBrowserFile));
       filePicker.value = "";
     }
   });
 
   folderPicker.addEventListener("change", () => {
     if (folderPicker.files) {
-      void handleImport([...folderPicker.files].map(fromBrowserFile));
+      handlePickedFiles([...folderPicker.files].map(fromBrowserFile));
       folderPicker.value = "";
     }
   });
@@ -1471,6 +1543,7 @@ async function init(): Promise<void> {
     libraryStore = await openLibraryStore();
     const persisted = await loadPersistedLibrary(libraryStore);
     staleEntries = persisted.staleEntries;
+    staleMissingFromImport = false;
     if (persisted.summaries.length > 0 || persisted.staleEntries.length > 0) {
       hasPersistedLibrary = true;
       libraryController.addSummaries(persisted.summaries);

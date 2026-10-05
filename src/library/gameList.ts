@@ -112,6 +112,8 @@ export class GameList {
   private container: HTMLElement;
   private sortOrder: "newest" | "oldest" = "newest";
   private groupBySession = true;
+  /** When set, the list is just this one session's body (12CB sections + standalone games), with no session header. */
+  private singleSession: SessionGroup | null = null;
   private showGroupToggle = true;
   /**
    * Sessions the user expanded (true) or collapsed (false) this page load.
@@ -152,6 +154,10 @@ export class GameList {
     this.groupBySession = group;
   }
 
+  public setSingleSession(session: SessionGroup | null): void {
+    this.singleSession = session;
+  }
+
   public setShowGroupToggle(show: boolean): void {
     this.showGroupToggle = show;
   }
@@ -177,6 +183,13 @@ export class GameList {
     let rowsHtml: string;
     if (sorted.length === 0) {
       rowsHtml = `<div class="game-list-empty">${escapeHtml(tr.noGamesMatched)}</div>`;
+    } else if (this.singleSession) {
+      rowsHtml = this.renderSessionBody(
+        this.singleSession,
+        identity,
+        sorted.length === 1,
+        computeSessionContext(this.singleSession.games, identity),
+      );
     } else if (this.groupBySession) {
       const mostRecentId = sessions.reduce<SessionGroup | null>(
         (latest, s) => (!latest || s.startTime > latest.startTime ? s : latest),
@@ -356,8 +369,66 @@ export class GameList {
       ? `<span class="session-video-badge" title="${escapeHtml(tr.sessionVideoAttached)}">🎬 ${escapeHtml(tr.youtubeVideoTitle)}</span>`
       : "";
 
-    let bodyHtml: string;
+    const bodyHtml = this.renderSessionBody(
+      session,
+      identity,
+      isSingleGame,
+      context,
+    );
 
+    return `
+      <div class="session-group${isCollapsed ? " collapsed" : ""}" data-session-id="${escapeHtml(session.id)}">
+        <div class="session-header" role="button" tabindex="0" aria-expanded="${!isCollapsed}">
+          <div class="session-header-left">
+            <span class="session-chevron">▼</span>
+            <div class="session-title">
+              ${escapeHtml(sessionTitle)}
+            </div>
+            <span class="meta-dot">·</span>
+            <span class="session-date">${escapeHtml(dateStr)}</span>
+            ${
+              context.matchup
+                ? `<span class="meta-dot">·</span><span class="session-matchup">${characterIconHtml(context.matchup.yourChar)}<span class="vs-label">vs</span>${characterIconHtml(context.matchup.oppChar)}</span>`
+                : ""
+            }
+            ${
+              context.stageId !== null
+                ? `<span class="meta-dot">·</span><span class="session-stage">${escapeHtml(stageName(context.stageId))}</span>`
+                : ""
+            }
+          </div>
+          <div class="session-header-right">
+            <span class="session-stat-pill">${escapeHtml(tr.sessionGamesCount(session.games.length))}</span>
+            ${recordPill}
+            ${twelveCbPill}
+            <span class="session-duration">⏱ ${duration}</span>
+            ${videoBadge}
+            <a
+              class="session-details-link"
+              href="#/session/${encodeURIComponent(session.id)}"
+              >${escapeHtml(tr.viewSession)} →</a
+            >
+          </div>
+        </div>
+        <div class="session-body">
+          ${bodyHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * The rows inside a session: each 12-character battle as its own section
+   * (games in play order), then any standalone games.
+   */
+  private renderSessionBody(
+    session: SessionGroup,
+    identity: Identity,
+    isSingleGame: boolean,
+    context: SessionContext,
+  ): string {
+    const tr = t();
+    const battles = session.twelveCharacterBattles || [];
     if (battles.length > 0) {
       const cbGameIds = new Set<string>();
       battles.forEach((b) => b.games.forEach((g) => cbGameIds.add(g.id)));
@@ -443,52 +514,12 @@ export class GameList {
         sectionParts.push(standaloneRowsHtml);
       }
 
-      bodyHtml = sectionParts.join("");
+      return sectionParts.join("");
     } else {
-      bodyHtml = chronological(session.games)
+      return chronological(session.games)
         .map((g) => this.renderGameRow(g, identity, isSingleGame, "", context))
         .join("");
     }
-
-    return `
-      <div class="session-group${isCollapsed ? " collapsed" : ""}" data-session-id="${escapeHtml(session.id)}">
-        <div class="session-header" role="button" tabindex="0" aria-expanded="${!isCollapsed}">
-          <div class="session-header-left">
-            <span class="session-chevron">▼</span>
-            <div class="session-title">
-              ${escapeHtml(sessionTitle)}
-            </div>
-            <span class="meta-dot">·</span>
-            <span class="session-date">${escapeHtml(dateStr)}</span>
-            ${
-              context.matchup
-                ? `<span class="meta-dot">·</span><span class="session-matchup">${characterIconHtml(context.matchup.yourChar)}<span class="vs-label">vs</span>${characterIconHtml(context.matchup.oppChar)}</span>`
-                : ""
-            }
-            ${
-              context.stageId !== null
-                ? `<span class="meta-dot">·</span><span class="session-stage">${escapeHtml(stageName(context.stageId))}</span>`
-                : ""
-            }
-          </div>
-          <div class="session-header-right">
-            <span class="session-stat-pill">${escapeHtml(tr.sessionGamesCount(session.games.length))}</span>
-            ${recordPill}
-            ${twelveCbPill}
-            <span class="session-duration">⏱ ${duration}</span>
-            ${videoBadge}
-            <a
-              class="session-details-link"
-              href="#/session/${encodeURIComponent(session.id)}"
-              >${escapeHtml(tr.viewSession)} →</a
-            >
-          </div>
-        </div>
-        <div class="session-body">
-          ${bodyHtml}
-        </div>
-      </div>
-    `;
   }
 
   private renderGameRow(
