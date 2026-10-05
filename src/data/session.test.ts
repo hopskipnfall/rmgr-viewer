@@ -40,7 +40,7 @@ describe("groupGamesIntoSessions", () => {
     stageId: 0x02,
     frameCount: frames,
     isComplete: true,
-    fileRef: null,
+    source: null,
     ports: [
       {
         port: 0,

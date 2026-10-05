@@ -207,6 +207,17 @@ export interface Translations {
   importThisFile: string;
   missingFileNoMatch: (path: string) => string;
   missingFileCancelled: string;
+  rescan: string;
+  projectNewer: string;
+  projectRestored: string;
+  projectUnreadable: string;
+  libraryFolderLabel: string;
+  changeFolder: string;
+  libraryFolderNotFound: string;
+  desktopHint: string;
+  dismiss: string;
+  notInLibraryTitle: string;
+  notInLibraryBody: (path: string) => string;
   searchUnloadedGames: (count: number) => string;
   clearLocalData: string;
   clearLocalDataConfirm: string;
@@ -906,6 +917,22 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     missingFileNoMatch: (path) =>
       `That file isn't ${path}. Choose the matching replay.`,
     missingFileCancelled: "Replay not loaded.",
+    rescan: "Rescan",
+    projectNewer:
+      "This library's project file was saved by a newer version of the app. Notes and comments will not be saved until you update the app.",
+    projectRestored:
+      "Project file was unreadable; restored from backup {n}. The damaged file was kept next to it.",
+    projectUnreadable:
+      "Project file and its backups are unreadable. Notes and comments will not be saved to the library folder until this is fixed.",
+    libraryFolderLabel: "Library folder",
+    changeFolder: "Change…",
+    libraryFolderNotFound: "Library folder not found",
+    desktopHint:
+      "Notes, comments and settings from the web version can be brought over with project export/import.",
+    dismiss: "Dismiss",
+    notInLibraryTitle: "Not found in your library folder",
+    notInLibraryBody: (path) =>
+      `This replay isn't in your library folder: ${path}`,
     searchUnloadedGames: (count) =>
       `${count} game${count === 1 ? " isn't" : "s aren't"} loaded this session and ${count === 1 ? "was" : "were"} not searched.`,
     clearLocalData: "Clear local data",
@@ -1617,6 +1644,22 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     missingFileNoMatch: (path) =>
       `${path} ではありません。対応するリプレイを選んでください。`,
     missingFileCancelled: "リプレイが読み込まれていません。",
+    rescan: "再スキャン",
+    projectNewer:
+      "このライブラリのプロジェクトファイルは新しいバージョンのアプリで保存されました。アプリを更新するまで、メモやコメントは保存されません。",
+    projectRestored:
+      "プロジェクトファイルを読み込めなかったため、バックアップ {n} から復元しました。破損したファイルは同じフォルダに残してあります。",
+    projectUnreadable:
+      "プロジェクトファイルとバックアップを読み込めません。修正されるまで、メモやコメントはライブラリフォルダに保存されません。",
+    libraryFolderLabel: "ライブラリフォルダ",
+    changeFolder: "変更…",
+    libraryFolderNotFound: "ライブラリフォルダが見つかりません",
+    desktopHint:
+      "ウェブ版のメモ・コメント・設定は、プロジェクトのエクスポート/インポートで引き継げます。",
+    dismiss: "閉じる",
+    notInLibraryTitle: "ライブラリフォルダに見つかりません",
+    notInLibraryBody: (path) =>
+      `このリプレイはライブラリフォルダにありません: ${path}`,
     searchUnloadedGames: (count) =>
       `${count}件のゲームは読み込まれていないため検索されませんでした。`,
     clearLocalData: "ローカルデータを消去",

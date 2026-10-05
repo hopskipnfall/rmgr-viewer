@@ -419,7 +419,7 @@ export class SearchViewController {
       this.criteria.playerName,
       isCombos ? this.criteria.victimName : null,
     ].filter((n): n is string => n !== null);
-    const isLoaded = (g: GameSummary) => g.fileRef !== null || !!g.url;
+    const isLoaded = (g: GameSummary) => g.source !== null || !!g.url;
     const candidates = this.getCandidateGames().filter((g) =>
       names.every((name) => g.ports.some((p) => p.playerName === name)),
     );

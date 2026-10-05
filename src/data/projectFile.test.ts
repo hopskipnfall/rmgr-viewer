@@ -5,6 +5,7 @@ import {
   mergeProjectFile,
   parseProjectFile,
   ProjectFileError,
+  ProjectFileTooNewError,
   serializeProjectFile,
 } from "./projectFile.js";
 import { ANALYSIS_VERSION } from "./analysisVersion.js";
@@ -363,5 +364,35 @@ describe("matchup comments export/import", () => {
     ).text();
     const parsed = parseProjectFile(text);
     expect(parsed.matchupComments).toEqual({});
+  });
+});
+
+describe("perspectiveOverrides and schema version", () => {
+  it("round-trips perspective overrides and defaults them for older files", async () => {
+    const file = buildProjectFile(
+      [],
+      { displayName: "", aliases: new Set() },
+      {},
+      {},
+      {},
+      {},
+      { abc: 1 },
+    );
+    const text = await serializeProjectFile(file).text();
+    expect(parseProjectFile(text).perspectiveOverrides).toEqual({ abc: 1 });
+
+    const legacy = JSON.parse(text);
+    delete legacy.perspectiveOverrides;
+    expect(
+      parseProjectFile(JSON.stringify(legacy)).perspectiveOverrides,
+    ).toEqual({});
+  });
+
+  it("raises ProjectFileTooNewError for a newer fileVersion", () => {
+    const text = JSON.stringify({
+      kind: "rmgr-viewer-project",
+      fileVersion: 99,
+    });
+    expect(() => parseProjectFile(text)).toThrow(ProjectFileTooNewError);
   });
 });

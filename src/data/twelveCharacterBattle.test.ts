@@ -46,7 +46,7 @@ describe("detect12CharacterBattles", () => {
       },
     ],
     statsByPort: {},
-    fileRef: null,
+    source: null,
   });
 
   it("detects a complete 12CB battle when one player loses 12 characters", () => {

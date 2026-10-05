@@ -4,6 +4,8 @@
  * localStorage per game id, folded into project export/import (see
  * src/data/projectFile.ts).
  */
+import { notifyUserDataChanged } from "./data/userDataChanged.js";
+
 export interface MatchNote {
   readonly id: string;
   readonly frameIndex: number;
@@ -52,6 +54,7 @@ export function saveMatchNotes(
     } else {
       localStorage.setItem(STORAGE_KEY_PREFIX + gameId, JSON.stringify(notes));
     }
+    notifyUserDataChanged();
   } catch {
     // Ignore localStorage write errors
   }

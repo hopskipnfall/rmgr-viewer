@@ -4,6 +4,8 @@
  * into project export/import (see src/data/projectFile.ts). Unlike src/notes.ts, a session has at
  * most one comment, so this stores a plain string rather than an array of records.
  */
+import { notifyUserDataChanged } from "./data/userDataChanged.js";
+
 const STORAGE_KEY_PREFIX = "rmgr_session_comment_";
 
 /** Returns "" if no comment is saved for this session. Never throws. */
@@ -27,6 +29,7 @@ export function saveSessionComment(sessionId: string, text: string): void {
     } else {
       localStorage.setItem(STORAGE_KEY_PREFIX + sessionId, trimmed);
     }
+    notifyUserDataChanged();
   } catch {
     // Ignore localStorage write errors
   }

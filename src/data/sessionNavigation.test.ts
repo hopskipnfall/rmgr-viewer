@@ -12,7 +12,7 @@ function game(id: string, minutesFromStart: number): GameSummary {
     stageId: DREAM_LAND_STAGE_ID,
     frameCount: 3600,
     isComplete: true,
-    fileRef: null,
+    source: null,
     ports: [
       { port: 0, playerName: "Jonn", characterId: 0x09, finalStocks: 3 },
       { port: 1, playerName: "Nue", characterId: 0x05, finalStocks: 0 },

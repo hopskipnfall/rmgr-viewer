@@ -71,7 +71,7 @@ function makeSummary(opts: {
       [yourPort]: fullCounters,
       [oppPort]: { ...fullCounters },
     },
-    fileRef: null,
+    source: null,
   };
 }
 

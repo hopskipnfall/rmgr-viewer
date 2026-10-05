@@ -47,7 +47,7 @@ function makeSummary(opts: {
       },
     ],
     statsByPort: { 0: counters, 1: { ...counters } },
-    fileRef: null,
+    source: null,
   };
 }
 

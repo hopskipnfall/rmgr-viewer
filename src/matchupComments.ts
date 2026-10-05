@@ -9,6 +9,8 @@
  * directly for this prefix instead of the notes.ts/sessionComments.ts pattern of iterating a
  * known id list, and this is folded into project export/import (see src/data/projectFile.ts).
  */
+import { notifyUserDataChanged } from "./data/userDataChanged.js";
+
 const STORAGE_KEY_PREFIX = "rmgr_matchup_comment_";
 
 function storageKey(myChar: number, oppChar: number): string {
@@ -39,6 +41,7 @@ export function saveMatchupComment(
     } else {
       localStorage.setItem(key, trimmed);
     }
+    notifyUserDataChanged();
   } catch {
     // Ignore localStorage write errors
   }
@@ -76,6 +79,7 @@ export function saveMatchupCommentByKey(key: string, text: string): void {
     } else {
       localStorage.setItem(fullKey, trimmed);
     }
+    notifyUserDataChanged();
   } catch {
     // Ignore localStorage write errors
   }

@@ -41,7 +41,7 @@ describe("groupGamesIntoSessions - rotating lobbies", () => {
       stageId: 0x02,
       frameCount: 120 * 60,
       isComplete: true,
-      fileRef: null,
+      source: null,
       lobbyNames: lobbyNames ?? undefined,
       ports: seated.map((port, i) => ({
         port,

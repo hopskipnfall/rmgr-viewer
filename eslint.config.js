@@ -4,7 +4,14 @@ import eslintConfigPrettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "scratch/**", "scratch_*.mjs", "logs.txt"],
+    ignores: [
+      "dist/**",
+      "src-tauri/target/**",
+      "src-tauri/gen/**",
+      "scratch/**",
+      "scratch_*.mjs",
+      "logs.txt",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

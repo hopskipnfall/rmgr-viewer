@@ -1,6 +1,6 @@
 import { parseReplay } from "@rmg-k/rmgr";
 import { summarizeReplay, type GameSummary } from "./gameSummary.js";
-import type { FileMeta } from "./importPlanner.js";
+import type { FileMeta, ReplayFileSource } from "./replayFileSource.js";
 import type { LoadedReplay } from "../replaySource.js";
 
 export interface ImportProgress {
@@ -14,7 +14,7 @@ export interface ImportError {
   error: string;
 }
 
-/** One parsed file: its summary (with `fileRef` set) plus what a persistent cache entry needs. */
+/** One parsed file: its summary (with `source` set) plus what a persistent cache entry needs. */
 export interface ImportedGame {
   summary: GameSummary;
   /** SHA-256 hex of the file's bytes. */
@@ -30,16 +30,8 @@ export interface ImportResult {
   errors: ImportError[];
 }
 
-export function fileMeta(file: File): FileMeta {
-  return {
-    sourcePath: file.webkitRelativePath || file.name,
-    size: file.size,
-    lastModified: file.lastModified,
-  };
-}
-
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  // Replay bytes always come from File.arrayBuffer()/readFileSync, never a
+  // Replay bytes always come from ReplayFileSource.read()/readFileSync, never a
   // SharedArrayBuffer, which is all SubtleCrypto's BufferSource excludes.
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -78,13 +70,10 @@ function yieldToIdle(): Promise<void> {
  * converts each into a compact GameSummary, and discards the parsed Replay to save memory (§3.1).
  */
 export async function importReplayFiles(
-  files: File[] | FileList,
+  files: readonly ReplayFileSource[],
   onProgress?: (progress: ImportProgress) => void,
 ): Promise<ImportResult> {
-  const fileArray = Array.from(files);
-  const rmgrFiles = fileArray.filter((f) =>
-    f.name.toLowerCase().endsWith(".rmgr"),
-  );
+  const rmgrFiles = files.filter((f) => f.name.toLowerCase().endsWith(".rmgr"));
 
   const games: ImportedGame[] = [];
   const errors: ImportError[] = [];
@@ -104,7 +93,7 @@ export async function importReplayFiles(
     await yieldToIdle();
 
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      const bytes = await file.read();
       const replay = await parseReplay(bytes);
       const loaded: LoadedReplay = {
         replay,
@@ -117,7 +106,7 @@ export async function importReplayFiles(
         contentHash: await sha256Hex(bytes),
         formatVersion: replay.header.version,
         recorderSchemaVersion: replay.header.recorderSchemaVersion,
-        meta: fileMeta(file),
+        meta: file.meta,
       });
     } catch (err) {
       errors.push({
