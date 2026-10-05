@@ -50,7 +50,7 @@ function createDummySummary(
       [ports[1]!.port]: dummyCounters(),
     },
     manualPerspectivePort,
-    fileRef: null,
+    source: null,
   };
 }
 

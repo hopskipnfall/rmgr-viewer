@@ -1,3 +1,4 @@
+import type { PortIndex } from "@rmg-k/rmgr";
 import type { VideoLinkData } from "../video/youtubeSync.js";
 import type { MatchNote } from "../notes.js";
 import {
@@ -13,7 +14,7 @@ import type { LibraryStore, StoredGame } from "./libraryStore.js";
 /** Marker so an unrelated JSON file can't be imported by accident. */
 const KIND = "rmgr-viewer-project";
 /** This file format's own version, independent of ANALYSIS_VERSION. */
-const FILE_VERSION = 1;
+export const FILE_VERSION = 1;
 
 /**
  * An exported project: everything the app knows about a library except the
@@ -44,6 +45,11 @@ export interface ProjectFile {
   /** Keyed by "myChar_oppChar" (a directed character-id pair, from router.ts's matchup route),
    * as stored in localStorage by matchupComments.ts. */
   readonly matchupComments: Readonly<Record<string, string>>;
+  /**
+   * Hand-set "which port is me" overrides, keyed by replay content hash (so renaming or moving a
+   * file never orphans one). Optional in older files: an additive field, so FILE_VERSION stays 1.
+   */
+  readonly perspectiveOverrides: Readonly<Record<string, PortIndex>>;
 }
 
 /**
@@ -69,6 +75,9 @@ export function identityOf(file: ProjectFile): Identity {
 /** A file that isn't a usable project export (wrong kind, newer format, not JSON). */
 export class ProjectFileError extends Error {}
 
+/** A project file written by a newer app version than this one understands. */
+export class ProjectFileTooNewError extends ProjectFileError {}
+
 export interface ImportProjectResult {
   /** Entries actually stored - everything except known-bad encodings (see isKnownBadEncoding()). */
   readonly imported: number;
@@ -87,6 +96,7 @@ export function buildProjectFile(
   notes: Readonly<Record<string, readonly MatchNote[]>> = {},
   sessionComments: Readonly<Record<string, string>> = {},
   matchupComments: Readonly<Record<string, string>> = {},
+  perspectiveOverrides: Readonly<Record<string, PortIndex>> = {},
 ): ProjectFile {
   return {
     kind: KIND,
@@ -102,6 +112,7 @@ export function buildProjectFile(
     notes,
     sessionComments,
     matchupComments,
+    perspectiveOverrides,
   };
 }
 
@@ -137,6 +148,12 @@ export function serializeProjectFile(file: ProjectFile): Blob {
     ),
   );
 
+  const perspectiveOverrides = listLines(
+    Object.entries(file.perspectiveOverrides).map(
+      ([hash, port]) => `${j(hash)}: ${j(port)}`,
+    ),
+  );
+
   const text = [
     "{",
     `  "kind": ${j(file.kind)},`,
@@ -158,6 +175,9 @@ export function serializeProjectFile(file: ProjectFile): Blob {
     `  },`,
     `  "matchupComments": {`,
     matchupComments,
+    `  },`,
+    `  "perspectiveOverrides": {`,
+    perspectiveOverrides,
     `  }`,
     "}",
     "",
@@ -182,8 +202,11 @@ export function parseProjectFile(text: string): ProjectFile {
   if (file?.kind !== KIND) {
     throw new ProjectFileError("not an rmgr-viewer project file");
   }
-  if (typeof file.fileVersion !== "number" || file.fileVersion > FILE_VERSION) {
+  if (typeof file.fileVersion !== "number") {
     throw new ProjectFileError("unsupported project file version");
+  }
+  if (file.fileVersion > FILE_VERSION) {
+    throw new ProjectFileTooNewError("project file is from a newer version");
   }
   return {
     kind: KIND,
@@ -204,6 +227,7 @@ export function parseProjectFile(text: string): ProjectFile {
     notes: file.notes ?? {},
     sessionComments: file.sessionComments ?? {},
     matchupComments: file.matchupComments ?? {},
+    perspectiveOverrides: file.perspectiveOverrides ?? {},
   };
 }
 

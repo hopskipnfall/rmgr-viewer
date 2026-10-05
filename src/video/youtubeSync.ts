@@ -1,3 +1,5 @@
+import { notifyUserDataChanged } from "../data/userDataChanged.js";
+
 // "canvas-muted" = 2D replay only, YouTube playback fully stopped, no video/audio ("Replay").
 // "video-only" = Full YouTube video.
 // "video-pip" = Video with mini 2D replay overlay.
@@ -260,6 +262,7 @@ export function saveVideoLink(replayId: string, data: VideoLinkData): void {
       STORAGE_KEY_PREFIX + replayId,
       JSON.stringify({ ...data, viewMode }),
     );
+    notifyUserDataChanged();
   } catch {
     // Ignore localStorage write errors
   }
@@ -272,6 +275,7 @@ export function deleteVideoLink(replayId: string): void {
   if (!replayId) return;
   try {
     localStorage.removeItem(STORAGE_KEY_PREFIX + replayId);
+    notifyUserDataChanged();
   } catch {
     // Ignore localStorage errors
   }

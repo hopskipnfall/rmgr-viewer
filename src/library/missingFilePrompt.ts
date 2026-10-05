@@ -11,11 +11,16 @@ export class MissingFileCancelledError extends Error {
 
 export interface MissingFilePromptOptions {
   modalContainer: HTMLElement;
-  /** The game to open. Resolves once an import sets its `fileRef`. */
+  /** The game to open. Resolves once an import sets its `source`. */
   summary: GameSummary;
   /** Opens the single-file picker; the import it triggers is reported via onImportFinished. */
   pickFile(): void;
   pickFolder(): void;
+  /**
+   * Desktop variant: "Not found in your library folder" with Rescan + Cancel
+   * instead of the web file/folder pickers.
+   */
+  desktopRescan?: () => void;
   /** Subscribes to "an import just finished"; returns an unsubscribe function. */
   onImportFinished(listener: () => void): () => void;
 }
@@ -31,6 +36,17 @@ export function promptForMissingFile(
 ): Promise<boolean> {
   const { modalContainer, summary } = options;
   const tr = t();
+  const desktop = options.desktopRescan !== undefined;
+  const title = desktop ? tr.notInLibraryTitle : tr.missingFileTitle;
+  const body = desktop
+    ? tr.notInLibraryBody(summary.sourceName)
+    : tr.missingFileBody(summary.sourceName);
+  const buttons = desktop
+    ? `<button id="missingFileCancelBtn" class="btn-secondary">${escapeHtml(tr.cancel)}</button>
+          <button id="missingFileRescanBtn" class="btn-primary">${escapeHtml(tr.rescan)}</button>`
+    : `<button id="missingFileCancelBtn" class="btn-secondary">${escapeHtml(tr.cancel)}</button>
+          <button id="missingFileFolderBtn" class="btn-secondary">${escapeHtml(tr.reimportFolder)}</button>
+          <button id="missingFileFileBtn" class="btn-primary">${escapeHtml(tr.importThisFile)}</button>`;
 
   return new Promise((resolve) => {
     modalContainer.hidden = false;
@@ -38,15 +54,13 @@ export function promptForMissingFile(
       <div class="modal-backdrop" id="missingFileBackdrop"></div>
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3>${escapeHtml(tr.missingFileTitle)}</h3>
+          <h3>${escapeHtml(title)}</h3>
           <button class="modal-close" id="missingFileCloseBtn">✕</button>
         </div>
-        <p class="modal-subtitle">${escapeHtml(tr.missingFileBody(summary.sourceName))}</p>
+        <p class="modal-subtitle">${escapeHtml(body)}</p>
         <p class="modal-subtitle search-unloaded-note" id="missingFileMessage"></p>
         <div class="modal-footer">
-          <button id="missingFileCancelBtn" class="btn-secondary">${escapeHtml(tr.cancel)}</button>
-          <button id="missingFileFolderBtn" class="btn-secondary">${escapeHtml(tr.reimportFolder)}</button>
-          <button id="missingFileFileBtn" class="btn-primary">${escapeHtml(tr.importThisFile)}</button>
+          ${buttons}
         </div>
       </div>
     `;
@@ -57,7 +71,7 @@ export function promptForMissingFile(
     // Only complain about a non-matching import if this prompt asked for it.
     let awaitingImport = false;
     const unsubscribe = options.onImportFinished(() => {
-      if (summary.fileRef) {
+      if (summary.source) {
         close(true);
         return;
       }
@@ -79,6 +93,10 @@ export function promptForMissingFile(
     on("#missingFileBackdrop", () => close(false));
     on("#missingFileCloseBtn", () => close(false));
     on("#missingFileCancelBtn", () => close(false));
+    on("#missingFileRescanBtn", () => {
+      awaitingImport = true;
+      options.desktopRescan?.();
+    });
     on("#missingFileFileBtn", () => {
       awaitingImport = true;
       options.pickFile();

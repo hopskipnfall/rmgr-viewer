@@ -31,7 +31,7 @@ function makeSummary(id: string, yourChar: number): GameSummary {
       { port: 1, playerName: "Penelope", characterId: 2, finalStocks: 0 },
     ],
     statsByPort: { 0: counters, 1: { ...counters } },
-    fileRef: null,
+    source: null,
   };
 }
 

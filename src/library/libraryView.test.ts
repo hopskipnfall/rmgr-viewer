@@ -73,7 +73,7 @@ function makeTestSummary(
       { port: 1, playerName: "Opponent", characterId: oppChar, finalStocks: 0 },
     ],
     statsByPort: { 0: counters, 1: { ...counters } },
-    fileRef: null,
+    source: null,
   };
 }
 

@@ -7,13 +7,8 @@ import type { StoredGame } from "./libraryStore.js";
  * No I/O here - libraryPersistence.ts does the reading and writing.
  */
 
-/** What a `File` tells us about itself without reading its bytes. */
-export interface FileMeta {
-  /** `webkitRelativePath` for a folder pick, otherwise the bare filename. */
-  sourcePath: string;
-  size: number;
-  lastModified: number;
-}
+import type { FileMeta } from "./replayFileSource.js";
+export type { FileMeta };
 
 /**
  * The cached entry a file can be attached to without parsing it: same

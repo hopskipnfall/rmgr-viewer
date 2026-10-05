@@ -1,4 +1,5 @@
 import { parseReplay, type Replay } from "@rmg-k/rmgr";
+import type { ReplayFileSource } from "./data/replayFileSource.js";
 
 export interface LoadedReplay {
   replay: Replay;
@@ -28,12 +29,13 @@ export async function loadReplayFromUrl(url: string): Promise<LoadedReplay> {
   };
 }
 
-export async function loadReplayFromFile(file: File): Promise<LoadedReplay> {
-  const buffer = await file.arrayBuffer();
-  const replay = await parseReplay(new Uint8Array(buffer));
+export async function loadReplayFromSource(
+  source: ReplayFileSource,
+): Promise<LoadedReplay> {
+  const replay = await parseReplay(await source.read());
   return {
     replay,
-    sourceName: file.name,
+    sourceName: source.name,
     recordedAt: recordedAtFromReplay(replay),
   };
 }

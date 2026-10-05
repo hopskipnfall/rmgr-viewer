@@ -52,3 +52,98 @@ jobs:
         working-directory: rmgr-viewer
       - run: npm run format:check
         working-directory: rmgr-viewer
+
+  # Keeps the Rust side of the desktop app from rotting between releases.
+  tauri-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rmgr-viewer
+      - uses: actions/checkout@v4
+        with:
+          repository: hopskipnfall/rmgr-ts
+          path: rmgr-ts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: rmgr-ts
+      - run: npm run build
+        working-directory: rmgr-ts
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: rmgr-viewer/src-tauri
+      - run: npm ci
+        working-directory: rmgr-viewer
+      # tauri::generate_context! needs frontendDist (../dist) to exist.
+      - run: npm run build
+        working-directory: rmgr-viewer
+      - run: cargo check --manifest-path src-tauri/Cargo.toml
+        working-directory: rmgr-viewer
+
+  # Builds the installers on every push to master and every PR, uploading them
+  # as workflow artifacts (no release is created; that's release.yml on tags).
+  tauri-build:
+    needs: tauri-check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+            artifact: macos-universal
+          - platform: windows-latest
+            args: ""
+            artifact: windows
+          - platform: ubuntu-22.04
+            args: ""
+            artifact: linux
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rmgr-viewer
+      - uses: actions/checkout@v4
+        with:
+          repository: hopskipnfall/rmgr-ts
+          path: rmgr-ts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: rmgr-ts
+      - run: npm run build
+        working-directory: rmgr-ts
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: rmgr-viewer/src-tauri
+      - name: Install Tauri system dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+        working-directory: rmgr-viewer
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: rmgr-viewer
+          args: ${{ matrix.args }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rmgr-viewer-${{ matrix.artifact }}
+          path: |
+            rmgr-viewer/src-tauri/target/**/release/bundle/dmg/*.dmg
+            rmgr-viewer/src-tauri/target/release/bundle/msi/*.msi
+            rmgr-viewer/src-tauri/target/release/bundle/nsis/*.exe
+            rmgr-viewer/src-tauri/target/release/bundle/appimage/*.AppImage
+            rmgr-viewer/src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error

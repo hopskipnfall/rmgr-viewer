@@ -6,6 +6,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest";
 import { ANALYSIS_VERSION } from "./analysisVersion.js";
 import { DEMO_REPLAY_FILENAMES } from "./demoReplayFiles.js";
+import { fromBrowserFile, type ReplayFileSource } from "./replayFileSource.js";
 import * as importer from "./importer.js";
 import { openLibraryStore, type LibraryStore } from "./libraryStore.js";
 import {
@@ -17,6 +18,14 @@ import {
 // `File` is only a global from Node 20 on, and CI still runs 18.
 const FileCtor = (globalThis.File ?? NodeFile) as unknown as typeof File;
 
+function src(
+  parts: BlobPart[],
+  name: string,
+  options?: FilePropertyBag,
+): ReplayFileSource {
+  return fromBrowserFile(new FileCtor(parts, name, options));
+}
+
 const replaysDir = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../public/replays",
@@ -26,10 +35,11 @@ const BYTES = NAMES.map(
   (name) => new Uint8Array(readFileSync(resolve(replaysDir, name))),
 );
 
-function demoFiles(rename: (name: string) => string = (n) => n): File[] {
-  return NAMES.map(
-    (name, i) =>
-      new FileCtor([BYTES[i]!], rename(name), { lastModified: 1000 }),
+function demoFiles(
+  rename: (name: string) => string = (n) => n,
+): ReplayFileSource[] {
+  return NAMES.map((name, i) =>
+    src([BYTES[i]!], rename(name), { lastModified: 1000 }),
   );
 }
 
@@ -44,7 +54,7 @@ describe("importIntoLibrary + loadPersistedLibrary", () => {
 
     expect(imported.errors).toEqual([]);
     expect(imported.summaries).toHaveLength(3);
-    expect(imported.summaries.every((s) => s.fileRef !== null)).toBe(true);
+    expect(imported.summaries.every((s) => s.source !== null)).toBe(true);
     expect(imported.newIds).toHaveLength(3);
 
     const loaded = await loadPersistedLibrary(store);
@@ -52,7 +62,7 @@ describe("importIntoLibrary + loadPersistedLibrary", () => {
     expect(loaded.summaries.map((s) => s.id).sort()).toEqual(
       imported.summaries.map((s) => s.id).sort(),
     );
-    expect(loaded.summaries.every((s) => s.fileRef === null)).toBe(true);
+    expect(loaded.summaries.every((s) => s.source === null)).toBe(true);
     expect(loaded.summaries[0]!.recordedAt).toBeInstanceOf(Date);
   });
 
@@ -70,8 +80,21 @@ describe("importIntoLibrary + loadPersistedLibrary", () => {
 
     expect(parsedFileCount).toBe(0);
     expect(again.summaries).toHaveLength(3);
-    expect(again.summaries.every((s) => s.fileRef !== null)).toBe(true);
+    expect(again.summaries.every((s) => s.source !== null)).toBe(true);
     expect(again.newIds).toEqual([]);
+  });
+
+  it("attaches unchanged files to cached summaries without reading their bytes", async () => {
+    const store = await freshStore();
+    await importIntoLibrary(store, demoFiles());
+
+    const read = vi.fn(async () => new Uint8Array());
+    const lazy = demoFiles().map((s) => ({ ...s, read }));
+    const again = await importIntoLibrary(store, lazy);
+
+    expect(read).not.toHaveBeenCalled();
+    expect(again.summaries).toHaveLength(3);
+    expect(again.summaries.every((s) => s.source !== null)).toBe(true);
   });
 
   it("still shows stale entries (using cached stats) alongside flagging them for re-import", async () => {
@@ -123,7 +146,7 @@ describe("importIntoLibrary + loadPersistedLibrary", () => {
   it("collapses duplicate copies of one game in the same import", async () => {
     const store = await freshStore();
     const [first] = demoFiles();
-    const copy = new FileCtor([BYTES[0]!], `copy-${NAMES[0]}`, {
+    const copy = src([BYTES[0]!], `copy-${NAMES[0]}`, {
       lastModified: 1000,
     });
 
@@ -135,7 +158,7 @@ describe("importIntoLibrary + loadPersistedLibrary", () => {
 
   it("never stores a file that fails to parse", async () => {
     const store = await freshStore();
-    const junk = new FileCtor([new Uint8Array([1, 2, 3])], "junk.rmgr");
+    const junk = src([new Uint8Array([1, 2, 3])], "junk.rmgr");
     const result = await importIntoLibrary(store, [junk]);
     expect(result.errors.map((e) => e.fileName)).toEqual(["junk.rmgr"]);
     expect(await store.getAll()).toEqual([]);

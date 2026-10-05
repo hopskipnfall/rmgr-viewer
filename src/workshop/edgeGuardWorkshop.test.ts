@@ -283,7 +283,7 @@ describe("Edge Guard Data Extraction & Mirroring", () => {
       },
     ],
     statsByPort: {},
-    fileRef: null,
+    source: null,
   };
 
   it("flips left-side recovery positions across x = 0 to positive X", () => {

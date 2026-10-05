@@ -1,4 +1,5 @@
 import { getSeatedPorts, type PortIndex, type Replay } from "@rmg-k/rmgr";
+import type { ReplayFileSource } from "./replayFileSource.js";
 import { computeEdgeGuardEvents, computeEdgeGuardStats } from "../edgeGuard.js";
 import {
   computeClassifiedSituations,
@@ -100,7 +101,7 @@ export interface GameSummary {
   lobbyNames?: string[];
   statsByPort: Partial<Record<PortIndex, RawCounters>>;
   manualPerspectivePort?: PortIndex | null;
-  fileRef: File | null;
+  source: ReplayFileSource | null;
   url?: string;
   isBundledSample?: boolean;
   isUnevenStockStart?: boolean;
@@ -278,7 +279,7 @@ export function legacyGameId(
 /**
  * JSON-serializable form of the fields `summarizeReplay()` computes (i.e.
  * everything except `recordedAt`, which becomes an ISO string, and
- * `fileRef`/`url`/`isBundledSample`/`manualPerspectivePort`, which are
+ * `source`/`url`/`isBundledSample`/`manualPerspectivePort`, which are
  * either not applicable or assigned by the caller afterward).
  *
  * Written by `scripts/generateDemoSummaries.ts` to
@@ -341,7 +342,7 @@ export function deserializeGameSummary(
     ports: serialized.ports,
     lobbyNames: serialized.lobbyNames,
     statsByPort: serialized.statsByPort,
-    fileRef: null,
+    source: null,
     isUnevenStockStart: serialized.isUnevenStockStart,
   };
 }
@@ -352,7 +353,7 @@ export function deserializeGameSummary(
  */
 export function summarizeReplay(
   loaded: LoadedReplay,
-  fileRef: File | null = null,
+  source: ReplayFileSource | null = null,
 ): GameSummary {
   const { replay, sourceName, recordedAt } = loaded;
   const seated = getSeatedPorts(replay);
@@ -424,7 +425,7 @@ export function summarizeReplay(
     ports,
     lobbyNames: replay.matchStart.playerNames.filter((n) => n.length > 0),
     statsByPort,
-    fileRef,
+    source,
     isUnevenStockStart,
   };
 }

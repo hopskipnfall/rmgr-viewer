@@ -12,7 +12,6 @@ import {
 } from "./gameSummary.js";
 import {
   importReplayFiles,
-  fileMeta,
   type ImportError,
   type ImportProgress,
   type ImportedGame,
@@ -22,6 +21,7 @@ import {
   findFastPathMatch,
   pickPreferred,
 } from "./importPlanner.js";
+import type { ReplayFileSource } from "./replayFileSource.js";
 import type { LibraryStore, StoredGame } from "./libraryStore.js";
 import { searchCache } from "../search/searchCache.js";
 
@@ -33,7 +33,7 @@ import { searchCache } from "../search/searchCache.js";
 
 export interface LoadedLibrary {
   /**
-   * Entries shown in the library, `fileRef` null (no file loaded yet this session). Includes
+   * Entries shown in the library, `source` null (no file loaded yet this session). Includes
    * entries on an older ANALYSIS_VERSION - their cached stats may reflect an older stat
    * definition, but showing possibly-slightly-outdated numbers beats hiding the game entirely,
    * especially for a project import where the user may not have the original replay file handy to
@@ -45,9 +45,12 @@ export interface LoadedLibrary {
   staleEntries: StoredGame[];
 }
 
-function summaryFromEntry(entry: StoredGame, file: File | null): GameSummary {
+function summaryFromEntry(
+  entry: StoredGame,
+  source: ReplayFileSource | null,
+): GameSummary {
   const summary = deserializeGameSummary(entry.summary);
-  summary.fileRef = file;
+  summary.source = source;
   if (entry.manualPerspectivePort !== null) {
     summary.manualPerspectivePort = entry.manualPerspectivePort;
   }
@@ -68,7 +71,7 @@ export async function loadPersistedLibrary(
 }
 
 export interface PersistImportResult {
-  /** Every game this import attached to the session (`fileRef` set). */
+  /** Every game this import attached to the session (`source` set). */
   summaries: GameSummary[];
   /** Cached entries that are still stale after this import. */
   staleEntries: StoredGame[];
@@ -114,7 +117,7 @@ function entryFromImport(
 
 export async function importIntoLibrary(
   store: LibraryStore,
-  files: readonly File[],
+  files: readonly ReplayFileSource[],
   onProgress?: (progress: ImportProgress) => void,
   /**
    * Fired right after the fast path (step 1) finishes, before the slow
@@ -133,12 +136,12 @@ export async function importIntoLibrary(
 
   const summaries: GameSummary[] = [];
   const attachedIds = new Set<string>();
-  const toParse: File[] = [];
+  const toParse: ReplayFileSource[] = [];
 
   // 1. Fast path: unchanged files attach straight from the cache, unread.
   for (const file of files) {
     if (!file.name.toLowerCase().endsWith(".rmgr")) continue;
-    const match = findFastPathMatch(fileMeta(file), byPath);
+    const match = findFastPathMatch(file.meta, byPath);
     if (match && !attachedIds.has(match.id)) {
       summaries.push(summaryFromEntry(match, file));
       attachedIds.add(match.id);

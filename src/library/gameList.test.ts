@@ -33,7 +33,7 @@ describe("GameList rendering", () => {
       stageId: DREAM_LAND_STAGE_ID,
       frameCount: 3600, // 1:00
       isComplete: true,
-      fileRef: null,
+      source: null,
       ports: [
         { port: 0, playerName: "Isai", characterId: 0x09, finalStocks: 3 }, // Pikachu
         { port: 1, playerName: "Mew2King", characterId: 0x01, finalStocks: 0 }, // Fox
@@ -137,7 +137,7 @@ describe("GameList rendering", () => {
       stageId: DREAM_LAND_STAGE_ID,
       frameCount: 3600,
       isComplete: true,
-      fileRef: null,
+      source: null,
       ports: [
         { port: 0, playerName: "Player 1", characterId: 0x09, finalStocks: 3 },
         { port: 1, playerName: "Player 2", characterId: 0x01, finalStocks: 0 },
@@ -183,7 +183,7 @@ describe("GameList rendering", () => {
       stageId: DREAM_LAND_STAGE_ID,
       frameCount: 3600,
       isComplete: true,
-      fileRef: null,
+      source: null,
       ports: [
         { port: 0, playerName: "Player 1", characterId: 0x09, finalStocks: 3 },
         { port: 1, playerName: "Player 2", characterId: 0x01, finalStocks: 0 },
@@ -226,7 +226,7 @@ describe("GameList rendering", () => {
       stageId: DREAM_LAND_STAGE_ID,
       frameCount: 3600,
       isComplete: true,
-      fileRef: null,
+      source: null,
       isUnevenStockStart: true,
       ports: [
         {
@@ -286,7 +286,7 @@ describe("GameList rendering", () => {
       stageId: DREAM_LAND_STAGE_ID,
       frameCount: 3600,
       isComplete: true,
-      fileRef: null,
+      source: null,
       isUnevenStockStart: i > 0,
       ports: [
         {
@@ -341,7 +341,7 @@ describe("GameList rendering", () => {
       stageId: DREAM_LAND_STAGE_ID,
       frameCount: 3600,
       isComplete: true,
-      fileRef: null,
+      source: null,
       ports: [
         {
           port: 0,

@@ -1,0 +1,102 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Library folder access",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "store:default",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        {
+          "path": "$DOCUMENT/Replays"
+        },
+        {
+          "path": "$DOCUMENT/Replays/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [
+        {
+          "path": "$DOCUMENT/Replays"
+        },
+        {
+          "path": "$DOCUMENT/Replays/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        {
+          "path": "$DOCUMENT/Replays"
+        },
+        {
+          "path": "$DOCUMENT/Replays/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        {
+          "path": "$DOCUMENT/Replays"
+        },
+        {
+          "path": "$DOCUMENT/Replays/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$DOCUMENT/Replays"
+        },
+        {
+          "path": "$DOCUMENT/Replays/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-watch",
+      "allow": [
+        {
+          "path": "$DOCUMENT/Replays"
+        },
+        {
+          "path": "$DOCUMENT/Replays/**"
+        }
+      ]
+    },
+    "fs:allow-unwatch",
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        {
+          "path": "$DOCUMENT/Replays/rmgr-viewer-project.json*"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-rename",
+      "allow": [
+        {
+          "path": "$DOCUMENT/Replays/rmgr-viewer-project.json*"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        {
+          "path": "$DOCUMENT/Replays/rmgr-viewer-project.json*"
+        }
+      ]
+    }
+  ]
+}

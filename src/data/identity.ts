@@ -1,5 +1,6 @@
 import type { PortIndex } from "@rmg-k/rmgr";
 import type { GameSummary } from "./gameSummary.js";
+import { notifyUserDataChanged } from "./userDataChanged.js";
 
 export interface Identity {
   displayName: string;
@@ -62,6 +63,7 @@ export function saveIdentity(identity: Identity): void {
         aliases: [...identity.aliases],
       }),
     );
+    notifyUserDataChanged();
   } catch {
     // Ignore localStorage write errors
   }

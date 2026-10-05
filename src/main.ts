@@ -19,7 +19,7 @@ import {
 } from "./router.js";
 import type { PortIndex } from "@rmg-k/rmgr";
 import {
-  loadReplayFromFile,
+  loadReplayFromSource,
   loadReplayFromUrl,
   type LoadedReplay,
 } from "./replaySource.js";
@@ -29,6 +29,11 @@ import {
   type DemoSummariesFile,
 } from "./data/gameSummary.js";
 import { DEMO_REPLAY_FILENAMES } from "./data/demoReplayFiles.js";
+import { isTauri } from "@tauri-apps/api/core";
+import {
+  fromBrowserFile,
+  type ReplayFileSource,
+} from "./data/replayFileSource.js";
 import { importReplayFiles, type ImportProgress } from "./data/importer.js";
 import { clearLocalData } from "./data/clearLocalData.js";
 import {
@@ -64,6 +69,7 @@ import {
   matchesAlias,
   resolvePerspectivePort,
   saveIdentity,
+  loadIdentity,
 } from "./data/identity.js";
 import { computeOverallBaseline, type DerivedRates } from "./data/aggregate.js";
 import { groupGamesIntoSessions, type SessionGroup } from "./data/session.js";
@@ -363,6 +369,13 @@ let libraryStore: LibraryStore | null = null;
 /** Cached games from an older ANALYSIS_VERSION - kept out of the library until re-imported. */
 let staleEntries: StoredGame[] = [];
 
+/** Set on desktop once the library folder is initialised (see startDesktopLibrary). */
+let desktopLibrary: { rescan(): Promise<void> } | null = null;
+/** Desktop project-file sync (notes, comments, identity, perspectives). Null on web. */
+let desktopProject: {
+  setPerspective(id: string, port: PortIndex | null): Promise<void>;
+} | null = null;
+
 /** Notified after every import completes (see promptForMissingFile). */
 const importFinishedListeners = new Set<() => void>();
 
@@ -382,7 +395,7 @@ function renderStaleBanner(): void {
 /**
  * Adds freshly imported games to the library. A game already listed (e.g.
  * loaded from the cache after a refresh) is updated in place instead - it
- * gets its File for this session, plus any recomputed stats.
+ * gets its source for this session, plus any recomputed stats.
  */
 function attachImportedSummaries(imported: GameSummary[]): void {
   const added: GameSummary[] = [];
@@ -405,8 +418,10 @@ function attachImportedSummaries(imported: GameSummary[]): void {
   }
 }
 
-async function handleImport(files: FileList | File[]): Promise<void> {
-  if (!files || files.length === 0) return;
+/** Returns the number of files that failed to import (1 if the whole import threw). */
+async function handleImport(files: ReplayFileSource[]): Promise<number> {
+  if (!files || files.length === 0) return 0;
+  let failures: number;
 
   // Elements are static markup in index.html's #homeShell/#librarySidebar
   // (Task 4 moved this out of LibraryViewController's dynamically-rendered
@@ -449,7 +464,7 @@ async function handleImport(files: FileList | File[]): Promise<void> {
     if (libraryStore) {
       const result = await importIntoLibrary(
         libraryStore,
-        [...files],
+        files,
         onProgress,
         // Surfaces already-cached games (e.g. the one the missing-file
         // prompt is waiting on) the moment they're recognized, rather than
@@ -480,6 +495,7 @@ async function handleImport(files: FileList | File[]): Promise<void> {
 
     attachImportedSummaries(summaries);
     renderStaleBanner();
+    failures = errorCount;
 
     const messages: string[] = [];
     if (errorCount > 0) {
@@ -490,6 +506,7 @@ async function handleImport(files: FileList | File[]): Promise<void> {
     }
     if (libStatusEl) libStatusEl.textContent = messages.join(" ");
   } catch (err) {
+    failures = 1;
     if (libStatusEl)
       libStatusEl.textContent = `Import failed: ${(err as Error).message}`;
   } finally {
@@ -503,6 +520,7 @@ async function handleImport(files: FileList | File[]): Promise<void> {
       if (libProgressWrap) libProgressWrap.hidden = true;
     }, 1500);
   }
+  return failures;
 }
 
 let currentMatchSummary: GameSummary | null = null;
@@ -542,8 +560,14 @@ function computeMatchupBaselineForPort(
 async function loadReplayForSummary(
   summary: GameSummary,
 ): Promise<LoadedReplay> {
-  if (summary.fileRef) {
-    return loadReplayFromFile(summary.fileRef);
+  if (summary.source) {
+    try {
+      return await loadReplayFromSource(summary.source);
+    } catch (err) {
+      // On desktop a vanished file falls through to the "not in your library folder" prompt.
+      if (!desktopLibrary) throw err;
+      summary.source = null;
+    }
   } else if (summary.url) {
     return loadReplayFromUrl(summary.url);
   }
@@ -556,13 +580,16 @@ async function loadReplayForSummary(
     summary,
     pickFile: () => filePicker.click(),
     pickFolder: () => folderPicker.click(),
+    desktopRescan: desktopLibrary
+      ? () => void desktopLibrary?.rescan()
+      : undefined,
     onImportFinished: (listener) => {
       importFinishedListeners.add(listener);
       return () => importFinishedListeners.delete(listener);
     },
   });
-  if (!loaded || !summary.fileRef) throw new MissingFileCancelledError();
-  return loadReplayFromFile(summary.fileRef);
+  if (!loaded || !summary.source) throw new MissingFileCancelledError();
+  return loadReplayFromSource(summary.source);
 }
 
 /** A playlist queued by e.g. the search view's "play this clip" action, consumed once handleRouteChange() finishes loading its starting clip's game. */
@@ -911,6 +938,111 @@ async function handleRouteChange(route: Route): Promise<void> {
   }
 }
 
+/**
+ * Desktop only: resolve the library folder, scan it, and watch it. Plugin
+ * code is dynamic-imported so it never enters the web bundle's initial chunk.
+ */
+async function startDesktopLibrary(): Promise<void> {
+  const [folder, adapter, ui, projectSync] = await Promise.all([
+    import("./desktop/libraryFolder.js"),
+    import("./desktop/fsAdapter.js"),
+    import("./desktop/desktopUi.js"),
+    import("./desktop/projectSync.js"),
+  ]);
+  const fs = adapter.tauriFs;
+  const sync = new projectSync.ProjectSync({
+    fs,
+    storage: localStorage,
+    store: libraryStore,
+    onNotice: (notice) => ui.setProjectNotice(notice),
+  });
+  desktopProject = sync;
+  // Flush any debounced edit before the window goes away.
+  await fs.onCloseRequested(() => sync.flush());
+
+  /** Re-applies the project's hand-set perspectives (keyed by content hash) to cached games. */
+  const applyPerspectives = async (): Promise<void> => {
+    for (const { id, port } of await sync.applyPerspectives()) {
+      const summary = libraryController.getSummaryById(id);
+      if (summary) summary.manualPerspectivePort = port;
+    }
+    libraryController.render();
+  };
+  let stopWatcher: (() => void) | null = null;
+
+  const unmatchAll = (): void => {
+    for (const s of libraryController.getSummaries()) {
+      if (!s.isBundledSample) s.source = null;
+    }
+  };
+
+  let scanning = false;
+  const scanAndWatch = async (): Promise<void> => {
+    if (scanning) return;
+    scanning = true;
+    ui.setScanning(true);
+    try {
+      await scanAndWatchUnguarded();
+    } finally {
+      scanning = false;
+      ui.setScanning(false);
+    }
+  };
+
+  const scanAndWatchUnguarded = async (): Promise<void> => {
+    stopWatcher?.();
+    stopWatcher = null;
+    const state = await folder.resolveRoot(fs);
+    ui.setLibraryFolderPath(state.root);
+    ui.setFolderMissingBanner(state.kind === "missing");
+    if (state.kind === "missing") {
+      await sync.detach();
+      return;
+    }
+    if (await sync.attach(state.root)) {
+      // localStorage now holds this library's project data: re-read what was cached at startup.
+      libraryController.setIdentity(loadIdentity());
+      homeSidebarController.setData(
+        libraryController.getSummaries(),
+        libraryController.getIdentity(),
+      );
+    }
+    await handleImport(await folder.scanLibrary(fs, state.root));
+    await applyPerspectives();
+    stopWatcher = await folder.startWatcher(fs, state.root, {
+      onSource: async (source) => {
+        if ((await handleImport([source])) > 0) {
+          throw new Error(`could not import ${source.name}`);
+        }
+        await applyPerspectives();
+      },
+      onRemove: (sourcePath) => {
+        for (const s of libraryController.getSummaries()) {
+          if (s.source?.meta.sourcePath === sourcePath) s.source = null;
+        }
+        libraryController.render();
+      },
+      onError: (sourcePath, err) =>
+        console.warn(`Could not import ${sourcePath}:`, err),
+    });
+  };
+
+  const changeFolder = async (): Promise<void> => {
+    const picked = await fs.pickDirectory();
+    if (!picked) return;
+    await fs.saveRoot(picked);
+    unmatchAll();
+    await scanAndWatch();
+  };
+
+  desktopLibrary = { rescan: scanAndWatch };
+  ui.initDesktopUi({
+    onRescan: () => void scanAndWatch(),
+    onChangeFolder: () => void changeFolder(),
+  });
+  await scanAndWatch();
+}
+
 async function init(): Promise<void> {
   // 1. Initialize Views
   matchController = new MatchViewController();
@@ -962,7 +1094,11 @@ async function init(): Promise<void> {
   libraryController.setPersistenceHooks({
     identity: (identity) => saveIdentity(identity),
     perspective: (id, port) => {
-      if (libraryStore) void setManualPerspective(libraryStore, id, port);
+      if (libraryStore) {
+        void setManualPerspective(libraryStore, id, port).then(() =>
+          desktopProject?.setPerspective(id, port),
+        );
+      }
     },
     remove: (id) => {
       if (libraryStore) void libraryStore.delete(id);
@@ -1115,14 +1251,14 @@ async function init(): Promise<void> {
 
   filePicker.addEventListener("change", () => {
     if (filePicker.files) {
-      void handleImport(filePicker.files);
+      void handleImport([...filePicker.files].map(fromBrowserFile));
       filePicker.value = "";
     }
   });
 
   folderPicker.addEventListener("change", () => {
     if (folderPicker.files) {
-      void handleImport(folderPicker.files);
+      void handleImport([...folderPicker.files].map(fromBrowserFile));
       folderPicker.value = "";
     }
   });
@@ -1240,7 +1376,7 @@ async function init(): Promise<void> {
   window.addEventListener("drop", (e) => {
     e.preventDefault();
     if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-      void handleImport(e.dataTransfer.files);
+      void handleImport([...e.dataTransfer.files].map(fromBrowserFile));
     }
   });
 
@@ -1465,6 +1601,13 @@ async function init(): Promise<void> {
       offsetSeconds,
       viewMode: existing?.viewMode ?? "canvas-muted",
     });
+  }
+
+  if (isTauri()) {
+    // After demo setup so a real scan replaces demo mode, not the reverse. Not awaited.
+    void startDesktopLibrary().catch((err) =>
+      console.warn("Desktop library folder unavailable:", err),
+    );
   }
 
   // 5. Connect Router. onRoute() fires its callback once synchronously

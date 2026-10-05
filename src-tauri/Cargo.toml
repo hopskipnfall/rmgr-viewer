@@ -1,0 +1,16 @@
+[package]
+name = "rmgr-viewer"
+version = "0.1.0"
+description = "Real-time visual playback of .rmgr replay files"
+edition = "2021"
+license = "GPL-3.0-only"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-fs = { version = "2", features = ["watch"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-store = "2"
+tauri-plugin-persisted-scope = "2"
