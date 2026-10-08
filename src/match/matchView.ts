@@ -122,6 +122,10 @@ import {
   unlinkVideoFromSession,
 } from "../video/youtubeSync.js";
 import {
+  buildVodMemos,
+  buildVodAnnotatorUrl,
+} from "../video/vodAnnotatorExport.js";
+import {
   type MatchNote,
   loadMatchNotes,
   upsertAnchoredNote,
@@ -4021,6 +4025,48 @@ export class MatchViewController {
     );
   }
 
+  /** Exports every neutral win/loss (from the current perspective) and note, ignoring the panel's filter toggles. */
+  private openInVodAnnotator(videoId: string, offsetSeconds: number): void {
+    if (this.perspectivePort === null) return;
+    const tr = t();
+    const reasonLabel = (e: NeutralHitEvent): string => {
+      switch (e.reason) {
+        case "shield-pressure":
+          return tr.neutralReasonShieldPressure;
+        case "landing-lag":
+          return tr.neutralReasonLandingLag;
+        case "whiff-punish":
+          return tr.neutralReasonWhiffPunish;
+        case "jump-punish":
+          return tr.neutralReasonJumpPunish;
+        case "standing-hit":
+          return e.hitType === "grab"
+            ? tr.neutralReasonStandingGrab
+            : tr.neutralReasonStandingHit;
+        case "reversal":
+          return tr.neutralReasonReversal;
+        default:
+          return tr.neutralReasonUnknown;
+      }
+    };
+    const memos = buildVodMemos({
+      videoId,
+      offsetSeconds,
+      perspectivePort: this.perspectivePort,
+      events: this.neutralHitEvents,
+      notes: this.matchNotes,
+      describeEvent: (e) => {
+        const hits = e.preSituationHits ?? e.totalHitsLanded;
+        return hits
+          ? `${reasonLabel(e)} (${tr.neutralHitsBadge(hits)})`
+          : reasonLabel(e);
+      },
+      winLabel: tr.vodExportNeutralWin,
+      lossLabel: tr.vodExportNeutralLoss,
+    });
+    window.open(buildVodAnnotatorUrl(videoId, memos), "_blank", "noopener");
+  }
+
   private renderNeutralHitsPanel(replay: Replay): void {
     const tr = t();
     this.neutralHitsList.innerHTML = "";
@@ -4337,6 +4383,20 @@ export class MatchViewController {
           },
         ),
       );
+      const vodLink = this.currentReplayId
+        ? loadVideoLink(this.currentReplayId)
+        : null;
+      if (vodLink) {
+        const vodBtn = document.createElement("button");
+        vodBtn.type = "button";
+        vodBtn.className = "neutral-filter-btn neutral-vod-export-btn";
+        vodBtn.textContent = `${tr.openInVodAnnotator} ↗`;
+        vodBtn.title = tr.openInVodAnnotatorTitle;
+        vodBtn.addEventListener("click", () =>
+          this.openInVodAnnotator(vodLink.videoId, vodLink.offsetSeconds),
+        );
+        filterContainer.appendChild(vodBtn);
+      }
       this.neutralHitsList.appendChild(filterContainer);
     }
 
