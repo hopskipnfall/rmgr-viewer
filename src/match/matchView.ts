@@ -388,6 +388,7 @@ export class MatchViewController {
   private vodModeLabel: HTMLSpanElement;
   private vodSyncLabel: HTMLSpanElement;
   private vodYoutubeLink: HTMLAnchorElement;
+  private vodAnnotatorBtn: HTMLButtonElement;
   private viewModePipBtn: HTMLButtonElement;
   private viewModeVideoBtn: HTMLButtonElement;
   private viewModeCanvasMutedBtn: HTMLButtonElement;
@@ -1087,6 +1088,15 @@ export class MatchViewController {
     this.vodSyncLabel = document.getElementById(
       "vodSyncLabel",
     ) as HTMLSpanElement;
+    this.vodAnnotatorBtn = document.getElementById(
+      "vodAnnotatorBtn",
+    ) as HTMLButtonElement;
+    this.vodAnnotatorBtn.addEventListener("click", () => {
+      const link = this.currentReplayId
+        ? loadVideoLink(this.currentReplayId)
+        : null;
+      if (link) this.openInVodAnnotator(link.videoId, link.offsetSeconds);
+    });
     this.vodYoutubeLink = document.getElementById(
       "vodYoutubeLink",
     ) as HTMLAnchorElement;
@@ -2212,7 +2222,11 @@ export class MatchViewController {
       this.vodModeLabel.textContent = tr.vodPlaybackModeLabel;
     if (this.vodSyncLabel) this.vodSyncLabel.textContent = tr.vodFixSyncLabel;
     if (this.vodYoutubeLink)
-      this.vodYoutubeLink.textContent = `▶ ${tr.vodWatchOnYouTube} ↗`;
+      this.vodYoutubeLink.textContent = `▶ ${tr.vodYouTubeLabel} ↗`;
+    if (this.vodAnnotatorBtn) {
+      this.vodAnnotatorBtn.textContent = `▶ ${tr.vodAnnotatorLabel} ↗`;
+      this.updateVodAnnotatorBtn();
+    }
     if (this.pipCloseBtn) this.pipCloseBtn.title = tr.pipCloseBtnTitle;
     const shortcutsTogglePipEl = document.getElementById("shortcutsTogglePip");
     if (shortcutsTogglePipEl)
@@ -4025,6 +4039,16 @@ export class MatchViewController {
     );
   }
 
+  private updateVodAnnotatorBtn(): void {
+    if (!this.vodAnnotatorBtn) return;
+    const tr = t();
+    const needsPerspective = this.perspectivePort === null;
+    this.vodAnnotatorBtn.disabled = needsPerspective;
+    this.vodAnnotatorBtn.title = needsPerspective
+      ? tr.vodAnnotatorNeedsPerspectiveTitle
+      : tr.openInVodAnnotatorTitle;
+  }
+
   /** Exports every neutral win/loss (from the current perspective) and note, ignoring the panel's filter toggles. */
   private openInVodAnnotator(videoId: string, offsetSeconds: number): void {
     if (this.perspectivePort === null) return;
@@ -4067,6 +4091,7 @@ export class MatchViewController {
 
   private renderNeutralHitsPanel(replay: Replay): void {
     const tr = t();
+    this.updateVodAnnotatorBtn();
     this.neutralHitsList.innerHTML = "";
 
     if (replay.frames.length === 0) {
@@ -4381,20 +4406,6 @@ export class MatchViewController {
           },
         ),
       );
-      const vodLink = this.currentReplayId
-        ? loadVideoLink(this.currentReplayId)
-        : null;
-      if (vodLink) {
-        const vodBtn = document.createElement("button");
-        vodBtn.type = "button";
-        vodBtn.className = "neutral-filter-btn neutral-vod-export-btn";
-        vodBtn.textContent = `${tr.openInVodAnnotator} ↗`;
-        vodBtn.title = tr.openInVodAnnotatorTitle;
-        vodBtn.addEventListener("click", () =>
-          this.openInVodAnnotator(vodLink.videoId, vodLink.offsetSeconds),
-        );
-        filterContainer.appendChild(vodBtn);
-      }
       this.neutralHitsList.appendChild(filterContainer);
     }
 
@@ -6348,6 +6359,7 @@ export class MatchViewController {
         this.clearOffsetOverrideBtn.title = tr.clearOffsetOverrideTitle;
       }
       this.vodYoutubeLink.href = data.url;
+      this.updateVodAnnotatorBtn();
       this.videoUnlinkBtn.hidden = false;
       this.replayInfoVideoValue.innerHTML = `
         <span class="video-linked-status">

@@ -469,7 +469,9 @@ export interface Translations {
   neutralFilterWin: (count: number) => string;
   neutralFilterLoss: (count: number) => string;
   neutralFilterComments: (count: number) => string;
-  openInVodAnnotator: string;
+  vodYouTubeLabel: string;
+  vodAnnotatorLabel: string;
+  vodAnnotatorNeedsPerspectiveTitle: string;
   openInVodAnnotatorTitle: string;
   neutralOpeningsGroupTitle: (count: number) => string;
   neutralPunishesGroupTitle: (count: number) => string;
@@ -1202,7 +1204,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralFilterWin: (count) => `Win (${count})`,
     neutralFilterLoss: (count) => `Loss (${count})`,
     neutralFilterComments: (count) => `Comments (${count})`,
-    openInVodAnnotator: "Open in Vod Annotator",
+    vodYouTubeLabel: "YouTube",
+    vodAnnotatorLabel: "VOD Annotator",
+    vodAnnotatorNeedsPerspectiveTitle:
+      "Select a perspective to open this game in Vod Annotator",
     openInVodAnnotatorTitle:
       "Open this game's neutral wins/losses and comments, synced to the attached YouTube video, in Vod Annotator",
     neutralOpeningsGroupTitle: (count) => `Neutral Openings (${count})`,
@@ -1924,7 +1929,10 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralFilterWin: (count) => `差し込み (${count})`,
     neutralFilterLoss: (count) => `被弾 (${count})`,
     neutralFilterComments: (count) => `コメント (${count})`,
-    openInVodAnnotator: "Vod Annotator で開く",
+    vodYouTubeLabel: "YouTube",
+    vodAnnotatorLabel: "VOD Annotator",
+    vodAnnotatorNeedsPerspectiveTitle:
+      "Vod Annotatorで開くには視点を選択してください",
     openInVodAnnotatorTitle:
       "このゲームの立ち回りの勝ち/負けとコメントを、リンク済みのYouTube動画と共にVod Annotatorで開く",
     neutralOpeningsGroupTitle: (count) => `差し込み成功 (${count})`,
