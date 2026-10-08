@@ -122,6 +122,10 @@ import {
   unlinkVideoFromSession,
 } from "../video/youtubeSync.js";
 import {
+  buildVodMemos,
+  buildVodAnnotatorUrl,
+} from "../video/vodAnnotatorExport.js";
+import {
   type MatchNote,
   loadMatchNotes,
   upsertAnchoredNote,
@@ -384,6 +388,7 @@ export class MatchViewController {
   private vodModeLabel: HTMLSpanElement;
   private vodSyncLabel: HTMLSpanElement;
   private vodYoutubeLink: HTMLAnchorElement;
+  private vodAnnotatorBtn: HTMLButtonElement;
   private viewModePipBtn: HTMLButtonElement;
   private viewModeVideoBtn: HTMLButtonElement;
   private viewModeCanvasMutedBtn: HTMLButtonElement;
@@ -1083,6 +1088,15 @@ export class MatchViewController {
     this.vodSyncLabel = document.getElementById(
       "vodSyncLabel",
     ) as HTMLSpanElement;
+    this.vodAnnotatorBtn = document.getElementById(
+      "vodAnnotatorBtn",
+    ) as HTMLButtonElement;
+    this.vodAnnotatorBtn.addEventListener("click", () => {
+      const link = this.currentReplayId
+        ? loadVideoLink(this.currentReplayId)
+        : null;
+      if (link) this.openInVodAnnotator(link.videoId, link.offsetSeconds);
+    });
     this.vodYoutubeLink = document.getElementById(
       "vodYoutubeLink",
     ) as HTMLAnchorElement;
@@ -2208,7 +2222,11 @@ export class MatchViewController {
       this.vodModeLabel.textContent = tr.vodPlaybackModeLabel;
     if (this.vodSyncLabel) this.vodSyncLabel.textContent = tr.vodFixSyncLabel;
     if (this.vodYoutubeLink)
-      this.vodYoutubeLink.textContent = `▶ ${tr.vodWatchOnYouTube} ↗`;
+      this.vodYoutubeLink.textContent = `▶ ${tr.vodYouTubeLabel} ↗`;
+    if (this.vodAnnotatorBtn) {
+      this.vodAnnotatorBtn.textContent = `▶ ${tr.vodAnnotatorLabel} ↗`;
+      this.updateVodAnnotatorBtn();
+    }
     if (this.pipCloseBtn) this.pipCloseBtn.title = tr.pipCloseBtnTitle;
     const shortcutsTogglePipEl = document.getElementById("shortcutsTogglePip");
     if (shortcutsTogglePipEl)
@@ -4021,8 +4039,59 @@ export class MatchViewController {
     );
   }
 
+  private updateVodAnnotatorBtn(): void {
+    if (!this.vodAnnotatorBtn) return;
+    const tr = t();
+    const needsPerspective = this.perspectivePort === null;
+    this.vodAnnotatorBtn.disabled = needsPerspective;
+    this.vodAnnotatorBtn.title = needsPerspective
+      ? tr.vodAnnotatorNeedsPerspectiveTitle
+      : tr.openInVodAnnotatorTitle;
+  }
+
+  /** Exports every neutral win/loss (from the current perspective) and note, ignoring the panel's filter toggles. */
+  private openInVodAnnotator(videoId: string, offsetSeconds: number): void {
+    if (this.perspectivePort === null) return;
+    const tr = t();
+    const reasonLabel = (e: NeutralHitEvent): string => {
+      switch (e.reason) {
+        case "shield-pressure":
+          return tr.neutralReasonShieldPressure;
+        case "landing-lag":
+          return tr.neutralReasonLandingLag;
+        case "whiff-punish":
+          return tr.neutralReasonWhiffPunish;
+        case "jump-punish":
+          return tr.neutralReasonJumpPunish;
+        case "standing-hit":
+          return e.hitType === "grab"
+            ? tr.neutralReasonStandingGrab
+            : tr.neutralReasonStandingHit;
+        case "reversal":
+          return tr.neutralReasonReversal;
+        default:
+          return tr.neutralReasonUnknown;
+      }
+    };
+    const memos = buildVodMemos({
+      videoId,
+      offsetSeconds,
+      perspectivePort: this.perspectivePort,
+      events: this.neutralHitEvents,
+      notes: this.matchNotes,
+      describeEvent: (e) => {
+        const hits = e.preSituationHits ?? e.totalHitsLanded;
+        return hits
+          ? `${reasonLabel(e)} (${tr.neutralHitsBadge(hits)})`
+          : reasonLabel(e);
+      },
+    });
+    window.open(buildVodAnnotatorUrl(videoId, memos), "_blank", "noopener");
+  }
+
   private renderNeutralHitsPanel(replay: Replay): void {
     const tr = t();
+    this.updateVodAnnotatorBtn();
     this.neutralHitsList.innerHTML = "";
 
     if (replay.frames.length === 0) {
@@ -6290,6 +6359,7 @@ export class MatchViewController {
         this.clearOffsetOverrideBtn.title = tr.clearOffsetOverrideTitle;
       }
       this.vodYoutubeLink.href = data.url;
+      this.updateVodAnnotatorBtn();
       this.videoUnlinkBtn.hidden = false;
       this.replayInfoVideoValue.innerHTML = `
         <span class="video-linked-status">

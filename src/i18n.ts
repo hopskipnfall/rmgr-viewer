@@ -469,6 +469,10 @@ export interface Translations {
   neutralFilterWin: (count: number) => string;
   neutralFilterLoss: (count: number) => string;
   neutralFilterComments: (count: number) => string;
+  vodYouTubeLabel: string;
+  vodAnnotatorLabel: string;
+  vodAnnotatorNeedsPerspectiveTitle: string;
+  openInVodAnnotatorTitle: string;
   neutralOpeningsGroupTitle: (count: number) => string;
   neutralPunishesGroupTitle: (count: number) => string;
   noNeutralHits: string;
@@ -1200,6 +1204,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralFilterWin: (count) => `Win (${count})`,
     neutralFilterLoss: (count) => `Loss (${count})`,
     neutralFilterComments: (count) => `Comments (${count})`,
+    vodYouTubeLabel: "YouTube",
+    vodAnnotatorLabel: "VOD Annotator",
+    vodAnnotatorNeedsPerspectiveTitle:
+      "Select a perspective to open this game in Vod Annotator",
+    openInVodAnnotatorTitle:
+      "Open this game's neutral wins/losses and comments, synced to the attached YouTube video, in Vod Annotator",
     neutralOpeningsGroupTitle: (count) => `Neutral Openings (${count})`,
     neutralPunishesGroupTitle: (count) => `Neutral Punishes Taken (${count})`,
     noNeutralHits: "No neutral hits in this match.",
@@ -1919,6 +1929,12 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     neutralFilterWin: (count) => `差し込み (${count})`,
     neutralFilterLoss: (count) => `被弾 (${count})`,
     neutralFilterComments: (count) => `コメント (${count})`,
+    vodYouTubeLabel: "YouTube",
+    vodAnnotatorLabel: "VOD Annotator",
+    vodAnnotatorNeedsPerspectiveTitle:
+      "Vod Annotatorで開くには視点を選択してください",
+    openInVodAnnotatorTitle:
+      "このゲームの立ち回りの勝ち/負けとコメントを、リンク済みのYouTube動画と共にVod Annotatorで開く",
     neutralOpeningsGroupTitle: (count) => `差し込み成功 (${count})`,
     neutralPunishesGroupTitle: (count) => `被弾・被差し返し (${count})`,
     noNeutralHits: "この試合で差し込みヒットはありません。",
