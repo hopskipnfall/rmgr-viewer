@@ -31,8 +31,6 @@ export interface VodExportInput {
   notes: readonly MatchNote[];
   /** Short label for an event, e.g. "Whiff punish (2 hits)". */
   describeEvent: (e: NeutralHitEvent) => string;
-  winLabel: string;
-  lossLabel: string;
 }
 
 function roundTenth(seconds: number): number {
@@ -50,7 +48,7 @@ export function buildVodMemos(input: VodExportInput): VodMemo[] {
     if (!isWin && !isLoss) continue;
     memos.push({
       timestampSeconds: at(e.frameIndex),
-      message: `${isWin ? input.winLabel : input.lossLabel}: ${input.describeEvent(e)}`,
+      message: input.describeEvent(e),
       kind: isWin ? "w" : "l",
     });
   }

@@ -38,8 +38,6 @@ const base = (over: Partial<VodExportInput>): VodExportInput => ({
   events: [],
   notes: [],
   describeEvent: () => "Whiff punish",
-  winLabel: "Neutral win",
-  lossLabel: "Neutral loss",
   ...over,
 });
 
@@ -61,11 +59,11 @@ describe("buildVodMemos", () => {
       }),
     );
     expect(memos).toEqual([
-      { timestampSeconds: 11, message: "Neutral win: Whiff punish", kind: "w" },
+      { timestampSeconds: 11, message: "Whiff punish", kind: "w" },
       { timestampSeconds: 15, message: "mix-up", kind: "" },
       {
         timestampSeconds: 20,
-        message: "Neutral loss: Whiff punish",
+        message: "Whiff punish",
         kind: "l",
       },
     ]);

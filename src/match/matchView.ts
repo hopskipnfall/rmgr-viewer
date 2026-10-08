@@ -4061,8 +4061,6 @@ export class MatchViewController {
           ? `${reasonLabel(e)} (${tr.neutralHitsBadge(hits)})`
           : reasonLabel(e);
       },
-      winLabel: tr.vodExportNeutralWin,
-      lossLabel: tr.vodExportNeutralLoss,
     });
     window.open(buildVodAnnotatorUrl(videoId, memos), "_blank", "noopener");
   }
