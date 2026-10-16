@@ -99,6 +99,7 @@ describe("VOD panel light mode styles", () => {
       "clearOffsetOverrideBtn",
       "vodLinkDisplayRow",
       "vodYoutubeLink",
+      "vodAnnotatorBtn",
       "vodEditLinkBtn",
       "vodLinkEditRow",
       "videoUrlInput",

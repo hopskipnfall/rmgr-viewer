@@ -6717,6 +6717,24 @@
       .vod-youtube-link:hover {
         text-decoration: underline;
       }
+      .vod-link-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 12px;
+      }
+      .vod-link-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .vod-link-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        text-decoration: none;
+      }
       [data-theme="light"] #vodWidget {
         border-color: #bae6fd;
       }
@@ -8027,14 +8045,23 @@
                   </div>
                 </div>
                 <div class="vod-row vod-link-row" id="vodLinkDisplayRow">
-                  <a
-                    id="vodYoutubeLink"
-                    class="vod-youtube-link"
-                    href="#"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    >▶ Watch on YouTube ↗</a
-                  >
+                  <span class="vod-link-group">
+                    <a
+                      id="vodYoutubeLink"
+                      class="vod-youtube-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >▶ YouTube ↗</a
+                    >
+                    <button
+                      id="vodAnnotatorBtn"
+                      class="vod-youtube-link vod-link-btn"
+                      type="button"
+                    >
+                      ▶ VOD Annotator ↗
+                    </button>
+                  </span>
                   <button
                     id="vodEditLinkBtn"
                     class="video-sync-btn"
