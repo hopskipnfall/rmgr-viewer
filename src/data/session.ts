@@ -6,6 +6,10 @@ import {
   resolvePerspectivePort,
   resolveOpponentPort,
 } from "./identity.js";
+import {
+  canonicalOpponentName,
+  type OpponentAliases,
+} from "./opponentAliases.js";
 import { loadVideoLink, type VideoLinkData } from "../video/youtubeSync.js";
 import {
   detect12CharacterBattles,
@@ -50,9 +54,22 @@ function lobbyNamesOf(summary: GameSummary): string[] {
   return summary.ports.map((p) => p.playerName || `P${p.port + 1}`);
 }
 
-/** Same lobby = same set of player names, regardless of who played this particular game or on which port. */
-function lobbyKey(summary: GameSummary): string {
-  return [...new Set(lobbyNamesOf(summary).map((n) => n.toLowerCase()))]
+/**
+ * Same lobby = same set of player names, regardless of who played this particular game or on which
+ * port. Names go through the opponent aliases first, so a sitting where one person switches tags
+ * mid-way (`kusora` then `kusora_JPN`) still clusters into one session.
+ */
+function lobbyKey(
+  summary: GameSummary,
+  opponentAliases?: OpponentAliases,
+): string {
+  return [
+    ...new Set(
+      lobbyNamesOf(summary).map((n) =>
+        canonicalOpponentName(n, opponentAliases).toLowerCase(),
+      ),
+    ),
+  ]
     .sort()
     .join("|");
 }
@@ -73,7 +90,14 @@ function sessionOpponentName(
 ): string {
   const lobby = lobbyNamesOf(firstGame);
   if (!lobby.some((n) => matchesAlias(n, identity))) return fallback;
-  return lobby.filter((n) => !matchesAlias(n, identity)).join(", ");
+  // Dedupe after canonicalizing: two tags of one person in the lobby are one opponent.
+  return [
+    ...new Set(
+      lobby
+        .filter((n) => !matchesAlias(n, identity))
+        .map((n) => canonicalOpponentName(n, identity.opponentAliases)),
+    ),
+  ].join(", ");
 }
 
 function getOpponentSignature(
@@ -88,7 +112,11 @@ function getOpponentSignature(
   if (yourPort === null) {
     // Ambiguous perspective: use both player names
     const names = summary.ports
-      .map((p) => p.playerName || `P${p.port + 1}`)
+      .map((p) =>
+        p.playerName
+          ? canonicalOpponentName(p.playerName, identity.opponentAliases)
+          : `P${p.port + 1}`,
+      )
       .sort()
       .join(" vs ");
     return { opponentName: names, is2Player: true, yourPort: null };
@@ -97,8 +125,11 @@ function getOpponentSignature(
   const oppPort = resolveOpponentPort(summary, yourPort);
   const oppP =
     oppPort !== null ? summary.ports.find((p) => p.port === oppPort) : null;
-  const oppName =
-    oppP?.playerName || (oppPort !== null ? `P${oppPort + 1}` : "");
+  const oppName = oppP?.playerName
+    ? canonicalOpponentName(oppP.playerName, identity.opponentAliases)
+    : oppPort !== null
+      ? `P${oppPort + 1}`
+      : "";
   return { opponentName: oppName, is2Player: true, yourPort };
 }
 
@@ -146,7 +177,9 @@ export function groupGamesIntoSessions(
 
     // Same lobby (the same players, even if they rotate who plays), and
     // this game starts after the previous one ended - within the gap limit.
-    const sameLobby = lobbyKey(prevGame) === lobbyKey(game);
+    const sameLobby =
+      lobbyKey(prevGame, identity.opponentAliases) ===
+      lobbyKey(game, identity.opponentAliases);
     const startsAfterPrevEnded =
       game.recordedAt.getTime() >=
       gameEndMs(prevGame) - GAME_OVERLAP_TOLERANCE_MS;

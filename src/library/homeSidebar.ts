@@ -9,7 +9,7 @@ import { SessionSidebarList } from "./sessionSidebarList.js";
  * Owns the persistent desktop sidebar shell (index.html's #librarySidebar,
  * now static markup, mounted inside #homeShell): Import replays, the YOU
  * (identity) panel, and the session list. Stays mounted across the library
- * <-> session routes - see docs/superpowers/specs/2026-09-19-desktop-session-sidebar-design.md.
+ * <-> session routes - see docs/ARCHITECTURE.md.
  *
  * Below the 860px breakpoint this sidebar's content is unused - mobile
  * still gets its sidebar rendered inline by LibraryViewController, exactly
@@ -32,6 +32,7 @@ export class HomeSidebarController {
     onIdentityChanged: (identity: Identity) => void,
     onSelectSession: (id: string) => void,
     onSelectStatistics: () => void,
+    onSelectProgress: () => void,
   ) {
     this.identity = identity;
 
@@ -56,6 +57,9 @@ export class HomeSidebarController {
       "#sidebarStatisticsLink",
     );
     statisticsLink?.addEventListener("click", () => onSelectStatistics());
+    container
+      .querySelector<HTMLButtonElement>("#sidebarProgressLink")
+      ?.addEventListener("click", () => onSelectProgress());
 
     // Mobile collapse/expand toggle - moved verbatim from
     // LibraryViewController's old constructor (it owned this same
@@ -121,22 +125,28 @@ export class HomeSidebarController {
   }
 
   /**
-   * `id === null` means the library/overview route is active, so the
-   * Statistics link (the sidebar's entry point to that route) is marked
-   * current the same way the header nav links mark "you are here" -
+   * `id === null` means a non-session page is active: `page` says which
+   * sidebar link (Statistics for the library overview, or Progress) is
+   * marked current, the same way the header nav links mark "you are here" -
    * see .sidebar-statistics-link[aria-current="page"] in index.html.
    */
-  public setSelectedSessionId(id: string | null): void {
+  public setSelectedSessionId(
+    id: string | null,
+    page: "statistics" | "progress" = "statistics",
+  ): void {
     this.sessionList.setSelectedSessionId(id);
     this.sessionList.render();
 
-    const statisticsLink = this.container.querySelector<HTMLButtonElement>(
-      "#sidebarStatisticsLink",
-    );
-    if (id === null) {
-      statisticsLink?.setAttribute("aria-current", "page");
-    } else {
-      statisticsLink?.removeAttribute("aria-current");
+    for (const [selector, linkPage] of [
+      ["#sidebarStatisticsLink", "statistics"],
+      ["#sidebarProgressLink", "progress"],
+    ] as const) {
+      const link = this.container.querySelector<HTMLButtonElement>(selector);
+      if (id === null && page === linkPage) {
+        link?.setAttribute("aria-current", "page");
+      } else {
+        link?.removeAttribute("aria-current");
+      }
     }
   }
 
@@ -155,5 +165,9 @@ export class HomeSidebarController {
     if (importFilesBtn) importFilesBtn.textContent = tr.importFiles;
     if (importFolderBtn) importFolderBtn.textContent = tr.importFolder;
     if (statisticsLink) statisticsLink.textContent = tr.sidebarStatistics;
+    const progressLink = this.container.querySelector<HTMLButtonElement>(
+      "#sidebarProgressLink",
+    );
+    if (progressLink) progressLink.textContent = tr.navProgress;
   }
 }

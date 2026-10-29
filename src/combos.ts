@@ -192,6 +192,8 @@ function findContestableSituation(
   );
 }
 
+const killCombosCache = new WeakMap<Replay, KillCombo[]>();
+
 /**
  * Extracts all "Kill Combos" from a match replay.
  *
@@ -210,8 +212,20 @@ function findContestableSituation(
  *       recover (not merely hitting the blast zone)." Only applies where the classifier has an
  *       opinion at all (Dream Land, one of its 9 supported characters) -- everywhere else, (b)'s
  *       existing behavior is unchanged.
+ *
+ * Memoized per replay: summarizing a game asks for these once per seated port, and the match view
+ * asks again. The returned array is shared - callers must not mutate it.
  */
 export function computeKillCombos(replay: Replay): KillCombo[] {
+  let combos = killCombosCache.get(replay);
+  if (!combos) {
+    combos = computeKillCombosUncached(replay);
+    killCombosCache.set(replay, combos);
+  }
+  return combos;
+}
+
+function computeKillCombosUncached(replay: Replay): KillCombo[] {
   return scanCombos(replay, 3).filter((c) => c.killed);
 }
 

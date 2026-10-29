@@ -335,6 +335,16 @@ export interface Translations {
   identityModalTitle: string;
   identityModalSubtitle: string;
   addCustomAlias: string;
+  opponentTagsButton: string;
+  opponentTagsTitle: string;
+  opponentTagsSubtitle: string;
+  opponentTagsPick: string;
+  opponentTagsSameAs: string;
+  opponentTagsMerge: string;
+  opponentTagsNone: string;
+  opponentTagsRemove: string;
+  opponentTagsMergesHeading: string;
+  opponentTagsGames: (n: number) => string;
   add: string;
   save: string;
   cancel: string;
@@ -438,7 +448,7 @@ export interface Translations {
   cameraPanResetTitle: string;
 
   // Classifier-aware recovery/edge-guard breakdown (see
-  // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md)
+  // docs/community/edge-guards.md)
   recoveryContestableLabel: string;
   edgeGuardEffectivenessLabel: string;
   edgeGuardEffectivenessSummary: (situations: number) => string;
@@ -700,6 +710,143 @@ export interface Translations {
   twelveCbNextMatch: string;
   twelveCbPrevMatchTitle: string;
   twelveCbNextMatchTitle: string;
+
+  // Progress view
+  navProgress: string;
+  progressTitle: string;
+  progressScopeAll: string;
+  progressGamesCount: (games: number) => string;
+  progressIntro: string;
+  progressNoIdentity: string;
+  progressNoGames: string;
+  progressMetricOpeningShare: string;
+  progressMetricOpeningShareHint: string;
+  progressMetricDamagePerOpening: string;
+  progressMetricDamagePerOpeningHint: string;
+  progressMetricDamageGivenBack: string;
+  progressMetricDamageGivenBackHint: string;
+  progressMetricBaitShare: string;
+  progressMetricBaitShareHint: string;
+  progressMetricHitBackShare: string;
+  progressMetricHitBackShareHint: string;
+  progressMetricRecovery: string;
+  progressMetricRecoveryHint: string;
+  progressUnitPoints: string;
+  progressUnitDamage: string;
+  progressRecentLabel: (days: number) => string;
+  progressEarlierLabel: string;
+  progressVsExpected: string;
+  progressVerdictBetter: string;
+  progressVerdictWorse: string;
+  progressVerdictUnclear: string;
+  progressVerdictTooFew: string;
+  progressOverall: (value: string, r: string) => string;
+  progressTooltipExpected: (value: string, expected: string) => string;
+  progressRepeatedTitle: string;
+  progressRepeatedHint: string;
+  progressAdaptationTitle: string;
+  progressAdaptationHint: string;
+  progressStrengthTitle: string;
+  progressStrengthHint: string;
+  progressColDate: string;
+  progressColOpponent: string;
+  progressColGames: string;
+  progressColRecord: string;
+  progressColOpeningShare: string;
+  progressColDamage: string;
+  progressColBait: string;
+  progressColHitBack: string;
+  progressColFirstThird: string;
+  progressColLastThird: string;
+  progressColChange: string;
+  progressColStrength: string;
+
+  // Session hit reel
+  hitReelTitle: (count: number) => string;
+  hitReelIntro: string;
+  hitReelPlayAll: string;
+  hitReelSortChronological: string;
+  hitReelSortCostliest: string;
+  hitReelBigOnly: string;
+  hitReelAllReasons: string;
+  hitReelLoading: (done: number, total: number) => string;
+  hitReelUnloaded: (count: number) => string;
+  hitReelImportFolder: string;
+  hitReelEmpty: string;
+  hitReelNoted: (noted: number, total: number) => string;
+  hitReelColGame: string;
+  hitReelColTime: string;
+  hitReelColHow: string;
+  hitReelColHitBy: string;
+  hitReelColYouWere: string;
+  hitReelColDamage: string;
+  hitReelColResult: string;
+  hitReelColNote: string;
+  hitReelNotePlaceholder: string;
+  hitReelPlay: string;
+  hitReelOutcomeKo: string;
+  hitReelOutcomeReset: string;
+  hitReelOutcomeReversal: string;
+  hitReelOutcomeIncomplete: string;
+  hitReelToEdge: string;
+  hitReelToLedge: string;
+  hitReelGrab: string;
+  hitReelClipLabel: (game: number, time: string, how: string) => string;
+
+  // Punish finder
+  navPunishes: string;
+  punishTitle: string;
+  punishIntro: string;
+  punishAttacker: string;
+  punishVictim: string;
+  punishAnyCharacter: string;
+  punishPercent: string;
+  punishPercentAny: string;
+  punishWhere: string;
+  punishWhereHint: string;
+  punishWho: string;
+  punishWhoAnyone: string;
+  punishWhoYou: string;
+  punishWhoOpponents: string;
+  punishKind: string;
+  punishKindAny: string;
+  punishKindAttack: string;
+  punishKindGrab: string;
+  punishSummary: (matches: number, games: number) => string;
+  punishNoIndex: (games: number) => string;
+  punishEmpty: string;
+  punishByMoveTitle: string;
+  punishByMoveHint: string;
+  punishBestTitle: string;
+  punishShowing: (shown: number, total: number) => string;
+  punishPlayTop: string;
+  punishColOpener: string;
+  punishColTimes: string;
+  punishColAverage: string;
+  punishColMedian: string;
+  punishColTookStock: string;
+  punishColBest: string;
+  punishColWho: string;
+  punishColOn: string;
+  punishColPercent: string;
+  punishColDamage: string;
+  punishColHits: string;
+  punishColDate: string;
+  punishKo: string;
+  punishGrab: string;
+  punishZoneLabel: (horizontal: string, vertical: string) => string;
+  punishZoneCenter: string;
+  punishZoneSide: string;
+  punishZoneOffstage: string;
+  punishZoneHigh: string;
+  punishZoneMid: string;
+  punishZoneLow: string;
+  punishClipLabel: (
+    who: string,
+    percent: number,
+    damage: number,
+    move: string,
+  ) => string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -1060,6 +1207,17 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     identityModalSubtitle:
       "Select the player names you use across your replays to aggregate your statistics accurately.",
     addCustomAlias: "Add custom name",
+    opponentTagsButton: "Merge opponent tags",
+    opponentTagsTitle: "Opponent tags",
+    opponentTagsSubtitle:
+      "If one person plays under several tags, merge them so they count as one opponent in strength, sessions, progress and filters.",
+    opponentTagsPick: "Choose a tag...",
+    opponentTagsSameAs: "is the same person as",
+    opponentTagsMerge: "Merge",
+    opponentTagsNone: "No merged tags yet.",
+    opponentTagsRemove: "Unmerge",
+    opponentTagsMergesHeading: "Merged tags",
+    opponentTagsGames: (n) => `${n} game${n !== 1 ? "s" : ""}`,
     add: "Add",
     save: "Save",
     cancel: "Cancel",
@@ -1446,6 +1604,157 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     twelveCbNextMatch: "Next",
     twelveCbPrevMatchTitle: "Previous match in this 12 Character Battle",
     twelveCbNextMatchTitle: "Next match in this 12 Character Battle",
+
+    navProgress: "Progress",
+    progressTitle: "Progress",
+    progressScopeAll: "All characters",
+    progressGamesCount: (games) => `${games} game${games === 1 ? "" : "s"}`,
+    progressIntro:
+      "Each dot is one session, compared with what's expected against that opponent. Opponent strength is inferred from your results on this character, so a close loss to a top player can count as a good session. Above the line is better than expected.",
+    progressNoIdentity:
+      "Choose which player is you in the sidebar to see your progress.",
+    progressNoGames: "No 1v1 games on this character yet.",
+    progressMetricOpeningShare: "Opening share",
+    progressMetricOpeningShareHint:
+      "Neutral openings you won, out of all openings",
+    progressMetricDamagePerOpening: "Damage per opening",
+    progressMetricDamagePerOpeningHint:
+      "How much each opening you won was worth",
+    progressMetricDamageGivenBack: "Damage given back",
+    progressMetricDamageGivenBackHint:
+      "Damage taken while you held the advantage, per opening",
+    progressMetricBaitShare: "Bait & punish",
+    progressMetricBaitShareHint:
+      "Openings won off the opponent's commitment (whiff or landing)",
+    progressMetricHitBackShare: "Hit back while ahead",
+    progressMetricHitBackShareHint:
+      "Openings lost right after you had the last hit",
+    progressMetricRecovery: "Recovery",
+    progressMetricRecoveryHint:
+      "Recoveries survived, excluding ones that were already lost",
+    progressUnitPoints: "pts",
+    progressUnitDamage: "%",
+    progressRecentLabel: (days) => `Last ${days} days`,
+    progressEarlierLabel: "Baseline",
+    progressVsExpected: "vs expected",
+    progressVerdictBetter: "Better than baseline",
+    progressVerdictWorse: "Worse than baseline",
+    progressVerdictUnclear: "No clear change yet",
+    progressVerdictTooFew: "Not enough sessions to compare",
+    progressOverall: (value, r) =>
+      `Overall ${value} · opponent strength explains r = ${r}`,
+    progressTooltipExpected: (value, expected) =>
+      `${value} (expected ${expected})`,
+    progressRepeatedTitle: "Same opponent, different days",
+    progressRepeatedHint:
+      "Raw numbers. When the opponent is the same, no adjustment is needed.",
+    progressAdaptationTitle: "Long sets: did you adapt?",
+    progressAdaptationHint:
+      "Opening share in the first third of a set vs. the last third.",
+    progressStrengthTitle: "Opponent strength",
+    progressStrengthHint:
+      "Inferred from stock margin in your games on this character (positive = stronger than you). This is what the expected values above are based on.",
+    progressColDate: "Date",
+    progressColOpponent: "Opponent",
+    progressColGames: "Games",
+    progressColRecord: "Record",
+    progressColOpeningShare: "Opening share",
+    progressColDamage: "Dmg / opening",
+    progressColBait: "Bait & punish",
+    progressColHitBack: "Hit back",
+    progressColFirstThird: "First third",
+    progressColLastThird: "Last third",
+    progressColChange: "Change",
+    progressColStrength: "Strength",
+
+    hitReelTitle: (count) => `Times you got hit (${count})`,
+    hitReelIntro:
+      "Every opening you lost this session, in order. Play them back to back, decide why each one happened, and write what you'd do instead. Notes show up on the same hit in the match view.",
+    hitReelPlayAll: "▶ Play all",
+    hitReelSortChronological: "In order",
+    hitReelSortCostliest: "Costliest first",
+    hitReelBigOnly: "Big ones (stock or 30%+)",
+    hitReelAllReasons: "All",
+    hitReelLoading: (done, total) => `Reading games… ${done}/${total}`,
+    hitReelUnloaded: (count) =>
+      `${count} game${count === 1 ? " isn't" : "s aren't"} loaded in this browser, so ${count === 1 ? "its" : "their"} hits are missing.`,
+    hitReelImportFolder: "Import folder",
+    hitReelEmpty: "No openings lost in the loaded games.",
+    hitReelNoted: (noted, total) => `${noted}/${total} noted`,
+    hitReelColGame: "Game",
+    hitReelColTime: "Time",
+    hitReelColHow: "How",
+    hitReelColHitBy: "Hit by",
+    hitReelColYouWere: "You were doing",
+    hitReelColDamage: "Damage",
+    hitReelColResult: "Result",
+    hitReelColNote: "Why / what instead",
+    hitReelNotePlaceholder: "Why did this happen? What instead?",
+    hitReelPlay: "Play",
+    hitReelOutcomeKo: "Lost stock",
+    hitReelOutcomeReset: "Got out",
+    hitReelOutcomeReversal: "Hit back",
+    hitReelOutcomeIncomplete: "Game ended",
+    hitReelToEdge: "offstage",
+    hitReelToLedge: "ledge",
+    hitReelGrab: "Grab",
+    hitReelClipLabel: (game, time, how) => `Game ${game} · ${time} · ${how}`,
+
+    navPunishes: "Punishes",
+    punishTitle: "Punish finder",
+    punishIntro:
+      "Every neutral opening in your library that matches a situation, ranked by what it was worth. Games between other players you've imported count too, so you can see what top players get from the same spot.",
+    punishAttacker: "Punisher",
+    punishVictim: "Against",
+    punishAnyCharacter: "Any character",
+    punishPercent: "Their percent",
+    punishPercentAny: "Any",
+    punishWhere: "Where they were",
+    punishWhereHint:
+      "Click areas to select them; both sides count the same. None selected = anywhere.",
+    punishWho: "Whose punishes",
+    punishWhoAnyone: "Anyone",
+    punishWhoYou: "Yours",
+    punishWhoOpponents: "Your opponents'",
+    punishKind: "Opened with",
+    punishKindAny: "Anything",
+    punishKindAttack: "Attacks",
+    punishKindGrab: "Grabs",
+    punishSummary: (matches, games) =>
+      `${matches} punish${matches === 1 ? "" : "es"} across ${games} game${games === 1 ? "" : "s"}`,
+    punishNoIndex: (games) =>
+      `${games} cached game${games === 1 ? " was" : "s were"} analyzed before this feature existed and aren't searched. Re-import them to include them.`,
+    punishEmpty:
+      "Nothing matches. Widen the percent range or select more of the stage.",
+    punishByMoveTitle: "What each opener led to",
+    punishByMoveHint:
+      "Grouped by the move that started the punish. Small counts are anecdotes, not averages.",
+    punishBestTitle: "Best punishes",
+    punishShowing: (shown, total) => `Top ${shown} of ${total}`,
+    punishPlayTop: "▶ Play these",
+    punishColOpener: "Opener",
+    punishColTimes: "Times",
+    punishColAverage: "Avg damage",
+    punishColMedian: "Median",
+    punishColTookStock: "Took stock",
+    punishColBest: "Best",
+    punishColWho: "Who",
+    punishColOn: "On",
+    punishColPercent: "Their %",
+    punishColDamage: "Damage",
+    punishColHits: "Hits",
+    punishColDate: "Date",
+    punishKo: "KO",
+    punishGrab: "Grab",
+    punishZoneLabel: (horizontal, vertical) => `${horizontal}, ${vertical}`,
+    punishZoneCenter: "Center",
+    punishZoneSide: "Side",
+    punishZoneOffstage: "Offstage",
+    punishZoneHigh: "high",
+    punishZoneMid: "platform height",
+    punishZoneLow: "low",
+    punishClipLabel: (who, percent, damage, move) =>
+      `${who} · ${move} at ${percent}% → +${damage}`,
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -1791,6 +2100,17 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     identityModalSubtitle:
       "スタッツを集計するために、あなたが使用しているプレイヤー名を選択してください。",
     addCustomAlias: "名前を追加",
+    opponentTagsButton: "対戦相手の名前を統合",
+    opponentTagsTitle: "対戦相手の名前",
+    opponentTagsSubtitle:
+      "同じ人が複数の名前でプレイしている場合、統合すると強さ・セッション・進捗・フィルターで1人の対戦相手として扱われます。",
+    opponentTagsPick: "名前を選択...",
+    opponentTagsSameAs: "は次の人と同一人物",
+    opponentTagsMerge: "統合",
+    opponentTagsNone: "統合した名前はまだありません。",
+    opponentTagsRemove: "統合を解除",
+    opponentTagsMergesHeading: "統合済みの名前",
+    opponentTagsGames: (n) => `${n}試合`,
     add: "追加",
     save: "保存",
     cancel: "キャンセル",
@@ -2167,6 +2487,149 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     twelveCbNextMatch: "次の試合",
     twelveCbPrevMatchTitle: "この12キャラ戦の前の試合",
     twelveCbNextMatchTitle: "この12キャラ戦の次の試合",
+
+    navProgress: "成長",
+    progressTitle: "成長",
+    progressScopeAll: "全キャラ",
+    progressGamesCount: (games) => `${games}試合`,
+    progressIntro:
+      "点はそれぞれ1セッションで、その相手に対する期待値と比べています。相手の強さはこのキャラでのあなたの戦績から推定するので、トップ選手への惜敗も良いセッションとして数えられます。線より上は期待以上です。",
+    progressNoIdentity:
+      "サイドバーで自分のプレイヤー名を選ぶと、成長が表示されます。",
+    progressNoGames: "このキャラでの1対1の試合はまだありません。",
+    progressMetricOpeningShare: "差し合い勝率",
+    progressMetricOpeningShareHint: "差し合いで先に取った割合",
+    progressMetricDamagePerOpening: "1回あたりのダメージ",
+    progressMetricDamagePerOpeningHint: "取った差し合い1回あたりのダメージ",
+    progressMetricDamageGivenBack: "有利中の被ダメージ",
+    progressMetricDamageGivenBackHint:
+      "有利状況を持っている間に受けたダメージ（1回あたり）",
+    progressMetricBaitShare: "釣って差し返し",
+    progressMetricBaitShareHint: "相手の空振り・着地を取った割合",
+    progressMetricHitBackShare: "有利中の反撃被弾",
+    progressMetricHitBackShareHint: "自分が最後に当てた直後に取られた割合",
+    progressMetricRecovery: "復帰",
+    progressMetricRecoveryHint: "復帰成功率（既に助からない状況は除外）",
+    progressUnitPoints: "pt",
+    progressUnitDamage: "%",
+    progressRecentLabel: (days) => `直近${days}日`,
+    progressEarlierLabel: "ベースライン",
+    progressVsExpected: "期待値比",
+    progressVerdictBetter: "ベースラインより良い",
+    progressVerdictWorse: "ベースラインより悪い",
+    progressVerdictUnclear: "まだ明確な変化なし",
+    progressVerdictTooFew: "比較できるセッションが足りません",
+    progressOverall: (value, r) =>
+      `全体 ${value} · 相手の強さとの相関 r = ${r}`,
+    progressTooltipExpected: (value, expected) =>
+      `${value}（期待値 ${expected}）`,
+    progressRepeatedTitle: "同じ相手、別の日",
+    progressRepeatedHint: "実数値です。相手が同じなら補正は不要です。",
+    progressAdaptationTitle: "長いセット：対応できたか",
+    progressAdaptationHint: "セット最初の1/3と最後の1/3の差し合い勝率。",
+    progressStrengthTitle: "相手の強さ",
+    progressStrengthHint:
+      "このキャラでの試合のストック差から推定（正の値＝自分より強い）。上の期待値はこれに基づきます。",
+    progressColDate: "日付",
+    progressColOpponent: "相手",
+    progressColGames: "試合",
+    progressColRecord: "戦績",
+    progressColOpeningShare: "差し合い勝率",
+    progressColDamage: "ダメージ/回",
+    progressColBait: "釣り",
+    progressColHitBack: "反撃被弾",
+    progressColFirstThird: "最初の1/3",
+    progressColLastThird: "最後の1/3",
+    progressColChange: "変化",
+    progressColStrength: "強さ",
+
+    hitReelTitle: (count) => `被弾シーン（${count}）`,
+    hitReelIntro:
+      "このセッションで取られた差し合いを順番に並べています。続けて再生し、なぜ取られたか、代わりに何をすべきだったかを書きましょう。メモは試合画面の同じ場面にも表示されます。",
+    hitReelPlayAll: "▶ すべて再生",
+    hitReelSortChronological: "順番",
+    hitReelSortCostliest: "被害の大きい順",
+    hitReelBigOnly: "大きい被弾（撃墜・30%以上）",
+    hitReelAllReasons: "すべて",
+    hitReelLoading: (done, total) => `試合を読み込み中… ${done}/${total}`,
+    hitReelUnloaded: (count) =>
+      `${count}試合がこのブラウザに読み込まれていないため、その被弾は表示されていません。`,
+    hitReelImportFolder: "フォルダを読み込む",
+    hitReelEmpty: "読み込まれた試合に被弾はありません。",
+    hitReelNoted: (noted, total) => `${noted}/${total} メモ済み`,
+    hitReelColGame: "試合",
+    hitReelColTime: "時間",
+    hitReelColHow: "取られ方",
+    hitReelColHitBy: "相手の技",
+    hitReelColYouWere: "自分の行動",
+    hitReelColDamage: "ダメージ",
+    hitReelColResult: "結果",
+    hitReelColNote: "理由 / 代わりに",
+    hitReelNotePlaceholder: "なぜ取られた？代わりに何をする？",
+    hitReelPlay: "再生",
+    hitReelOutcomeKo: "撃墜された",
+    hitReelOutcomeReset: "脱出",
+    hitReelOutcomeReversal: "反撃",
+    hitReelOutcomeIncomplete: "試合終了",
+    hitReelToEdge: "復帰阻止",
+    hitReelToLedge: "崖",
+    hitReelGrab: "つかみ",
+    hitReelClipLabel: (game, time, how) => `第${game}試合 · ${time} · ${how}`,
+
+    navPunishes: "反撃研究",
+    punishTitle: "反撃ファインダー",
+    punishIntro:
+      "ライブラリ内の差し合いから条件に合うものを探し、どれだけ取れたかで並べます。読み込んだ他の選手同士の試合も含まれるので、トップ選手が同じ状況から何を取っているかも見られます。",
+    punishAttacker: "反撃する側",
+    punishVictim: "相手",
+    punishAnyCharacter: "全キャラ",
+    punishPercent: "相手の%",
+    punishPercentAny: "すべて",
+    punishWhere: "相手の位置",
+    punishWhereHint:
+      "クリックで範囲を選択（左右は同じ扱い）。未選択＝どこでも。",
+    punishWho: "誰の反撃",
+    punishWhoAnyone: "全員",
+    punishWhoYou: "自分",
+    punishWhoOpponents: "対戦相手",
+    punishKind: "始動",
+    punishKindAny: "すべて",
+    punishKindAttack: "攻撃",
+    punishKindGrab: "つかみ",
+    punishSummary: (matches, games) => `${games}試合から${matches}件`,
+    punishNoIndex: (games) =>
+      `${games}試合はこの機能より前に解析されたため検索対象外です。再読み込みすると含まれます。`,
+    punishEmpty:
+      "該当なし。%の範囲を広げるか、ステージの範囲を増やしてください。",
+    punishByMoveTitle: "始動技ごとの結果",
+    punishByMoveHint:
+      "反撃を始めた技でまとめています。件数が少ないものは参考程度に。",
+    punishBestTitle: "ベスト反撃",
+    punishShowing: (shown, total) => `上位${shown}件 / ${total}件`,
+    punishPlayTop: "▶ まとめて再生",
+    punishColOpener: "始動技",
+    punishColTimes: "回数",
+    punishColAverage: "平均ダメージ",
+    punishColMedian: "中央値",
+    punishColTookStock: "撃墜率",
+    punishColBest: "ベスト",
+    punishColWho: "誰が",
+    punishColOn: "相手",
+    punishColPercent: "相手の%",
+    punishColDamage: "ダメージ",
+    punishColHits: "ヒット",
+    punishColDate: "日付",
+    punishKo: "撃墜",
+    punishGrab: "つかみ",
+    punishZoneLabel: (horizontal, vertical) => `${horizontal}・${vertical}`,
+    punishZoneCenter: "中央",
+    punishZoneSide: "端寄り",
+    punishZoneOffstage: "場外",
+    punishZoneHigh: "高い",
+    punishZoneMid: "台の高さ",
+    punishZoneLow: "低い",
+    punishClipLabel: (who, percent, damage, move) =>
+      `${who} · ${percent}%で${move} → +${damage}`,
   },
 };
 

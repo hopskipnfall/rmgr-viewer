@@ -13,6 +13,7 @@ import { MatchupChipSelector } from "../library/matchupChipSelector.js";
 import { MatchupStatsView } from "../library/matchupStatsView.js";
 import { searchHash, type SearchRouteCriteria } from "../router.js";
 import { loadSessionComment, saveSessionComment } from "../sessionComments.js";
+import type { HitReelPanel } from "./hitReelPanel.js";
 
 /** No filters: the base every quick search starts from. */
 const EMPTY_CRITERIA: SearchRouteCriteria = {
@@ -107,6 +108,7 @@ export class SessionViewController {
     ) => void,
     private readonly onRemoveGame: (id: string) => void,
     private readonly onShowFailedEdgeGuards: (session: SessionGroup) => void,
+    private readonly hitReel: HitReelPanel,
   ) {}
 
   public setData(summaries: GameSummary[], identity: Identity): void {
@@ -174,6 +176,7 @@ export class SessionViewController {
             <span>${escapeHtml(tr.sessionRecord(session.wins, session.losses))}</span>
           </p>
         </section>
+        <section class="session-page-section hit-reel" id="sessionHitReel"></section>
         <section class="session-page-section">
           <h3>${escapeHtml(tr.sessionCommentTitle)}</h3>
           <textarea
@@ -205,6 +208,10 @@ export class SessionViewController {
         </section>
       </div>
     `;
+
+    const hitReelEl =
+      this.container.querySelector<HTMLElement>("#sessionHitReel");
+    if (hitReelEl) this.hitReel.show(hitReelEl, session, this.identity);
 
     const commentEl = this.container.querySelector<HTMLTextAreaElement>(
       "#sessionCommentInput",

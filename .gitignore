@@ -9,3 +9,7 @@ dist/
 
 src-tauri/target
 src-tauri/gen
+
+# Local analysis output - never commit
+scripts/*.sqlite
+/analysis-local/

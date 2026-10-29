@@ -123,3 +123,44 @@ describe("opponentStrength module", () => {
     expect(strengths.get("shidozz2")?.tier).toBe("peer");
   });
 });
+
+describe("opponentStrength with opponent aliases", () => {
+  const base = createDefaultIdentity("Marcela");
+  base.aliases.add("Marcela");
+  const games = [
+    ...["a", "b", "c"].map((id) =>
+      makeSummary({
+        id,
+        yourFinalStocks: 0,
+        oppFinalStocks: 3,
+        oppName: "kusora",
+      }),
+    ),
+    ...["d", "e", "f"].map((id) =>
+      makeSummary({
+        id,
+        yourFinalStocks: 0,
+        oppFinalStocks: 3,
+        oppName: "kusora_JPN",
+      }),
+    ),
+  ];
+
+  it("counts separate tags as separate opponents without aliases", () => {
+    const strengths = computeOpponentStrength(games, base);
+    expect(strengths.get("kusora")?.n).toBe(3);
+    expect(strengths.get("kusora")?.tier).toBe("unknown");
+    expect(strengths.get("kusora_JPN")?.n).toBe(3);
+  });
+
+  it("pools a merged person's games under the canonical tag", () => {
+    const identity = {
+      ...base,
+      opponentAliases: { kusora_JPN: "kusora" },
+    };
+    const strengths = computeOpponentStrength(games, identity);
+    expect(strengths.has("kusora_JPN")).toBe(false);
+    expect(strengths.get("kusora")?.n).toBe(6);
+    expect(strengths.get("kusora")?.tier).toBe("above");
+  });
+});

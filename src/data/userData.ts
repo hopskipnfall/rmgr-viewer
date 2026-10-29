@@ -2,6 +2,10 @@ import type { PortIndex } from "@rmg-k/rmgr";
 import type { MatchNote } from "../notes.js";
 import type { VideoLinkData } from "../video/youtubeSync.js";
 import {
+  loadOpponentAliasesFrom,
+  OPPONENT_ALIASES_STORAGE_KEY,
+} from "./opponentAliases.js";
+import {
   buildProjectFile,
   type ProjectFile,
   type SerializedIdentity,
@@ -18,6 +22,8 @@ const SESSION_PREFIX = "rmgr_session_comment_";
 const MATCHUP_PREFIX = "rmgr_matchup_comment_";
 const VIDEO_PREFIX = "rmgr_yt_link_";
 const IDENTITY_KEY = "rmgr-viewer-identity";
+
+const OPPONENT_ALIASES_KEY = OPPONENT_ALIASES_STORAGE_KEY;
 
 const PREFIXES = [NOTES_PREFIX, SESSION_PREFIX, MATCHUP_PREFIX, VIDEO_PREFIX];
 
@@ -84,13 +90,18 @@ export function collectUserData(
     sessionComments,
     matchupComments,
     perspectiveOverrides,
+    loadOpponentAliasesFrom(storage),
   );
 }
 
 /** Removes every in-scope key. Other preferences (theme, language, playback mode) are untouched. */
 export function clearUserData(storage: Storage): void {
   for (const key of keysOf(storage)) {
-    if (key === IDENTITY_KEY || PREFIXES.some((p) => key.startsWith(p))) {
+    if (
+      key === IDENTITY_KEY ||
+      key === OPPONENT_ALIASES_KEY ||
+      PREFIXES.some((p) => key.startsWith(p))
+    ) {
       storage.removeItem(key);
     }
   }
@@ -114,6 +125,9 @@ export function applyUserData(storage: Storage, file: ProjectFile): void {
   }
   for (const [id, link] of Object.entries(file.videoLinks)) {
     storage.setItem(VIDEO_PREFIX + id, JSON.stringify(link));
+  }
+  if (Object.keys(file.opponentAliases).length > 0) {
+    storage.setItem(OPPONENT_ALIASES_KEY, JSON.stringify(file.opponentAliases));
   }
   const id: SerializedIdentity = file.identity;
   if (id.displayName || id.aliases.length > 0) {

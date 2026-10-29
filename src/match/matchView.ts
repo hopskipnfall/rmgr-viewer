@@ -3325,7 +3325,7 @@ export class MatchViewController {
 
     // Situations the recovery classifier confirmed were unsurvivable at entry are excluded from
     // Recovery% entirely -- see edgeGuard.ts's computeEdgeGuardStats doc comment and
-    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+    // docs/community/edge-guards.md.
     const classifiedSituations = computeClassifiedSituations(replay);
     const stats = computeEdgeGuardStats(
       edgeEvents,
@@ -3444,7 +3444,7 @@ export class MatchViewController {
       this.matchupBaseline?.recoveryPct,
     );
     // Classifier-aware breakdown (see
-    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md, phase 2). The rows
+    // docs/community/edge-guards.md). The rows
     // above already exclude "hopeless" situations entirely (see computeEdgeGuardStats' doc
     // comment); this section adds a further, purely additive contestable-only view on top, plus
     // the ledge-hog-opportunity stat. Hidden entirely when there's nothing classified to show
@@ -3752,7 +3752,7 @@ export class MatchViewController {
 
     // Keyed by enteredFrameIndex, which is unique per situation across a match (edgeGuard.ts only
     // ever has one situation open at a time) -- see
-    // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md, phase 2.
+    // docs/community/edge-guards.md.
     const classifiedByEntry = new Map<number, ClassifiedSituation>(
       computeClassifiedSituations(replay).map((s) => [s.enteredFrameIndex, s]),
     );

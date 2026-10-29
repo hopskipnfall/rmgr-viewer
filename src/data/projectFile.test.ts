@@ -3,6 +3,7 @@ import {
   buildProjectFile,
   identityOf,
   mergeProjectFile,
+  opponentAliasesOf,
   parseProjectFile,
   ProjectFileError,
   ProjectFileTooNewError,
@@ -394,5 +395,53 @@ describe("perspectiveOverrides and schema version", () => {
       fileVersion: 99,
     });
     expect(() => parseProjectFile(text)).toThrow(ProjectFileTooNewError);
+  });
+});
+
+describe("opponent aliases export/import", () => {
+  const merges = { kusora_JPN: "kusora", shidozz2: "shido" };
+
+  it("round-trips the merge map through JSON", () => {
+    const built = buildProjectFile(
+      [],
+      createDefaultIdentity(),
+      {},
+      {},
+      {},
+      {},
+      {},
+      merges,
+    );
+    const parsed = parseProjectFile(JSON.stringify(built));
+    expect(opponentAliasesOf(parsed)).toEqual(merges);
+  });
+
+  it("round-trips through the one-record-per-line serialization", async () => {
+    const text = await serializeProjectFile(
+      buildProjectFile([], createDefaultIdentity(), {}, {}, {}, {}, {}, merges),
+    ).text();
+    expect(text.split("\n").filter((l) => l.includes("shidozz2"))).toHaveLength(
+      1,
+    );
+    expect(parseProjectFile(text).opponentAliases).toEqual(merges);
+  });
+
+  it("reads a file from before opponent aliases existed as no merges", () => {
+    const built = buildProjectFile([], createDefaultIdentity(), {});
+    const legacy: Record<string, unknown> = { ...built };
+    delete legacy.opponentAliases;
+    const parsed = parseProjectFile(JSON.stringify(legacy));
+    expect(parsed.opponentAliases).toEqual({});
+  });
+
+  it("normalizes a hand-edited file (chains collapse, junk dropped)", () => {
+    const built = buildProjectFile([], createDefaultIdentity(), {});
+    const parsed = parseProjectFile(
+      JSON.stringify({
+        ...built,
+        opponentAliases: { a: "b", b: "c", x: 5 },
+      }),
+    );
+    expect(parsed.opponentAliases).toEqual({ a: "c", b: "c" });
   });
 });

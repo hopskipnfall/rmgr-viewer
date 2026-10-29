@@ -5,6 +5,7 @@ import {
   resolveOpponentPort,
   type Identity,
 } from "./identity.js";
+import { canonicalOpponentName } from "./opponentAliases.js";
 import { getCharacterGroup, type CharacterGroup } from "../lookups.js";
 import type { NeutralOpeningReason } from "../neutralHits.js";
 import type { MicroStatCounts } from "../microStats.js";
@@ -181,7 +182,11 @@ export function filterGameSummaries(
     if (
       criteria.opponentName !== undefined &&
       criteria.opponentName !== "all" &&
-      oppPortSummary.playerName.trim() !== criteria.opponentName.trim()
+      canonicalOpponentName(
+        oppPortSummary.playerName,
+        identity.opponentAliases,
+      ) !==
+        canonicalOpponentName(criteria.opponentName, identity.opponentAliases)
     ) {
       continue;
     }

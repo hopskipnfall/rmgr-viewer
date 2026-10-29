@@ -3,7 +3,7 @@ import type { StoredGame } from "./libraryStore.js";
 
 /**
  * Pure decisions for importing replay files into the persistent library
- * (docs/superpowers/specs/2026-09-15-persistent-library-design.md §5).
+ * (docs/ARCHITECTURE.md).
  * No I/O here - libraryPersistence.ts does the reading and writing.
  */
 

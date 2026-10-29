@@ -14,6 +14,8 @@ import {
 import {
   computeNeutralHitsStats,
   computeNeutralHitEvents,
+  openingMove,
+  type NeutralInteractionOutcome,
   type NeutralOpeningReason,
 } from "../neutralHits.js";
 import { computeKillCombos } from "../combos.js";
@@ -69,6 +71,33 @@ export interface RawCounters {
   microStats?: MicroStatCounts;
 }
 
+/**
+ * One neutral opening, kept for every game so situations ("the best punishes from 60% near the
+ * ledge in this matchup") can be queried across the whole library without re-reading replays.
+ * The victim is the other seated port.
+ */
+export interface OpeningRecord {
+  /** Frame index of the opening hit or grab. */
+  readonly frameIndex: number;
+  /** Where the interaction ended (reset, KO, or the victim hit back). */
+  readonly endFrameIndex: number;
+  readonly attackerPort: PortIndex;
+  readonly reason: NeutralOpeningReason;
+  readonly isGrab: boolean;
+  /** The attacker's action state that landed it (see openingMove). */
+  readonly move: number | null;
+  /** Victim's damage and position just before the hit. */
+  readonly victimDamage: number;
+  readonly victimX: number;
+  readonly victimY: number;
+  readonly victimGrounded: boolean;
+  /** Total damage the whole punish did, and how many hits it had. */
+  readonly damage: number;
+  readonly hits: number;
+  readonly killed: boolean;
+  readonly outcome: NeutralInteractionOutcome | null;
+}
+
 export interface GamePortSummary {
   port: PortIndex;
   playerName: string;
@@ -100,6 +129,8 @@ export interface GameSummary {
    */
   lobbyNames?: string[];
   statsByPort: Partial<Record<PortIndex, RawCounters>>;
+  /** Every neutral opening in the game, 2-player games only. Undefined before ANALYSIS_VERSION 11. */
+  openings?: OpeningRecord[];
   manualPerspectivePort?: PortIndex | null;
   source: ReplayFileSource | null;
   url?: string;
@@ -153,7 +184,7 @@ export function computeRawCountersForPort(
   // Situations the recovery classifier confirmed were unsurvivable at entry are excluded from
   // Recovery% entirely, here as well as in the per-match panel (matchView.ts) -- this is what
   // feeds the library-wide aggregate stats. See edgeGuard.ts's computeEdgeGuardStats doc comment
-  // and docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+  // and docs/community/edge-guards.md.
   const classifiedSituations = computeClassifiedSituations(replay);
   const hopelessFrames = hopelessEnteredFrameIndices(classifiedSituations);
   const edgeStats = computeEdgeGuardStats(edgeEvents, port, hopelessFrames);
@@ -249,7 +280,7 @@ function hashString(str: string): string {
  * the file and editing player-name metadata. File-format versions are
  * deliberately excluded - a fixed re-export of the same game should
  * replace its cached entry, not appear as a second game (see
- * docs/superpowers/specs/2026-09-15-persistent-library-design.md §1).
+ * docs/ARCHITECTURE.md).
  */
 export function gameIdFor(
   recordedAtEpochMillis: number,
@@ -297,6 +328,7 @@ export type SerializedGameSummary = Pick<
   | "ports"
   | "lobbyNames"
   | "statsByPort"
+  | "openings"
   | "isUnevenStockStart"
 > & {
   recordedAt: string;
@@ -325,6 +357,7 @@ export function serializeGameSummary(
     ports: summary.ports,
     lobbyNames: summary.lobbyNames,
     statsByPort: summary.statsByPort,
+    openings: summary.openings,
     isUnevenStockStart: summary.isUnevenStockStart,
   };
 }
@@ -342,6 +375,7 @@ export function deserializeGameSummary(
     ports: serialized.ports,
     lobbyNames: serialized.lobbyNames,
     statsByPort: serialized.statsByPort,
+    openings: serialized.openings,
     source: null,
     isUnevenStockStart: serialized.isUnevenStockStart,
   };
@@ -408,6 +442,8 @@ export function summarizeReplay(
       statsByPort[port] = computeRawCountersForPort(replay, port);
     }
   }
+  const openings =
+    seated.length === 2 ? computeOpeningRecords(replay) : undefined;
 
   const stageId = replay.matchSettings?.stageId ?? 0;
   const id = gameIdFor(
@@ -425,7 +461,32 @@ export function summarizeReplay(
     ports,
     lobbyNames: replay.matchStart.playerNames.filter((n) => n.length > 0),
     statsByPort,
+    openings,
     source,
     isUnevenStockStart,
   };
+}
+
+/** The OpeningRecord list for a 2-player replay. */
+export function computeOpeningRecords(replay: Replay): OpeningRecord[] {
+  return computeNeutralHitEvents(replay).map((e) => {
+    const victim =
+      replay.frames[Math.max(0, e.frameIndex - 1)]?.ports[e.victimPort]?.state;
+    return {
+      frameIndex: e.frameIndex,
+      endFrameIndex: e.endFrameIndex ?? e.frameIndex,
+      attackerPort: e.attackerPort,
+      reason: e.reason,
+      isGrab: e.hitType === "grab",
+      move: openingMove(replay, e.frameIndex, e.attackerPort),
+      victimDamage: Math.round(victim?.damagePercent ?? 0),
+      victimX: Math.round(victim?.positionX ?? 0),
+      victimY: Math.round(victim?.positionY ?? 0),
+      victimGrounded: victim?.grounded ?? false,
+      damage: Math.round(e.totalDamageDealt ?? 0),
+      hits: e.totalHitsLanded ?? 0,
+      killed: !!e.convertedToKill,
+      outcome: e.outcome ?? null,
+    };
+  });
 }

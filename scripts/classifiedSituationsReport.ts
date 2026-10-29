@@ -1,8 +1,8 @@
 /**
  * Runs computeClassifiedSituations (src/classifiedSituations.ts) across the real replay corpus
  * and reports category breakdown counts plus every missedLedgeHogOpportunity /
- * possibleAccidentalSave instance found, for spot-checking by eye -- see phase 1 of
- * docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+ * possibleAccidentalSave instance found, for spot-checking by eye -- see
+ * docs/community/edge-guards.md.
  *
  * Run: npx tsx scripts/classifiedSituationsReport.ts
  */

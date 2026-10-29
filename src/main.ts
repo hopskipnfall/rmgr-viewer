@@ -7,10 +7,14 @@ import {
   type Theme,
   type ThemePreference,
 } from "./theme.js";
+import { ProgressViewController } from "./progress/progressView.js";
+import { HitReelPanel } from "./session/hitReelPanel.js";
+import { PunishFinderViewController } from "./situations/punishFinderView.js";
 import {
   navigateToLibrary,
   navigateToMatch,
   navigateToMatchup,
+  navigateToProgress,
   navigateToSearch,
   navigateToSession,
   onRoute,
@@ -49,6 +53,7 @@ import {
   buildProjectFile,
   identityOf,
   mergeProjectFile,
+  opponentAliasesOf,
   parseProjectFile,
   ProjectFileError,
   serializeProjectFile,
@@ -71,6 +76,11 @@ import {
   saveIdentity,
   loadIdentity,
 } from "./data/identity.js";
+import {
+  loadOpponentAliases,
+  mergeOpponentAliases,
+  saveOpponentAliases,
+} from "./data/opponentAliases.js";
 import { computeOverallBaseline, type DerivedRates } from "./data/aggregate.js";
 import { groupGamesIntoSessions, type SessionGroup } from "./data/session.js";
 import type { PlaylistClip } from "./playlist.js";
@@ -106,6 +116,12 @@ const previewViewEl = document.getElementById("previewView") as HTMLDivElement;
 const matchViewEl = document.getElementById("matchView") as HTMLDivElement;
 const searchViewEl = document.getElementById("searchView") as HTMLDivElement;
 const sessionViewEl = document.getElementById("sessionView") as HTMLDivElement;
+const progressViewEl = document.getElementById(
+  "progressView",
+) as HTMLDivElement;
+const punishFinderViewEl = document.getElementById(
+  "punishFinderView",
+) as HTMLDivElement;
 const matchupViewEl = document.getElementById("matchupView") as HTMLDivElement;
 const edgeGuardWorkshopViewEl = document.getElementById(
   "edgeGuardWorkshopView",
@@ -254,6 +270,10 @@ let homeSidebarController: HomeSidebarController;
 let previewController: CharacterPreviewController;
 let searchController: SearchViewController;
 let sessionController: SessionViewController;
+let progressController: ProgressViewController;
+let progressActive = false;
+let punishFinderController: PunishFinderViewController;
+let punishFinderActive = false;
 let matchupController: MatchupViewController;
 let edgeGuardWorkshopController: EdgeGuardWorkshopViewController;
 
@@ -276,6 +296,10 @@ function updateHeaderTranslations(): void {
   const navLibraryLink = document.getElementById("navLibraryLink");
   const navSearchLink = document.getElementById("navSearchLink");
   if (navLibraryLink) navLibraryLink.textContent = tr.navLibrary;
+  const navProgressLink = document.getElementById("navProgressLink");
+  if (navProgressLink) navProgressLink.textContent = tr.navProgress;
+  const navPunishesLink = document.getElementById("navPunishesLink");
+  if (navPunishesLink) navPunishesLink.textContent = tr.navPunishes;
   if (navSearchLink) navSearchLink.textContent = tr.navSearch;
   renderStaleBanner();
   aboutClearDataBtn.textContent = tr.clearLocalData;
@@ -352,6 +376,35 @@ function applyLanguage(lang: Language): void {
   homeSidebarController?.updateTranslations();
   matchController?.updateStaticTranslations();
   rerenderMatchupIfActive();
+  rerenderProgressIfActive();
+}
+
+/** The library's games or identity changed: refresh every home-shell view that shows them. */
+function refreshHomeData(): void {
+  homeSidebarController.setData(
+    libraryController.getSummaries(),
+    libraryController.getIdentity(),
+  );
+  rerenderProgressIfActive();
+  rerenderPunishFinderIfActive();
+}
+
+function rerenderPunishFinderIfActive(): void {
+  if (!punishFinderActive) return;
+  punishFinderController.setData(
+    libraryController.getSummaries(),
+    libraryController.getIdentity(),
+  );
+  punishFinderController.render();
+}
+
+function rerenderProgressIfActive(): void {
+  if (!progressActive) return;
+  progressController.setData(
+    libraryController.getSummaries(),
+    libraryController.getIdentity(),
+  );
+  progressController.render();
 }
 
 function rerenderMatchupIfActive(): void {
@@ -417,13 +470,12 @@ function attachImportedSummaries(imported: GameSummary[]): void {
   }
   if (added.length > 0) {
     libraryController.addSummaries(added);
-    homeSidebarController.setData(
-      libraryController.getSummaries(),
-      libraryController.getIdentity(),
-    );
   } else {
     libraryController.render();
   }
+  // Re-imported games were updated in place (e.g. after an ANALYSIS_VERSION bump): the views
+  // built on them need the new numbers either way.
+  refreshHomeData();
 }
 
 /**
@@ -673,6 +725,18 @@ let pendingPlaylistStartIndex = 0;
  * handleRouteChange() picks up `pendingPlaylistClips` once that game
  * finishes loading and hands it (plus `startIndex`) to the match view.
  */
+/**
+ * Like loadReplayForSummary, but never prompts for a missing file: for background readers (the
+ * hit reel) that read many games and should skip the ones that aren't available.
+ */
+async function loadReplayIfAvailable(
+  summary: GameSummary,
+): Promise<LoadedReplay> {
+  if (summary.source) return loadReplayFromSource(summary.source);
+  if (summary.url) return loadReplayFromUrl(summary.url);
+  throw new MissingFileCancelledError();
+}
+
 function playPlaylistClips(clips: PlaylistClip[], startIndex: number): void {
   if (clips.length === 0) return;
   pendingPlaylistClips = clips;
@@ -760,66 +824,61 @@ function defaultSearchCriteria(): SearchRouteCriteria {
   };
 }
 
+/** Views that live inside the home shell (beside the sessions sidebar). */
+const HOME_SHELL_VIEWS = (): HTMLElement[] => [
+  libraryViewEl,
+  sessionViewEl,
+  progressViewEl,
+];
+
+/** Shows exactly `visible` among the routed views and hides the rest; the
+ * home shell (sidebar) shows whenever one of its views does. */
+function showViews(...visible: HTMLElement[]): void {
+  for (const el of [
+    matchViewEl,
+    matchFooterEl,
+    previewViewEl,
+    searchViewEl,
+    punishFinderViewEl,
+    matchupViewEl,
+    edgeGuardWorkshopViewEl,
+    ...HOME_SHELL_VIEWS(),
+  ]) {
+    el.hidden = !visible.includes(el);
+  }
+  homeShellEl.hidden = !HOME_SHELL_VIEWS().some((el) => visible.includes(el));
+  // The header nav's Library link covers going back.
+  backToLibraryBtn.hidden = true;
+}
+
 async function handleRouteChange(route: Route): Promise<void> {
   const myRouteGeneration = ++routeGeneration;
   setCurrentNavLink("navLibraryLink", route.view === "library");
   setCurrentNavLink("navSearchLink", route.view === "search");
+  setCurrentNavLink("navProgressLink", route.view === "progress");
+  setCurrentNavLink("navPunishesLink", route.view === "punishes");
+  progressActive = route.view === "progress";
+  punishFinderActive = route.view === "punishes";
   if (route.view === "library") {
     currentMatchSummary = null;
     currentMatchupRoute = null;
-    // Show Library View
+    showViews(libraryViewEl);
     matchController.deactivate();
     previewController?.deactivate();
-    matchViewEl.hidden = true;
-    matchFooterEl.hidden = true;
-    previewViewEl.hidden = true;
-    searchViewEl.hidden = true;
-    sessionViewEl.hidden = true;
-    matchupViewEl.hidden = true;
-    edgeGuardWorkshopViewEl.hidden = true;
-    backToLibraryBtn.hidden = true;
-
-    homeShellEl.hidden = false;
-    libraryViewEl.hidden = false;
     homeSidebarController.setSelectedSessionId(null);
     libraryController.render();
   } else if (route.view === "preview") {
     currentMatchSummary = null;
     currentMatchupRoute = null;
-    // Show Character Preview View
+    showViews();
     matchController.deactivate();
-    matchViewEl.hidden = true;
-    matchFooterEl.hidden = true;
-    libraryViewEl.hidden = true;
-    searchViewEl.hidden = true;
-    sessionViewEl.hidden = true;
-    matchupViewEl.hidden = true;
-    edgeGuardWorkshopViewEl.hidden = true;
-    // The header nav's Library link covers this; keeping both showed two
-    // Library buttons side by side.
-    backToLibraryBtn.hidden = true;
-    homeShellEl.hidden = true;
-
     previewController.activate();
   } else if (route.view === "search") {
     currentMatchSummary = null;
     currentMatchupRoute = null;
-    // Show Search View
+    showViews(searchViewEl);
     matchController.deactivate();
     previewController?.deactivate();
-    matchViewEl.hidden = true;
-    matchFooterEl.hidden = true;
-    previewViewEl.hidden = true;
-    libraryViewEl.hidden = true;
-    matchupViewEl.hidden = true;
-    edgeGuardWorkshopViewEl.hidden = true;
-    // The header nav's Library link covers this; keeping both showed two
-    // Library buttons side by side.
-    backToLibraryBtn.hidden = true;
-    homeShellEl.hidden = true;
-
-    searchViewEl.hidden = false;
-    sessionViewEl.hidden = true;
     searchController.setData(
       libraryController.getSummaries(),
       libraryController.getIdentity(),
@@ -838,25 +897,35 @@ async function handleRouteChange(route: Route): Promise<void> {
       jumpCount: route.jumpCount,
       startingAreaBox: route.startingAreaBox,
     });
+  } else if (route.view === "punishes") {
+    currentMatchSummary = null;
+    currentMatchupRoute = null;
+    showViews(punishFinderViewEl);
+    matchController.deactivate();
+    previewController?.deactivate();
+    punishFinderController.setData(
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
+    punishFinderController.render();
+  } else if (route.view === "progress") {
+    currentMatchSummary = null;
+    currentMatchupRoute = null;
+    showViews(progressViewEl);
+    matchController.deactivate();
+    previewController?.deactivate();
+    homeSidebarController.setSelectedSessionId(null, "progress");
+    progressController.setData(
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
+    progressController.render();
   } else if (route.view === "session") {
     currentMatchSummary = null;
     currentMatchupRoute = null;
-    // Show Session View
+    showViews(sessionViewEl);
     matchController.deactivate();
     previewController?.deactivate();
-    matchViewEl.hidden = true;
-    matchFooterEl.hidden = true;
-    previewViewEl.hidden = true;
-    libraryViewEl.hidden = true;
-    searchViewEl.hidden = true;
-    matchupViewEl.hidden = true;
-    edgeGuardWorkshopViewEl.hidden = true;
-    // The header nav's Library link covers this; keeping both showed two
-    // Library buttons side by side.
-    backToLibraryBtn.hidden = true;
-
-    homeShellEl.hidden = false;
-    sessionViewEl.hidden = false;
     homeSidebarController.setSelectedSessionId(route.id);
     sessionController.setData(
       libraryController.getSummaries(),
@@ -864,7 +933,6 @@ async function handleRouteChange(route: Route): Promise<void> {
     );
     sessionController.setSessionId(route.id);
   } else if (route.view === "match") {
-    // Show Match View
     currentMatchupRoute = null;
     const summary = libraryController.getSummaryById(route.id);
     if (!summary) {
@@ -874,19 +942,8 @@ async function handleRouteChange(route: Route): Promise<void> {
     }
     currentMatchSummary = summary;
 
+    showViews(matchViewEl, matchFooterEl);
     previewController?.deactivate();
-    previewViewEl.hidden = true;
-    libraryViewEl.hidden = true;
-    searchViewEl.hidden = true;
-    sessionViewEl.hidden = true;
-    matchupViewEl.hidden = true;
-    edgeGuardWorkshopViewEl.hidden = true;
-    matchViewEl.hidden = false;
-    matchFooterEl.hidden = false;
-    // The header nav's Library link covers this; keeping both showed two
-    // Library buttons side by side.
-    backToLibraryBtn.hidden = true;
-    homeShellEl.hidden = true;
 
     try {
       const loaded = await loadReplayForSummary(summary);
@@ -961,22 +1018,9 @@ async function handleRouteChange(route: Route): Promise<void> {
   } else if (route.view === "matchup") {
     currentMatchSummary = null;
     currentMatchupRoute = { myChar: route.myChar, oppChar: route.oppChar };
-    // Show Matchup View
+    showViews(matchupViewEl);
     matchController.deactivate();
     previewController?.deactivate();
-    matchViewEl.hidden = true;
-    matchFooterEl.hidden = true;
-    previewViewEl.hidden = true;
-    libraryViewEl.hidden = true;
-    searchViewEl.hidden = true;
-    sessionViewEl.hidden = true;
-    // The header nav's Library link covers this; keeping both showed two
-    // Library buttons side by side.
-    backToLibraryBtn.hidden = true;
-    homeShellEl.hidden = true;
-
-    edgeGuardWorkshopViewEl.hidden = true;
-    matchupViewEl.hidden = false;
     matchupController.render(
       route.myChar,
       route.oppChar,
@@ -986,20 +1030,9 @@ async function handleRouteChange(route: Route): Promise<void> {
   } else if (route.view === "edgeGuardWorkshop") {
     currentMatchSummary = null;
     currentMatchupRoute = null;
-    // Show Edge Guard Workshop View
+    showViews(edgeGuardWorkshopViewEl);
     matchController.deactivate();
     previewController?.deactivate();
-    matchViewEl.hidden = true;
-    matchFooterEl.hidden = true;
-    previewViewEl.hidden = true;
-    libraryViewEl.hidden = true;
-    searchViewEl.hidden = true;
-    sessionViewEl.hidden = true;
-    matchupViewEl.hidden = true;
-    backToLibraryBtn.hidden = true;
-    homeShellEl.hidden = true;
-
-    edgeGuardWorkshopViewEl.hidden = false;
     edgeGuardWorkshopController.render(
       route.myChar,
       route.oppChar,
@@ -1074,10 +1107,7 @@ async function startDesktopLibrary(): Promise<void> {
     if (await sync.attach(state.root)) {
       // localStorage now holds this library's project data: re-read what was cached at startup.
       libraryController.setIdentity(loadIdentity());
-      homeSidebarController.setData(
-        libraryController.getSummaries(),
-        libraryController.getIdentity(),
-      );
+      refreshHomeData();
     }
     await handleImport(await folder.scanLibrary(fs, state.root));
     await applyPerspectives();
@@ -1157,10 +1187,11 @@ async function init(): Promise<void> {
         saveIdentity(identity);
       }
       libraryController.setIdentity(identity);
-      homeSidebarController.setData(libraryController.getSummaries(), identity);
+      refreshHomeData();
     },
     (sessionId) => navigateToSession(sessionId),
     () => navigateToLibrary(),
+    () => navigateToProgress(),
   );
 
   libraryController.setPersistenceHooks({
@@ -1188,10 +1219,7 @@ async function init(): Promise<void> {
     },
     (id) => {
       libraryController.removeSummary(id);
-      homeSidebarController.setData(
-        libraryController.getSummaries(),
-        libraryController.getIdentity(),
-      );
+      refreshHomeData();
       rerenderMatchupIfActive();
     },
     (session) => {
@@ -1217,6 +1245,14 @@ async function init(): Promise<void> {
     },
     () => folderPicker.click(),
   );
+  punishFinderController = new PunishFinderViewController(
+    punishFinderViewEl,
+    (clips, startIndex) => playPlaylistClips(clips, startIndex),
+  );
+  progressController = new ProgressViewController(progressViewEl, (sessionId) =>
+    navigateToSession(sessionId),
+  );
+
   sessionController = new SessionViewController(
     sessionViewEl,
     (summary) => {
@@ -1224,10 +1260,7 @@ async function init(): Promise<void> {
     },
     (summary, port) => {
       libraryController.selectPlayerPerspective(summary, port);
-      homeSidebarController.setData(
-        libraryController.getSummaries(),
-        libraryController.getIdentity(),
-      );
+      refreshHomeData();
       sessionController.setData(
         libraryController.getSummaries(),
         libraryController.getIdentity(),
@@ -1236,10 +1269,7 @@ async function init(): Promise<void> {
     },
     (id) => {
       libraryController.removeSummary(id);
-      homeSidebarController.setData(
-        libraryController.getSummaries(),
-        libraryController.getIdentity(),
-      );
+      refreshHomeData();
       sessionController.setData(
         libraryController.getSummaries(),
         libraryController.getIdentity(),
@@ -1249,6 +1279,11 @@ async function init(): Promise<void> {
     (session) => {
       handleShowFailedEdgeGuards(session);
     },
+    new HitReelPanel(
+      loadReplayIfAvailable,
+      (clips, startIndex) => playPlaylistClips(clips, startIndex),
+      () => folderPicker.click(),
+    ),
   );
 
   // 2. Wire Header controls
@@ -1368,6 +1403,8 @@ async function init(): Promise<void> {
           notes,
           sessionComments,
           matchupComments,
+          {},
+          loadOpponentAliases(),
         ),
       );
       const url = URL.createObjectURL(blob);
@@ -1396,6 +1433,13 @@ async function init(): Promise<void> {
         const parsed = parseProjectFile(await file.text());
         const result = await mergeProjectFile(parsed, libraryStore);
         saveIdentity(identityOf(parsed));
+        // Additive like the rest of an import: keep local merges, imported ones win on conflict.
+        saveOpponentAliases(
+          mergeOpponentAliases(
+            loadOpponentAliases(),
+            opponentAliasesOf(parsed),
+          ),
+        );
         for (const [id, link] of Object.entries(parsed.videoLinks)) {
           saveVideoLink(id, link);
         }
@@ -1547,10 +1591,7 @@ async function init(): Promise<void> {
     if (persisted.summaries.length > 0 || persisted.staleEntries.length > 0) {
       hasPersistedLibrary = true;
       libraryController.addSummaries(persisted.summaries);
-      homeSidebarController.setData(
-        libraryController.getSummaries(),
-        libraryController.getIdentity(),
-      );
+      refreshHomeData();
     }
   } catch (err) {
     console.warn(
@@ -1600,10 +1641,7 @@ async function init(): Promise<void> {
     homeSidebarController.setDemoMode(true);
     libraryController.setIdentity(createDefaultIdentity("George"));
     libraryController.addSummaries(demoSummaries);
-    homeSidebarController.setData(
-      libraryController.getSummaries(),
-      libraryController.getIdentity(),
-    );
+    refreshHomeData();
   }
 
   // 3b. Seed the default YouTube sync link for the 12CB session recorded on

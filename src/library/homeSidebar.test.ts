@@ -77,6 +77,7 @@ describe("HomeSidebarController statistics nav item", () => {
       () => {
         selectStatisticsCalls++;
       },
+      () => {},
     );
 
     container.byId("sidebarStatisticsLink").fire("click");
@@ -95,6 +96,7 @@ describe("HomeSidebarController statistics nav item", () => {
       () => {},
       () => {},
       () => {},
+      () => {},
     );
 
     controller.setSelectedSessionId(null);
@@ -108,6 +110,35 @@ describe("HomeSidebarController statistics nav item", () => {
     ).toBeNull();
   });
 
+  it("marks the progress link current, not statistics, on the progress page", () => {
+    const container = makeFakeContainer();
+    const modalContainer = makeFakeContainer();
+    let selectProgressCalls = 0;
+
+    const controller = new HomeSidebarController(
+      container,
+      modalContainer,
+      createDefaultIdentity(),
+      () => {},
+      () => {},
+      () => {},
+      () => {
+        selectProgressCalls++;
+      },
+    );
+
+    container.byId("sidebarProgressLink").fire("click");
+    expect(selectProgressCalls).toBe(1);
+
+    controller.setSelectedSessionId(null, "progress");
+    expect(
+      container.byId("sidebarProgressLink").getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+      container.byId("sidebarStatisticsLink").getAttribute("aria-current"),
+    ).toBeNull();
+  });
+
   it("sets the statistics link label via updateTranslations", () => {
     const container = makeFakeContainer();
     const modalContainer = makeFakeContainer();
@@ -116,6 +147,7 @@ describe("HomeSidebarController statistics nav item", () => {
       container,
       modalContainer,
       createDefaultIdentity(),
+      () => {},
       () => {},
       () => {},
       () => {},

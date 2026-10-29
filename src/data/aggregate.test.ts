@@ -514,3 +514,30 @@ describe("aggregate module", () => {
     expect(deltas.recoveryDeltaPct ?? 0).toBeGreaterThan(0); // 100% raw is above its own shrunk baseline
   });
 });
+
+describe("filterGameSummaries opponent filter with aliases", () => {
+  it("matches every tag of a merged opponent by either name", () => {
+    const identity = {
+      ...createDefaultIdentity("Marcela"),
+      aliases: new Set(["Marcela"]),
+      opponentAliases: { kusora_JPN: "kusora" },
+    };
+    const mk = (id: string, opp: string): GameSummary =>
+      makeSummary({
+        id,
+        yourName: "Marcela",
+        oppName: opp,
+        yourChar: 1,
+        oppChar: 2,
+        yourStats: {},
+      });
+    const games = [mk("a", "kusora"), mk("b", "kusora_JPN"), mk("c", "other")];
+    for (const selected of ["kusora", "kusora_JPN"]) {
+      expect(
+        filterGameSummaries(games, identity, { opponentName: selected })
+          .map((r) => r.summary.id)
+          .sort(),
+      ).toEqual(["a", "b"]);
+    }
+  });
+});

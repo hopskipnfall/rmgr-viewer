@@ -39,7 +39,7 @@ This document defines the mathematical models, action state taxonomies, state ma
 
 ## 2. Edge Guarding & Offstage Recovery
 
-Implemented in [`src/edgeGuard.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/edgeGuard.ts).
+Implemented in [`src/edgeGuard.ts`](../src/edgeGuard.ts).
 
 ### 2.1 Danger Zone Geometry (Dream Land)
 
@@ -76,7 +76,7 @@ _Hitstun Gating Rule_: If a player is launched offstage in hitstun and dies with
 
 ## 3. Ledge Trapping & Ledge Getup
 
-Implemented in [`src/ledgeTrap.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/ledgeTrap.ts).
+Implemented in [`src/ledgeTrap.ts`](../src/ledgeTrap.ts).
 
 ### 3.1 Entry Conditions
 
@@ -108,7 +108,7 @@ Initiated when a player enters:
 
 ## 4. Neutral Analysis & Opening Classification
 
-Implemented in [`src/neutralHits.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/neutralHits.ts).
+Implemented in [`src/neutralHits.ts`](../src/neutralHits.ts).
 
 ### 4.1 Advantage Hierarchy & Neutral Interaction Chains
 
@@ -189,11 +189,11 @@ When a fresh hit (`comboHitCount` increments from 0) or fresh grab (`0x0ab`–`0
 ```
 
 1. **`shield-pressure` ("Unsafe Shield Pressure")**: Victim initiated an attack within the preceding 45 frames that made contact with the opponent's shield (`0x098`–`0x09b` or shield stun `0x09b`/`0x023`), and was punished out of shield.
-2. **`landing-lag` ("Land Punish")**: Victim was in landing lag animation (`0x01f`, `0x020`, `0x03b`, `0x0db`) or transitioned from airborne to grounded within 30 frames ($0.5\text{ s}$) prior to being hit.
-3. **`whiff-punish` ("Whiff Punish")**: Victim initiated an attack or grab that ended without landing a hit within 30 frames prior to being hit.
+2. **`landing-lag` ("Land Punish")**: Victim is grounded at the hit and, within the preceding 30 frames ($0.5\text{ s}$), was in landing lag (`0x01f`, `0x020`, `0x03b`, `0x0db`), an airborne action state, or not `grounded`. "Airborne" always comes from the engine's `grounded` flag and the action state, never from height, because Dream Land's platforms stand well above $y = 0$. A whiffed aerial followed by a landing is labeled `landing-lag`, since this rule runs before whiff punish.
+3. **`whiff-punish` ("Whiff Punish")**: Victim was in an attack or grab state within the preceding 45 frames, that attack ended at most 30 frames before the hit, and it didn't connect. "Connected" means the _attacker's_ `comboHitCount` was running during the victim's attack frames, because the combo counter belongs to the port taking the hits.
 4. **`jump-punish` ("Jump Punish")**: Victim initiated jump squat (`0x014`, `0x015`) or airborne jump (`0x016`–`0x019`) without executing an aerial attack within 30 frames prior to being hit.
 5. **`standing-hit` / `standing-grab` ("Standing Hit" / "Standing Grab")**: Victim was grounded in neutral stand/walk/run/crouch when hit or grabbed.
-6. **`reversal` ("Reversal")**: The defender was in a disadvantaged state (such as ledge trap or recovery) and landed a counter-hit or grab, turning the tables and seizing advantage.
+6. **`reversal` ("Reversal")**: Not chosen by this classifier. An interaction gets `reversal` when the _defender_ of an ongoing interaction lands a hit or grab before neutral resets (§4.2). That includes real escapes from ledge or offstage disadvantage, but also any counter-hit in a scramble less than 60 actionable frames after the last hit. Because of the strict reset rule, reversals are about a third of all openings in real play. Treat "openings lost by reversal" as _getting hit back while you had the last hit_, not only as escapes from disadvantage.
 7. **`unknown` ("Neutral Hit")**: Airborne neutral hit outside of above conditions.
 
 ### 4.5 Lifecycle Resolution & Terminal Outcome
@@ -208,7 +208,7 @@ Every neutral or advantage interaction lifecycle concludes with one of three ter
 
 ## 5. Directional Influence (DI) Measurement & Physics
 
-Implemented in [`src/di.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/di.ts).
+Implemented in [`src/di.ts`](../src/di.ts).
 
 ### 5.1 Smash 64 DI Engine Mechanics
 
@@ -249,7 +249,7 @@ Displacement angle $\theta = \operatorname{atan2}(\Delta y, \Delta x)$:
 
 ## 6. Kill Combos Engine
 
-Implemented in [`src/combos.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/combos.ts).
+Implemented in [`src/combos.ts`](../src/combos.ts).
 
 ### 6.1 Qualification Criteria
 
@@ -267,7 +267,7 @@ A sequence is classified as a **Kill Combo** if:
 
 ## 7. Angel Invincibility (Respawn Platform)
 
-Implemented in [`src/angelInvincibility.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/angelInvincibility.ts).
+Implemented in [`src/angelInvincibility.ts`](../src/angelInvincibility.ts).
 
 ### 7.1 Lifecycle
 
@@ -280,7 +280,7 @@ Implemented in [`src/angelInvincibility.ts`](file:///Users/ness/workspaces/rmgr-
 
 ## 8. Character-Specific Analytical Modules
 
-Implemented in [`src/characterMeta.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/characterMeta.ts).
+Implemented in [`src/characterMeta.ts`](../src/characterMeta.ts).
 
 ### 8.1 Pikachu Quick Attack (Up-B) Trajectory
 
@@ -313,7 +313,26 @@ Implemented in [`src/characterMeta.ts`](file:///Users/ness/workspaces/rmgr-viewe
 
 ## 9. Cross-Replay Aggregation & Historical Baselines
 
-Implemented in [`src/data/aggregate.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/data/aggregate.ts) and [`src/data/identity.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/data/identity.ts).
+### 9.0 What each game keeps
+
+`summarizeReplay()` (in [`src/data/gameSummary.ts`](../src/data/gameSummary.ts)) keeps two things
+per 2-player game:
+
+- `statsByPort`: pooled counters per port (situations and successes, openings by reason, damage).
+  Every aggregate rate is built from these.
+- `openings`: one `OpeningRecord` per neutral opening. That's the frame, the attacker, the opening
+  reason, grab or attack, the **opening move**, the victim's damage, position and `grounded` flag
+  just before the hit, and the punish's total damage, hit count, KO flag and outcome. The opening
+  move is the attacker's latest attack action state in the 20 frames up to the hit (`openingMove`),
+  because on a trade the attacker is already in hitstun on the hit frame.
+
+**Stage zones** for situation queries
+([`src/data/situations.ts`](../src/data/situations.ts)) mirror left and right:
+
+- **Horizontal:** center (|x| ≤ 1000), side (to the ledge at 2318) or offstage.
+- **Vertical:** low (y < 300), platform height (300 ≤ y < 1300) or high.
+
+Implemented in [`src/data/aggregate.ts`](../src/data/aggregate.ts) and [`src/data/identity.ts`](../src/data/identity.ts).
 
 ### 9.1 Identity Matching
 
@@ -334,7 +353,7 @@ $$\text{Average Neutral Hits / Stock} = \frac{\sum_{g \in G} \text{Total Neutral
 - **Uneven Start Detection**: Replays where seated players begin with unequal initial stock counts (captured from frame 0 post-data) are flagged as `isUnevenStockStart = true`.
 - **Win/Loss Exclusion**: Uneven start matches are excluded from aggregate win/loss records and win rate percentage calculations to preserve pure competitive record tracking. Tooltips indicate this exclusion explicitly.
 - **12 Character Battle (12CB) Recognition**:
-  - Implemented in [`src/data/twelveCharacterBattle.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/data/twelveCharacterBattle.ts).
+  - Implemented in [`src/data/twelveCharacterBattle.ts`](../src/data/twelveCharacterBattle.ts).
   - Recognizes multi-game 12CB sets by verifying carry-over conditions:
     1. The winner of match $k$ carries over their remaining stocks $S_{\text{rem}} > 0$ and character to match $k+1$.
     2. The loser of match $k$ is eliminated on that character and counterpicks a new character starting with full stocks ($N=4$).
@@ -354,7 +373,7 @@ $$\text{Average Neutral Hits / Stock} = \frac{\sum_{g \in G} \text{Total Neutral
 
 ## 10. Playback Engine & HUD System
 
-Implemented in [`src/playback.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/playback.ts), [`src/renderer.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/renderer.ts), and [`src/match/matchView.ts`](file:///Users/ness/workspaces/rmgr-viewer/src/match/matchView.ts).
+Implemented in [`src/playback.ts`](../src/playback.ts), [`src/renderer.ts`](../src/renderer.ts), and [`src/match/matchView.ts`](../src/match/matchView.ts).
 
 - **Delta Time Accumulator**: Supports exact speed scaling (`1.0x` = 60 FPS, `0.5x` = 30 FPS, `0.25x` = 15 FPS) without frame desynchronization.
 - **Event Log Categorization**:

@@ -103,3 +103,58 @@ describe("groupGamesIntoSessions - rotating lobbies", () => {
     expect(sessions[0]!.opponentName).toBe("shidozzzz");
   });
 });
+
+describe("groupGamesIntoSessions - opponent aliases", () => {
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    (globalThis as unknown as { localStorage: Partial<Storage> }).localStorage =
+      {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
+      };
+  });
+
+  function duel(id: string, minute: number, opp: string): GameSummary {
+    return {
+      id,
+      sourceName: `${id}.rmgr`,
+      recordedAt: new Date(Date.UTC(2026, 8, 12, 15, minute)),
+      stageId: 0x02,
+      frameCount: 120 * 60,
+      isComplete: true,
+      source: null,
+      lobbyNames: ["nue", opp],
+      ports: [
+        { port: 0, playerName: "nue", characterId: 40, finalStocks: 2 },
+        { port: 1, playerName: opp, characterId: 41, finalStocks: 0 },
+      ],
+      statsByPort: {},
+    };
+  }
+
+  const games = [
+    duel("g1", 0, "kusora"),
+    duel("g2", 3, "kusora_JPN"),
+    duel("g3", 6, "kusora_JPN"),
+  ];
+  const me = { ...createDefaultIdentity("nue"), aliases: new Set(["nue"]) };
+
+  it("splits a sitting where the opponent changed tags, without a merge", () => {
+    const sessions = groupGamesIntoSessions(games, me, "oldest");
+    expect(sessions.map((s) => s.games.length)).toEqual([1, 2]);
+  });
+
+  it("keeps it one session, labelled with the canonical tag, once merged", () => {
+    const sessions = groupGamesIntoSessions(
+      games,
+      { ...me, opponentAliases: { kusora_JPN: "kusora" } },
+      "oldest",
+    );
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.opponentName).toBe("kusora");
+    expect(sessions[0]!.wins).toBe(3);
+    // The id still comes from the first game, so comments saved earlier stay attached.
+    expect(sessions[0]!.id).toBe("session_g1");
+  });
+});

@@ -5,7 +5,7 @@ import type { SerializedGameSummary } from "./gameSummary.js";
  * One imported game's cached analysis, persisted in IndexedDB so the
  * library survives a page refresh without re-reading any replay files.
  * Only derived data lives here - never the raw `.rmgr` bytes (see
- * docs/superpowers/specs/2026-09-15-persistent-library-design.md §2).
+ * docs/ARCHITECTURE.md).
  */
 export interface StoredGame {
   /** `gameIdFor(recordedAtEpochMillis, frameCount)`. */
