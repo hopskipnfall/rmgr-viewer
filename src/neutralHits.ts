@@ -249,9 +249,12 @@ export function classifyNeutralOpening(
   const victimPrevPost =
     replay.frames[hitFrameIndex - 1]?.ports[victimPort]?.state;
   if (!victimPrevPost) return { reason: "unknown" };
+  // The engine's own ground flag, not height: Dream Land's platforms put a standing fighter well
+  // above y=0, and a height check misfiled every platform hit as airborne (never "landing-lag" or
+  // "standing-hit").
   const isVictimAirborneAtHit =
     isAirborneActionState(victimPrevPost.actionStateId) ||
-    Math.abs(victimPrevPost.positionY) > 5;
+    !victimPrevPost.grounded;
 
   // Rule 1: Unsafe Shield Pressure
   // Check if victim attacked into attacker's shield within preceding 45 frames (0.75s)
@@ -294,7 +297,7 @@ export function classifyNeutralOpening(
       if (
         isLandingLagActionState(post.actionStateId) ||
         isAirborneActionState(post.actionStateId) ||
-        Math.abs(post.positionY) > 5
+        !post.grounded
       ) {
         framesSinceLanding = k;
         break;
@@ -320,7 +323,10 @@ export function classifyNeutralOpening(
     if (!post) continue;
 
     if (isAttackActionState(post.actionStateId)) {
-      if (post.comboHitCount > 0) {
+      // comboHitCount belongs to the port taking the hits, so the victim's attack connected iff
+      // the *attacker's* counter is running.
+      const attackerPost = replay.frames[f]?.ports[attackerPort]?.state;
+      if (attackerPost && attackerPost.comboHitCount > 0) {
         attackHadHit = true;
       }
       if (foundAttackEnd === -1) {
@@ -405,7 +411,7 @@ export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
   // unsurvivable at that point. Without this, EVERY hit that knocks someone offstage gets
   // credited as a meaningful edge-guard setup, even when the neutral hit itself already secured
   // the kill outright -- the "unhelpful neutral analysis commentary" the user flagged. See
-  // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+  // docs/community/edge-guards.md.
   const deadSpansByPort = new Map<
     PortIndex,
     { verdictFrameIndex: number; holdEndFrameIndex: number }[]

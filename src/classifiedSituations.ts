@@ -15,7 +15,7 @@
  * available where it's actually needed (missedLedgeHogOpportunity, possibleAccidentalSave, and the
  * two "contestable only" sub-stats in matchView.ts) via the raw `entryVerdict` field itself.
  *
- * See docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md for the design this
+ * See docs/community/edge-guards.md for the design this
  * implements (phase 1: the correlation layer + validation, no UI yet).
  */
 import type { PortIndex, Replay } from "@rmg-k/rmgr";
@@ -386,7 +386,7 @@ export function hopelessEnteredFrameIndices(
 
 // ---------------------------------------------------------------------------
 // Event log entries for the two detectors (phase 3 --
-// docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md)
+// docs/community/edge-guards.md)
 // ---------------------------------------------------------------------------
 
 export type ClassifiedSituationEventKind =

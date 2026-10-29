@@ -10,6 +10,10 @@ import { DREAM_LAND_STAGE_ID } from "./stageGeometry.js";
 function makeMockReplayWithAction(options: {
   victimActionsBeforeHit: number[];
   victimAirborne?: boolean;
+  /** Standing on a Dream Land side platform: high above y=0 but grounded. */
+  victimOnPlatform?: boolean;
+  /** Frame indices on which the attacker's own combo counter is running (it was just hit). */
+  attackerHitOnFrames?: readonly number[];
   hitType?: "attack" | "grab";
 }): Replay {
   const frames: Frame[] = [];
@@ -18,6 +22,8 @@ function makeMockReplayWithAction(options: {
   const {
     victimActionsBeforeHit,
     victimAirborne = false,
+    victimOnPlatform = false,
+    attackerHitOnFrames = [],
     hitType = "attack",
   } = options;
 
@@ -59,6 +65,7 @@ function makeMockReplayWithAction(options: {
             actionFrameCounter: f,
             positionX: 1000,
             positionY: 0,
+            grounded: true,
             positionZ: 0,
             velocityX: 0,
             velocityY: 0,
@@ -67,7 +74,7 @@ function makeMockReplayWithAction(options: {
             stocksRemaining: 4,
             shieldSize: 50,
             hitstunCounter: 0,
-            comboHitCount: 0,
+            comboHitCount: attackerHitOnFrames.includes(f) ? 1 : 0,
             facingDirection: 1,
           },
         },
@@ -91,7 +98,8 @@ function makeMockReplayWithAction(options: {
             actionStateId: actionState,
             actionFrameCounter: f,
             positionX: 1100,
-            positionY: victimAirborne ? 500 : 0,
+            positionY: victimAirborne ? 500 : victimOnPlatform ? 904 : 0,
+            grounded: !victimAirborne,
             positionZ: 0,
             velocityX: 0,
             velocityY: 0,
@@ -198,6 +206,40 @@ describe("classifyNeutralOpening", () => {
     const result = classifyNeutralOpening(
       replay,
       10,
+      1 as PortIndex,
+      0 as PortIndex,
+    );
+    expect(result.reason).toBe("standing-hit");
+  });
+
+  it("classifies standing hit on a side platform (grounded, but well above y=0)", () => {
+    const actions = new Array(10).fill(0x00a);
+    const replay = makeMockReplayWithAction({
+      victimActionsBeforeHit: actions,
+      victimOnPlatform: true,
+    });
+    const result = classifyNeutralOpening(
+      replay,
+      10,
+      1 as PortIndex,
+      0 as PortIndex,
+    );
+    expect(result.reason).toBe("standing-hit");
+  });
+
+  it("does not call it a whiff punish when the victim's attack connected", () => {
+    // USmash x 5 that hit the attacker (attacker's combo counter runs), then Idle, then hit
+    const actions = [
+      0x0cf, 0x0cf, 0x0cf, 0x0cf, 0x0cf, 0x00a, 0x00a, 0x00a, 0x00a, 0x00a,
+      0x00a, 0x00a, 0x00a, 0x00a, 0x00a,
+    ];
+    const replay = makeMockReplayWithAction({
+      victimActionsBeforeHit: actions,
+      attackerHitOnFrames: [3, 4],
+    });
+    const result = classifyNeutralOpening(
+      replay,
+      15,
       1 as PortIndex,
       0 as PortIndex,
     );

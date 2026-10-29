@@ -37,6 +37,7 @@ export interface EgwFilters {
 
 export type Route =
   | { view: "library" }
+  | { view: "progress" }
   | { view: "match"; id: string }
   | { view: "preview" }
   | { view: "session"; id: string }
@@ -111,6 +112,7 @@ export function parseRoute(hash: string): Route {
   if (clean === "preview" || clean.startsWith("preview") || clean === "debug") {
     return { view: "preview" };
   }
+  if (clean === "progress") return { view: "progress" };
   if (clean.startsWith("session/")) {
     const id = decodeURIComponent(clean.slice("session/".length));
     if (id) return { view: "session", id };
@@ -175,6 +177,10 @@ export function navigateToMatch(id: string): void {
 
 export function navigateToPreview(): void {
   window.location.hash = "#/preview";
+}
+
+export function navigateToProgress(): void {
+  window.location.hash = "#/progress";
 }
 
 export function navigateToSession(id: string): void {

@@ -153,7 +153,7 @@ export function computeRawCountersForPort(
   // Situations the recovery classifier confirmed were unsurvivable at entry are excluded from
   // Recovery% entirely, here as well as in the per-match panel (matchView.ts) -- this is what
   // feeds the library-wide aggregate stats. See edgeGuard.ts's computeEdgeGuardStats doc comment
-  // and docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+  // and docs/community/edge-guards.md.
   const classifiedSituations = computeClassifiedSituations(replay);
   const hopelessFrames = hopelessEnteredFrameIndices(classifiedSituations);
   const edgeStats = computeEdgeGuardStats(edgeEvents, port, hopelessFrames);
@@ -249,7 +249,7 @@ function hashString(str: string): string {
  * the file and editing player-name metadata. File-format versions are
  * deliberately excluded - a fixed re-export of the same game should
  * replace its cached entry, not appear as a second game (see
- * docs/superpowers/specs/2026-09-15-persistent-library-design.md §1).
+ * docs/ARCHITECTURE.md).
  */
 export function gameIdFor(
   recordedAtEpochMillis: number,

@@ -493,7 +493,7 @@ export interface EdgeGuardStats {
  * denominator and the numerator) by their `situation-entered` frameIndex —
  * used to exclude situations the recovery classifier confirmed were
  * "dead" (unsurvivable by any simulated strategy) at entry, per
- * docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md.
+ * docs/community/edge-guards.md.
  * Deliberately does NOT exclude "reaches-stage" verdicts here: that verdict
  * only proves one input sequence works, not that the situation was trivial
  * or unaffected by matchup-specific edge-guard pressure -- confirmed against

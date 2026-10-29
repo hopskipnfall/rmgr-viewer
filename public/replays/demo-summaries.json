@@ -1,5 +1,5 @@
 {
-  "analysisVersion": 9,
+  "analysisVersion": 10,
   "games": [
     {
       "id": "g_mt9qi5yw_4sx",
@@ -52,10 +52,10 @@
             "reversal": 2
           },
           "openingsLostByReason": {
-            "whiff-punish": 3,
+            "whiff-punish": 2,
             "reversal": 1,
             "unknown": 1,
-            "landing-lag": 1
+            "landing-lag": 2
           },
           "damageDealtOnOpenings": 411,
           "damageLeakOnOpenings": 0,
@@ -82,10 +82,10 @@
           "openingsWon": 6,
           "openingsLost": 8,
           "openingsWonByReason": {
-            "whiff-punish": 3,
+            "whiff-punish": 2,
             "reversal": 1,
             "unknown": 1,
-            "landing-lag": 1
+            "landing-lag": 2
           },
           "openingsLostByReason": {
             "whiff-punish": 4,
@@ -375,8 +375,8 @@
           },
           "openingsLostByReason": {
             "reversal": 3,
-            "whiff-punish": 3,
-            "landing-lag": 2,
+            "whiff-punish": 2,
+            "landing-lag": 3,
             "jump-punish": 2,
             "unknown": 1
           },
@@ -406,8 +406,8 @@
           "openingsLost": 8,
           "openingsWonByReason": {
             "reversal": 3,
-            "whiff-punish": 3,
-            "landing-lag": 2,
+            "whiff-punish": 2,
+            "landing-lag": 3,
             "jump-punish": 2,
             "unknown": 1
           },
@@ -471,18 +471,17 @@
           "openingsWon": 15,
           "openingsLost": 10,
           "openingsWonByReason": {
-            "whiff-punish": 8,
-            "standing-hit": 1,
+            "whiff-punish": 7,
+            "standing-hit": 2,
             "reversal": 3,
-            "landing-lag": 1,
-            "unknown": 2
+            "landing-lag": 2,
+            "unknown": 1
           },
           "openingsLostByReason": {
             "whiff-punish": 4,
             "reversal": 2,
-            "unknown": 1,
-            "jump-punish": 2,
-            "landing-lag": 1
+            "landing-lag": 3,
+            "jump-punish": 1
           },
           "damageDealtOnOpenings": 358,
           "damageLeakOnOpenings": 28,
@@ -512,16 +511,15 @@
           "openingsWonByReason": {
             "whiff-punish": 4,
             "reversal": 2,
-            "unknown": 1,
-            "jump-punish": 2,
-            "landing-lag": 1
+            "landing-lag": 3,
+            "jump-punish": 1
           },
           "openingsLostByReason": {
-            "whiff-punish": 8,
-            "standing-hit": 1,
+            "whiff-punish": 7,
+            "standing-hit": 2,
             "reversal": 3,
-            "landing-lag": 1,
-            "unknown": 2
+            "landing-lag": 2,
+            "unknown": 1
           },
           "damageDealtOnOpenings": 260,
           "damageLeakOnOpenings": 43,
@@ -579,16 +577,16 @@
           "openingsWon": 10,
           "openingsLost": 5,
           "openingsWonByReason": {
-            "landing-lag": 2,
+            "landing-lag": 3,
             "reversal": 2,
             "whiff-punish": 3,
-            "standing-hit": 2,
-            "unknown": 1
+            "standing-hit": 2
           },
           "openingsLostByReason": {
             "reversal": 2,
-            "whiff-punish": 2,
-            "landing-lag": 1
+            "standing-hit": 1,
+            "landing-lag": 1,
+            "whiff-punish": 1
           },
           "damageDealtOnOpenings": 187,
           "damageLeakOnOpenings": 10,
@@ -617,15 +615,15 @@
           "openingsLost": 10,
           "openingsWonByReason": {
             "reversal": 2,
-            "whiff-punish": 2,
-            "landing-lag": 1
+            "standing-hit": 1,
+            "landing-lag": 1,
+            "whiff-punish": 1
           },
           "openingsLostByReason": {
-            "landing-lag": 2,
+            "landing-lag": 3,
             "reversal": 2,
             "whiff-punish": 3,
-            "standing-hit": 2,
-            "unknown": 1
+            "standing-hit": 2
           },
           "damageDealtOnOpenings": 85,
           "damageLeakOnOpenings": 23,
@@ -778,8 +776,7 @@
             "landing-lag": 6,
             "whiff-punish": 6,
             "jump-punish": 1,
-            "unknown": 1,
-            "standing-hit": 1
+            "standing-hit": 2
           },
           "openingsLostByReason": {
             "jump-punish": 1,
@@ -823,8 +820,7 @@
             "landing-lag": 6,
             "whiff-punish": 6,
             "jump-punish": 1,
-            "unknown": 1,
-            "standing-hit": 1
+            "standing-hit": 2
           },
           "damageDealtOnOpenings": 260,
           "damageLeakOnOpenings": 92,
@@ -1087,15 +1083,17 @@
           "openingsLost": 12,
           "openingsWonByReason": {
             "reversal": 5,
-            "whiff-punish": 5,
+            "landing-lag": 1,
+            "whiff-punish": 4,
             "standing-hit": 1
           },
           "openingsLostByReason": {
             "whiff-punish": 3,
-            "unknown": 2,
+            "unknown": 1,
             "jump-punish": 3,
             "reversal": 3,
-            "landing-lag": 1
+            "landing-lag": 1,
+            "standing-hit": 1
           },
           "damageDealtOnOpenings": 319,
           "damageLeakOnOpenings": 3,
@@ -1121,14 +1119,16 @@
           "openingsLost": 11,
           "openingsWonByReason": {
             "whiff-punish": 3,
-            "unknown": 2,
+            "unknown": 1,
             "jump-punish": 3,
             "reversal": 3,
-            "landing-lag": 1
+            "landing-lag": 1,
+            "standing-hit": 1
           },
           "openingsLostByReason": {
             "reversal": 5,
-            "whiff-punish": 5,
+            "landing-lag": 1,
+            "whiff-punish": 4,
             "standing-hit": 1
           },
           "damageDealtOnOpenings": 238,
@@ -1289,7 +1289,7 @@
             "unknown": 2,
             "jump-punish": 1,
             "standing-hit": 1,
-            "whiff-punish": 1
+            "landing-lag": 1
           },
           "damageDealtOnOpenings": 285,
           "damageLeakOnOpenings": 74,
@@ -1318,7 +1318,7 @@
             "unknown": 2,
             "jump-punish": 1,
             "standing-hit": 1,
-            "whiff-punish": 1
+            "landing-lag": 1
           },
           "openingsLostByReason": {
             "shield-pressure": 2,
@@ -1485,8 +1485,8 @@
             "reversal": 2
           },
           "openingsLostByReason": {
-            "whiff-punish": 3,
-            "landing-lag": 1,
+            "landing-lag": 2,
+            "whiff-punish": 2,
             "reversal": 5
           },
           "damageDealtOnOpenings": 501,
@@ -1516,8 +1516,8 @@
           "openingsWon": 9,
           "openingsLost": 19,
           "openingsWonByReason": {
-            "whiff-punish": 3,
-            "landing-lag": 1,
+            "landing-lag": 2,
+            "whiff-punish": 2,
             "reversal": 5
           },
           "openingsLostByReason": {
@@ -1582,8 +1582,8 @@
           "openingsLost": 7,
           "openingsWonByReason": {
             "reversal": 2,
-            "whiff-punish": 8,
-            "landing-lag": 1,
+            "whiff-punish": 7,
+            "landing-lag": 2,
             "standing-hit": 1
           },
           "openingsLostByReason": {
@@ -1622,8 +1622,8 @@
           },
           "openingsLostByReason": {
             "reversal": 2,
-            "whiff-punish": 8,
-            "landing-lag": 1,
+            "whiff-punish": 7,
+            "landing-lag": 2,
             "standing-hit": 1
           },
           "damageDealtOnOpenings": 206,
@@ -1894,9 +1894,8 @@
           "openingsLost": 4,
           "openingsWonByReason": {
             "reversal": 3,
-            "unknown": 1,
-            "whiff-punish": 3,
-            "standing-hit": 1
+            "standing-hit": 2,
+            "whiff-punish": 3
           },
           "openingsLostByReason": {
             "whiff-punish": 2,
@@ -1932,9 +1931,8 @@
           },
           "openingsLostByReason": {
             "reversal": 3,
-            "unknown": 1,
-            "whiff-punish": 3,
-            "standing-hit": 1
+            "standing-hit": 2,
+            "whiff-punish": 3
           },
           "damageDealtOnOpenings": 84,
           "damageLeakOnOpenings": 48,
@@ -2092,11 +2090,12 @@
           "openingsLost": 15,
           "openingsWonByReason": {
             "reversal": 13,
-            "whiff-punish": 3,
+            "landing-lag": 1,
+            "whiff-punish": 2,
             "unknown": 1
           },
           "openingsLostByReason": {
-            "unknown": 1,
+            "standing-hit": 1,
             "reversal": 11,
             "whiff-punish": 3
           },
@@ -2125,13 +2124,14 @@
           "openingsWon": 15,
           "openingsLost": 17,
           "openingsWonByReason": {
-            "unknown": 1,
+            "standing-hit": 1,
             "reversal": 11,
             "whiff-punish": 3
           },
           "openingsLostByReason": {
             "reversal": 13,
-            "whiff-punish": 3,
+            "landing-lag": 1,
+            "whiff-punish": 2,
             "unknown": 1
           },
           "damageDealtOnOpenings": 347,
@@ -2188,16 +2188,17 @@
           "openingsWon": 14,
           "openingsLost": 11,
           "openingsWonByReason": {
-            "whiff-punish": 8,
+            "whiff-punish": 7,
             "reversal": 5,
-            "unknown": 1
+            "landing-lag": 1,
+            "standing-hit": 1
           },
           "openingsLostByReason": {
-            "unknown": 1,
-            "whiff-punish": 3,
+            "standing-hit": 1,
+            "whiff-punish": 2,
             "reversal": 4,
             "jump-punish": 1,
-            "landing-lag": 2
+            "landing-lag": 3
           },
           "damageDealtOnOpenings": 279,
           "damageLeakOnOpenings": 33,
@@ -2225,16 +2226,17 @@
           "openingsWon": 11,
           "openingsLost": 14,
           "openingsWonByReason": {
-            "unknown": 1,
-            "whiff-punish": 3,
+            "standing-hit": 1,
+            "whiff-punish": 2,
             "reversal": 4,
             "jump-punish": 1,
-            "landing-lag": 2
+            "landing-lag": 3
           },
           "openingsLostByReason": {
-            "whiff-punish": 8,
+            "whiff-punish": 7,
             "reversal": 5,
-            "unknown": 1
+            "landing-lag": 1,
+            "standing-hit": 1
           },
           "damageDealtOnOpenings": 199,
           "damageLeakOnOpenings": 12,
@@ -2290,7 +2292,8 @@
           "openingsWon": 8,
           "openingsLost": 9,
           "openingsWonByReason": {
-            "whiff-punish": 6,
+            "landing-lag": 3,
+            "whiff-punish": 3,
             "reversal": 2
           },
           "openingsLostByReason": {
@@ -2328,7 +2331,8 @@
             "whiff-punish": 3
           },
           "openingsLostByReason": {
-            "whiff-punish": 6,
+            "landing-lag": 3,
+            "whiff-punish": 3,
             "reversal": 2
           },
           "damageDealtOnOpenings": 245,

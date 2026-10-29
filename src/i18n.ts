@@ -438,7 +438,7 @@ export interface Translations {
   cameraPanResetTitle: string;
 
   // Classifier-aware recovery/edge-guard breakdown (see
-  // docs/superpowers/specs/2026-09-10-classifier-aware-recovery-stats.md)
+  // docs/community/edge-guards.md)
   recoveryContestableLabel: string;
   edgeGuardEffectivenessLabel: string;
   edgeGuardEffectivenessSummary: (situations: number) => string;
@@ -696,6 +696,56 @@ export interface Translations {
   twelveCbNextMatch: string;
   twelveCbPrevMatchTitle: string;
   twelveCbNextMatchTitle: string;
+
+  // Progress view
+  navProgress: string;
+  progressTitle: string;
+  progressScopeAll: string;
+  progressGamesCount: (games: number) => string;
+  progressIntro: string;
+  progressNoIdentity: string;
+  progressNoGames: string;
+  progressMetricOpeningShare: string;
+  progressMetricOpeningShareHint: string;
+  progressMetricDamagePerOpening: string;
+  progressMetricDamagePerOpeningHint: string;
+  progressMetricDamageGivenBack: string;
+  progressMetricDamageGivenBackHint: string;
+  progressMetricBaitShare: string;
+  progressMetricBaitShareHint: string;
+  progressMetricHitBackShare: string;
+  progressMetricHitBackShareHint: string;
+  progressMetricRecovery: string;
+  progressMetricRecoveryHint: string;
+  progressUnitPoints: string;
+  progressUnitDamage: string;
+  progressRecentLabel: (days: number) => string;
+  progressEarlierLabel: string;
+  progressVsExpected: string;
+  progressVerdictBetter: string;
+  progressVerdictWorse: string;
+  progressVerdictUnclear: string;
+  progressVerdictTooFew: string;
+  progressOverall: (value: string, r: string) => string;
+  progressTooltipExpected: (value: string, expected: string) => string;
+  progressRepeatedTitle: string;
+  progressRepeatedHint: string;
+  progressAdaptationTitle: string;
+  progressAdaptationHint: string;
+  progressStrengthTitle: string;
+  progressStrengthHint: string;
+  progressColDate: string;
+  progressColOpponent: string;
+  progressColGames: string;
+  progressColRecord: string;
+  progressColOpeningShare: string;
+  progressColDamage: string;
+  progressColBait: string;
+  progressColHitBack: string;
+  progressColFirstThird: string;
+  progressColLastThird: string;
+  progressColChange: string;
+  progressColStrength: string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -1436,6 +1486,68 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     twelveCbNextMatch: "Next",
     twelveCbPrevMatchTitle: "Previous match in this 12 Character Battle",
     twelveCbNextMatchTitle: "Next match in this 12 Character Battle",
+
+    navProgress: "Progress",
+    progressTitle: "Progress",
+    progressScopeAll: "All characters",
+    progressGamesCount: (games) => `${games} game${games === 1 ? "" : "s"}`,
+    progressIntro:
+      "Each dot is one session, compared with what's expected against that opponent. Opponent strength is inferred from your results on this character, so a close loss to a top player can count as a good session. Above the line is better than expected.",
+    progressNoIdentity:
+      "Choose which player is you in the sidebar to see your progress.",
+    progressNoGames: "No 1v1 games on this character yet.",
+    progressMetricOpeningShare: "Opening share",
+    progressMetricOpeningShareHint:
+      "Neutral openings you won, out of all openings",
+    progressMetricDamagePerOpening: "Damage per opening",
+    progressMetricDamagePerOpeningHint:
+      "How much each opening you won was worth",
+    progressMetricDamageGivenBack: "Damage given back",
+    progressMetricDamageGivenBackHint:
+      "Damage taken while you held the advantage, per opening",
+    progressMetricBaitShare: "Bait & punish",
+    progressMetricBaitShareHint:
+      "Openings won off the opponent's commitment (whiff or landing)",
+    progressMetricHitBackShare: "Hit back while ahead",
+    progressMetricHitBackShareHint:
+      "Openings lost right after you had the last hit",
+    progressMetricRecovery: "Recovery",
+    progressMetricRecoveryHint:
+      "Recoveries survived, excluding ones that were already lost",
+    progressUnitPoints: "pts",
+    progressUnitDamage: "%",
+    progressRecentLabel: (days) => `Last ${days} days`,
+    progressEarlierLabel: "Baseline",
+    progressVsExpected: "vs expected",
+    progressVerdictBetter: "Better than baseline",
+    progressVerdictWorse: "Worse than baseline",
+    progressVerdictUnclear: "No clear change yet",
+    progressVerdictTooFew: "Not enough sessions to compare",
+    progressOverall: (value, r) =>
+      `Overall ${value} · opponent strength explains r = ${r}`,
+    progressTooltipExpected: (value, expected) =>
+      `${value} (expected ${expected})`,
+    progressRepeatedTitle: "Same opponent, different days",
+    progressRepeatedHint:
+      "Raw numbers. When the opponent is the same, no adjustment is needed.",
+    progressAdaptationTitle: "Long sets: did you adapt?",
+    progressAdaptationHint:
+      "Opening share in the first third of a set vs. the last third.",
+    progressStrengthTitle: "Opponent strength",
+    progressStrengthHint:
+      "Inferred from stock margin in your games on this character (positive = stronger than you). This is what the expected values above are based on.",
+    progressColDate: "Date",
+    progressColOpponent: "Opponent",
+    progressColGames: "Games",
+    progressColRecord: "Record",
+    progressColOpeningShare: "Opening share",
+    progressColDamage: "Dmg / opening",
+    progressColBait: "Bait & punish",
+    progressColHitBack: "Hit back",
+    progressColFirstThird: "First third",
+    progressColLastThird: "Last third",
+    progressColChange: "Change",
+    progressColStrength: "Strength",
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -2151,6 +2263,61 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     twelveCbNextMatch: "次の試合",
     twelveCbPrevMatchTitle: "この12キャラ戦の前の試合",
     twelveCbNextMatchTitle: "この12キャラ戦の次の試合",
+
+    navProgress: "成長",
+    progressTitle: "成長",
+    progressScopeAll: "全キャラ",
+    progressGamesCount: (games) => `${games}試合`,
+    progressIntro:
+      "点はそれぞれ1セッションで、その相手に対する期待値と比べています。相手の強さはこのキャラでのあなたの戦績から推定するので、トップ選手への惜敗も良いセッションとして数えられます。線より上は期待以上です。",
+    progressNoIdentity:
+      "サイドバーで自分のプレイヤー名を選ぶと、成長が表示されます。",
+    progressNoGames: "このキャラでの1対1の試合はまだありません。",
+    progressMetricOpeningShare: "差し合い勝率",
+    progressMetricOpeningShareHint: "差し合いで先に取った割合",
+    progressMetricDamagePerOpening: "1回あたりのダメージ",
+    progressMetricDamagePerOpeningHint: "取った差し合い1回あたりのダメージ",
+    progressMetricDamageGivenBack: "有利中の被ダメージ",
+    progressMetricDamageGivenBackHint:
+      "有利状況を持っている間に受けたダメージ（1回あたり）",
+    progressMetricBaitShare: "釣って差し返し",
+    progressMetricBaitShareHint: "相手の空振り・着地を取った割合",
+    progressMetricHitBackShare: "有利中の反撃被弾",
+    progressMetricHitBackShareHint: "自分が最後に当てた直後に取られた割合",
+    progressMetricRecovery: "復帰",
+    progressMetricRecoveryHint: "復帰成功率（既に助からない状況は除外）",
+    progressUnitPoints: "pt",
+    progressUnitDamage: "%",
+    progressRecentLabel: (days) => `直近${days}日`,
+    progressEarlierLabel: "ベースライン",
+    progressVsExpected: "期待値比",
+    progressVerdictBetter: "ベースラインより良い",
+    progressVerdictWorse: "ベースラインより悪い",
+    progressVerdictUnclear: "まだ明確な変化なし",
+    progressVerdictTooFew: "比較できるセッションが足りません",
+    progressOverall: (value, r) =>
+      `全体 ${value} · 相手の強さとの相関 r = ${r}`,
+    progressTooltipExpected: (value, expected) =>
+      `${value}（期待値 ${expected}）`,
+    progressRepeatedTitle: "同じ相手、別の日",
+    progressRepeatedHint: "実数値です。相手が同じなら補正は不要です。",
+    progressAdaptationTitle: "長いセット：対応できたか",
+    progressAdaptationHint: "セット最初の1/3と最後の1/3の差し合い勝率。",
+    progressStrengthTitle: "相手の強さ",
+    progressStrengthHint:
+      "このキャラでの試合のストック差から推定（正の値＝自分より強い）。上の期待値はこれに基づきます。",
+    progressColDate: "日付",
+    progressColOpponent: "相手",
+    progressColGames: "試合",
+    progressColRecord: "戦績",
+    progressColOpeningShare: "差し合い勝率",
+    progressColDamage: "ダメージ/回",
+    progressColBait: "釣り",
+    progressColHitBack: "反撃被弾",
+    progressColFirstThird: "最初の1/3",
+    progressColLastThird: "最後の1/3",
+    progressColChange: "変化",
+    progressColStrength: "強さ",
   },
 };
 

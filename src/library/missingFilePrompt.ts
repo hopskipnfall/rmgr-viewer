@@ -28,7 +28,7 @@ export interface MissingFilePromptOptions {
 /**
  * Shown when opening a game whose summary came from the persistent cache
  * but whose replay file hasn't been imported this session (see
- * docs/superpowers/specs/2026-09-15-persistent-library-design.md §6).
+ * docs/ARCHITECTURE.md).
  * Resolves true once the matching file is loaded, false if dismissed.
  */
 export function promptForMissingFile(

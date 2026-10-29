@@ -6335,6 +6335,285 @@
         color: var(--text-dim);
         font-size: 11px;
       }
+      /* Progress page (#/progress) - see src/progress/progressView.ts */
+      .progress-page {
+        position: relative;
+        max-width: 1100px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 16px;
+        box-sizing: border-box;
+        flex-shrink: 0;
+      }
+      .progress-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 6px;
+      }
+      .progress-header h2 {
+        margin: 0;
+      }
+      .progress-scope {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .progress-scope-chip {
+        font: inherit;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--panel-border);
+        background: var(--card-bg);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .progress-scope-chip[aria-pressed="true"] {
+        background: var(--accent-subtle);
+        border-color: var(--accent);
+      }
+      .progress-scope-count {
+        color: var(--text-dim);
+        margin-left: 4px;
+      }
+      .progress-intro,
+      .progress-section-hint,
+      .progress-card-hint,
+      .progress-card-foot {
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .progress-intro {
+        max-width: 760px;
+        margin: 0 0 16px;
+      }
+      .progress-empty {
+        color: var(--text-dim);
+      }
+      .progress-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .progress-card {
+        background: var(--card-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 12px;
+        min-width: 0;
+      }
+      .progress-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .progress-card-header h3 {
+        font-size: 14px;
+        margin: 0;
+      }
+      .progress-card-hint {
+        margin: 2px 0 8px;
+      }
+      .progress-card-foot {
+        margin: 6px 0 0;
+      }
+      .progress-verdict {
+        font-size: 12px;
+        color: var(--text-dim);
+        white-space: nowrap;
+      }
+      .progress-verdict.delta-pos,
+      .progress-table td.delta-pos {
+        color: #60a5fa;
+        font-weight: 600;
+      }
+      .progress-verdict.delta-neg,
+      .progress-table td.delta-neg {
+        color: #e0473f;
+        font-weight: 600;
+      }
+      .progress-windows {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin: 0 0 6px;
+      }
+      .progress-windows dt {
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      .progress-windows dd {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .progress-chart {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .progress-chart-zero {
+        stroke: var(--text-dim);
+        stroke-width: 1;
+        stroke-dasharray: 3 3;
+        opacity: 0.6;
+      }
+      .progress-chart-axis {
+        fill: var(--text-dim);
+        font-size: 9px;
+      }
+      .progress-chart-se {
+        stroke: var(--text-dim);
+        stroke-width: 1;
+        opacity: 0.45;
+      }
+      .progress-chart-rolling {
+        fill: none;
+        stroke: var(--accent);
+        stroke-width: 2;
+        stroke-linejoin: round;
+        opacity: 0.55;
+      }
+      .progress-chart-dot {
+        fill: var(--accent);
+        stroke: var(--panel);
+        stroke-width: 1.5;
+      }
+      .progress-chart-hit {
+        fill: transparent;
+      }
+      .progress-chart-point {
+        cursor: pointer;
+      }
+      .progress-chart-point.faint,
+      .progress-chart-se.faint {
+        opacity: 0.3;
+      }
+      .progress-chart-point:hover .progress-chart-dot {
+        stroke: var(--text);
+      }
+      .progress-tooltip {
+        position: absolute;
+        z-index: 5;
+        pointer-events: none;
+        white-space: pre-line;
+        font-size: 12px;
+        line-height: 1.4;
+        padding: 6px 8px;
+        border-radius: 6px;
+        background: var(--dropdown-bg);
+        border: 1px solid var(--panel-border);
+        color: var(--text);
+        box-shadow: var(--shadow-menu);
+        max-width: 260px;
+      }
+      .progress-section {
+        margin-bottom: 24px;
+      }
+      .progress-section h3 {
+        font-size: 14px;
+        margin: 0 0 2px;
+      }
+      .progress-section-hint {
+        margin: 0 0 8px;
+      }
+      .progress-table-wrap {
+        overflow-x: auto;
+      }
+      .progress-table {
+        border-collapse: collapse;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        min-width: 100%;
+      }
+      .progress-table th,
+      .progress-table td {
+        text-align: left;
+        padding: 5px 10px 5px 0;
+        border-bottom: 1px solid var(--panel-border);
+        white-space: nowrap;
+      }
+      .progress-table th {
+        color: var(--text-dim);
+        font-weight: 500;
+      }
+      .progress-row-link {
+        cursor: pointer;
+      }
+      .progress-row-link:hover {
+        background: var(--table-hover);
+      }
+      .progress-strength-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-width: 640px;
+      }
+      .progress-strength-row {
+        display: grid;
+        grid-template-columns: minmax(80px, 140px) 1fr 48px 80px;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        padding: 2px 0;
+      }
+      .progress-strength-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .progress-strength-track {
+        position: relative;
+        height: 8px;
+        background: var(--track-bg);
+        border-radius: 4px;
+      }
+      .progress-strength-track::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: -2px;
+        bottom: -2px;
+        width: 1px;
+        background: var(--text-dim);
+      }
+      .progress-strength-bar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        border-radius: 4px;
+      }
+      .progress-strength-bar.stronger {
+        background: #e0473f;
+      }
+      .progress-strength-bar.weaker {
+        background: #60a5fa;
+      }
+      .progress-strength-value,
+      .progress-strength-games {
+        white-space: nowrap;
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      @media (max-width: 860px) {
+        .progress-grid {
+          grid-template-columns: 1fr;
+        }
+        .progress-strength-row {
+          grid-template-columns: 90px 1fr 44px;
+        }
+        .progress-strength-games {
+          display: none;
+        }
+      }
+
       .session-page {
         max-width: 1100px;
         width: 100%;
@@ -7613,6 +7892,9 @@
       <div class="header-controls">
         <nav class="header-nav">
           <a id="navLibraryLink" class="header-nav-link" href="#/">Library</a>
+          <a id="navProgressLink" class="header-nav-link" href="#/progress"
+            >Progress</a
+          >
           <a id="navSearchLink" class="header-nav-link" href="#/search"
             >Search</a
           >
@@ -7732,6 +8014,11 @@
           <div id="librarySidebarContent" class="library-sidebar-content">
             <div id="identityCard" class="identity-card"></div>
             <button
+              id="sidebarProgressLink"
+              class="sidebar-statistics-link"
+              type="button"
+            ></button>
+            <button
               id="sidebarStatisticsLink"
               class="sidebar-statistics-link"
               type="button"
@@ -7741,6 +8028,7 @@
         </div>
         <div id="libraryView" class="view-container"></div>
         <div id="sessionView" class="view-container" hidden></div>
+        <div id="progressView" class="view-container" hidden></div>
       </div>
 
       <!-- Preview View -->

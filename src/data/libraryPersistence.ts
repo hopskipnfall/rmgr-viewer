@@ -28,7 +28,7 @@ import { searchCache } from "../search/searchCache.js";
 /**
  * Glue between the IndexedDB cache (libraryStore.ts), the pure import
  * rules (importPlanner.ts) and the parser (importer.ts). See
- * docs/superpowers/specs/2026-09-15-persistent-library-design.md §4-§5.
+ * docs/ARCHITECTURE.md.
  */
 
 export interface LoadedLibrary {

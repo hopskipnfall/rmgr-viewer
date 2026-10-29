@@ -71,7 +71,7 @@ function newNoteId(): string {
 /**
  * Creates or replaces the single note anchored to `eventFrameIndex` - at
  * most one note per neutral-interaction row, per the design (see
- * docs/superpowers/specs/2026-09-27-match-notes-design.md). Returns the
+ * docs/ARCHITECTURE.md). Returns the
  * game's full, already-saved note list.
  */
 export function upsertAnchoredNote(

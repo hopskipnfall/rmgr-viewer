@@ -9,7 +9,7 @@
  * until you do, and `npm run generate:demo-summaries` refuses to overwrite
  * changed output without a bump.
  */
-export const ANALYSIS_VERSION = 9;
+export const ANALYSIS_VERSION = 10;
 // History:
 // 1 - initial persistent library.
 // 2 - GameSummary.lobbyNames (whole lobby, for rotating 3-4 player sessions).
@@ -30,6 +30,9 @@ export const ANALYSIS_VERSION = 9;
 //     MicroStatId maps to a number, not {attempted, punished}).
 // 9 - microStats: added punished up tilt for Pikachu, Ness, Yoshi, and Link
 //     (US+JP) as four new stat ids.
+// 10 - neutral opening reasons: airborne/landing read from the engine's ground flag instead of
+//      height (platform hits were never land punish / standing hit), and a whiff is judged by
+//      whether the attacker was hit, not the victim's own combo counter.
 
 /** Matches replays by the versions in their file header. An unset field matches any value. */
 export interface VersionMatcher {

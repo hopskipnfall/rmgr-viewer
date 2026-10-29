@@ -4,7 +4,7 @@ A browser-based playback viewer for `.rmgr` replay files — per-match recording
 controller inputs and in-memory game state for _Super Smash Bros. (N64) — Smash Remix_,
 produced by [RMG-K](https://github.com/hopskipnfall/RMG-K).
 
-**[Live demo](https://hopskipnfall.github.io/rmgr-viewer/)** (loads a sample replay by
+**[Live demo](https://replay.12cb.dev/)** (loads a sample replay by
 default; use the file picker to load your own `.rmgr` file — nothing is uploaded, it's
 read entirely in your browser).
 
@@ -23,7 +23,7 @@ read entirely in your browser).
 - **Interactive Visualizers**: Directional Influence (DI) vectors and controller overlays, Pikachu Quick Attack recovery paths, and real-time controller stick input pads.
 - **Situational Analysis**: Offstage Edge Guarding & Recovery, Ledge Trapping & Getups (<100% vs ≥100%), Neutral Openings & Whiff Punish classification, Kill Combos, and Angel Invincibility.
 - **Multi-Replay Library**: Cross-game aggregate statistics, historical matchup baselines ($\Delta\%$), and session identity resolution.
-- **Documentation**: See [Analysis Engine Specifications](docs/ANALYSIS_SPECIFICATIONS.md) for full mathematical definitions, state taxonomies, and coordinate systems.
+- **Documentation**: [Architecture](docs/ARCHITECTURE.md), [Analysis Engine Specifications](docs/ANALYSIS_SPECIFICATIONS.md) (definitions, state taxonomies, coordinates), [Statistics](docs/STATISTICS.md) (aggregation and trends over time), and the [Roadmap](docs/ROADMAP.md).
 
 ## Local development
 
@@ -65,10 +65,8 @@ A Tauri desktop build (macOS, Windows, Linux) points at a library folder and kee
 
 ## Deployment
 
-Pushes to `master` build and deploy automatically to GitHub Pages (see
-`.github/workflows/`). The production build serves under the `/rmgr-viewer/` path
-(`vite.config.ts` sets `base` accordingly whenever `CI` is set); local dev and
-`npm run preview` serve from `/`.
+Pushes to `master` build and deploy automatically to GitHub Pages (see `.github/workflows/`),
+served from the root of the custom domain, so `vite.config.ts` uses `base: "/"` everywhere.
 
 ## License
 
