@@ -8,6 +8,7 @@ import {
   type ThemePreference,
 } from "./theme.js";
 import { ProgressViewController } from "./progress/progressView.js";
+import { HitReelPanel } from "./session/hitReelPanel.js";
 import {
   navigateToLibrary,
   navigateToMatch,
@@ -1222,6 +1223,11 @@ async function init(): Promise<void> {
     (session) => {
       handleShowFailedEdgeGuards(session);
     },
+    new HitReelPanel(
+      loadReplayForSummary,
+      (clips, startIndex) => playPlaylistClips(clips, startIndex),
+      () => folderPicker.click(),
+    ),
   );
 
   // 2. Wire Header controls

@@ -6335,6 +6335,160 @@
         color: var(--text-dim);
         font-size: 11px;
       }
+      /* Session hit reel - see src/session/hitReelPanel.ts */
+      .hit-reel-head {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+      .hit-reel-head h3 {
+        font-size: 15px;
+        margin: 0;
+      }
+      .hit-reel-noted-count {
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+      .hit-reel-intro,
+      .hit-reel-status {
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.45;
+        margin: 4px 0 10px;
+        max-width: 760px;
+      }
+      .hit-reel-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 16px;
+        margin-bottom: 8px;
+      }
+      .hit-reel-sort,
+      .hit-reel-reasons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .hit-reel-play-all,
+      .hit-reel-import {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 5px 12px;
+        border-radius: 6px;
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+      }
+      .hit-reel-import {
+        font-size: 12px;
+        padding: 3px 10px;
+        margin-left: 6px;
+      }
+      .hit-reel-play-all:hover,
+      .hit-reel-import:hover {
+        background: var(--accent-hover);
+      }
+      .hit-reel-chip {
+        font: inherit;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--panel-border);
+        background: var(--card-bg);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .hit-reel-chip span {
+        color: var(--text-dim);
+        margin-left: 2px;
+      }
+      .hit-reel-chip[aria-pressed="true"] {
+        background: var(--accent-subtle);
+        border-color: var(--accent);
+      }
+      .hit-reel-table-wrap {
+        overflow: auto;
+        max-height: 70vh;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+      }
+      .hit-reel-table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .hit-reel-table th {
+        position: sticky;
+        top: 0;
+        background: var(--panel);
+        color: var(--text-dim);
+        font-weight: 500;
+        text-align: left;
+        z-index: 1;
+      }
+      .hit-reel-table th,
+      .hit-reel-table td {
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--panel-border);
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+      .hit-reel-table tr.hit-reel-ko td:nth-child(8) {
+        color: #e0473f;
+        font-weight: 600;
+      }
+      .hit-reel-table tr.hit-reel-noted td:first-child {
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+      .hit-reel-leadin {
+        color: var(--text-dim);
+        max-width: 170px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .hit-reel-damage span {
+        color: var(--text-dim);
+      }
+      .hit-reel-play {
+        font: inherit;
+        font-size: 11px;
+        width: 26px;
+        height: 22px;
+        border-radius: 4px;
+        border: 1px solid var(--panel-border);
+        background: var(--btn-secondary-bg);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .hit-reel-play:hover {
+        background: var(--btn-secondary-hover);
+      }
+      .hit-reel-note-cell {
+        width: 100%;
+        min-width: 180px;
+      }
+      .hit-reel-note {
+        width: 100%;
+        box-sizing: border-box;
+        font: inherit;
+        font-size: 12px;
+        padding: 4px 6px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text);
+      }
+      .hit-reel-note:hover,
+      .hit-reel-note:focus {
+        border-color: var(--input-border);
+        background: var(--input-bg);
+        outline: none;
+      }
+
       /* Progress page (#/progress) - see src/progress/progressView.ts */
       .progress-page {
         position: relative;

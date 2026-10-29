@@ -746,6 +746,38 @@ export interface Translations {
   progressColLastThird: string;
   progressColChange: string;
   progressColStrength: string;
+
+  // Session hit reel
+  hitReelTitle: (count: number) => string;
+  hitReelIntro: string;
+  hitReelPlayAll: string;
+  hitReelSortChronological: string;
+  hitReelSortCostliest: string;
+  hitReelBigOnly: string;
+  hitReelAllReasons: string;
+  hitReelLoading: (done: number, total: number) => string;
+  hitReelUnloaded: (count: number) => string;
+  hitReelImportFolder: string;
+  hitReelEmpty: string;
+  hitReelNoted: (noted: number, total: number) => string;
+  hitReelColGame: string;
+  hitReelColTime: string;
+  hitReelColHow: string;
+  hitReelColHitBy: string;
+  hitReelColYouWere: string;
+  hitReelColDamage: string;
+  hitReelColResult: string;
+  hitReelColNote: string;
+  hitReelNotePlaceholder: string;
+  hitReelPlay: string;
+  hitReelOutcomeKo: string;
+  hitReelOutcomeReset: string;
+  hitReelOutcomeReversal: string;
+  hitReelOutcomeIncomplete: string;
+  hitReelToEdge: string;
+  hitReelToLedge: string;
+  hitReelGrab: string;
+  hitReelClipLabel: (game: number, time: string, how: string) => string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -1548,6 +1580,39 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     progressColLastThird: "Last third",
     progressColChange: "Change",
     progressColStrength: "Strength",
+
+    hitReelTitle: (count) => `Times you got hit (${count})`,
+    hitReelIntro:
+      "Every opening you lost this session, in order. Play them back to back, decide why each one happened, and write what you'd do instead. Notes show up on the same hit in the match view.",
+    hitReelPlayAll: "▶ Play all",
+    hitReelSortChronological: "In order",
+    hitReelSortCostliest: "Costliest first",
+    hitReelBigOnly: "Big ones (stock or 30%+)",
+    hitReelAllReasons: "All",
+    hitReelLoading: (done, total) => `Reading games… ${done}/${total}`,
+    hitReelUnloaded: (count) =>
+      `${count} game${count === 1 ? " isn't" : "s aren't"} loaded in this browser, so ${count === 1 ? "its" : "their"} hits are missing.`,
+    hitReelImportFolder: "Import folder",
+    hitReelEmpty: "No openings lost in the loaded games.",
+    hitReelNoted: (noted, total) => `${noted}/${total} noted`,
+    hitReelColGame: "Game",
+    hitReelColTime: "Time",
+    hitReelColHow: "How",
+    hitReelColHitBy: "Hit by",
+    hitReelColYouWere: "You were doing",
+    hitReelColDamage: "Damage",
+    hitReelColResult: "Result",
+    hitReelColNote: "Why / what instead",
+    hitReelNotePlaceholder: "Why did this happen? What instead?",
+    hitReelPlay: "Play",
+    hitReelOutcomeKo: "Lost stock",
+    hitReelOutcomeReset: "Got out",
+    hitReelOutcomeReversal: "Hit back",
+    hitReelOutcomeIncomplete: "Game ended",
+    hitReelToEdge: "offstage",
+    hitReelToLedge: "ledge",
+    hitReelGrab: "Grab",
+    hitReelClipLabel: (game, time, how) => `Game ${game} · ${time} · ${how}`,
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -2318,6 +2383,39 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     progressColLastThird: "最後の1/3",
     progressColChange: "変化",
     progressColStrength: "強さ",
+
+    hitReelTitle: (count) => `被弾シーン（${count}）`,
+    hitReelIntro:
+      "このセッションで取られた差し合いを順番に並べています。続けて再生し、なぜ取られたか、代わりに何をすべきだったかを書きましょう。メモは試合画面の同じ場面にも表示されます。",
+    hitReelPlayAll: "▶ すべて再生",
+    hitReelSortChronological: "順番",
+    hitReelSortCostliest: "被害の大きい順",
+    hitReelBigOnly: "大きい被弾（撃墜・30%以上）",
+    hitReelAllReasons: "すべて",
+    hitReelLoading: (done, total) => `試合を読み込み中… ${done}/${total}`,
+    hitReelUnloaded: (count) =>
+      `${count}試合がこのブラウザに読み込まれていないため、その被弾は表示されていません。`,
+    hitReelImportFolder: "フォルダを読み込む",
+    hitReelEmpty: "読み込まれた試合に被弾はありません。",
+    hitReelNoted: (noted, total) => `${noted}/${total} メモ済み`,
+    hitReelColGame: "試合",
+    hitReelColTime: "時間",
+    hitReelColHow: "取られ方",
+    hitReelColHitBy: "相手の技",
+    hitReelColYouWere: "自分の行動",
+    hitReelColDamage: "ダメージ",
+    hitReelColResult: "結果",
+    hitReelColNote: "理由 / 代わりに",
+    hitReelNotePlaceholder: "なぜ取られた？代わりに何をする？",
+    hitReelPlay: "再生",
+    hitReelOutcomeKo: "撃墜された",
+    hitReelOutcomeReset: "脱出",
+    hitReelOutcomeReversal: "反撃",
+    hitReelOutcomeIncomplete: "試合終了",
+    hitReelToEdge: "復帰阻止",
+    hitReelToLedge: "崖",
+    hitReelGrab: "つかみ",
+    hitReelClipLabel: (game, time, how) => `第${game}試合 · ${time} · ${how}`,
   },
 };
 

@@ -15,9 +15,10 @@ record the behavior in the relevant living doc.
 - **Duplicate files.** Import says "Skipped N duplicate copies", and stats count each game ID once,
   but nothing lists which files are copies or helps tidy the folder. That belongs with file
   organization.
-- **Session review is per-game.** The match view lists "Loss" rows (times you got hit) for one game,
-  but there's no way to walk every hit across a session in order, with notes, without opening each
-  game.
+- **Hit reel next steps:** after a page refresh the web app has to re-import the folder before the
+  reel can read replays (desktop doesn't). Move names are raw action-state names (`JumpAerialB`,
+  `SpecialAirHi`); show player-facing names. The "big ones" cutoff (stock lost or 30%+) is a first
+  guess, and against a top player it still keeps about half the hits.
 - **No situation study.** "Show me every time someone got a good punish from this percent and
   position in this matchup" is the core attribute-study workflow and isn't supported. Clip search
   covers edge guards and combos only.
