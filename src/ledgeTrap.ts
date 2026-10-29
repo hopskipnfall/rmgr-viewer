@@ -232,6 +232,8 @@ export function buildRecoveryMap(
   return map;
 }
 
+const computeLedgeTrapEventsCache = new WeakMap<Replay, LedgeTrapEvent[]>();
+
 /**
  * Computes all Ledge Getup / Ledge Trap events for a 2-player match.
  *
@@ -245,8 +247,20 @@ export function buildRecoveryMap(
  * - Success (for ledge player) / Failure (for trapping player):
  *   - Ledge player safely exits all ledge animation states onto stage and remains safe (non-hitstun, non-capture) for 30 consecutive grounded frames, OR
  *   - Trapping player loses a stock.
+ *
+ * Memoized per replay: summarizing a game asks for these once per seated port, and the match view
+ * asks again. The returned array is shared - callers must not mutate it.
  */
 export function computeLedgeTrapEvents(replay: Replay): LedgeTrapEvent[] {
+  let events = computeLedgeTrapEventsCache.get(replay);
+  if (!events) {
+    events = computeLedgeTrapEventsUncached(replay);
+    computeLedgeTrapEventsCache.set(replay, events);
+  }
+  return events;
+}
+
+function computeLedgeTrapEventsUncached(replay: Replay): LedgeTrapEvent[] {
   const events: LedgeTrapEvent[] = [];
 
   // Only meaningful on Dream Land, 2-player matches.

@@ -30,7 +30,7 @@ both). Per-game percentages are never averaged: a 1/1 game must not weigh as muc
 
 ## 3. Opponent strength
 
-Strength is inferred from results, not entered by hand (`src/data/opponentStrength.ts`):
+Tags the user has merged (one person, several tags) are pooled as one opponent. Strength is inferred from results, not entered by hand (`src/data/opponentStrength.ts`):
 
 ```
 strength(opp) = −mean(myStocks − oppStocks) × n / (n + 5)     over decided games vs opp

@@ -53,6 +53,7 @@ import {
   buildProjectFile,
   identityOf,
   mergeProjectFile,
+  opponentAliasesOf,
   parseProjectFile,
   ProjectFileError,
   serializeProjectFile,
@@ -75,6 +76,11 @@ import {
   saveIdentity,
   loadIdentity,
 } from "./data/identity.js";
+import {
+  loadOpponentAliases,
+  mergeOpponentAliases,
+  saveOpponentAliases,
+} from "./data/opponentAliases.js";
 import { computeOverallBaseline, type DerivedRates } from "./data/aggregate.js";
 import { groupGamesIntoSessions, type SessionGroup } from "./data/session.js";
 import type { PlaylistClip } from "./playlist.js";
@@ -267,6 +273,7 @@ let sessionController: SessionViewController;
 let progressController: ProgressViewController;
 let progressActive = false;
 let punishFinderController: PunishFinderViewController;
+let punishFinderActive = false;
 let matchupController: MatchupViewController;
 let edgeGuardWorkshopController: EdgeGuardWorkshopViewController;
 
@@ -379,6 +386,16 @@ function refreshHomeData(): void {
     libraryController.getIdentity(),
   );
   rerenderProgressIfActive();
+  rerenderPunishFinderIfActive();
+}
+
+function rerenderPunishFinderIfActive(): void {
+  if (!punishFinderActive) return;
+  punishFinderController.setData(
+    libraryController.getSummaries(),
+    libraryController.getIdentity(),
+  );
+  punishFinderController.render();
 }
 
 function rerenderProgressIfActive(): void {
@@ -453,10 +470,12 @@ function attachImportedSummaries(imported: GameSummary[]): void {
   }
   if (added.length > 0) {
     libraryController.addSummaries(added);
-    refreshHomeData();
   } else {
     libraryController.render();
   }
+  // Re-imported games were updated in place (e.g. after an ANALYSIS_VERSION bump): the views
+  // built on them need the new numbers either way.
+  refreshHomeData();
 }
 
 /**
@@ -706,6 +725,18 @@ let pendingPlaylistStartIndex = 0;
  * handleRouteChange() picks up `pendingPlaylistClips` once that game
  * finishes loading and hands it (plus `startIndex`) to the match view.
  */
+/**
+ * Like loadReplayForSummary, but never prompts for a missing file: for background readers (the
+ * hit reel) that read many games and should skip the ones that aren't available.
+ */
+async function loadReplayIfAvailable(
+  summary: GameSummary,
+): Promise<LoadedReplay> {
+  if (summary.source) return loadReplayFromSource(summary.source);
+  if (summary.url) return loadReplayFromUrl(summary.url);
+  throw new MissingFileCancelledError();
+}
+
 function playPlaylistClips(clips: PlaylistClip[], startIndex: number): void {
   if (clips.length === 0) return;
   pendingPlaylistClips = clips;
@@ -827,6 +858,7 @@ async function handleRouteChange(route: Route): Promise<void> {
   setCurrentNavLink("navProgressLink", route.view === "progress");
   setCurrentNavLink("navPunishesLink", route.view === "punishes");
   progressActive = route.view === "progress";
+  punishFinderActive = route.view === "punishes";
   if (route.view === "library") {
     currentMatchSummary = null;
     currentMatchupRoute = null;
@@ -1248,7 +1280,7 @@ async function init(): Promise<void> {
       handleShowFailedEdgeGuards(session);
     },
     new HitReelPanel(
-      loadReplayForSummary,
+      loadReplayIfAvailable,
       (clips, startIndex) => playPlaylistClips(clips, startIndex),
       () => folderPicker.click(),
     ),
@@ -1371,6 +1403,8 @@ async function init(): Promise<void> {
           notes,
           sessionComments,
           matchupComments,
+          {},
+          loadOpponentAliases(),
         ),
       );
       const url = URL.createObjectURL(blob);
@@ -1399,6 +1433,13 @@ async function init(): Promise<void> {
         const parsed = parseProjectFile(await file.text());
         const result = await mergeProjectFile(parsed, libraryStore);
         saveIdentity(identityOf(parsed));
+        // Additive like the rest of an import: keep local merges, imported ones win on conflict.
+        saveOpponentAliases(
+          mergeOpponentAliases(
+            loadOpponentAliases(),
+            opponentAliasesOf(parsed),
+          ),
+        );
         for (const [id, link] of Object.entries(parsed.videoLinks)) {
           saveVideoLink(id, link);
         }

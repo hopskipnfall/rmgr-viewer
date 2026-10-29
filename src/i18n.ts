@@ -335,6 +335,16 @@ export interface Translations {
   identityModalTitle: string;
   identityModalSubtitle: string;
   addCustomAlias: string;
+  opponentTagsButton: string;
+  opponentTagsTitle: string;
+  opponentTagsSubtitle: string;
+  opponentTagsPick: string;
+  opponentTagsSameAs: string;
+  opponentTagsMerge: string;
+  opponentTagsNone: string;
+  opponentTagsRemove: string;
+  opponentTagsMergesHeading: string;
+  opponentTagsGames: (n: number) => string;
   add: string;
   save: string;
   cancel: string;
@@ -1193,6 +1203,17 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     identityModalSubtitle:
       "Select the player names you use across your replays to aggregate your statistics accurately.",
     addCustomAlias: "Add custom name",
+    opponentTagsButton: "Merge opponent tags",
+    opponentTagsTitle: "Opponent tags",
+    opponentTagsSubtitle:
+      "If one person plays under several tags, merge them so they count as one opponent in strength, sessions, progress and filters.",
+    opponentTagsPick: "Choose a tag...",
+    opponentTagsSameAs: "is the same person as",
+    opponentTagsMerge: "Merge",
+    opponentTagsNone: "No merged tags yet.",
+    opponentTagsRemove: "Unmerge",
+    opponentTagsMergesHeading: "Merged tags",
+    opponentTagsGames: (n) => `${n} game${n !== 1 ? "s" : ""}`,
     add: "Add",
     save: "Save",
     cancel: "Cancel",
@@ -2069,6 +2090,17 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     identityModalSubtitle:
       "スタッツを集計するために、あなたが使用しているプレイヤー名を選択してください。",
     addCustomAlias: "名前を追加",
+    opponentTagsButton: "対戦相手の名前を統合",
+    opponentTagsTitle: "対戦相手の名前",
+    opponentTagsSubtitle:
+      "同じ人が複数の名前でプレイしている場合、統合すると強さ・セッション・進捗・フィルターで1人の対戦相手として扱われます。",
+    opponentTagsPick: "名前を選択...",
+    opponentTagsSameAs: "は次の人と同一人物",
+    opponentTagsMerge: "統合",
+    opponentTagsNone: "統合した名前はまだありません。",
+    opponentTagsRemove: "統合を解除",
+    opponentTagsMergesHeading: "統合済みの名前",
+    opponentTagsGames: (n) => `${n}試合`,
     add: "追加",
     save: "保存",
     cancel: "キャンセル",

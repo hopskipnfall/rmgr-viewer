@@ -9,6 +9,10 @@ import {
   type VersionMatcher,
 } from "./analysisVersion.js";
 import type { Identity } from "./identity.js";
+import {
+  normalizeOpponentAliases,
+  type OpponentAliases,
+} from "./opponentAliases.js";
 import type { LibraryStore, StoredGame } from "./libraryStore.js";
 
 /** Marker so an unrelated JSON file can't be imported by accident. */
@@ -50,6 +54,11 @@ export interface ProjectFile {
    * file never orphans one). Optional in older files: an additive field, so FILE_VERSION stays 1.
    */
   readonly perspectiveOverrides: Readonly<Record<string, PortIndex>>;
+  /**
+   * Opponent tag merges (alternate tag -> canonical tag), as stored in localStorage by
+   * opponentAliases.ts. Optional in older files: an additive field, so FILE_VERSION stays 1.
+   */
+  readonly opponentAliases: OpponentAliases;
 }
 
 /**
@@ -70,6 +79,11 @@ export function identityOf(file: ProjectFile): Identity {
       (file.identity?.aliases ?? []).filter((a) => typeof a === "string"),
     ),
   };
+}
+
+/** The opponent tag merges in a parsed project file (always normalized). */
+export function opponentAliasesOf(file: ProjectFile): OpponentAliases {
+  return normalizeOpponentAliases(file.opponentAliases);
 }
 
 /** A file that isn't a usable project export (wrong kind, newer format, not JSON). */
@@ -97,6 +111,7 @@ export function buildProjectFile(
   sessionComments: Readonly<Record<string, string>> = {},
   matchupComments: Readonly<Record<string, string>> = {},
   perspectiveOverrides: Readonly<Record<string, PortIndex>> = {},
+  opponentAliases: OpponentAliases = {},
 ): ProjectFile {
   return {
     kind: KIND,
@@ -113,6 +128,7 @@ export function buildProjectFile(
     sessionComments,
     matchupComments,
     perspectiveOverrides,
+    opponentAliases,
   };
 }
 
@@ -154,6 +170,12 @@ export function serializeProjectFile(file: ProjectFile): Blob {
     ),
   );
 
+  const opponentAliases = listLines(
+    Object.entries(file.opponentAliases).map(
+      ([alt, canonical]) => `${j(alt)}: ${j(canonical)}`,
+    ),
+  );
+
   const text = [
     "{",
     `  "kind": ${j(file.kind)},`,
@@ -178,6 +200,9 @@ export function serializeProjectFile(file: ProjectFile): Blob {
     `  },`,
     `  "perspectiveOverrides": {`,
     perspectiveOverrides,
+    `  },`,
+    `  "opponentAliases": {`,
+    opponentAliases,
     `  }`,
     "}",
     "",
@@ -228,6 +253,7 @@ export function parseProjectFile(text: string): ProjectFile {
     sessionComments: file.sessionComments ?? {},
     matchupComments: file.matchupComments ?? {},
     perspectiveOverrides: file.perspectiveOverrides ?? {},
+    opponentAliases: normalizeOpponentAliases(file.opponentAliases),
   };
 }
 

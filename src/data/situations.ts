@@ -1,6 +1,7 @@
 import type { GameSummary, OpeningRecord } from "./gameSummary.js";
 import { resolvePerspectivePort, type Identity } from "./identity.js";
 import { characterFamily } from "./characterFamily.js";
+import { DREAM_LAND_STAGE_ID } from "../stageGeometry.js";
 import type { PlaylistClip } from "../playlist.js";
 
 /**
@@ -10,7 +11,8 @@ import type { PlaylistClip } from "../playlist.js";
  * OpeningRecord index cached in each GameSummary, so no replay files are needed to search.
  */
 
-/** Dream Land's main stage edge (ground half-width), see stageGeometry.ts. */
+/** Dream Land's main stage edge (ground half-width), see stageGeometry.ts. Only Dream Land games
+ * are searched. */
 const STAGE_EDGE_X = 2318;
 /** Inside this |x| is "center"; the side platforms start at |x| ~= 951. */
 const CENTER_HALF_WIDTH = 1000;
@@ -18,6 +20,9 @@ const CENTER_HALF_WIDTH = 1000;
 const LOW_MAX_Y = 300;
 /** At or above this y is "high" (top platform and above). */
 const HIGH_MIN_Y = 1300;
+
+/** Openers with fewer samples than this sort after the rest (and render dimmed). */
+export const MIN_OPENER_SAMPLES = 3;
 
 export type HorizontalZone = "center" | "side" | "offstage";
 export type VerticalZone = "low" | "mid" | "high";
@@ -85,7 +90,7 @@ export interface MoveSummary {
 export interface SituationResults {
   /** Best first. */
   readonly matches: readonly SituationMatch[];
-  /** Highest average damage first. */
+  /** Highest average damage first, openers with few samples last. */
   readonly byMove: readonly MoveSummary[];
   readonly gamesSearched: number;
   /** Games cached before the opening index existed; re-import to include them. */
@@ -120,7 +125,9 @@ export function findSituations(
   let gamesWithoutIndex = 0;
 
   for (const summary of unique) {
-    if (summary.ports.length !== 2) continue;
+    // Zones are Dream Land geometry (the only legal stage); other stages would be misread.
+    if (summary.ports.length !== 2 || summary.stageId !== DREAM_LAND_STAGE_ID)
+      continue;
     if (!summary.openings) {
       gamesWithoutIndex++;
       continue;
@@ -199,7 +206,15 @@ export function findSituations(
       best: first,
     };
   });
-  byMove.sort((a, b) => b.averageDamage - a.averageDamage || b.count - a.count);
+  // Rare openers (a couple of samples) would top the table on luck alone: established ones first.
+  const established = (m: MoveSummary) =>
+    m.count >= MIN_OPENER_SAMPLES ? 1 : 0;
+  byMove.sort(
+    (a, b) =>
+      established(b) - established(a) ||
+      b.averageDamage - a.averageDamage ||
+      b.count - a.count,
+  );
 
   return { matches, byMove, gamesSearched, gamesWithoutIndex };
 }

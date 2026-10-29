@@ -1,10 +1,23 @@
 import type { PortIndex } from "@rmg-k/rmgr";
 import type { GameSummary } from "./gameSummary.js";
+import {
+  loadOpponentAliases,
+  saveOpponentAliases,
+  type OpponentAliases,
+} from "./opponentAliases.js";
 import { notifyUserDataChanged } from "./userDataChanged.js";
 
 export interface Identity {
   displayName: string;
   aliases: Set<string>;
+  /**
+   * Opponent tag merges (alternate tag -> canonical tag, see opponentAliases.ts). Carried on the
+   * identity so every pure function that already takes an Identity can group opponents without
+   * reading localStorage. Optional: absent means no merges (tests, the demo identity).
+   * loadIdentity() fills it in and saveIdentity() writes it back (under its own storage key)
+   * when present.
+   */
+  opponentAliases?: OpponentAliases;
 }
 
 const STORAGE_KEY = "rmgr-viewer-identity";
@@ -45,13 +58,17 @@ export function loadIdentity(): Identity {
           aliases: new Set(
             parsed.aliases.filter((a): a is string => typeof a === "string"),
           ),
+          opponentAliases: loadOpponentAliases(),
         };
       }
     }
   } catch {
     // Ignore localStorage read errors and corrupt data
   }
-  return createDefaultIdentity();
+  return {
+    ...createDefaultIdentity(),
+    opponentAliases: loadOpponentAliases(),
+  };
 }
 
 export function saveIdentity(identity: Identity): void {
@@ -67,6 +84,7 @@ export function saveIdentity(identity: Identity): void {
   } catch {
     // Ignore localStorage write errors
   }
+  if (identity.opponentAliases) saveOpponentAliases(identity.opponentAliases);
 }
 
 /**

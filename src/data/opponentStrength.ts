@@ -1,5 +1,6 @@
 import type { GameSummary } from "./gameSummary.js";
 import type { Identity } from "./identity.js";
+import { canonicalOpponentName } from "./opponentAliases.js";
 import { filterGameSummaries, aggregateFilteredGames } from "./aggregate.js";
 
 /**
@@ -44,7 +45,10 @@ export function computeOpponentStrength(
   >();
   for (const item of resolved) {
     const oppP = item.summary.ports.find((p) => p.port === item.oppPort);
-    const name = oppP?.playerName.trim();
+    // Tags merged in the user's opponent aliases count as one opponent.
+    const name = oppP
+      ? canonicalOpponentName(oppP.playerName, identity.opponentAliases)
+      : "";
     if (!name) continue;
     const list = byOpponent.get(name) ?? [];
     list.push(item);

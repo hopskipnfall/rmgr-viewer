@@ -391,14 +391,13 @@ export function classifyNeutralOpening(
   };
 }
 
+const neutralHitEventsCache = new WeakMap<Replay, NeutralHitEvent[]>();
+
 /**
  * Computes all neutral interactions and opening events in chronological order.
  * Tracks end-to-end advantage chains from first contact through follow-up hits,
  * situation conversions (offstage edge guard, ledge trap), and neutral reset (60F mutual actionable).
- */
-const neutralHitEventsCache = new WeakMap<Replay, NeutralHitEvent[]>();
-
-/**
+ *
  * Memoized per replay: summarizing a game asks for these several times (per port, per stat),
  * and the match view asks again. The returned array is shared - callers must not mutate it.
  */

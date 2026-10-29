@@ -1,3 +1,4 @@
+import { escapeHtml } from "../ui/html.js";
 import { characterName } from "../lookups.js";
 import { t, type Translations } from "../i18n.js";
 import type { GameSummary } from "../data/gameSummary.js";
@@ -14,12 +15,6 @@ import {
   type ProgressReport,
   type WindowSummary,
 } from "../data/progress.js";
-
-function escapeHtml(s: string): string {
-  const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
-}
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
@@ -93,7 +88,10 @@ function windowText(
   w: WindowSummary | null,
 ): string {
   if (!w) return "—";
-  return `${signed(w.meanResidual)} ±${w.standardError.toFixed(1)} ${unit(tr, trend)}`;
+  const se = Number.isFinite(w.standardError)
+    ? w.standardError.toFixed(1)
+    : "?";
+  return `${signed(w.meanResidual)} ±${se} ${unit(tr, trend)}`;
 }
 
 const CHART_W = 320;
@@ -170,7 +168,7 @@ function renderChart(
           formatValue(trend, m.value),
           formatValue(trend, m.expected),
         ),
-        `${signed(m.residual)} ±${m.standardError.toFixed(1)} ${unit(tr, trend)} ${tr.progressVsExpected}`,
+        `${signed(m.residual)} ±${Number.isFinite(m.standardError) ? m.standardError.toFixed(1) : "?"} ${unit(tr, trend)} ${tr.progressVsExpected}`,
       ].join("\n");
       const faint = p.games < FAINT_BELOW_GAMES ? " faint" : "";
       return `<g class="progress-chart-point${faint}" data-point="${index}" data-tip="${escapeHtml(tip)}">

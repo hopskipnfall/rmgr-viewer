@@ -1,9 +1,10 @@
+import { escapeHtml } from "../ui/html.js";
 import type { PortIndex } from "@rmg-k/rmgr";
 import type { GameSummary } from "../data/gameSummary.js";
 import { resolvePerspectivePort, type Identity } from "../data/identity.js";
 import type { SessionGroup } from "../data/session.js";
 import { t, type Translations } from "../i18n.js";
-import { actionStateName } from "../lookups.js";
+import { moveDisplayName } from "../moveNames.js";
 import {
   computeNeutralHitEvents,
   type NeutralOpeningReason,
@@ -23,12 +24,6 @@ import {
   type HitReelEntry,
   type HitReelSort,
 } from "./hitReel.js";
-
-function escapeHtml(s: string): string {
-  const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
-}
 
 function clock(frameIndex: number): string {
   const seconds = Math.floor(frameIndex / 60);
@@ -67,9 +62,17 @@ function resultLabel(tr: Translations, e: HitReelEntry): string {
 }
 
 function moveName(id: number | null, characterId: number): string {
-  return id === null
-    ? "—"
-    : actionStateName(id, undefined, undefined, characterId);
+  return id === null ? "—" : moveDisplayName(id, characterId);
+}
+
+/** Your lead-in as names, collapsing repeats (Shield on -> Shield both read "Shield"). */
+function leadInText(e: HitReelEntry): string {
+  const names: string[] = [];
+  for (const a of e.yourLeadIn) {
+    const name = moveName(a, e.yourCharacterId);
+    if (names[names.length - 1] !== name) names.push(name);
+  }
+  return names.length > 0 ? names.join(" → ") : "—";
 }
 
 interface CachedReel {
@@ -94,6 +97,8 @@ export class HitReelPanel {
   private sort: HitReelSort = "chronological";
   private reasonFilter: NeutralOpeningReason | null = null;
   private bigOnly = false;
+  /** A render skipped because a note had focus; done when focus leaves the note. */
+  private renderPending = false;
 
   constructor(
     private readonly loadReplay: (
@@ -117,10 +122,14 @@ export class HitReelPanel {
       this.reasonFilter = null;
       this.bigOnly = false;
     }
+    // Any load still running belongs to whatever was shown before; stop it touching this view.
+    this.loadToken++;
     this.container = container;
     this.session = session;
     container.onclick = (e) => this.handleClick(e);
     container.onchange = (e) => this.handleNoteChange(e);
+    // Same function every time, so repeated show() calls don't stack listeners.
+    container.addEventListener("focusout", this.handleFocusOut);
 
     // Sessions list games newest first; number them the way they were played.
     const games = [...session.games]
@@ -179,13 +188,23 @@ export class HitReelPanel {
         // A game that fails to load is skipped rather than blocking the rest.
       }
       if (token !== this.loadToken) return;
-      this.progress = { done: this.progress.done + 1, total: games.length };
+      this.progress = {
+        done: (this.progress?.done ?? 0) + 1,
+        total: games.length,
+      };
       this.renderUnlessEditing();
     }
     this.cache.set(sessionId, { key, entries });
     this.progress = null;
-    this.render();
+    this.renderUnlessEditing();
   }
+
+  private readonly handleFocusOut = (): void => {
+    // focusout fires before focus lands elsewhere; check once it has.
+    setTimeout(() => {
+      if (this.renderPending) this.renderUnlessEditing();
+    });
+  };
 
   /** While games are still loading, don't rebuild the table under someone typing a note. */
   private renderUnlessEditing(): void {
@@ -194,6 +213,7 @@ export class HitReelPanel {
       active?.classList.contains("hit-reel-note") &&
       this.container?.contains(active)
     ) {
+      this.renderPending = true;
       const status = this.container.querySelector(".hit-reel-status");
       if (status && this.progress) {
         status.textContent = t().hitReelLoading(
@@ -216,6 +236,7 @@ export class HitReelPanel {
   }
 
   private render(): void {
+    this.renderPending = false;
     const container = this.container;
     if (!container || !container.isConnected) return;
     const tr = t();
@@ -249,12 +270,7 @@ export class HitReelPanel {
           e.hitType === "grab"
             ? tr.hitReelGrab
             : moveName(e.opponentMove, e.opponentCharacterId);
-        const youWere =
-          e.yourLeadIn.length > 0
-            ? e.yourLeadIn
-                .map((a) => moveName(a, e.yourCharacterId))
-                .join(" → ")
-            : "—";
+        const youWere = leadInText(e);
         return `<tr class="${e.convertedToKill ? "hit-reel-ko" : ""}${note ? " hit-reel-noted" : ""}">
           <td><button type="button" class="hit-reel-play" data-index="${i}" title="${escapeHtml(tr.hitReelPlay)}">▶</button></td>
           <td>${e.gameNumber}</td>

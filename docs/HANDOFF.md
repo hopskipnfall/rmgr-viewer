@@ -24,7 +24,7 @@ played from now on, not in this data.
 ## What changed, in commit order
 
 Nothing could be committed when the work was done: a user hook blocks `git commit` on weekdays
-7:00–18:00. The work was snapshotted into three checkpoints and is meant to land as three commits:
+7:00–18:00. The work was snapshotted into checkpoints and is meant to land as four commits:
 
 1. **Docs, cleanup, classifier fixes, Progress page**
    - **Docs:** replaced the dated design/plan docs (`docs/superpowers/`, the root
@@ -67,9 +67,33 @@ Nothing could be committed when the work was done: a user hook blocks `git commi
      and `characterFamily` into `src/data/characterFamily.ts`.
    - `scripts/punishReport.ts`.
 
+4. **Polish round** (built in parallel with Sonnet subagents, integrated and verified here):
+   - **Player-facing move names:** `src/moveNames.ts`, in English and Japanese, used by the hit reel
+     and punish finder.
+   - **Detector caching:** `computeEdgeGuardEvents`, `computeLedgeTrapEvents`,
+     `computeAngelInvincibilityEvents` and `computeKillCombos` are memoized like the neutral events.
+   - **Opponent tag merges:** `src/data/opponentAliases.ts`. Each merge is stored as
+     `Identity.opponentAliases` and in the project file, and applied to strength, sessions (including
+     the lobby key), Progress and the library filter. The editor opens from "Merge opponent tags" on
+     the identity card.
+   - **Fixes from an independent review of commits 1–3:**
+     - A quote-safe `escapeHtml` (`src/ui/html.ts`). A note containing `"` used to be truncated and
+       could be re-saved truncated.
+     - The hit reel's load token is bumped on every `show()` (cache-hit navigation threw a TypeError).
+     - The reel's final render no longer wipes a note being typed. A deferred render runs on focusout.
+     - Background reading uses `loadReplayIfAvailable`, which never prompts for a missing file.
+     - Re-importing existing games refreshes Progress and the punish finder.
+     - The finder's default query follows the library until the user changes a filter.
+     - An empty max-% field means "no limit".
+     - The finder only searches Dream Land games.
+     - Openers with fewer than 3 samples sort last.
+     - Progress W-L follows the session page's rule (uneven starts and unknown stocks excluded).
+     - A single-point fit reports unknown SE (shown as `±?`) instead of ±0.
+     - Every memoized function's doc comment is back on the function.
+
 To recreate the commits from the checkpoints (they're in the original session's scratchpad, not the
-repo): restore checkpoint 1's files and deletions on top of `d1468f0`, commit, then checkpoint 2,
-commit, then the final working tree. If the checkpoints are gone, one commit per feature is still
+repo): restore checkpoint 1's files and deletions on top of `d1468f0`, commit, then checkpoint 2, commit, then
+checkpoint 3, commit, then the final working tree. If the checkpoints are gone, one commit per feature is still
 easy to cut by file. The overlapping files are `src/main.ts`, `src/i18n.ts`, `index.html` and the
 docs.
 
@@ -79,7 +103,7 @@ docs.
 npm test && npm run typecheck && npm run typecheck:scripts && npm run lint && npm run format:check
 ```
 
-At handoff, all of these passed (974 tests).
+At handoff, all of these passed (1,015 tests).
 
 - **Real corpus:** the user's replays are at `~/rmgr-replays/replays` on the dev machine (`razzpi`).
   They're **private**: never commit them, copy them into fixtures, or quote them beyond anonymized
@@ -126,6 +150,8 @@ These are also in ROADMAP.md.
 
 - **Hit reel:** is "big ones" at 30% the right cutoff? Against a top player it keeps about half the
   hits.
+- **Opponent tag merges:** the Edge Guard Workshop filter and clip search still use raw tags, and a
+  merge that joins two sessions orphans the absorbed session's comment.
 - **Opponent tags:** they need merging (`kusora`, `kusora_JPN`, `kusora_YoutubeLive`).
 - **Baseline cutoff:** should the user set it themselves ("since I started working on X")?
 - **Move names:** show player-facing names instead of internal action-state names.

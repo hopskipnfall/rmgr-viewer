@@ -9,16 +9,15 @@ record the behavior in the relevant living doc.
   `library/neutralScorePanel.ts` and `library/matchupPicker.ts` are implemented and tested, but no
   view renders them. Use them or delete them. (Opponent strength and main detection now feed the
   Progress page.)
-- **Opponent aliases.** One person playing under several tags (`kusora`, `kusora_JPN`, …) counts as
-  several opponents in strength, sessions and repeated-opponent tracks. Players need a way to merge
-  tags, like their own identity aliases.
 - **Duplicate files.** Import says "Skipped N duplicate copies", and stats count each game ID once,
   but nothing lists which files are copies or helps tidy the folder. That belongs with file
   organization.
 - **Hit reel next steps:** after a page refresh the web app has to re-import the folder before the
-  reel can read replays (desktop doesn't). Move names are raw action-state names (`JumpAerialB`,
-  `SpecialAirHi`); show player-facing names. The "big ones" cutoff (stock lost or 30%+) is a first
+  reel can read replays (desktop doesn't). The "big ones" cutoff (stock lost or 30%+) is a first
   guess, and against a top player it still keeps about half the hits.
+- **Opponent tag merges, remaining:** the Edge Guard Workshop's opponent filter and clip search's
+  player list still use raw tags. Merging tags can join two sessions into one, and the absorbed
+  session's comment is orphaned (its id disappears).
 - **Punish finder next steps:** filter by the punisher's position or percent too (not just the
   victim's), show what followed the opener (the route, not just the starter), and let a search be
   saved as a study item next to a goal. The opener grouping uses the move id, so the same move
@@ -38,9 +37,9 @@ record the behavior in the relevant living doc.
   "escaped disadvantage" from "traded back in a scramble". See ANALYSIS_SPECIFICATIONS.md §4.4.
 - **Land punish shadows whiff punish** for aerials: a whiffed aerial that lands is labeled
   `landing-lag`. That works for "punished a commitment", but merges two coaching cues.
-- **Duplicate work in `computeRawCountersForPort`:** neutral events are now cached per replay
-  (`computeNeutralHitEvents`), which cut a full import by about 30%. Edge-guard, ledge, angel and
-  combo detection still run once per port.
+- **Player-facing move names** (`src/moveNames.ts`) cover the shared moves and the original 12's
+  specials. Remix characters' specials fall back to engine names, and the match view still shows
+  engine names.
 
 ## Match view
 

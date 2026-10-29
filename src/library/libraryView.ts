@@ -17,6 +17,7 @@ import {
 } from "../data/aggregate.js";
 import { isDesktopWidth, watchDesktopWidth } from "../responsive.js";
 import { MatchupChipSelector } from "./matchupChipSelector.js";
+import { canonicalOpponentName } from "../data/opponentAliases.js";
 import { MatchupStatsView } from "./matchupStatsView.js";
 import { GameList } from "./gameList.js";
 import type { SessionGroup } from "../data/session.js";
@@ -48,7 +49,11 @@ function matchesFilters(
       if (!oppP || oppP.characterId !== filters.oppCharacterId) return false;
     }
     if (filters.opponentName !== undefined && filters.opponentName !== "all") {
-      if (!oppP || oppP.playerName.trim() !== filters.opponentName.trim())
+      if (
+        !oppP ||
+        canonicalOpponentName(oppP.playerName, identity.opponentAliases) !==
+          canonicalOpponentName(filters.opponentName, identity.opponentAliases)
+      )
         return false;
     }
     return true;
@@ -58,7 +63,12 @@ function matchesFilters(
   if (filters.opponentName !== undefined && filters.opponentName !== "all") {
     if (
       !summary.ports.some(
-        (p) => p.playerName.trim() === filters.opponentName!.trim(),
+        (p) =>
+          canonicalOpponentName(p.playerName, identity.opponentAliases) ===
+          canonicalOpponentName(
+            filters.opponentName!,
+            identity.opponentAliases,
+          ),
       )
     )
       return false;
@@ -355,8 +365,11 @@ export class LibraryViewController {
           if (yourP) myCharsSet.add(yourP.characterId);
           if (oppP) {
             oppCharsSet.add(oppP.characterId);
-            if (oppP.playerName.trim())
-              opponentNamesSet.add(oppP.playerName.trim());
+            const oppName = canonicalOpponentName(
+              oppP.playerName,
+              this.identity.opponentAliases,
+            );
+            if (oppName) opponentNamesSet.add(oppName);
           }
         } else {
           for (const p of summary.ports) {
@@ -364,7 +377,12 @@ export class LibraryViewController {
               p.playerName.trim() &&
               !this.identity.aliases.has(p.playerName.trim())
             ) {
-              opponentNamesSet.add(p.playerName.trim());
+              opponentNamesSet.add(
+                canonicalOpponentName(
+                  p.playerName,
+                  this.identity.opponentAliases,
+                ),
+              );
             }
             oppCharsSet.add(p.characterId);
           }

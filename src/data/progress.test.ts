@@ -256,3 +256,50 @@ describe("computeProgress", () => {
     expect(row?.lastThirdShare).toBeCloseTo(50);
   });
 });
+
+describe("computeProgress with opponent aliases", () => {
+  // The same person on two days under two tags.
+  const games = [
+    ...set("2026-08-01", 4, {
+      opp: "kusora",
+      won: 4,
+      lost: 6,
+      yourStocks: 1,
+      oppStocks: 2,
+    }),
+    ...set("2026-08-05", 4, {
+      opp: "kusora_JPN",
+      won: 5,
+      lost: 5,
+      yourStocks: 1,
+      oppStocks: 2,
+    }),
+  ];
+
+  it("treats the tags as two opponents without a merge", () => {
+    const report = computeProgress(games, identity, PIKACHU);
+    expect(report.opponents.map((o) => o.opponentName).sort()).toEqual([
+      "kusora",
+      "kusora_JPN",
+    ]);
+    expect(report.repeatedOpponents).toHaveLength(0);
+  });
+
+  it("merges them into one opponent, one repeated-opponent track", () => {
+    const merged = {
+      ...identity,
+      opponentAliases: { kusora_JPN: "kusora" },
+    };
+    const report = computeProgress(games, merged, PIKACHU);
+    expect(report.opponents).toHaveLength(1);
+    expect(report.opponents[0]!.opponentName).toBe("kusora");
+    expect(report.opponents[0]!.games).toBe(8);
+    expect(report.points.map((p) => p.opponentName)).toEqual([
+      "kusora",
+      "kusora",
+    ]);
+    expect(report.repeatedOpponents).toHaveLength(1);
+    expect(report.repeatedOpponents[0]!.opponentName).toBe("kusora");
+    expect(report.repeatedOpponents[0]!.points).toHaveLength(2);
+  });
+});

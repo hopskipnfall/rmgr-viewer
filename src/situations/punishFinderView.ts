@@ -1,9 +1,11 @@
+import { escapeHtml } from "../ui/html.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import type { Identity } from "../data/identity.js";
 import { characterFamily } from "../data/characterFamily.js";
 import { detectMainCharacter } from "../data/mainCharacter.js";
 import {
   HORIZONTAL_ZONES,
+  MIN_OPENER_SAMPLES,
   VERTICAL_ZONES,
   findSituations,
   situationClips,
@@ -16,14 +18,9 @@ import {
   type VerticalZone,
 } from "../data/situations.js";
 import { t, type Translations } from "../i18n.js";
-import { actionStateName, characterName } from "../lookups.js";
+import { characterName } from "../lookups.js";
+import { moveDisplayName } from "../moveNames.js";
 import type { PlaylistClip } from "../playlist.js";
-
-function escapeHtml(s: string): string {
-  const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
-}
 
 /** Rows shown in the best-punishes list (and played by "Play these"). */
 const BEST_LIMIT = 50;
@@ -42,12 +39,7 @@ function moveLabel(tr: Translations, m: SituationMatch): string {
   if (m.opening.isGrab) return tr.punishGrab;
   return m.opening.move === null
     ? "—"
-    : actionStateName(
-        m.opening.move,
-        undefined,
-        undefined,
-        m.attackerCharacterId,
-      );
+    : moveDisplayName(m.opening.move, m.attackerCharacterId);
 }
 
 function zoneName(
@@ -120,6 +112,9 @@ export class PunishFinderViewController {
   private summaries: GameSummary[] = [];
   private identity: Identity | null = null;
   private query: SituationQuery | null = null;
+  /** Until the user changes a filter, the query follows the library (its main can change as
+   * games load). */
+  private queryTouched = false;
 
   constructor(
     private readonly container: HTMLElement,
@@ -169,7 +164,7 @@ export class PunishFinderViewController {
   public render(): void {
     if (!this.identity) return;
     const tr = t();
-    this.query ??= this.defaultQuery();
+    if (!this.queryTouched || !this.query) this.query = this.defaultQuery();
     const q = this.query;
     const families = this.families();
     const familyOptions = (selected: number | null) =>
@@ -269,7 +264,7 @@ export class PunishFinderViewController {
       .slice(0, OPENER_LIMIT)
       .map((m) => {
         const index = results.matches.indexOf(m.best);
-        return `<tr class="${m.count < 3 ? "punish-few" : ""}">
+        return `<tr class="${m.count < MIN_OPENER_SAMPLES ? "punish-few" : ""}">
           <td>${escapeHtml(characterName(m.attackerFamily))}</td>
           <td>${escapeHtml(moveLabel(tr, m.best))}</td>
           <td>${m.count}</td>
@@ -331,6 +326,7 @@ export class PunishFinderViewController {
   }
 
   private update(change: Partial<SituationQuery>): void {
+    this.queryTouched = true;
     this.query = { ...this.query!, ...change };
     this.render();
   }
@@ -403,7 +399,12 @@ export class PunishFinderViewController {
           : { victimFamily: value },
       );
     } else if (field === "min" || field === "max") {
-      const n = Math.max(0, Math.min(999, Number(el.value) || 0));
+      // An emptied field means "no limit" on that side.
+      const fallback = field === "max" ? 999 : 0;
+      const n =
+        el.value.trim() === ""
+          ? fallback
+          : Math.max(0, Math.min(999, Number(el.value) || 0));
       this.update(field === "min" ? { minDamage: n } : { maxDamage: n });
     }
   }

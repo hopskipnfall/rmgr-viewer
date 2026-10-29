@@ -180,6 +180,8 @@ describe("findSituations", () => {
     const fair = r.byMove.find((m) => m.move === FAIR)!;
     expect(fair.killRate).toBe(100);
     expect(r.byMove.find((m) => m.isGrab)?.move).toBeNull();
+    // Up air (3 samples, avg ~48.7) outranks fair (1 sample, 48) and the grab (1 sample).
+    expect(r.byMove[0]!.move).toBe(UAIR);
   });
 
   it("clips each match with lead-in, clamped to the game", () => {

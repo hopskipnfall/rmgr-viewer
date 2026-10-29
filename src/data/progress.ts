@@ -1,5 +1,6 @@
 import type { GameSummary, RawCounters } from "./gameSummary.js";
 import type { Identity } from "./identity.js";
+import { canonicalOpponentName } from "./opponentAliases.js";
 import { filterGameSummaries } from "./aggregate.js";
 import { computeOpponentStrength } from "./opponentStrength.js";
 import { groupGamesIntoSessions } from "./session.js";
@@ -172,6 +173,12 @@ interface ResolvedGame {
   readonly decided: boolean;
 }
 
+function decided(summary: GameSummary, yours: number, theirs: number): boolean {
+  return (
+    !summary.isUnevenStockStart && yours >= 0 && theirs >= 0 && yours !== theirs
+  );
+}
+
 function resolveGames(
   summaries: readonly GameSummary[],
   identity: Identity,
@@ -192,9 +199,16 @@ function resolveGames(
       summary,
       counters,
       yourCharacterId: you.characterId,
-      opponentName: opp.playerName.trim(),
-      won: you.finalStocks > opp.finalStocks,
-      decided: you.finalStocks !== opp.finalStocks,
+      opponentName: canonicalOpponentName(
+        opp.playerName,
+        identity.opponentAliases,
+      ),
+      // Same rule as the session record (session.ts): uneven-start games and unknown final
+      // stocks don't count toward W-L.
+      won:
+        decided(summary, you.finalStocks, opp.finalStocks) &&
+        you.finalStocks > opp.finalStocks,
+      decided: decided(summary, you.finalStocks, opp.finalStocks),
     });
   }
   return out;
@@ -252,9 +266,9 @@ function weightedFit(
   for (const p of points) {
     rss += p.w * (p.y - (intercept + slope * p.x)) ** 2;
   }
-  // With too few points to estimate scatter, fall back to the spread around the mean so a
-  // single session never claims zero uncertainty.
-  const sigma2 = dof > 0 ? rss / dof : syy / Math.max(1, points.length);
+  // With no degrees of freedom left there's no scatter to estimate it from: report unknown
+  // (infinite) uncertainty rather than a misleading +-0.
+  const sigma2 = dof > 0 ? rss / dof : Number.POSITIVE_INFINITY;
   return { intercept, slope, correlation, sigma2 };
 }
 

@@ -180,6 +180,8 @@ interface SituationState {
   edgeGuardingStocksAtEntry: number;
 }
 
+const computeEdgeGuardEventsCache = new WeakMap<Replay, EdgeGuardEvent[]>();
+
 /**
  * Precomputes all edge-guard / recovery events for a replay.
  *
@@ -189,8 +191,20 @@ interface SituationState {
  * `computeNeutralHitsPerStock`: the viewer allows arbitrary seek order, so
  * incremental tracking would need a full recompute from scratch on every
  * backwards jump anyway.
+ *
+ * Memoized per replay: summarizing a game asks for these once per seated port, and the match view
+ * asks again. The returned array is shared - callers must not mutate it.
  */
 export function computeEdgeGuardEvents(replay: Replay): EdgeGuardEvent[] {
+  let events = computeEdgeGuardEventsCache.get(replay);
+  if (!events) {
+    events = computeEdgeGuardEventsUncached(replay);
+    computeEdgeGuardEventsCache.set(replay, events);
+  }
+  return events;
+}
+
+function computeEdgeGuardEventsUncached(replay: Replay): EdgeGuardEvent[] {
   const events: EdgeGuardEvent[] = [];
 
   // Only meaningful on Dream Land, 2-player matches.

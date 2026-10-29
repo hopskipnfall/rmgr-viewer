@@ -46,12 +46,31 @@ export interface AngelInvincibilityStats {
   hitsTakenDuringOpponentAngel: number;
 }
 
+const computeAngelInvincibilityEventsCache = new WeakMap<
+  Replay,
+  AngelInvincibilityEvent[]
+>();
+
 /**
  * Computes all angel (spawn/respawn) invincibility events in chronological order.
  * Tracks the platform descent/wait and the subsequent 120-frame (2-second)
  * post-drop spawn invincibility window.
+ *
+ * Memoized per replay: summarizing a game asks for these once per seated port, and the match view
+ * asks again. The returned array is shared - callers must not mutate it.
  */
 export function computeAngelInvincibilityEvents(
+  replay: Replay,
+): AngelInvincibilityEvent[] {
+  let events = computeAngelInvincibilityEventsCache.get(replay);
+  if (!events) {
+    events = computeAngelInvincibilityEventsUncached(replay);
+    computeAngelInvincibilityEventsCache.set(replay, events);
+  }
+  return events;
+}
+
+function computeAngelInvincibilityEventsUncached(
   replay: Replay,
 ): AngelInvincibilityEvent[] {
   const events: AngelInvincibilityEvent[] = [];
