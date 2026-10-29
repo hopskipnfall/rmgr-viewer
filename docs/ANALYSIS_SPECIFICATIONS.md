@@ -313,6 +313,25 @@ Implemented in [`src/characterMeta.ts`](../src/characterMeta.ts).
 
 ## 9. Cross-Replay Aggregation & Historical Baselines
 
+### 9.0 What each game keeps
+
+`summarizeReplay()` (in [`src/data/gameSummary.ts`](../src/data/gameSummary.ts)) keeps two things
+per 2-player game:
+
+- `statsByPort`: pooled counters per port (situations and successes, openings by reason, damage).
+  Every aggregate rate is built from these.
+- `openings`: one `OpeningRecord` per neutral opening. That's the frame, the attacker, the opening
+  reason, grab or attack, the **opening move**, the victim's damage, position and `grounded` flag
+  just before the hit, and the punish's total damage, hit count, KO flag and outcome. The opening
+  move is the attacker's latest attack action state in the 20 frames up to the hit (`openingMove`),
+  because on a trade the attacker is already in hitstun on the hit frame.
+
+**Stage zones** for situation queries
+([`src/data/situations.ts`](../src/data/situations.ts)) mirror left and right:
+
+- **Horizontal:** center (|x| ≤ 1000), side (to the ledge at 2318) or offstage.
+- **Vertical:** low (y < 300), platform height (300 ≤ y < 1300) or high.
+
 Implemented in [`src/data/aggregate.ts`](../src/data/aggregate.ts) and [`src/data/identity.ts`](../src/data/identity.ts).
 
 ### 9.1 Identity Matching

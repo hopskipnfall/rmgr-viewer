@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  characterFamily,
-  computeProgress,
-  playedCharacterFamilies,
-} from "./progress.js";
+import { computeProgress, playedCharacterFamilies } from "./progress.js";
+import { characterFamily } from "./characterFamily.js";
 import {
   createEmptyCounters,
   type GameSummary,

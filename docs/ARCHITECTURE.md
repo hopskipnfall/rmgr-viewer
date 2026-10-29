@@ -28,9 +28,14 @@ numbers are aggregated, compared, and tracked over time, see [STATISTICS.md](STA
   file: ports, characters, final stocks, stage, duration, and one `RawCounters` per port. Counters are
   pooled numerators and denominators (situations and successes, openings won/lost by reason, damage),
   never percentages, so any set of games can be aggregated exactly.
-- **Event-level data** (individual openings, recoveries, ledge situations) isn't cached. It's
-  recomputed from the `Replay` when a match is opened or a clip search runs. Clip search keeps its own
-  cache (`src/search/searchCache.ts`).
+- **Opening index:** `GameSummary.openings` keeps one compact `OpeningRecord` per neutral opening
+  (attacker, opening move, victim's damage and position, punish damage, KO). It powers the punish
+  finder without reading any replay. It was added in ANALYSIS_VERSION 11, and older cached entries
+  don't have it.
+- **Other event-level data** (recoveries, ledge situations, the hit reel's lead-in actions) isn't
+  cached. It's recomputed from the `Replay` when a match is opened, a session's hit reel loads, or a
+  clip search runs. Clip search keeps its own cache (`src/search/searchCache.ts`), and
+  `computeNeutralHitEvents` and `computeClassifiedSituations` are memoized per `Replay` object.
 
 ### Analysis versioning
 
@@ -51,6 +56,7 @@ test. `npm run generate:demo-summaries` refuses to change it without a version b
 | Sessions & 12CB         | `src/data/session.ts`, `src/data/twelveCharacterBattle.ts`                                                                                   | Games with the same opponent less than 2 h apart form a session. Rotating 3–4 player lobbies group by `lobbyNames`.                                                                                                                                         |
 | Progress                | `src/data/progress.ts`, `src/progress/progressView.ts`, `src/data/opponentStrength.ts`, `src/data/mainCharacter.ts`                          | Change over time, adjusted for opponent strength (STATISTICS.md §5). `computeCharacterBaselines` in `aggregate.ts` is still unused.                                                                                                                         |
 | Session hit reel        | `src/session/hitReel.ts`, `src/session/hitReelPanel.ts`                                                                                      | Every opening the player lost in a session, from `computeNeutralHitEvents`. Reads loaded replays once per session (cached in memory), plays as a match-view playlist, and saves notes as anchored match notes (same row as the match view's Neutral panel). |
+| Punish finder           | `src/data/situations.ts`, `src/situations/punishFinderView.ts`, `src/data/characterFamily.ts`                                                | Queries the opening index across the whole library (including third-party games), groups by opening move, plays results as a playlist. Stage zones are a mirrored 3×3 grid on Dream Land.                                                                   |
 | Library persistence     | `src/data/libraryStore.ts`, `libraryPersistence.ts`, `importer.ts`, `importPlanner.ts`                                                       | IndexedDB `rmgr-viewer` / `games`. Stores derived data only, never replay bytes. The planner skips files whose path, size and mtime are unchanged, and matches renamed files by content hash.                                                               |
 | Views                   | `src/library/`, `src/session/`, `src/matchup/`, `src/match/`, `src/search/`, `src/workshop/`, `src/preview/`                                 | Plain TypeScript controllers that render HTML strings or DOM. No framework.                                                                                                                                                                                 |
 | Rendering               | `src/renderer.ts`, `src/renderer/`, `src/characters/`                                                                                        | Canvas replay renderer: stage, characters, items, HUD.                                                                                                                                                                                                      |
@@ -72,6 +78,7 @@ desktop/web split. `index.html` holds the static shell and all CSS.
 | `#/matchup/:myChar/:oppChar/recoveries?…` | Edge Guard Workshop for that matchup                                                                                        |
 | `#/match/:gameId`                         | Match player with analysis side panels                                                                                      |
 | `#/search?…`                              | Clip search (edge guards, combos) with a playlist                                                                           |
+| `#/punishes`                              | Punish finder: openings matching a situation (characters, victim percent, stage zone), ranked, by opener, playable          |
 | `#/preview`                               | Character animation preview (dev tool)                                                                                      |
 
 ## User data and where it lives

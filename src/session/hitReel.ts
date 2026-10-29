@@ -1,6 +1,6 @@
 import type { PortIndex, Replay } from "@rmg-k/rmgr";
 import {
-  isAttackActionState,
+  openingMove,
   type NeutralHitEvent,
   type NeutralInteractionOutcome,
   type NeutralOpeningReason,
@@ -20,10 +20,6 @@ const LEAD_IN_FRAMES = 45;
 /** Clip context: enough before the hit to see the approach, and a beat after the punish ends. */
 const CLIP_PRE_ROLL_FRAMES = 120;
 const CLIP_POST_ROLL_FRAMES = 45;
-
-/** How far back to look for the move that hit you when the hit frame shows something else (a
- * trade puts the attacker in hitstun on that same frame). */
-const HIT_BY_LOOKBACK_FRAMES = 20;
 
 /** Standing around, walking, crouching: not worth listing as something you "did". */
 const IDLE_ACTIONS = new Set([0x00a, 0x00b, 0x00c, 0x00d, 0x01c, 0x01d, 0x01e]);
@@ -56,22 +52,6 @@ export interface HitReelEntry {
   /** Playback range for this hit, clamped to the game. */
   readonly clipStartFrameIndex: number;
   readonly clipEndFrameIndex: number;
-}
-
-function hitBy(
-  replay: Replay,
-  frameIndex: number,
-  port: PortIndex,
-): number | null {
-  for (
-    let f = frameIndex;
-    f >= Math.max(0, frameIndex - HIT_BY_LOOKBACK_FRAMES);
-    f--
-  ) {
-    const a = replay.frames[f]?.ports[port]?.state?.actionStateId;
-    if (a !== undefined && isAttackActionState(a)) return a;
-  }
-  return replay.frames[frameIndex]?.ports[port]?.state?.actionStateId ?? null;
 }
 
 function leadIn(replay: Replay, frameIndex: number, port: PortIndex): number[] {
@@ -119,7 +99,7 @@ export function hitReelEntriesForGame(
         convertedToEdgeGuard: !!e.convertedToEdgeGuard,
         convertedToLedgeTrap: !!e.convertedToLedgeTrap,
         convertedToKill: !!e.convertedToKill,
-        opponentMove: hitBy(replay, e.frameIndex, e.attackerPort),
+        opponentMove: openingMove(replay, e.frameIndex, e.attackerPort),
         opponentCharacterId: them?.characterId ?? 0,
         yourLeadIn: leadIn(replay, e.frameIndex, yourPort),
         yourCharacterId: you?.characterId ?? 0,

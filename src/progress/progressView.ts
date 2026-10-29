@@ -3,9 +3,9 @@ import { t, type Translations } from "../i18n.js";
 import type { GameSummary } from "../data/gameSummary.js";
 import type { Identity } from "../data/identity.js";
 import { detectMainCharacter } from "../data/mainCharacter.js";
+import { characterFamily } from "../data/characterFamily.js";
 import {
   RECENT_WINDOW_DAYS,
-  characterFamily,
   computeProgress,
   playedCharacterFamilies,
   type MetricTrend,

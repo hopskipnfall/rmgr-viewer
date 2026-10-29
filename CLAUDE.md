@@ -23,6 +23,7 @@ player's main character comes first; Dream Land is the only stage.
 - [docs/ANALYSIS_SPECIFICATIONS.md](docs/ANALYSIS_SPECIFICATIONS.md): what each detector measures
 - [docs/STATISTICS.md](docs/STATISTICS.md): aggregation, opponent adjustment, trends over time, metric caveats
 - [docs/ROADMAP.md](docs/ROADMAP.md): known issues and planned work
+- [docs/HANDOFF.md](docs/HANDOFF.md): state of the in-flight branch (temporary; delete once merged)
 - [docs/recovery-heuristics/](docs/recovery-heuristics/README.md): per-character recovery model
 - [docs/community/](docs/community/README.md): plain-language explanations for players
 

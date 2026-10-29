@@ -19,9 +19,10 @@ record the behavior in the relevant living doc.
   reel can read replays (desktop doesn't). Move names are raw action-state names (`JumpAerialB`,
   `SpecialAirHi`); show player-facing names. The "big ones" cutoff (stock lost or 30%+) is a first
   guess, and against a top player it still keeps about half the hits.
-- **No situation study.** "Show me every time someone got a good punish from this percent and
-  position in this matchup" is the core attribute-study workflow and isn't supported. Clip search
-  covers edge guards and combos only.
+- **Punish finder next steps:** filter by the punisher's position or percent too (not just the
+  victim's), show what followed the opener (the route, not just the starter), and let a search be
+  saved as a study item next to a goal. The opener grouping uses the move id, so the same move
+  across characters with different specials stays separate. Results are capped at the top 50.
 - **Progress page next steps:** let the user move the baseline cutoff (for example "since I started
   working on X"), and add per-matchup scopes once a matchup has enough sessions.
 - **Goals aren't tracked.** Players work on specific habits (attack only on a real opening, bait then
@@ -37,8 +38,9 @@ record the behavior in the relevant living doc.
   "escaped disadvantage" from "traded back in a scramble". See ANALYSIS_SPECIFICATIONS.md §4.4.
 - **Land punish shadows whiff punish** for aerials: a whiffed aerial that lands is labeled
   `landing-lag`. That works for "punished a commitment", but merges two coaching cues.
-- **Duplicate work in `computeRawCountersForPort`:** every detector runs once per port, so a 2-player
-  game is analyzed twice on import.
+- **Duplicate work in `computeRawCountersForPort`:** neutral events are now cached per replay
+  (`computeNeutralHitEvents`), which cut a full import by about 30%. Edge-guard, ledge, angel and
+  combo detection still run once per port.
 
 ## Match view
 

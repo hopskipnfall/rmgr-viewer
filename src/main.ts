@@ -9,6 +9,7 @@ import {
 } from "./theme.js";
 import { ProgressViewController } from "./progress/progressView.js";
 import { HitReelPanel } from "./session/hitReelPanel.js";
+import { PunishFinderViewController } from "./situations/punishFinderView.js";
 import {
   navigateToLibrary,
   navigateToMatch,
@@ -111,6 +112,9 @@ const searchViewEl = document.getElementById("searchView") as HTMLDivElement;
 const sessionViewEl = document.getElementById("sessionView") as HTMLDivElement;
 const progressViewEl = document.getElementById(
   "progressView",
+) as HTMLDivElement;
+const punishFinderViewEl = document.getElementById(
+  "punishFinderView",
 ) as HTMLDivElement;
 const matchupViewEl = document.getElementById("matchupView") as HTMLDivElement;
 const edgeGuardWorkshopViewEl = document.getElementById(
@@ -262,6 +266,7 @@ let searchController: SearchViewController;
 let sessionController: SessionViewController;
 let progressController: ProgressViewController;
 let progressActive = false;
+let punishFinderController: PunishFinderViewController;
 let matchupController: MatchupViewController;
 let edgeGuardWorkshopController: EdgeGuardWorkshopViewController;
 
@@ -286,6 +291,8 @@ function updateHeaderTranslations(): void {
   if (navLibraryLink) navLibraryLink.textContent = tr.navLibrary;
   const navProgressLink = document.getElementById("navProgressLink");
   if (navProgressLink) navProgressLink.textContent = tr.navProgress;
+  const navPunishesLink = document.getElementById("navPunishesLink");
+  if (navPunishesLink) navPunishesLink.textContent = tr.navPunishes;
   if (navSearchLink) navSearchLink.textContent = tr.navSearch;
   renderStaleBanner();
   aboutClearDataBtn.textContent = tr.clearLocalData;
@@ -801,6 +808,7 @@ function showViews(...visible: HTMLElement[]): void {
     matchFooterEl,
     previewViewEl,
     searchViewEl,
+    punishFinderViewEl,
     matchupViewEl,
     edgeGuardWorkshopViewEl,
     ...HOME_SHELL_VIEWS(),
@@ -817,6 +825,7 @@ async function handleRouteChange(route: Route): Promise<void> {
   setCurrentNavLink("navLibraryLink", route.view === "library");
   setCurrentNavLink("navSearchLink", route.view === "search");
   setCurrentNavLink("navProgressLink", route.view === "progress");
+  setCurrentNavLink("navPunishesLink", route.view === "punishes");
   progressActive = route.view === "progress";
   if (route.view === "library") {
     currentMatchSummary = null;
@@ -856,6 +865,17 @@ async function handleRouteChange(route: Route): Promise<void> {
       jumpCount: route.jumpCount,
       startingAreaBox: route.startingAreaBox,
     });
+  } else if (route.view === "punishes") {
+    currentMatchSummary = null;
+    currentMatchupRoute = null;
+    showViews(punishFinderViewEl);
+    matchController.deactivate();
+    previewController?.deactivate();
+    punishFinderController.setData(
+      libraryController.getSummaries(),
+      libraryController.getIdentity(),
+    );
+    punishFinderController.render();
   } else if (route.view === "progress") {
     currentMatchSummary = null;
     currentMatchupRoute = null;
@@ -1192,6 +1212,10 @@ async function init(): Promise<void> {
       playPlaylistClips(clips, startIndex);
     },
     () => folderPicker.click(),
+  );
+  punishFinderController = new PunishFinderViewController(
+    punishFinderViewEl,
+    (clips, startIndex) => playPlaylistClips(clips, startIndex),
   );
   progressController = new ProgressViewController(progressViewEl, (sessionId) =>
     navigateToSession(sessionId),

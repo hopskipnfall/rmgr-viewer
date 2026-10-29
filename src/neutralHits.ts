@@ -396,7 +396,46 @@ export function classifyNeutralOpening(
  * Tracks end-to-end advantage chains from first contact through follow-up hits,
  * situation conversions (offstage edge guard, ledge trap), and neutral reset (60F mutual actionable).
  */
+const neutralHitEventsCache = new WeakMap<Replay, NeutralHitEvent[]>();
+
+/**
+ * Memoized per replay: summarizing a game asks for these several times (per port, per stat),
+ * and the match view asks again. The returned array is shared - callers must not mutate it.
+ */
 export function computeNeutralHitEvents(replay: Replay): NeutralHitEvent[] {
+  let events = neutralHitEventsCache.get(replay);
+  if (!events) {
+    events = computeNeutralHitEventsUncached(replay);
+    neutralHitEventsCache.set(replay, events);
+  }
+  return events;
+}
+
+/** How far back to look for the move that landed when the hit frame shows something else (a
+ * trade puts the attacker in hitstun on that same frame). */
+const OPENING_MOVE_LOOKBACK_FRAMES = 20;
+
+/** The attacker's action state that landed an opening at `frameIndex`: the latest attack state at
+ * or before it, falling back to whatever they were doing on the hit frame. */
+export function openingMove(
+  replay: Replay,
+  frameIndex: number,
+  attackerPort: PortIndex,
+): number | null {
+  for (
+    let f = frameIndex;
+    f >= Math.max(0, frameIndex - OPENING_MOVE_LOOKBACK_FRAMES);
+    f--
+  ) {
+    const a = replay.frames[f]?.ports[attackerPort]?.state?.actionStateId;
+    if (a !== undefined && isAttackActionState(a)) return a;
+  }
+  return (
+    replay.frames[frameIndex]?.ports[attackerPort]?.state?.actionStateId ?? null
+  );
+}
+
+function computeNeutralHitEventsUncached(replay: Replay): NeutralHitEvent[] {
   const events: NeutralHitEvent[] = [];
   const seated = getSeatedPorts(replay);
   if (seated.length !== 2) return events;

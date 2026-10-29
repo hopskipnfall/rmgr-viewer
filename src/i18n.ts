@@ -778,6 +778,61 @@ export interface Translations {
   hitReelToLedge: string;
   hitReelGrab: string;
   hitReelClipLabel: (game: number, time: string, how: string) => string;
+
+  // Punish finder
+  navPunishes: string;
+  punishTitle: string;
+  punishIntro: string;
+  punishAttacker: string;
+  punishVictim: string;
+  punishAnyCharacter: string;
+  punishPercent: string;
+  punishPercentAny: string;
+  punishWhere: string;
+  punishWhereHint: string;
+  punishWho: string;
+  punishWhoAnyone: string;
+  punishWhoYou: string;
+  punishWhoOpponents: string;
+  punishKind: string;
+  punishKindAny: string;
+  punishKindAttack: string;
+  punishKindGrab: string;
+  punishSummary: (matches: number, games: number) => string;
+  punishNoIndex: (games: number) => string;
+  punishEmpty: string;
+  punishByMoveTitle: string;
+  punishByMoveHint: string;
+  punishBestTitle: string;
+  punishShowing: (shown: number, total: number) => string;
+  punishPlayTop: string;
+  punishColOpener: string;
+  punishColTimes: string;
+  punishColAverage: string;
+  punishColMedian: string;
+  punishColTookStock: string;
+  punishColBest: string;
+  punishColWho: string;
+  punishColOn: string;
+  punishColPercent: string;
+  punishColDamage: string;
+  punishColHits: string;
+  punishColDate: string;
+  punishKo: string;
+  punishGrab: string;
+  punishZoneLabel: (horizontal: string, vertical: string) => string;
+  punishZoneCenter: string;
+  punishZoneSide: string;
+  punishZoneOffstage: string;
+  punishZoneHigh: string;
+  punishZoneMid: string;
+  punishZoneLow: string;
+  punishClipLabel: (
+    who: string,
+    percent: number,
+    damage: number,
+    move: string,
+  ) => string;
 }
 
 export const TRANSLATIONS: Record<Language, Translations> = {
@@ -1613,6 +1668,62 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     hitReelToLedge: "ledge",
     hitReelGrab: "Grab",
     hitReelClipLabel: (game, time, how) => `Game ${game} · ${time} · ${how}`,
+
+    navPunishes: "Punishes",
+    punishTitle: "Punish finder",
+    punishIntro:
+      "Every neutral opening in your library that matches a situation, ranked by what it was worth. Games between other players you've imported count too, so you can see what top players get from the same spot.",
+    punishAttacker: "Punisher",
+    punishVictim: "Against",
+    punishAnyCharacter: "Any character",
+    punishPercent: "Their percent",
+    punishPercentAny: "Any",
+    punishWhere: "Where they were",
+    punishWhereHint:
+      "Click areas to select them; both sides count the same. None selected = anywhere.",
+    punishWho: "Whose punishes",
+    punishWhoAnyone: "Anyone",
+    punishWhoYou: "Yours",
+    punishWhoOpponents: "Your opponents'",
+    punishKind: "Opened with",
+    punishKindAny: "Anything",
+    punishKindAttack: "Attacks",
+    punishKindGrab: "Grabs",
+    punishSummary: (matches, games) =>
+      `${matches} punish${matches === 1 ? "" : "es"} across ${games} game${games === 1 ? "" : "s"}`,
+    punishNoIndex: (games) =>
+      `${games} cached game${games === 1 ? " was" : "s were"} analyzed before this feature existed and aren't searched. Re-import them to include them.`,
+    punishEmpty:
+      "Nothing matches. Widen the percent range or select more of the stage.",
+    punishByMoveTitle: "What each opener led to",
+    punishByMoveHint:
+      "Grouped by the move that started the punish. Small counts are anecdotes, not averages.",
+    punishBestTitle: "Best punishes",
+    punishShowing: (shown, total) => `Top ${shown} of ${total}`,
+    punishPlayTop: "▶ Play these",
+    punishColOpener: "Opener",
+    punishColTimes: "Times",
+    punishColAverage: "Avg damage",
+    punishColMedian: "Median",
+    punishColTookStock: "Took stock",
+    punishColBest: "Best",
+    punishColWho: "Who",
+    punishColOn: "On",
+    punishColPercent: "Their %",
+    punishColDamage: "Damage",
+    punishColHits: "Hits",
+    punishColDate: "Date",
+    punishKo: "KO",
+    punishGrab: "Grab",
+    punishZoneLabel: (horizontal, vertical) => `${horizontal}, ${vertical}`,
+    punishZoneCenter: "Center",
+    punishZoneSide: "Side",
+    punishZoneOffstage: "Offstage",
+    punishZoneHigh: "high",
+    punishZoneMid: "platform height",
+    punishZoneLow: "low",
+    punishClipLabel: (who, percent, damage, move) =>
+      `${who} · ${move} at ${percent}% → +${damage}`,
   },
   ja: {
     appTitle: "RMG-K リプレイビューアー",
@@ -2416,6 +2527,61 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     hitReelToLedge: "崖",
     hitReelGrab: "つかみ",
     hitReelClipLabel: (game, time, how) => `第${game}試合 · ${time} · ${how}`,
+
+    navPunishes: "反撃研究",
+    punishTitle: "反撃ファインダー",
+    punishIntro:
+      "ライブラリ内の差し合いから条件に合うものを探し、どれだけ取れたかで並べます。読み込んだ他の選手同士の試合も含まれるので、トップ選手が同じ状況から何を取っているかも見られます。",
+    punishAttacker: "反撃する側",
+    punishVictim: "相手",
+    punishAnyCharacter: "全キャラ",
+    punishPercent: "相手の%",
+    punishPercentAny: "すべて",
+    punishWhere: "相手の位置",
+    punishWhereHint:
+      "クリックで範囲を選択（左右は同じ扱い）。未選択＝どこでも。",
+    punishWho: "誰の反撃",
+    punishWhoAnyone: "全員",
+    punishWhoYou: "自分",
+    punishWhoOpponents: "対戦相手",
+    punishKind: "始動",
+    punishKindAny: "すべて",
+    punishKindAttack: "攻撃",
+    punishKindGrab: "つかみ",
+    punishSummary: (matches, games) => `${games}試合から${matches}件`,
+    punishNoIndex: (games) =>
+      `${games}試合はこの機能より前に解析されたため検索対象外です。再読み込みすると含まれます。`,
+    punishEmpty:
+      "該当なし。%の範囲を広げるか、ステージの範囲を増やしてください。",
+    punishByMoveTitle: "始動技ごとの結果",
+    punishByMoveHint:
+      "反撃を始めた技でまとめています。件数が少ないものは参考程度に。",
+    punishBestTitle: "ベスト反撃",
+    punishShowing: (shown, total) => `上位${shown}件 / ${total}件`,
+    punishPlayTop: "▶ まとめて再生",
+    punishColOpener: "始動技",
+    punishColTimes: "回数",
+    punishColAverage: "平均ダメージ",
+    punishColMedian: "中央値",
+    punishColTookStock: "撃墜率",
+    punishColBest: "ベスト",
+    punishColWho: "誰が",
+    punishColOn: "相手",
+    punishColPercent: "相手の%",
+    punishColDamage: "ダメージ",
+    punishColHits: "ヒット",
+    punishColDate: "日付",
+    punishKo: "撃墜",
+    punishGrab: "つかみ",
+    punishZoneLabel: (horizontal, vertical) => `${horizontal}・${vertical}`,
+    punishZoneCenter: "中央",
+    punishZoneSide: "端寄り",
+    punishZoneOffstage: "場外",
+    punishZoneHigh: "高い",
+    punishZoneMid: "台の高さ",
+    punishZoneLow: "低い",
+    punishClipLabel: (who, percent, damage, move) =>
+      `${who} · ${percent}%で${move} → +${damage}`,
   },
 };
 

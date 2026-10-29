@@ -38,6 +38,7 @@ export interface EgwFilters {
 export type Route =
   | { view: "library" }
   | { view: "progress" }
+  | { view: "punishes" }
   | { view: "match"; id: string }
   | { view: "preview" }
   | { view: "session"; id: string }
@@ -113,6 +114,7 @@ export function parseRoute(hash: string): Route {
     return { view: "preview" };
   }
   if (clean === "progress") return { view: "progress" };
+  if (clean === "punishes") return { view: "punishes" };
   if (clean.startsWith("session/")) {
     const id = decodeURIComponent(clean.slice("session/".length));
     if (id) return { view: "session", id };

@@ -6335,6 +6335,198 @@
         color: var(--text-dim);
         font-size: 11px;
       }
+      /* Punish finder (#/punishes) - see src/situations/punishFinderView.ts */
+      .punish-page {
+        max-width: 1100px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 16px;
+        box-sizing: border-box;
+        flex-shrink: 0;
+      }
+      .punish-page h2 {
+        margin: 0 0 4px;
+      }
+      .punish-intro,
+      .punish-hint,
+      .punish-summary,
+      .punish-empty {
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.45;
+        max-width: 760px;
+      }
+      .punish-intro {
+        margin: 0 0 14px;
+      }
+      .punish-summary {
+        color: var(--text);
+        font-size: 13px;
+        margin: 14px 0 6px;
+      }
+      .punish-controls {
+        display: grid;
+        grid-template-columns: minmax(180px, 220px) minmax(240px, 1fr) minmax(
+            260px,
+            320px
+          );
+        gap: 16px;
+        padding: 12px;
+        background: var(--card-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+      }
+      .punish-control {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .punish-control label,
+      .punish-label {
+        font-size: 11px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .punish-control select,
+      .punish-range input {
+        font: inherit;
+        font-size: 13px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        border: 1px solid var(--input-border);
+        background: var(--input-bg);
+        color: var(--text);
+      }
+      .punish-range {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .punish-range input {
+        width: 64px;
+      }
+      .punish-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .punish-chip {
+        font: inherit;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--panel-border);
+        background: var(--card-bg);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .punish-chip[aria-pressed="true"] {
+        background: var(--accent-subtle);
+        border-color: var(--accent);
+      }
+      .zone-picker {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .zone-cell {
+        fill: var(--track-bg);
+        stroke: var(--panel-border);
+        cursor: pointer;
+      }
+      .zone-cell:hover {
+        fill: var(--table-hover);
+        stroke: var(--text-dim);
+      }
+      .zone-cell[aria-pressed="true"] {
+        fill: var(--accent-subtle);
+        stroke: var(--accent);
+      }
+      .zone-stage {
+        fill: var(--text-dim);
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      .punish-section {
+        margin-top: 18px;
+      }
+      .punish-section h3 {
+        font-size: 14px;
+        margin: 0;
+      }
+      .punish-section-head {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .punish-section-head .punish-play-all {
+        margin-left: auto;
+      }
+      .punish-play-all {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 5px 12px;
+        border-radius: 6px;
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+      }
+      .punish-table-wrap {
+        overflow-x: auto;
+      }
+      .punish-table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .punish-table th,
+      .punish-table td {
+        text-align: left;
+        padding: 5px 10px 5px 0;
+        border-bottom: 1px solid var(--panel-border);
+        white-space: nowrap;
+      }
+      .punish-table th {
+        color: var(--text-dim);
+        font-weight: 500;
+      }
+      .punish-table tr.punish-few td {
+        color: var(--text-dim);
+      }
+      .punish-table tr.punish-yours td:nth-child(2) {
+        box-shadow: inset 3px 0 0 var(--accent);
+        padding-left: 6px;
+      }
+      .punish-dim {
+        color: var(--text-dim);
+      }
+      .punish-ko {
+        color: #e0473f;
+        font-weight: 600;
+      }
+      .punish-play {
+        font: inherit;
+        font-size: 11px;
+        width: 26px;
+        height: 22px;
+        border-radius: 4px;
+        border: 1px solid var(--panel-border);
+        background: var(--btn-secondary-bg);
+        color: var(--text);
+        cursor: pointer;
+      }
+      @media (max-width: 860px) {
+        .punish-controls {
+          grid-template-columns: 1fr;
+        }
+      }
+
       /* Session hit reel - see src/session/hitReelPanel.ts */
       .hit-reel-head {
         display: flex;
@@ -8049,6 +8241,9 @@
           <a id="navProgressLink" class="header-nav-link" href="#/progress"
             >Progress</a
           >
+          <a id="navPunishesLink" class="header-nav-link" href="#/punishes"
+            >Punishes</a
+          >
           <a id="navSearchLink" class="header-nav-link" href="#/search"
             >Search</a
           >
@@ -8190,6 +8385,9 @@
 
       <!-- Search View -->
       <div id="searchView" class="view-container" hidden></div>
+
+      <!-- Punish finder -->
+      <div id="punishFinderView" class="view-container" hidden></div>
 
       <!-- Matchup View -->
       <div

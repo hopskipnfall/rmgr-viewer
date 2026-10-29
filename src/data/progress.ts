@@ -1,9 +1,9 @@
-import { JP_ORIGINAL_12_IDS, NA_ORIGINAL_12_IDS } from "@rmg-k/rmgr";
 import type { GameSummary, RawCounters } from "./gameSummary.js";
 import type { Identity } from "./identity.js";
 import { filterGameSummaries } from "./aggregate.js";
 import { computeOpponentStrength } from "./opponentStrength.js";
 import { groupGamesIntoSessions } from "./session.js";
+import { characterFamily } from "./characterFamily.js";
 
 /**
  * Change over time, adjusted for who the opponent was (docs/STATISTICS.md §5).
@@ -13,24 +13,6 @@ import { groupGamesIntoSessions } from "./session.js";
  * against inferred opponent strength across all sessions, and each session is shown as its
  * residual: actual minus what that opponent's strength predicts.
  */
-
-/** EU region variants of the original 12, mapped to the NA character they play like. */
-const EU_TO_NA: Readonly<Record<number, number>> = {
-  0x23: 0x05, // LinkEU -> Link
-  0x2d: 0x09, // PikachuEU -> Pikachu
-  0x2f: 0x0a, // JigglypuffEU -> Jigglypuff
-  0x33: 0x03, // SamusEU -> Samus
-};
-
-/**
- * The character a region variant belongs to (Pikachu (JP) -> Pikachu), so a main played across
- * NA/JP builds is one scope. Remix characters map to themselves.
- */
-export function characterFamily(characterId: number): number {
-  const jpIndex = JP_ORIGINAL_12_IDS.indexOf(characterId);
-  if (jpIndex >= 0) return NA_ORIGINAL_12_IDS[jpIndex] ?? characterId;
-  return EU_TO_NA[characterId] ?? characterId;
-}
 
 export type ProgressMetricId =
   | "openingShare"
